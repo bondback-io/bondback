@@ -398,8 +398,11 @@ export function GuidedDisputeForm({
               <Slider
                 value={[refundPercentage]}
                 onValueChange={([v]) => {
-                  setRefundPercentage(v);
-                  setErrorRefund(null);
+                  // v can be undefined from Slider onValueChange
+                  if (v !== undefined) {
+                    setRefundPercentage(v);
+                    setErrorRefund(null);
+                  }
                 }}
                 min={0}
                 max={100}

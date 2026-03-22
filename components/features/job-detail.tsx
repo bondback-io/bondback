@@ -1964,7 +1964,10 @@ export function JobDetail({
                             <Label>Your counter (refund amount)</Label>
                             <Slider
                               value={[counterAmountCents]}
-                              onValueChange={([v]) => setCounterAmountCents(v)}
+                              onValueChange={([v]) => {
+                                // v can be undefined from Slider onValueChange
+                                if (v !== undefined) setCounterAmountCents(v);
+                              }}
                               min={0}
                               max={agreedAmountCents || 1}
                               step={500}

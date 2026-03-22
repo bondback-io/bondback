@@ -145,19 +145,55 @@ export function ReviewForm({ jobId, revieweeType, onSuccess }: ReviewFormProps) 
             </p>
             <div className="space-y-2">
               <Label className="text-xs">Quality of work: {quality}</Label>
-              <Slider value={[quality]} min={1} max={5} step={1} onValueChange={([v]) => setQuality(v)} />
+              <Slider
+                value={[quality]}
+                min={1}
+                max={5}
+                step={1}
+                onValueChange={([v]) => {
+                  // v can be undefined from Slider onValueChange
+                  if (v !== undefined) setQuality(v);
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Reliability: {reliability}</Label>
-              <Slider value={[reliability]} min={1} max={5} step={1} onValueChange={([v]) => setReliability(v)} />
+              <Slider
+                value={[reliability]}
+                min={1}
+                max={5}
+                step={1}
+                onValueChange={([v]) => {
+                  // v can be undefined from Slider onValueChange
+                  if (v !== undefined) setReliability(v);
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Communication: {communication}</Label>
-              <Slider value={[communication]} min={1} max={5} step={1} onValueChange={([v]) => setCommunication(v)} />
+              <Slider
+                value={[communication]}
+                min={1}
+                max={5}
+                step={1}
+                onValueChange={([v]) => {
+                  // v can be undefined from Slider onValueChange
+                  if (v !== undefined) setCommunication(v);
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Punctuality: {punctuality}</Label>
-              <Slider value={[punctuality]} min={1} max={5} step={1} onValueChange={([v]) => setPunctuality(v)} />
+              <Slider
+                value={[punctuality]}
+                min={1}
+                max={5}
+                step={1}
+                onValueChange={([v]) => {
+                  // v can be undefined from Slider onValueChange
+                  if (v !== undefined) setPunctuality(v);
+                }}
+              />
             </div>
           </div>
         )}

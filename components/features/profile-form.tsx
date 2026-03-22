@@ -661,11 +661,12 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                     max={100}
                     step={5}
                     value={[cleanerForm.watch("max_travel_km") ?? 30]}
-                    onValueChange={([v]) =>
+                    onValueChange={([v]) => {
+                      // v can be undefined from Slider onValueChange
                       cleanerForm.setValue("max_travel_km", v ?? 30, {
                         shouldValidate: true,
-                      })
-                    }
+                      });
+                    }}
                     className="touch-none"
                     aria-label="Max travel distance in km"
                   />
