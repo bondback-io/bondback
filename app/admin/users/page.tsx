@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminUsersFetchErrorToast } from "@/components/admin/admin-users-fetch-error-toast";
 import { AdminUserActions } from "@/components/admin/admin-user-actions";
 import { AdminUsersFilters } from "@/components/admin/admin-users-filters";
 import { AdminUserVerificationActions } from "@/components/admin/admin-user-verification-actions";
@@ -49,37 +50,51 @@ interface AdminUsersPageProps {
 }
 
 export default async function AdminUsersPage({ searchParams }: AdminUsersPageProps) {
-  const params = await (searchParams ?? Promise.resolve({}));
+  const params =
+    (await (searchParams ?? Promise.resolve({}))) as NonNullable<
+      Awaited<AdminUsersPageProps["searchParams"]>
+    >;
   const supabase = await createServerSupabaseClient();
-  const admin = createSupabaseAdminClient();
+  /** Service-role client (SUPABASE_SERVICE_ROLE_KEY) — required to load all profiles and bypass RLS. */
+  const supabaseAdmin = createSupabaseAdminClient();
 
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) redirect("/");
 
-  const { data: adminProfile } = await supabase
-    .from("profiles")
-    .select("id, is_admin")
-    .eq("id", session.user.id)
-    .maybeSingle();
-  if (!adminProfile || !(adminProfile as { is_admin?: boolean }).is_admin) {
+  const { data: profile } = supabaseAdmin
+    ? await supabaseAdmin
+        .from("profiles")
+        .select("id, is_admin")
+        .eq("id", session.user.id)
+        .maybeSingle()
+    : await supabase
+        .from("profiles")
+        .select("id, is_admin")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+  // eslint-disable-next-line no-console
+  console.log("Admin users query", { isAdmin: (profile as { is_admin?: boolean } | null)?.is_admin });
+
+  if (!profile || !(profile as { is_admin?: boolean }).is_admin) {
     redirect("/dashboard");
   }
 
   // Admin Users requires the service-role client to bypass RLS and load all users.
-  const serviceRoleMissing = !admin;
+  const serviceRoleMissing = !supabaseAdmin;
 
   const [profilesRes, jobsRes, emailsMap] = await Promise.all([
     serviceRoleMissing
       ? { data: null as ProfileRow[] | null, error: { message: "Service role key not configured" } }
-      : admin!
+      : supabaseAdmin!
           .from("profiles")
           .select("*")
           .order("id", { ascending: false }),
     serviceRoleMissing
       ? { data: [] as JobRow[], error: null }
-      : admin!.from("jobs").select("id, lister_id, winner_id, listing_id, status"),
+      : supabaseAdmin!.from("jobs").select("id, lister_id, winner_id, listing_id, status"),
     getAllUserEmailsMap(),
   ]);
 
@@ -89,7 +104,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
       error: profilesRes.error,
       errorCode: (profilesRes.error as { code?: string } | null)?.code,
       count: (profilesRes.data ?? []).length,
-      hasAdminClient: !!admin,
+      hasAdminClient: !!supabaseAdmin,
       serviceRoleMissing,
     });
   }
@@ -108,12 +123,12 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
 
   // Fallback: if profiles query failed (e.g. RLS or wrong key) but we have the admin client,
   // load users from Auth Admin API so the table still shows all users (id, email, created_at).
-  if (profilesRes.error && admin && allProfiles.length === 0) {
+  if (profilesRes.error && supabaseAdmin && allProfiles.length === 0) {
     const authUsers: ProfileWithExtras[] = [];
     let page = 1;
     const perPage = 1000;
     while (true) {
-      const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
       if (error || !data?.users?.length) break;
       for (const u of data.users) {
         authUsers.push({
@@ -152,20 +167,23 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     }
   }
 
-  // When service role is missing we show a clear message; when it's set but query failed and no auth fallback, show current admin only.
-  if (allProfiles.length === 0 && !serviceRoleMissing && adminProfile) {
-    allProfiles = [
-      {
-        ...(adminProfile as ProfileRow),
-      } as ProfileWithExtras,
-    ];
+  // When service role is set but list query failed and no auth fallback, show current admin only (full row via service role).
+  if (allProfiles.length === 0 && !serviceRoleMissing && profile && supabaseAdmin) {
+    const { data: fullAdminRow } = await supabaseAdmin
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    if (fullAdminRow) {
+      allProfiles = [fullAdminRow as ProfileWithExtras];
+    }
   }
 
   const listingIds = [...new Set(allJobs.map((j) => j.listing_id))];
   const listingsQuery =
     serviceRoleMissing || listingIds.length === 0
       ? { data: [] as ListingRow[] }
-      : await admin!.from("listings").select("id, current_lowest_bid_cents").in("id", listingIds);
+      : await supabaseAdmin!.from("listings").select("id, current_lowest_bid_cents").in("id", listingIds);
   const { data: listingsData } = listingsQuery;
   const listingsMap = new Map<string, ListingRow>();
   (listingsData ?? []).forEach((l: any) => listingsMap.set(l.id, l as ListingRow));
@@ -237,8 +255,19 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     return new Date(created) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   }).length;
 
+  const fetchErrorToastDescription =
+    serviceRoleMissing
+      ? "SUPABASE_SERVICE_ROLE_KEY is not set. Add the service_role secret from Supabase → Project Settings → API and restart the dev server."
+      : profilesRes.error
+        ? (profilesRes.error as { message?: string }).message ?? String(profilesRes.error)
+        : null;
+
   return (
     <AdminShell activeHref="/admin/users">
+      <AdminUsersFetchErrorToast
+        title={serviceRoleMissing ? "Service role key missing" : "Could not load users"}
+        description={fetchErrorToastDescription}
+      />
       <div className="space-y-6">
         {(serviceRoleMissing || profilesRes.error) && (
           <Card className="border-destructive/40 bg-destructive/5 text-xs sm:text-sm text-destructive dark:border-red-900/60 dark:bg-red-950/30">
@@ -356,7 +385,13 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                 const isAdmin = (user as { is_admin?: boolean }).is_admin;
                 const isBanned = (user as { is_banned?: boolean }).is_banned;
                 const isDeleted = (user as { is_deleted?: boolean }).is_deleted;
-                const primaryRole = isAdmin ? "Admin" : (user.active_role ?? roles[0] ?? "Lister");
+                const primaryRole: string = isAdmin
+                  ? "Admin"
+                  : user.active_role === "cleaner"
+                    ? "Cleaner"
+                    : user.active_role === "lister"
+                      ? "Lister"
+                      : String(roles[0] ?? "Lister");
                 const email = emailsMap.get(user.id) ?? "—";
                 const totalJobs = totalJobsByUser.get(user.id) ?? 0;
                 const totalEarnings = totalEarningsByUser.get(user.id) ?? 0;
@@ -388,7 +423,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                           className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground dark:bg-gray-800 dark:text-gray-400"
                           aria-hidden
                         >
-                          {(user.full_name ?? "?")[0].toUpperCase()}
+                          {String(user.full_name ?? "?").charAt(0).toUpperCase()}
                         </div>
                       )}
                     </TableCell>

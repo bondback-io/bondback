@@ -90,8 +90,12 @@ export default async function SettingsPage({
     .eq("id", session.user.id)
     .maybeSingle();
 
-  const p = profile as ProfileRow | null;
-  const roles = ((p?.roles as string[] | null) ?? []) as string[];
+  if (!profile) {
+    redirect("/onboarding/role-choice");
+  }
+
+  const p = profile as ProfileRow;
+  const roles = ((p.roles as string[] | null) ?? []) as string[];
   const activeRole = (p as { active_role?: string | null })?.active_role ?? roles[0] ?? null;
   const isCleaner = roles.includes("cleaner");
   const isLister = roles.includes("lister");
@@ -163,7 +167,7 @@ export default async function SettingsPage({
                   <div className="mb-4 border-b border-border pb-4 dark:border-gray-700">
                     <SettingsRolesSection roles={roles} />
                   </div>
-                  <SettingsProfileForm profile={p ? { ...p, isCleaner } : undefined} />
+                  <SettingsProfileForm profile={{ ...p, isCleaner }} />
                 </div>
               </TabsContent>
 
@@ -316,7 +320,7 @@ export default async function SettingsPage({
                     <div className="mb-4 border-b border-border pb-4 dark:border-gray-700">
                       <SettingsRolesSection roles={roles} />
                     </div>
-                    <SettingsProfileForm profile={p ? { ...p, isCleaner } : undefined} />
+                    <SettingsProfileForm profile={{ ...p, isCleaner }} />
                   </div>
                 </AccordionContent>
               </AccordionItem>

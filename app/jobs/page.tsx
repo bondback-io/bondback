@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { buildLiveListingsQuery } from "@/lib/jobs-query";
 import { buildListerCardDataByListingId } from "@/lib/lister-card-data";
@@ -99,7 +100,7 @@ export default async function JobsPage({
   // Exclude listings that already have an associated job (assigned/approved).
   // Use admin client so we see ALL jobs (RLS would otherwise hide jobs the user isn't part of).
   const admin = createSupabaseAdminClient();
-  const jobsClient = admin ?? supabase;
+  const jobsClient = (admin ?? supabase) as SupabaseClient<Database>;
   const { data: jobsData } = await jobsClient
     .from("jobs")
     .select("listing_id");

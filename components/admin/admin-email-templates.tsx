@@ -19,7 +19,7 @@ import type {
   TestSendRateLimitResult,
   TestDataInput,
 } from "@/lib/actions/admin-email-templates";
-import { setEmailsEnabled } from "@/lib/actions/global-settings";
+import { setEmailsEnabled as saveEmailsEnabledGlobally } from "@/lib/actions/global-settings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -358,7 +358,7 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
 
   const handleToggleAll = (enabled: boolean) => {
     startTransition(async () => {
-      const result = await setEmailsEnabled(enabled);
+      const result = await saveEmailsEnabledGlobally(enabled);
       if (result.ok) {
         setEmailsEnabled(enabled);
         toast({ title: enabled ? "All emails enabled" : "All emails disabled" });

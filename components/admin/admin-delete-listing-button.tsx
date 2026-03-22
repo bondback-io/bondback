@@ -17,17 +17,9 @@ export function AdminDeleteListingButton({ listingId }: { listingId: string }) {
     try {
       const formData = new FormData();
       formData.set("listingId", listingId);
-      const result = await adminDeleteListing(formData);
-      if (result?.ok) {
-        toast({ title: "Listing deleted", description: "The listing has been removed." });
-        router.refresh();
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Delete failed",
-          description: (result as { error?: string })?.error ?? "Could not delete listing.",
-        });
-      }
+      await adminDeleteListing(formData);
+      toast({ title: "Listing deleted", description: "The listing has been removed." });
+      router.refresh();
     } catch (e) {
       toast({
         variant: "destructive",

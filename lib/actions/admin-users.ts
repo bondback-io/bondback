@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createNotification } from "@/lib/actions/notifications";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import type {
@@ -15,14 +16,33 @@ import type {
 async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return { ok: false as const, error: "Not authenticated", adminId: null };
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("is_admin")
-    .eq("id", session.user.id)
-    .maybeSingle();
+  const supabaseAdmin = createSupabaseAdminClient();
+  const { data: profile } = supabaseAdmin
+    ? await supabaseAdmin
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", session.user.id)
+        .maybeSingle()
+    : await supabase
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", session.user.id)
+        .maybeSingle();
   if (!profile || !(profile as { is_admin?: boolean }).is_admin)
     return { ok: false as const, error: "Not authorised", adminId: null };
   return { ok: true as const, adminId: session.user.id };
+}
+
+function requireServiceRole() {
+  const supabaseAdmin = createSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    return {
+      ok: false as const,
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is not configured. Admin user updates require the service role client.",
+    };
+  }
+  return { ok: true as const, supabaseAdmin };
 }
 
 /** Admin only: ban user with reason. Double-confirm in UI before calling. */
@@ -34,13 +54,15 @@ export async function banUser(
   const auth = await requireAdmin(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
   const adminId = auth.adminId!;
+  const db = requireServiceRole();
+  if (!db.ok) return { ok: false, error: db.error };
 
   const trimmed = (reason ?? "").trim();
   if (!trimmed) return { ok: false, error: "Reason is required." };
   if (userId === adminId) return { ok: false, error: "You cannot ban yourself." };
 
   const now = new Date().toISOString();
-  const { error } = await supabase
+  const { error } = await db.supabaseAdmin
     .from("profiles")
     .update({
       is_banned: true,
@@ -66,8 +88,10 @@ export async function unbanUser(userId: string): Promise<UnbanResult> {
   const supabase = await createServerSupabaseClient();
   const auth = await requireAdmin(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
+  const db = requireServiceRole();
+  if (!db.ok) return { ok: false, error: db.error };
 
-  const { error } = await supabase
+  const { error } = await db.supabaseAdmin
     .from("profiles")
     .update({
       is_banned: false,
@@ -109,8 +133,10 @@ export async function adminDeleteUser(userId: string): Promise<DeleteUserResult>
   const auth = await requireAdmin(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
   if (userId === auth.adminId) return { ok: false, error: "Cannot delete your own account." };
+  const db = requireServiceRole();
+  if (!db.ok) return { ok: false, error: db.error };
 
-  const { error } = await supabase
+  const { error } = await db.supabaseAdmin
     .from("profiles")
     .update({
       is_deleted: true,
@@ -133,6 +159,8 @@ export async function adminEditRole(
   const supabase = await createServerSupabaseClient();
   const auth = await requireAdmin(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
+  const db = requireServiceRole();
+  if (!db.ok) return { ok: false, error: db.error };
 
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -148,7 +176,7 @@ export async function adminEditRole(
     updates.active_role = role;
   }
 
-  const { error } = await supabase
+  const { error } = await db.supabaseAdmin
     .from("profiles")
     .update(updates)
     .eq("id", userId);
@@ -170,6 +198,8 @@ export async function adminSetEmailForceDisabled(
   const supabase = await createServerSupabaseClient();
   const auth = await requireAdmin(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
+  const db = requireServiceRole();
+  if (!db.ok) return { ok: false, error: db.error };
 
   const updates: Record<string, unknown> = {
     email_force_disabled: forceDisabled,
@@ -182,7 +212,7 @@ export async function adminSetEmailForceDisabled(
     updates.notification_preferences = {};
   }
 
-  const { error } = await supabase
+  const { error } = await db.supabaseAdmin
     .from("profiles")
     .update(updates)
     .eq("id", userId);
@@ -202,8 +232,10 @@ export async function adminSetEmailPreferencesLock(
   const supabase = await createServerSupabaseClient();
   const auth = await requireAdmin(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
+  const db = requireServiceRole();
+  if (!db.ok) return { ok: false, error: db.error };
 
-  const { error } = await supabase
+  const { error } = await db.supabaseAdmin
     .from("profiles")
     .update({
       email_preferences_locked: locked,
@@ -226,8 +258,10 @@ export async function adminUpdateNotificationPreferences(
   const supabase = await createServerSupabaseClient();
   const auth = await requireAdmin(supabase);
   if (!auth.ok) return { ok: false, error: auth.error };
+  const db = requireServiceRole();
+  if (!db.ok) return { ok: false, error: db.error };
 
-  const { error } = await supabase
+  const { error } = await db.supabaseAdmin
     .from("profiles")
     .update({
       notification_preferences: prefs,

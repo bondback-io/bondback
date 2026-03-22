@@ -252,7 +252,7 @@ export function EarningsPageClient({
       .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
 
     const now = new Date();
-    const cutoffs: Record<string, Date> = {
+    const cutoffs: Record<typeof range, Date> = {
       "3m": new Date(now.getFullYear(), now.getMonth() - 3, 1),
       "6m": new Date(now.getFullYear(), now.getMonth() - 6, 1),
       "12m": new Date(now.getFullYear(), now.getMonth() - 12, 1),
@@ -677,7 +677,7 @@ export function EarningsPageClient({
                       color: isDark ? "#f3f4f6" : undefined,
                       fontSize: 12,
                     }}
-                    formatter={(value: number, name: string) => [
+                    formatter={(value, name) => [
                       `$${Number(value).toFixed(0)}`,
                       name === "net" ? "Net Earnings (after 12% fee)" : "Gross Earnings",
                     ]}

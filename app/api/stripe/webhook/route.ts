@@ -68,7 +68,8 @@ export async function POST(request: Request) {
   };
 
   try {
-    switch (event.type) {
+    // Cast: Stripe typings may omit rarely used Connect event names (e.g. account.application.deleted).
+    switch (event.type as string) {
       case "account.updated": {
         const account = event.data.object as Stripe.Account;
         logEvent({ account_id: account.id, details_submitted: account.details_submitted, payouts_enabled: account.payouts_enabled });

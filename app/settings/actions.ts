@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type Stripe from "stripe";
 import type { Database } from "@/types/supabase";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 
@@ -37,6 +39,7 @@ export async function saveProfileSettings(formData: FormData) {
   }
 
   const admin = createSupabaseAdminClient();
+  const db = (admin ?? supabase) as SupabaseClient<Database>;
   const updates: ProfileUpdate = {
     full_name,
     phone,
@@ -48,7 +51,7 @@ export async function saveProfileSettings(formData: FormData) {
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = await admin
+  const { error } = await db
     .from("profiles")
     .update(updates as any)
     .eq("id", session.user.id);
@@ -195,7 +198,8 @@ export async function savePrivacySettings(formData: FormData) {
   const profilePublic = formData.get("profile_public") === "on";
 
   const admin = createSupabaseAdminClient();
-  const { error } = await admin
+  const db = (admin ?? supabase) as SupabaseClient<Database>;
+  const { error } = await db
     .from("profiles")
     .update({
       profile_public: profilePublic as any,
@@ -322,7 +326,7 @@ export async function fulfillListerSetupFromSession(checkoutSessionId: string): 
     return { ok: false, error: "This session was for a different user." };
   }
 
-  const setupIntent = cs.setup_intent as import("stripe").SetupIntent | null;
+  const setupIntent = cs.setup_intent as Stripe.SetupIntent | null;
   const pmId = typeof setupIntent?.payment_method === "string" ? setupIntent.payment_method : setupIntent?.payment_method?.id ?? null;
   const customerId = typeof cs.customer === "string" ? cs.customer : cs.customer?.id ?? null;
 

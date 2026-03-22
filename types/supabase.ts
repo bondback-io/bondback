@@ -50,6 +50,7 @@ export interface Database {
           account_credit_cents: number;
           high_dispute_opens_30d: number;
           last_dispute_abuse_alert_at: string | null;
+          preferred_payout_schedule: string;
         };
         Insert: {
           id: string;
@@ -91,6 +92,7 @@ export interface Database {
           account_credit_cents?: number;
           high_dispute_opens_30d?: number;
           last_dispute_abuse_alert_at?: string | null;
+          preferred_payout_schedule?: string;
         };
         Update: {
           roles?: string[] | null;
@@ -130,6 +132,7 @@ export interface Database {
           account_credit_cents?: number;
           high_dispute_opens_30d?: number;
           last_dispute_abuse_alert_at?: string | null;
+          preferred_payout_schedule?: string;
         };
         Relationships: [
           {
@@ -259,6 +262,122 @@ export interface Database {
           {
             foreignKeyName: "bids_cleaner_id_fkey";
             columns: ["cleaner_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      jobs: {
+        Row: {
+          id: number;
+          listing_id: string;
+          lister_id: string;
+          winner_id: string | null;
+          status: string;
+          title: string | null;
+          agreed_amount_cents: number | null;
+          payment_intent_id: string | null;
+          payment_released_at: string | null;
+          stripe_transfer_id: string | null;
+          cleaner_confirmed_complete: boolean | null;
+          cleaner_confirmed_at: string | null;
+          auto_release_at: string | null;
+          auto_release_at_original: string | null;
+          completed_at: string | null;
+          disputed_at: string | null;
+          dispute_reason: string | null;
+          dispute_photos: string[] | null;
+          dispute_evidence: string[] | null;
+          dispute_status: string | null;
+          dispute_opened_by: string | null;
+          proposed_refund_amount: number | null;
+          counter_proposal_amount: number | null;
+          dispute_resolution: string | null;
+          resolution_type: string | null;
+          resolution_at: string | null;
+          resolution_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          listing_id: string;
+          lister_id: string;
+          winner_id?: string | null;
+          status?: string;
+          title?: string | null;
+          agreed_amount_cents?: number | null;
+          payment_intent_id?: string | null;
+          payment_released_at?: string | null;
+          stripe_transfer_id?: string | null;
+          cleaner_confirmed_complete?: boolean | null;
+          cleaner_confirmed_at?: string | null;
+          auto_release_at?: string | null;
+          auto_release_at_original?: string | null;
+          completed_at?: string | null;
+          disputed_at?: string | null;
+          dispute_reason?: string | null;
+          dispute_photos?: string[] | null;
+          dispute_evidence?: string[] | null;
+          dispute_status?: string | null;
+          dispute_opened_by?: string | null;
+          proposed_refund_amount?: number | null;
+          counter_proposal_amount?: number | null;
+          dispute_resolution?: string | null;
+          resolution_type?: string | null;
+          resolution_at?: string | null;
+          resolution_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          listing_id?: string;
+          lister_id?: string;
+          winner_id?: string | null;
+          status?: string;
+          title?: string | null;
+          agreed_amount_cents?: number | null;
+          payment_intent_id?: string | null;
+          payment_released_at?: string | null;
+          stripe_transfer_id?: string | null;
+          cleaner_confirmed_complete?: boolean | null;
+          cleaner_confirmed_at?: string | null;
+          auto_release_at?: string | null;
+          auto_release_at_original?: string | null;
+          completed_at?: string | null;
+          disputed_at?: string | null;
+          dispute_reason?: string | null;
+          dispute_photos?: string[] | null;
+          dispute_evidence?: string[] | null;
+          dispute_status?: string | null;
+          dispute_opened_by?: string | null;
+          proposed_refund_amount?: number | null;
+          counter_proposal_amount?: number | null;
+          dispute_resolution?: string | null;
+          resolution_type?: string | null;
+          resolution_at?: string | null;
+          resolution_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "jobs_listing_id_fkey";
+            columns: ["listing_id"];
+            isOneToOne: false;
+            referencedRelation: "listings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "jobs_lister_id_fkey";
+            columns: ["lister_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "jobs_winner_id_fkey";
+            columns: ["winner_id"];
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
@@ -402,6 +521,64 @@ export interface Database {
             foreignKeyName: "referral_rewards_job_id_fkey";
             columns: ["job_id"];
             isOneToOne: true;
+            referencedRelation: "jobs";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      reviews: {
+        Row: {
+          id: number;
+          job_id: number;
+          reviewer_id: string;
+          reviewee_id: string;
+          reviewee_role: string | null;
+          reviewee_type: string | null;
+          overall_rating: number;
+          quality_of_work: number | null;
+          reliability: number | null;
+          communication: number | null;
+          punctuality: number | null;
+          review_text: string | null;
+          review_photos: string[] | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          job_id: number;
+          reviewer_id: string;
+          reviewee_id: string;
+          reviewee_role?: string | null;
+          reviewee_type?: string | null;
+          overall_rating: number;
+          quality_of_work?: number | null;
+          reliability?: number | null;
+          communication?: number | null;
+          punctuality?: number | null;
+          review_text?: string | null;
+          review_photos?: string[] | null;
+          created_at?: string;
+        };
+        Update: {
+          job_id?: number;
+          reviewer_id?: string;
+          reviewee_id?: string;
+          reviewee_role?: string | null;
+          reviewee_type?: string | null;
+          overall_rating?: number;
+          quality_of_work?: number | null;
+          reliability?: number | null;
+          communication?: number | null;
+          punctuality?: number | null;
+          review_text?: string | null;
+          review_photos?: string[] | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "reviews_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
             referencedRelation: "jobs";
             referencedColumns: ["id"];
           }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, User, Mail } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminUsersFetchErrorToast } from "@/components/admin/admin-users-fetch-error-toast";
 import { AdminUserNotificationOverrides } from "@/components/admin/admin-user-notification-overrides";
 import { AdminUserActions } from "@/components/admin/admin-user-actions";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
@@ -33,30 +35,52 @@ export default async function AdminUserDetailPage({
 }) {
   const { id: userId } = await params;
   const supabase = await createServerSupabaseClient();
-  const admin = createSupabaseAdminClient();
+  const supabaseAdmin = createSupabaseAdminClient();
 
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) redirect("/");
 
-  const { data: adminProfile } = await supabase
-    .from("profiles")
-    .select("is_admin")
-    .eq("id", session.user.id)
-    .maybeSingle();
-  if (!adminProfile || !(adminProfile as { is_admin?: boolean }).is_admin) {
+  const { data: viewerProfile } = supabaseAdmin
+    ? await supabaseAdmin
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", session.user.id)
+        .maybeSingle()
+    : await supabase
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+  // eslint-disable-next-line no-console
+  console.log("Admin users query", {
+    isAdmin: (viewerProfile as { is_admin?: boolean } | null)?.is_admin,
+  });
+
+  if (!viewerProfile || !(viewerProfile as { is_admin?: boolean }).is_admin) {
     redirect("/dashboard");
   }
 
-  const client = admin ?? supabase;
-  const { data: profile } = await client
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .maybeSingle();
+  const profileRes = supabaseAdmin
+    ? await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle()
+    : await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+
+  const profileFetchErr = profileRes.error;
+  const { data: profile } = profileRes;
 
   if (!profile) notFound();
+
+  const client = (supabaseAdmin ?? supabase) as SupabaseClient<Database>;
 
   const p = profile as ProfileRow & {
     notification_preferences?: Record<string, boolean> | null;
@@ -69,7 +93,7 @@ export default async function AdminUserDetailPage({
   };
 
   const [emailLogsData, email, globalSettings] = await Promise.all([
-    (admin ?? supabase)
+    client
       .from("email_logs")
       .select("id, type, sent_at, subject")
       .eq("user_id", userId)
@@ -94,8 +118,19 @@ export default async function AdminUserDetailPage({
     getEffectivePayoutSchedule(preferredPayout as "daily" | "weekly" | "monthly" | "platform_default", platformPayout)
   );
 
+  const detailPageFetchToast =
+    !supabaseAdmin
+      ? "SUPABASE_SERVICE_ROLE_KEY is not set. Add the service_role secret from Supabase → Project Settings → API and restart the dev server."
+      : profileFetchErr
+        ? (profileFetchErr as { message?: string }).message ?? String(profileFetchErr)
+        : null;
+
   return (
     <AdminShell activeHref="/admin/users">
+      <AdminUsersFetchErrorToast
+        title={!supabaseAdmin ? "Service role key missing" : "User profile query failed"}
+        description={detailPageFetchToast}
+      />
       <section className="page-inner space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Button variant="ghost" size="sm" asChild>

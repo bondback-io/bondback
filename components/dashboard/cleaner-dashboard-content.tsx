@@ -86,9 +86,11 @@ export function CleanerDashboardContent({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activeJobs.map((job) => {
               const listing = listingsMap.get(String(job.listing_id)) ?? null;
-              const moveOut = listing?.move_out_date
-                ? new Date((listing as { move_out_date?: string }).move_out_date)
-                : null;
+              const moveOutDate = listing?.move_out_date;
+              const moveOut =
+                moveOutDate != null && moveOutDate !== ""
+                  ? new Date(moveOutDate)
+                  : null;
               const daysLeft =
                 moveOut != null
                   ? Math.max(

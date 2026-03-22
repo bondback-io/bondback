@@ -1,5 +1,11 @@
 import { redirect, notFound } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { Database } from "@/types/supabase";
+
+type ListingLister = Pick<
+  Database["public"]["Tables"]["listings"]["Row"],
+  "id" | "lister_id"
+>;
 
 export default async function EditListingPage({
   params,
@@ -27,7 +33,9 @@ export default async function EditListingPage({
     notFound();
   }
 
-  if (listing.lister_id !== session.user.id) {
+  const listingRow = listing as ListingLister;
+
+  if (listingRow.lister_id !== session.user.id) {
     notFound();
   }
 

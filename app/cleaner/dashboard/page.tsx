@@ -87,7 +87,12 @@ export default async function CleanerDashboardPage() {
     return jobDate >= monthStart && jobDate <= now ? sum + gross : sum;
   }, 0);
 
-  const averageRatingValue: number | null = null; // stub until reviews
+  const cleanerAvgRaw = (profile as { cleaner_avg_rating?: number | string | null })
+    .cleaner_avg_rating;
+  const averageRatingValue =
+    cleanerAvgRaw != null && cleanerAvgRaw !== ""
+      ? Number(cleanerAvgRaw)
+      : null;
 
   const { data: notificationsData } = await supabase
     .from("notifications")
@@ -104,7 +109,10 @@ export default async function CleanerDashboardPage() {
     { label: "Earnings This Month", value: formatCents(totalEarningsThisMonthCents) },
     {
       label: "Average Rating",
-      value: averageRatingValue != null ? `${averageRatingValue.toFixed(1)}` : "—",
+      value:
+        averageRatingValue != null && !Number.isNaN(averageRatingValue)
+          ? averageRatingValue.toFixed(1)
+          : "—",
     },
   ];
 
@@ -169,9 +177,8 @@ export default async function CleanerDashboardPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activeJobs.map((job) => {
               const listing = listingsMap.get(job.listing_id as string) ?? null;
-              const moveOut = listing?.move_out_date
-                ? new Date((listing as { move_out_date?: string }).move_out_date)
-                : null;
+              const moveOutRaw = listing?.move_out_date;
+              const moveOut = moveOutRaw ? new Date(moveOutRaw) : null;
               const daysLeft =
                 moveOut != null
                   ? Math.max(

@@ -183,13 +183,15 @@ export function AdminRevenueChart({ points, summary }: Props) {
                     border: "1px solid rgba(148,163,184,0.5)",
                     color: "white",
                   }}
-                  formatter={(value: any, name: string) => {
+                  formatter={(value, name) => {
                     const dollars = (Number(value) / 100).toLocaleString("en-AU", {
                       style: "currency",
                       currency: "AUD",
                       maximumFractionDigits: 0,
                     });
-                    return [dollars, name === "feeCents" ? "Platform fees" : "Job volume"];
+                    const label =
+                      name === "feeCents" ? "Platform fees" : "Job volume";
+                    return [dollars, label];
                   }}
                   labelFormatter={(label) => label}
                 />

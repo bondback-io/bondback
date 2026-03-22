@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getEmailTypeLabel } from "@/lib/admin-email-templates-utils";
@@ -80,7 +81,7 @@ export default async function AdminNotificationsPage() {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   // Email logs: use admin client so we can read all (RLS may restrict)
-  const client = admin ?? supabase;
+  const client = (admin ?? supabase) as SupabaseClient<Database>;
   const { data: emailLogsData } = await client
     .from("email_logs")
     .select("id, user_id, type, sent_at, subject")
@@ -176,7 +177,10 @@ export default async function AdminNotificationsPage() {
               <Zap className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <Badge variant={emailsEnabled ? "default" : "secondary"} className="text-xs">
+              <Badge
+                variant={emailsEnabled ? "default" : "outline"}
+                className="text-xs"
+              >
                 {emailsEnabled ? "On" : "Off"}
               </Badge>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -349,7 +353,7 @@ export default async function AdminNotificationsPage() {
                         </TableCell>
                         <TableCell>
                           <Badge
-                            variant={n.is_read ? "secondary" : "outline"}
+                            variant={n.is_read ? "default" : "outline"}
                             className="text-[10px]"
                           >
                             {n.is_read ? "Read" : "Unread"}

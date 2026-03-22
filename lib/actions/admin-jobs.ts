@@ -29,23 +29,24 @@ async function requireAdmin(): Promise<{
   return { supabase, adminId: session.user.id };
 }
 
-export async function adminForceCompleteJob(formData: FormData) {
+export async function adminForceCompleteJob(formData: FormData): Promise<void> {
   const jobId = formData.get("jobId");
-  if (!jobId) return { ok: false, error: "Missing jobId" };
+  if (!jobId) return;
   const { supabase, adminId } = await requireAdmin();
   const { error } = await supabase
     .from("jobs")
     .update({ status: "completed", completed_at: new Date().toISOString() })
     .eq("id", Number(jobId));
-  if (error) return { ok: false, error: error.message };
+  if (error) return;
   await logAdminActivity({ adminId, actionType: "job_force_complete", targetType: "job", targetId: String(jobId), details: {} });
 
-  return { ok: true };
+  revalidatePath("/admin/jobs");
+  revalidatePath("/dashboard");
 }
 
-export async function adminReinstateJob(formData: FormData) {
+export async function adminReinstateJob(formData: FormData): Promise<void> {
   const jobId = formData.get("jobId");
-  if (!jobId) return { ok: false, error: "Missing jobId" };
+  if (!jobId) return;
   const { supabase, adminId } = await requireAdmin();
   const { data: job, error: fetchError } = await supabase
     .from("jobs")
@@ -54,7 +55,7 @@ export async function adminReinstateJob(formData: FormData) {
     .maybeSingle();
 
   if (fetchError || !job) {
-    return { ok: false, error: "Job not found." };
+    return;
   }
 
   // Simple rule: completed -> in_progress, disputed/in_review -> in_progress, otherwise leave as-is.
@@ -67,7 +68,7 @@ export async function adminReinstateJob(formData: FormData) {
   }
 
   if (nextStatus === currentStatus) {
-    return { ok: false, error: "Job cannot be reinstated from its current status." };
+    return;
   }
 
   const { error: updateError } = await supabase
@@ -76,14 +77,13 @@ export async function adminReinstateJob(formData: FormData) {
     .eq("id", Number(jobId));
 
   if (updateError) {
-    return { ok: false, error: updateError.message };
+    return;
   }
 
   await logAdminActivity({ adminId, actionType: "job_reinstate", targetType: "job", targetId: String(jobId), details: { from: currentStatus, to: nextStatus } });
 
   revalidatePath("/admin/jobs");
   revalidatePath("/dashboard");
-  return { ok: true };
 }
 
 export type RefundJobResult = { ok: true } | { ok: false; error: string };
@@ -176,20 +176,21 @@ export async function refundJob(
 }
 
 /** Legacy form-based entry point; extracts jobId and amountCents from FormData. */
-export async function adminRefundJob(formData: FormData) {
+export async function adminRefundJob(formData: FormData): Promise<void> {
   const jobId = formData.get("jobId");
   const amountCents = formData.get("amountCents");
   if (!jobId) {
-    return { ok: false, error: "Missing jobId" };
+    return;
   }
   const amount = amountCents ? Math.round(Number(amountCents)) : undefined;
   if (amount === undefined || amount < 1) {
-    return { ok: false, error: "Missing or invalid amountCents" };
+    return;
   }
-  return refundJob(Number(jobId), amount);
+  await refundJob(Number(jobId), amount);
+  revalidatePath("/admin/jobs");
 }
 
-export async function adminResolveDispute(formData: FormData) {
+export async function adminResolveDispute(formData: FormData): Promise<void> {
   const jobId = formData.get("jobId");
   const resolution = formData.get("resolution") as
     | "release_funds"
@@ -197,7 +198,7 @@ export async function adminResolveDispute(formData: FormData) {
     | "full_refund"
     | "reject"
     | null;
-  if (!jobId || !resolution) return { ok: false, error: "Missing data" };
+  if (!jobId || !resolution) return;
   const { supabase, adminId } = await requireAdmin();
 
   const nowIso = new Date().toISOString();
@@ -217,7 +218,7 @@ export async function adminResolveDispute(formData: FormData) {
     .maybeSingle();
 
   if (fetchError || !job) {
-    return { ok: false, error: fetchError?.message ?? "Job not found." };
+    return;
   }
 
   const j = job as {
@@ -234,7 +235,7 @@ export async function adminResolveDispute(formData: FormData) {
   // Ensure payout/refund happens when PaymentIntent is still held (manual capture).
   if (resolution === "release_funds" || resolution === "reject") {
     const releaseResult = await releaseJobFunds(numericJobId);
-    if (!releaseResult.ok) return { ok: false, error: releaseResult.error };
+    if (!releaseResult.ok) return;
   }
 
   if (resolution === "partial_refund" || resolution === "full_refund") {
@@ -248,11 +249,11 @@ export async function adminResolveDispute(formData: FormData) {
       resolution === "full_refund" ? agreedCents + feeCents : refundAmountCents ?? 0;
 
     if (!refundTotalCents || refundTotalCents < 1) {
-      return { ok: false, error: "Refund amount must be provided and >= 1 cent." };
+      return;
     }
 
     const refundResult = await executeRefund(numericJobId, refundTotalCents);
-    if (!refundResult.ok) return { ok: false, error: refundResult.error };
+    if (!refundResult.ok) return;
   }
 
   const updatePayload: Record<string, unknown> = {
@@ -271,7 +272,7 @@ export async function adminResolveDispute(formData: FormData) {
     .update(updatePayload as never)
     .eq("id", numericJobId);
 
-  if (updateError) return { ok: false, error: updateError.message };
+  if (updateError) return;
 
   if (j.listing_id) {
     await supabase
@@ -300,21 +301,23 @@ export async function adminResolveDispute(formData: FormData) {
 
   revalidatePath("/admin/disputes");
   revalidatePath(`/jobs/${numericJobId}`);
-
-  return { ok: true };
 }
 
-export async function adminDeleteJob(formData: FormData) {
+export async function adminDeleteJob(formData: FormData): Promise<void> {
   const jobIdRaw = formData.get("jobId");
-  if (!jobIdRaw) return { ok: false, error: "Missing jobId" };
+  if (!jobIdRaw) throw new Error("Missing jobId");
   const jobId = Number(jobIdRaw);
   const { adminId } = await requireAdmin();
   const admin = createSupabaseAdminClient();
-  if (!admin) return { ok: false, error: "Admin delete requires SUPABASE_SERVICE_ROLE_KEY so listers see updates." };
+  if (!admin) {
+    throw new Error(
+      "Admin delete requires SUPABASE_SERVICE_ROLE_KEY so listers see updates."
+    );
+  }
   const db = admin;
 
   const { data: job } = await db.from("jobs").select("id").eq("id", jobId).maybeSingle();
-  if (!job) return { ok: false, error: "Job not found" };
+  if (!job) throw new Error("Job not found");
 
   const { error: _checklistErr } = await (db as any)
     .from("job_checklist_items")
@@ -322,7 +325,7 @@ export async function adminDeleteJob(formData: FormData) {
     .eq("job_id", jobId);
   await db.from("job_messages").delete().eq("job_id", jobId);
   const { error } = await db.from("jobs").delete().eq("id", jobId);
-  if (error) return { ok: false, error: error.message };
+  if (error) throw new Error(error.message);
 
   await logAdminActivity({ adminId, actionType: "job_deleted", targetType: "job", targetId: String(jobId), details: {} });
 
@@ -330,14 +333,13 @@ export async function adminDeleteJob(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/lister/dashboard");
   revalidatePath("/my-listings");
-  return { ok: true };
 }
 
-export async function adminResetAllJobs(formData: FormData) {
+export async function adminResetAllJobs(formData: FormData): Promise<void> {
   const confirmed = formData.get("confirm") === "on";
   const double = formData.get("confirmText");
   if (!confirmed || (double as string)?.toLowerCase() !== "delete") {
-    return { ok: false, error: "Confirmation required" };
+    return;
   }
   const { supabase, adminId } = await requireAdmin();
   const { data: jobs } = await supabase.from("jobs").select("id");
@@ -345,11 +347,15 @@ export async function adminResetAllJobs(formData: FormData) {
   for (const id of ids) {
     const fd = new FormData();
     fd.set("jobId", String(id));
-    // eslint-disable-next-line no-await-in-loop
-    await adminDeleteJob(fd);
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await adminDeleteJob(fd);
+    } catch {
+      /* continue bulk reset */
+    }
   }
   await logAdminActivity({ adminId, actionType: "jobs_reset_all", targetType: "job", targetId: null, details: { count: ids.length } });
-  return { ok: true };
+  revalidatePath("/admin/jobs");
 }
 
 export type OverrideTimerActionType =

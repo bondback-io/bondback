@@ -322,7 +322,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               min={0}
               max={30}
               step={0.5}
-              onValueChange={([v]) => setFeePercentage(v)}
+              onValueChange={([v]) => setFeePercentage(v ?? feePercentage)}
             />
             <p className="text-[11px] text-muted-foreground dark:text-gray-400">
               Charged to the lister on top of the job price. Cleaner receives the full bid amount.
@@ -443,7 +443,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                 min={0}
                 max={100}
                 step={5}
-                onValueChange={([v]) => setMinProfileCompletion(v)}
+                onValueChange={([v]) => setMinProfileCompletion(v ?? minProfileCompletion)}
               />
             </div>
 

@@ -32,7 +32,7 @@ export default async function JobDetailPage({
     data: { session },
   } = await supabase.auth.getSession();
 
-  let profile: Pick<ProfileRow, "role"> | null = null;
+  let profile: Pick<ProfileRow, "roles" | "active_role"> | null = null;
   if (session) {
     const { data } = await supabase
       .from("profiles")
@@ -75,6 +75,8 @@ export default async function JobDetailPage({
     notFound();
   }
 
+  const listingRow = listing as ListingRow;
+
   const { data: bids } = await supabase
     .from("bids")
     .select("*")
@@ -93,10 +95,10 @@ export default async function JobDetailPage({
 
   const jobId = job?.id ?? null;
   const jobAgreed = (job as { agreed_amount_cents?: number | null })?.agreed_amount_cents;
-  const listingBuyNow = (listing as { buy_now_cents?: number | null }).buy_now_cents;
-  const listingReserve = (listing as { reserve_cents?: number }).reserve_cents;
+  const listingBuyNow = listingRow.buy_now_cents;
+  const listingReserve = listingRow.reserve_cents;
   const agreedAmountCents =
-    job && listing
+    job
       ? (jobAgreed != null && jobAgreed > 0
           ? jobAgreed
           : listingBuyNow ?? listingReserve ?? 0)
@@ -135,7 +137,7 @@ export default async function JobDetailPage({
   const isJobCancelled = job?.status === "cancelled";
   const hasActiveJob = !!job && !isJobCancelled;
   const listingCancelled =
-    String((listing as { status?: string }).status ?? "")
+    String(listingRow.status ?? "")
       .toLowerCase() === "cancelled";
   const hideCleanerJobMessaging =
     isCleaner && (listingCancelled || isJobCancelled);
@@ -254,7 +256,7 @@ export default async function JobDetailPage({
       )}
       <JobDetail
         listingId={listingId}
-        initialListing={listing as ListingRow}
+        initialListing={listingRow}
         initialBids={initialBids}
         isCleaner={!!isCleaner}
         hasActiveJob={hasActiveJob}
@@ -292,7 +294,7 @@ export default async function JobDetailPage({
           session.user.id === job.lister_id &&
           isListerActive
         }
-        isListingOwner={!!session && listing.lister_id === session.user.id}
+        isListingOwner={!!session && listingRow.lister_id === session.user.id}
         isJobCleaner={
           !!session &&
           !!job &&

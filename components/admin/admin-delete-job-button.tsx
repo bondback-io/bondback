@@ -17,17 +17,9 @@ export function AdminDeleteJobButton({ jobId }: { jobId: number }) {
     try {
       const formData = new FormData();
       formData.set("jobId", String(jobId));
-      const result = await adminDeleteJob(formData);
-      if (result?.ok) {
-        toast({ title: "Job deleted", description: "The job has been removed." });
-        router.refresh();
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Delete failed",
-          description: (result as { error?: string })?.error ?? "Could not delete job.",
-        });
-      }
+      await adminDeleteJob(formData);
+      toast({ title: "Job deleted", description: "The job has been removed." });
+      router.refresh();
     } catch (e) {
       toast({
         variant: "destructive",

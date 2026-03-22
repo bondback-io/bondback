@@ -21,31 +21,34 @@ async function requireAdmin(): Promise<{
   return { supabase, adminId: session.user.id };
 }
 
-export async function adminForceEndListing(formData: FormData) {
+export async function adminForceEndListing(formData: FormData): Promise<void> {
   const listingId = formData.get("listingId");
-  if (!listingId) return { ok: false, error: "Missing listingId" };
+  if (!listingId) return;
   const { supabase, adminId } = await requireAdmin();
   const { error } = await supabase
     .from("listings")
     .update({ status: "ended" } as never)
     .eq("id", listingId as never);
-  if (error) return { ok: false, error: error.message };
+  if (error) return;
   await logAdminActivity({ adminId, actionType: "listing_force_end", targetType: "listing", targetId: String(listingId), details: { status: "ended" } });
 
   revalidatePath("/admin/listings");
   revalidatePath("/dashboard");
   revalidatePath("/lister/dashboard");
   revalidatePath("/my-listings");
-  return { ok: true };
 }
 
-export async function adminDeleteListing(formData: FormData) {
+export async function adminDeleteListing(formData: FormData): Promise<void> {
   const listingId = formData.get("listingId");
-  if (!listingId) return { ok: false, error: "Missing listingId" };
+  if (!listingId) throw new Error("Missing listingId");
   const id = String(listingId);
   const { supabase, adminId } = await requireAdmin();
   const admin = createSupabaseAdminClient();
-  if (!admin) return { ok: false, error: "Admin delete requires SUPABASE_SERVICE_ROLE_KEY so listers see updates." };
+  if (!admin) {
+    throw new Error(
+      "Admin delete requires SUPABASE_SERVICE_ROLE_KEY so listers see updates."
+    );
+  }
   const db = admin;
 
   const { data: jobs } = await db.from("jobs").select("id").eq("listing_id", id);
@@ -59,21 +62,20 @@ export async function adminDeleteListing(formData: FormData) {
 
   await db.from("bids").delete().eq("listing_id", id);
   const { error } = await db.from("listings").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) throw new Error(error.message);
   await logAdminActivity({ adminId, actionType: "listing_deleted", targetType: "listing", targetId: id, details: { cascadeJobs: jobIds } });
 
   revalidatePath("/admin/listings");
   revalidatePath("/dashboard");
   revalidatePath("/lister/dashboard");
   revalidatePath("/my-listings");
-  return { ok: true };
 }
 
-export async function adminResetAllListings(formData: FormData) {
+export async function adminResetAllListings(formData: FormData): Promise<void> {
   const confirmed = formData.get("confirm") === "on";
   const double = formData.get("confirmText");
   if (!confirmed || (double as string)?.toLowerCase() !== "delete") {
-    return { ok: false, error: "Confirmation required" };
+    return;
   }
   const { supabase, adminId } = await requireAdmin();
   const { data: listings } = await supabase.from("listings").select("id");
@@ -81,10 +83,14 @@ export async function adminResetAllListings(formData: FormData) {
   for (const id of ids) {
     const fd = new FormData();
     fd.set("listingId", id);
-    // eslint-disable-next-line no-await-in-loop
-    await adminDeleteListing(fd);
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await adminDeleteListing(fd);
+    } catch {
+      /* continue bulk reset */
+    }
   }
   await logAdminActivity({ adminId, actionType: "listings_reset_all", targetType: "listing", targetId: null, details: { count: ids.length } });
-  return { ok: true };
+  revalidatePath("/admin/listings");
 }
 

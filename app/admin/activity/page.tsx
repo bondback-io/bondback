@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +64,7 @@ function actionIcon(actionType: string) {
 export default async function AdminActivityLogPage() {
   const { profile, supabase } = await requireAdmin();
   const admin = createSupabaseAdminClient();
-  const client = admin ?? supabase;
+  const client = (admin ?? supabase) as SupabaseClient<Database>;
 
   const { data: logData } = await (client as any)
     .from("admin_activity_log")

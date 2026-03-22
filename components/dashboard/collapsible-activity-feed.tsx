@@ -74,37 +74,41 @@ export function CollapsibleActivityFeed({
 
               const label = item.message_text || "Update";
               const timeAgo = formatDistanceToNow(new Date(item.created_at), { addSuffix: true });
-              const Wrapper = item.job_id ? Link : "div";
-              const wrapperProps = item.job_id
-                ? { href: `/jobs/${item.job_id}`, className: "block" }
-                : {};
+              const rowClassName = cn(
+                "flex items-start gap-3 py-3 transition-colors",
+                item.job_id &&
+                  "hover:bg-muted/50 dark:hover:bg-gray-800/50 rounded-md -mx-1 px-2"
+              );
+              const body = (
+                <>
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground dark:bg-gray-800 dark:text-gray-200">
+                    {icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-foreground dark:text-gray-100 line-clamp-2">
+                      {label}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {timeAgo}
+                    </p>
+                  </div>
+                  {item.job_id && (
+                    <span className="shrink-0 text-xs font-medium text-primary">
+                      View
+                    </span>
+                  )}
+                </>
+              );
 
               return (
                 <li key={item.id}>
-                  <Wrapper
-                    {...wrapperProps}
-                    className={cn(
-                      "flex items-start gap-3 py-3 transition-colors",
-                      item.job_id && "hover:bg-muted/50 dark:hover:bg-gray-800/50 rounded-md -mx-1 px-2"
-                    )}
-                  >
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground dark:bg-gray-800 dark:text-gray-200">
-                      {icon}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-foreground dark:text-gray-100 line-clamp-2">
-                        {label}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {timeAgo}
-                      </p>
-                    </div>
-                    {item.job_id && (
-                      <span className="shrink-0 text-xs font-medium text-primary">
-                        View
-                      </span>
-                    )}
-                  </Wrapper>
+                  {item.job_id != null ? (
+                    <Link href={`/jobs/${item.job_id}`} className={cn("block", rowClassName)}>
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className={rowClassName}>{body}</div>
+                  )}
                 </li>
               );
             })}

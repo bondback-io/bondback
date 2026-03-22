@@ -50,6 +50,7 @@ export function CleanerCurrentBids({ items }: CleanerCurrentBidsProps) {
   return (
     <div className="divide-y rounded-md border">
       {grouped.map(({ latest, others }) => {
+        if (!latest) return null;
         const { bid, listing, isWinning } = latest;
         const listingCancelled =
           String(listing.status).toLowerCase() === "cancelled";

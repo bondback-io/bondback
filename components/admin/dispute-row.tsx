@@ -81,10 +81,8 @@ export function DisputeRow({
 }) {
   const router = useRouter();
   const reason = job.dispute_reason ?? "No reason supplied";
-  const evidence = (job.dispute_evidence ?? job.dispute_photos ?? []) as
-    | string[]
-    | null
-    | undefined;
+  const evidence: string[] =
+    job.dispute_evidence ?? job.dispute_photos ?? [];
   const disputedBy = job.dispute_opened_by ?? "lister";
   const [resolveOpen, setResolveOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);

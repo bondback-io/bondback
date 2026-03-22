@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/supabase";
 
 export type JobsListFilters = {
   suburb?: string;
@@ -16,8 +17,9 @@ export type JobsListFilters = {
   property_type?: string;
 };
 
+/** Accepts SSR or browser Supabase client (schema generic may differ slightly between packages). */
 export function buildLiveListingsQuery(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database, "public", any>,
   filters: JobsListFilters,
   takenIds: (string | number)[]
 ) {

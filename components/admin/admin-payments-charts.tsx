@@ -74,7 +74,10 @@ export function AdminPaymentsCharts({ monthlyData }: AdminPaymentsChartsProps) {
                 border: "1px solid hsl(var(--border))",
                 fontSize: 12,
               }}
-              formatter={(value: number) => [formatAUD(value), "Fees"]}
+              formatter={(value) => [
+                formatAUD(Number(value) || 0),
+                "Fees",
+              ]}
               labelFormatter={(label) => label}
             />
             <Line
@@ -123,7 +126,10 @@ export function AdminPaymentsCharts({ monthlyData }: AdminPaymentsChartsProps) {
                 border: "1px solid hsl(var(--border))",
                 fontSize: 12,
               }}
-              formatter={(value: number) => [formatAUD(value), "Payouts"]}
+              formatter={(value) => [
+                formatAUD(Number(value) || 0),
+                "Payouts",
+              ]}
               labelFormatter={(label) => label}
             />
             <Bar

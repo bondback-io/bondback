@@ -3,6 +3,7 @@ import { Star } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -15,7 +16,7 @@ export default async function CleanerProfilePage({
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
   const admin = createSupabaseAdminClient();
-  const client = admin ?? supabase;
+  const client = (admin ?? supabase) as SupabaseClient<Database>;
 
   const { data: profile } = await client
     .from("profiles")
@@ -26,6 +27,8 @@ export default async function CleanerProfilePage({
   if (!profile) {
     notFound();
   }
+
+  const profileRow = profile as ProfileRow;
 
   const cleanerAvg =
     (profile as any).cleaner_avg_rating != null
@@ -124,16 +127,16 @@ export default async function CleanerProfilePage({
             </p>
           </div>
 
-          {(suburb || profile.abn || years != null) && (
+          {(suburb || profileRow.abn || years != null) && (
             <p className="text-xs text-muted-foreground">
               {suburb && <>Based in {suburb} {postcode ?? ""}</>}
-              {suburb && (profile.abn || years != null) && " · "}
-              {profile.abn && (
+              {suburb && (profileRow.abn || years != null) && " · "}
+              {profileRow.abn && (
                 <span className="font-medium text-emerald-600 dark:text-emerald-400">
                   ABN verified
                 </span>
               )}
-              {profile.abn && years != null && " · "}
+              {profileRow.abn && years != null && " · "}
               {years != null && `${years} years experience`}
             </p>
           )}

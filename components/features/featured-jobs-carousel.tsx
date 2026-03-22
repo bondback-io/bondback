@@ -40,7 +40,7 @@ export function FeaturedJobsCarousel({
     return null;
   }
 
-  const current = items[Math.min(index, items.length - 1)];
+  const current = items[Math.min(index, items.length - 1)]!;
 
   const goPrev = () =>
     setIndex((i) => (i <= 0 ? items.length - 1 : i - 1));
@@ -126,7 +126,7 @@ export function FeaturedJobsCarousel({
                   <span className="font-semibold">
                     {formatCents(
                       (current.current_lowest_bid_cents as number | null) ??
-                        (current.base_price_cents as number | null) ??
+                        (current.starting_price_cents as number | null) ??
                         0
                     )}
                   </span>

@@ -10,6 +10,7 @@ import { getListingCoverUrl, formatCents } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = { id: number; listing_id: string; status: string };
 
 type SearchParams = { tab?: string };
@@ -33,8 +34,11 @@ export default async function MyListingsJobsPage({
     .eq("id", session.user.id)
     .maybeSingle();
 
-  const roles = (profile?.roles as string[] | null) ?? [];
-  const activeRole = (profile?.active_role as string | null) ?? roles[0];
+  if (!profile) redirect("/dashboard");
+
+  const p = profile as Pick<ProfileRow, "roles" | "active_role">;
+  const roles = (p.roles as string[] | null) ?? [];
+  const activeRole = (p.active_role as string | null) ?? roles[0];
   if (!roles.includes("lister") || activeRole !== "lister") {
     redirect("/dashboard");
   }

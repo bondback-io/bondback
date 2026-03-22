@@ -83,9 +83,9 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         />
       </head>
       <body>
-        {showAnnouncement && (
-          <SiteAnnouncementBanner text={settings.announcement_text!} />
-        )}
+        {showAnnouncement && settings?.announcement_text?.trim() ? (
+          <SiteAnnouncementBanner text={settings.announcement_text} />
+        ) : null}
         <TestModeBanner stripeTestMode={stripeTestMode} />
         <PwaRegisterSw />
         <RegisterExpoPushToken />

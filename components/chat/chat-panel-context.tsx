@@ -182,8 +182,9 @@ export function ChatPanelProvider({
       });
 
       setConversations(convos);
-      if (!selectedJobId && convos.length > 0) {
-        setSelectedJobId(convos[0].jobId);
+      if (!selectedJobId) {
+        const first = convos[0];
+        if (first) setSelectedJobId(first.jobId);
       }
     };
 

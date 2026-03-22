@@ -167,9 +167,9 @@ async function getAdminDashboardData() {
 
     let growthPercent = 0;
     if (revenuePoints.length >= 2) {
-      const last = revenuePoints[revenuePoints.length - 1].feeCents;
-      const prev = revenuePoints[revenuePoints.length - 2].feeCents;
-      if (prev > 0) {
+      const last = revenuePoints.at(-1)?.feeCents;
+      const prev = revenuePoints.at(-2)?.feeCents;
+      if (prev != null && last != null && prev > 0) {
         growthPercent = ((last - prev) / prev) * 100;
       }
     }
@@ -208,9 +208,10 @@ async function getAdminDashboardData() {
         .from("profiles")
         .select("id, preferred_payout_schedule")
         .in("id", winnerIds);
-      (winnerProfiles ?? []).forEach((row: { id: string; preferred_payout_schedule?: string | null }) => {
-        profilesByWinner.set(row.id, row.preferred_payout_schedule ?? "platform_default");
-      });
+      for (const row of winnerProfiles ?? []) {
+        const p = row as Pick<ProfileRow, "id" | "preferred_payout_schedule">;
+        profilesByWinner.set(p.id, p.preferred_payout_schedule ?? "platform_default");
+      }
     }
     const payoutVolumeBySchedule = { dailyCents: 0, weeklyCents: 0, monthlyCents: 0 };
     for (const job of completedJobs) {
@@ -261,6 +262,8 @@ async function getAdminDashboardData() {
     return {
       profile,
       stats: null,
+      revenuePoints: [] as AdminRevenuePoint[],
+      revenueSummary: null as AdminRevenueSummary | null,
       recentActivity: [] as any[],
       payoutVolumeBySchedule: { dailyCents: 0, weeklyCents: 0, monthlyCents: 0 },
       error: message,
@@ -455,7 +458,10 @@ export default async function AdminDashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <AdminRevenueChart points={revenuePoints} summary={revenueSummary} />
+          <AdminRevenueChart
+            points={revenuePoints ?? []}
+            summary={revenueSummary ?? null}
+          />
         </div>
         <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80 lg:col-span-1">
           <CardHeader className="pb-2">

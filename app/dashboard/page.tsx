@@ -39,7 +39,8 @@ export default async function DashboardPage({
   const roles = (profile.roles as string[] | null) ?? [];
   if (roles.length === 0) redirect("/onboarding/role-choice");
 
-  const activeRole = (profile.active_role as string | null) ?? roles[0];
+  const activeRole: string =
+    (profile.active_role as string | null) ?? roles[0] ?? "lister";
   const isLister = roles.includes("lister");
   const isCleaner = roles.includes("cleaner");
 
