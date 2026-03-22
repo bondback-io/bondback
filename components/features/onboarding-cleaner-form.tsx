@@ -243,10 +243,11 @@ export function OnboardingCleanerForm({
                             setSuburbSuggestions([]);
                             return;
                           }
+                          const rows = data as SuburbEntry[];
                           const filtered = stateCode
-                            ? data.filter((s) => s.state === stateCode)
-                            : data;
-                          setSuburbSuggestions(filtered as SuburbEntry[]);
+                            ? rows.filter((s) => s.state === stateCode)
+                            : rows;
+                          setSuburbSuggestions(filtered);
                         });
                     }}
                   />

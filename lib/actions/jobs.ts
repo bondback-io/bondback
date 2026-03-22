@@ -143,11 +143,18 @@ export async function acceptBid(
     return { ok: false, error: "Listing not found." };
   }
 
-  if (listing.lister_id !== session.user.id) {
+  const listRow = listing as {
+    id: string;
+    lister_id: string;
+    status: string;
+    title?: string | null;
+  };
+
+  if (listRow.lister_id !== session.user.id) {
     return { ok: false, error: "Only the lister can accept a bid." };
   }
 
-  if (listing.status !== "live") {
+  if (listRow.status !== "live") {
     return { ok: false, error: "This listing is no longer accepting bids." };
   }
 
@@ -172,7 +179,7 @@ export async function acceptBid(
   const { data: existingJob } = await supabase
     .from("jobs")
     .select("id")
-    .eq("id", listing.id)
+    .eq("id", listRow.id)
     .maybeSingle();
 
   if (existingJob) {
@@ -187,9 +194,9 @@ export async function acceptBid(
   const { data: inserted, error: insertError } = await supabase
     .from("jobs")
     .insert({
-      id: listing.id,
-      listing_id: listing.id,
-      lister_id: listing.lister_id,
+      id: listRow.id,
+      listing_id: listRow.id,
+      lister_id: listRow.lister_id,
       winner_id: cleanerId,
       status: "accepted",
       agreed_amount_cents: amountCents,
@@ -204,12 +211,12 @@ export async function acceptBid(
     };
   }
 
-  const jobId = inserted.id as number | string;
+  const jobId = (inserted as { id: number | string }).id;
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
-  const listingTitle = (listing as { title?: string | null }).title ?? null;
+  const listingTitle = listRow.title ?? null;
   await createNotification(
-    listing.lister_id,
+    listRow.lister_id,
     "job_created",
     numericJobId,
     "You accepted a bid. Pay & Start Job to hold funds in escrow and start the job."
@@ -261,12 +268,19 @@ export async function secureJobAtPrice(
     return { ok: false, error: "Listing not found." };
   }
 
-  if (listing.status !== "live") {
+  const listRow = listing as {
+    id: string;
+    lister_id: string;
+    status: string;
+    buy_now_cents?: number | null;
+    title?: string | null;
+  };
+
+  if (listRow.status !== "live") {
     return { ok: false, error: "This listing is no longer available at this price." };
   }
 
-  const listingRow = listing as { buy_now_cents?: number | null };
-  if (!listingRow?.buy_now_cents || listingRow.buy_now_cents < 1) {
+  if (!listRow.buy_now_cents || listRow.buy_now_cents < 1) {
     return { ok: false, error: "This listing has no fixed price set." };
   }
 
@@ -289,7 +303,7 @@ export async function secureJobAtPrice(
   const { data: existingJob } = await supabase
     .from("jobs")
     .select("id")
-    .eq("id", listing.id)
+    .eq("id", listRow.id)
     .maybeSingle();
 
   if (existingJob) {
@@ -299,12 +313,12 @@ export async function secureJobAtPrice(
   const { data: inserted, error: insertError } = await supabase
     .from("jobs")
     .insert({
-      id: listing.id,
-      listing_id: listing.id,
-      lister_id: listing.lister_id,
+      id: listRow.id,
+      listing_id: listRow.id,
+      lister_id: listRow.lister_id,
       winner_id: session.user.id,
       status: "accepted",
-      agreed_amount_cents: listingRow.buy_now_cents,
+      agreed_amount_cents: listRow.buy_now_cents,
     } as never)
     .select("id")
     .maybeSingle();
@@ -316,12 +330,12 @@ export async function secureJobAtPrice(
     };
   }
 
-  const jobId = inserted.id as number | string;
+  const jobId = (inserted as { id: number | string }).id;
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
-  const listingTitle = (listing as { title?: string | null }).title ?? null;
+  const listingTitle = listRow.title ?? null;
   await createNotification(
-    listing.lister_id,
+    listRow.lister_id,
     "job_created",
     numericJobId,
     "A cleaner secured this job at your fixed price. Pay & Start Job to hold funds in escrow and start the job."

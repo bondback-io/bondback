@@ -165,7 +165,7 @@ export async function saveEmailTemplate(
         type_enabled: (existing as { type_enabled?: boolean } | null)?.type_enabled ?? true,
         send_after: sendAfter || "instant",
         updated_at: new Date().toISOString(),
-      },
+      } as never,
       { onConflict: "template_key" }
     );
   if (error) return { ok: false, error: error.message };
@@ -198,7 +198,7 @@ export async function applyDefaultEmailTemplates(): Promise<ApplyDefaultTemplate
           type_enabled: row?.type_enabled ?? true,
           send_after: sendAfter,
           updated_at: new Date().toISOString(),
-        },
+        } as never,
         { onConflict: "template_key" }
       );
       if (!error) count++;
@@ -236,7 +236,7 @@ export async function toggleEmailType(
         type_enabled: enabled,
         send_after: (row as { send_after?: string } | null)?.send_after ?? "instant",
         updated_at: new Date().toISOString(),
-      },
+      } as never,
       { onConflict: "template_key" }
     );
   if (error) return { ok: false, error: error.message };
@@ -284,7 +284,7 @@ export async function createEmailTemplate(typeKey: string): Promise<CreateEmailT
     type_enabled: true,
     send_after: sendAfter,
     updated_at: new Date().toISOString(),
-  });
+  } as never);
   if (error) return { ok: false, error: error.message };
   await logAdminActivity({ adminId, actionType: "email_template_created", targetType: "other", targetId: key, details: {} });
   revalidatePath("/admin/emails");

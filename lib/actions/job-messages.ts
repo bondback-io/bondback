@@ -168,10 +168,21 @@ export async function sendJobMessage(
     .eq("id", jobId)
     .maybeSingle();
 
-  if (
-    !job ||
-    ![job.lister_id, job.winner_id].includes(session.user.id)
-  ) {
+  if (!job) {
+    return {
+      ok: false,
+      error: "You are not allowed to send messages for this job.",
+    };
+  }
+
+  const j = job as {
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    payment_intent_id?: string | null;
+  };
+
+  if (![j.lister_id, j.winner_id].includes(session.user.id)) {
     return {
       ok: false,
       error: "You are not allowed to send messages for this job.",
@@ -182,10 +193,9 @@ export async function sendJobMessage(
   // - in_progress / completed (funds in escrow and work underway or done)
   // - accepted with a payment_intent_id (Pay & Start Job clicked, escrow hold created)
   const hasPaymentHold =
-    typeof (job as { payment_intent_id?: string | null }).payment_intent_id === "string" &&
-    !!(job as { payment_intent_id?: string | null }).payment_intent_id?.trim();
+    typeof j.payment_intent_id === "string" && !!j.payment_intent_id?.trim();
 
-  const status = job.status ?? "";
+  const status = j.status ?? "";
   const chatAllowed =
     status === "in_progress" ||
     status === "completed" ||
@@ -214,7 +224,7 @@ export async function sendJobMessage(
 
   // Fire a notification for the recipient (other party on the job).
   const recipientId =
-    session.user.id === job.lister_id ? job.winner_id : job.lister_id;
+    session.user.id === j.lister_id ? j.winner_id : j.lister_id;
   if (recipientId) {
     const preview = text.length > 100 ? `${text.slice(0, 97)}...` : text;
     const { data: senderProfile } = await supabase

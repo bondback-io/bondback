@@ -18,7 +18,7 @@ export function JobsPageMobileShell({ children }: { children: React.ReactNode })
   return (
     <>
       <StickyFilterBehavior />
-      <PullToRefresh onRefresh={handleRefresh} mobileOnly>
+      <PullToRefresh onRefresh={handleRefresh}>
         {children}
       </PullToRefresh>
       <BackToTop />

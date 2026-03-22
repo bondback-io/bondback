@@ -138,8 +138,7 @@ export function ListingCard({
 }: ListingCardProps) {
   const jobHref = `/jobs/${listing.id}`;
 
-  const handleShare = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleShare = () => {
     const url = typeof window !== "undefined" ? `${window.location.origin}${jobHref}` : jobHref;
     if (navigator.share) {
       navigator.share({ title: listing.title ?? "Bond clean", url }).catch(() => {});
@@ -357,7 +356,7 @@ export function ListingCard({
                   Report Issue
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleShare} className="flex cursor-pointer items-center gap-2">
+              <DropdownMenuItem onSelect={() => handleShare()} className="flex cursor-pointer items-center gap-2">
                 <Share2 className="h-4 w-4 shrink-0" />
                 Share Listing
               </DropdownMenuItem>

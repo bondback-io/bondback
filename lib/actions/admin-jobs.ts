@@ -35,7 +35,7 @@ export async function adminForceCompleteJob(formData: FormData): Promise<void> {
   const { supabase, adminId } = await requireAdmin();
   const { error } = await supabase
     .from("jobs")
-    .update({ status: "completed", completed_at: new Date().toISOString() })
+    .update({ status: "completed", completed_at: new Date().toISOString() } as never)
     .eq("id", Number(jobId));
   if (error) return;
   await logAdminActivity({ adminId, actionType: "job_force_complete", targetType: "job", targetId: String(jobId), details: {} });
@@ -109,6 +109,7 @@ export async function refundJob(
   }
 
   const j = job as {
+    status: string;
     lister_id: string;
     winner_id: string | null;
     payment_intent_id: string | null;
@@ -137,7 +138,7 @@ export async function refundJob(
     const nowIso = new Date().toISOString();
     const refundStatus = refund.status === "succeeded" ? "succeeded" : refund.status === "failed" ? "failed" : "pending";
     const isFullRefund = false; // Could compare amount to job total if we had agreed_amount on job
-    const statusUpdate = refundStatus === "succeeded" ? "refunded" : job.status;
+    const statusUpdate = refundStatus === "succeeded" ? "refunded" : j.status;
 
     const updatePayload = {
       refund_amount: amount,
@@ -406,36 +407,49 @@ export async function overrideTimer(
     return { ok: false, error: jobError?.message ?? "Job not found." };
   }
 
-  if (job.status !== "completed_pending_approval") {
+  const row = job as {
+    status: string;
+    payment_released_at?: string | null;
+    auto_release_at?: string | null;
+    auto_release_at_original?: string | null;
+    cleaner_confirmed_at?: string | null;
+    cleaner_confirmed_complete?: boolean | null;
+    listing_id: string;
+    lister_id: string;
+    winner_id: string | null;
+    agreed_amount_cents: number | null;
+  };
+
+  if (row.status !== "completed_pending_approval") {
     return {
       ok: false,
-      error: `Job is not in completed_pending_approval (current: ${job.status}).`,
+      error: `Job is not in completed_pending_approval (current: ${row.status}).`,
     };
   }
 
-  if (job.payment_released_at) {
+  if (row.payment_released_at) {
     return { ok: false, error: "Payment has already been released." };
   }
 
   const nowIso = new Date().toISOString();
-  const prevAutoReleaseAt = job.auto_release_at ?? null;
-  const prevAutoReleaseAtOriginal = job.auto_release_at_original ?? null;
+  const prevAutoReleaseAt = row.auto_release_at ?? null;
+  const prevAutoReleaseAtOriginal = row.auto_release_at_original ?? null;
 
   const settings = await getGlobalSettings();
   const autoReleaseHours = settings?.auto_release_hours ?? 48;
   const feePercent = (settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12) / 100;
 
   const computeBaselineIso = () => {
-    if (job.auto_release_at_original) return job.auto_release_at_original;
-    if (!job.cleaner_confirmed_at) return null;
+    if (row.auto_release_at_original) return row.auto_release_at_original;
+    if (!row.cleaner_confirmed_at) return null;
     const baseMs =
-      new Date(job.cleaner_confirmed_at).getTime() +
+      new Date(row.cleaner_confirmed_at).getTime() +
       autoReleaseHours * 60 * 60 * 1000;
     return new Date(baseMs).toISOString();
   };
 
   const computeAutoReleaseMs = () => {
-    const atIso = job.auto_release_at ?? computeBaselineIso();
+    const atIso = row.auto_release_at ?? computeBaselineIso();
     return atIso ? new Date(atIso).getTime() : null;
   };
 
@@ -455,47 +469,47 @@ export async function overrideTimer(
       return { ok: false, error: statusErr.message };
     }
 
-    if (job.listing_id) {
+    if (row.listing_id) {
       const { error: listingErr } = await supabase
         .from("listings")
         .update({ status: "ended" } as never)
-        .eq("id", job.listing_id);
+        .eq("id", row.listing_id);
       if (listingErr) {
         return { ok: false, error: listingErr.message };
       }
     }
 
     // Notify winner + send lister/cleaner receipts (same approach as auto-release)
-    if (job.winner_id) {
+    if (row.winner_id) {
       await createNotification(
-        job.winner_id,
+        row.winner_id,
         "payment_released",
         jobId,
         "Payment was released by an admin timer override. Funds are on the way to your connected account."
       );
     }
 
-    if (job.winner_id) await recomputeVerificationBadgesForUser(job.winner_id);
-    if (job.lister_id) await recomputeVerificationBadgesForUser(job.lister_id);
+    if (row.winner_id) await recomputeVerificationBadgesForUser(row.winner_id);
+    if (row.lister_id) await recomputeVerificationBadgesForUser(row.lister_id);
 
-    const agreedCents = job.agreed_amount_cents ?? 0;
-    if (agreedCents >= 1 && job.lister_id && job.winner_id) {
+    const agreedCents = row.agreed_amount_cents ?? 0;
+    if (agreedCents >= 1 && row.lister_id && row.winner_id) {
       const feeCents = Math.round(agreedCents * feePercent);
       const totalCents = agreedCents + feeCents;
       let jobTitle: string | null = null;
-      if (job.listing_id) {
+      if (row.listing_id) {
         const { data: listing } = await supabase
           .from("listings")
           .select("title")
-          .eq("id", job.listing_id)
+          .eq("id", row.listing_id)
           .maybeSingle();
         jobTitle = (listing as { title?: string } | null)?.title ?? null;
       }
 
       await sendPaymentReceiptEmails({
         jobId,
-        listerId: job.lister_id,
-        cleanerId: job.winner_id,
+        listerId: row.lister_id,
+        cleanerId: row.winner_id,
         amountCents: totalCents,
         feeCents,
         netCents: agreedCents,

@@ -101,7 +101,9 @@ function dateSuffix() {
 
 function rowsToCsv(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "";
-  const keys = Object.keys(rows[0]);
+  const first = rows[0];
+  if (!first) return "";
+  const keys = Object.keys(first);
   const header = keys.map((k) => escapeCsv(k)).join(",");
   const lines = rows.map((r) =>
     keys.map((k) => escapeCsv(String(r[k] ?? ""))).join(",")

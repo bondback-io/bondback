@@ -551,12 +551,11 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                             setCleanerSuburbSuggestions([]);
                             return;
                           }
+                          const rows = data as SuburbEntry[];
                           const filtered = stateCode
-                            ? data.filter((s) => s.state === stateCode)
-                            : data;
-                          setCleanerSuburbSuggestions(
-                            filtered as SuburbEntry[]
-                          );
+                            ? rows.filter((s) => s.state === stateCode)
+                            : rows;
+                          setCleanerSuburbSuggestions(filtered);
                         });
                     }}
                   />
@@ -1039,12 +1038,11 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                           setListerSuburbSuggestions([]);
                           return;
                         }
+                        const rows = data as SuburbEntry[];
                         const filtered = stateCode
-                          ? data.filter((s) => s.state === stateCode)
-                          : data;
-                        setListerSuburbSuggestions(
-                          filtered as SuburbEntry[]
-                        );
+                          ? rows.filter((s) => s.state === stateCode)
+                          : rows;
+                        setListerSuburbSuggestions(filtered);
                       });
                   }}
                 />

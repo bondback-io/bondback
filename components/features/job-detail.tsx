@@ -375,11 +375,19 @@ export function JobDetail({
         window.location.href = res.url;
         return;
       }
-      const errMsg = res.error ?? "Please try again.";
+      if (!res.ok) {
+        const errMsg = res.error ?? "Please try again.";
+        toast({
+          variant: "destructive",
+          title: "Pay & Start Job failed",
+          description: errMsg,
+        });
+        return;
+      }
       toast({
         variant: "destructive",
         title: "Pay & Start Job failed",
-        description: errMsg,
+        description: "Please try again.",
       });
     } finally {
       setSecuringPayment(false);

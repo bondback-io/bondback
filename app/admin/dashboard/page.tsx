@@ -295,7 +295,8 @@ export default async function AdminDashboardPage() {
           variant="destructive"
         >
           <AlertTriangle className="h-4 w-4" />
-          <h5 className="font-medium leading-none tracking-tight text-sm font-semibold">
+          {/* AlertTitle removed in newer shadcn/ui – using h5 instead */}
+          <h5 className="mb-1 font-medium leading-none tracking-tight text-sm font-semibold">
             Error loading data
           </h5>
           <AlertDescription className="text-xs sm:text-sm">{error}</AlertDescription>

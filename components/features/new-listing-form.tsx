@@ -405,7 +405,7 @@ export function NewListingForm({
     const buyNow = values.buyNowPrice?.trim()
       ? Number(values.buyNowPrice)
       : null;
-    const startingPrice = calculateEstimatedPrice(values);
+    const startingPrice = calculateEstimatedPrice(values, addonCustomPrices);
     if (buyNow != null && buyNow >= startingPrice) {
       setIsSubmitting(false);
       setSubmitError("Buy-now price must be lower than the starting bid price.");
@@ -485,7 +485,7 @@ export function NewListingForm({
       return;
     }
 
-    const listingId = String(inserted.id);
+    const listingId = String((inserted as { id: string }).id);
     const total = initialPhotoFiles.length;
     const uploadedUrls: string[] = [];
 
@@ -498,6 +498,7 @@ export function NewListingForm({
         );
         setUploadProgress(total > 0 ? Math.round(((i + 1) / total) * 100) : 0);
         const file = initialPhotoFiles[i];
+        if (!file) continue;
         const fd = new FormData();
         fd.append("file", file);
         const { results, error: actionError } = await uploadProcessedPhotos(fd, {
@@ -548,7 +549,7 @@ export function NewListingForm({
       const { updateListingCoverPhoto } = await import("@/lib/actions/listings");
       const coverUrl =
         uploadedUrls[Math.min(coverPhotoIndex, uploadedUrls.length - 1)] ?? uploadedUrls[0];
-      await updateListingCoverPhoto(listingId, coverUrl);
+      await updateListingCoverPhoto(listingId, coverUrl ?? null);
     }
 
     setCreatedListingId(listingId);

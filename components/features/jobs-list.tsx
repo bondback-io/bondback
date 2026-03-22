@@ -200,8 +200,8 @@ export function JobsList({
 
   const rowVirtualizer = useWindowVirtualizer({
     count: live.length > VIRTUALIZE_THRESHOLD ? live.length : 0,
-    estimateSize: ESTIMATED_CARD_HEIGHT,
-    getScrollElement: () => window.document.documentElement,
+    estimateSize: () => ESTIMATED_CARD_HEIGHT,
+    getScrollElement: () => window,
     scrollMargin: scrollMarginTop,
     overscan: 5,
     gap: 12,
@@ -318,6 +318,7 @@ export function JobsList({
       >
         {virtualItems.map((virtualRow) => {
           const listing = live[virtualRow.index];
+          if (!listing) return null;
           return (
             <div
               key={listing.id}

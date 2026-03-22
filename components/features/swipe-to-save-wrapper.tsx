@@ -39,12 +39,15 @@ export function SwipeToSaveWrapper({
   }, [onSave, toast]);
 
   const onTouchStart = (e: React.TouchEvent) => {
-    startX.current = e.touches[0].clientX;
+    const t = e.touches[0];
+    if (t) startX.current = t.clientX;
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
     if (saved) return;
-    const x = e.touches[0].clientX;
+    const t = e.touches[0];
+    if (!t) return;
+    const x = t.clientX;
     const delta = x - startX.current;
     if (delta > 0) setOffset(Math.min(delta, 80));
     else setOffset(0);

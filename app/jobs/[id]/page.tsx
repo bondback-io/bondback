@@ -243,7 +243,7 @@ export default async function JobDetailPage({
       {isDisputed && (
         <Alert variant="warning" className="border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/40">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-          {/* AlertTitle removed in newer shadcn/ui – using h5 instead */}
+          {/* AlertTitle removed in newer shadcn/ui — using h5 instead */}
           <h5 className="mb-1 font-medium leading-none tracking-tight text-amber-900 dark:text-amber-100">
             Dispute in progress – details below
           </h5>

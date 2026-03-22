@@ -50,7 +50,9 @@ export function SupportForm({
   initialListingId = "",
 }: SupportFormProps) {
   const { toast } = useToast();
-  const [category, setCategory] = useState<string>(SUPPORT_CATEGORY_OPTIONS[SUPPORT_CATEGORY_OPTIONS.length - 1]);
+  const [category, setCategory] = useState<string>(
+    SUPPORT_CATEGORY_OPTIONS.at(-1) ?? "Other"
+  );
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [email, setEmail] = useState(initialEmail);

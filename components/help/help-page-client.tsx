@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Fuse from "fuse.js";
+import type { IFuseOptions, FuseResult } from "fuse.js";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { HelpArticleMinimal } from "@/lib/help-articles";
 import { stripMarkdownToPlainText, escapeLikePattern, expandSearchTerms } from "@/lib/help-utils";
@@ -34,7 +35,7 @@ const EMPTY_STATE_SUGGESTIONS = [
 
 const DEBOUNCE_MS = 200;
 
-const FUSE_OPTIONS: Fuse.IFuseOptions<HelpArticleMinimal> = {
+const FUSE_OPTIONS: IFuseOptions<HelpArticleMinimal> = {
   keys: [
     { name: "title", weight: 0.6 },
     { name: "content", weight: 0.4 },
@@ -60,7 +61,7 @@ export function HelpPageClient({ initialArticles }: HelpPageClientProps) {
   const [initialLoading, setInitialLoading] = useState(false);
   const [searchFallbackLoading, setSearchFallbackLoading] = useState(false);
   const [displayItems, setDisplayItems] = useState<HelpArticleMinimal[]>(initialArticles);
-  const [fuseResults, setFuseResults] = useState<Fuse.FuseResult<HelpArticleMinimal>[] | null>(null);
+  const [fuseResults, setFuseResults] = useState<FuseResult<HelpArticleMinimal>[] | null>(null);
   const [usedFallbackSearch, setUsedFallbackSearch] = useState(false);
   const [showClosestMessage, setShowClosestMessage] = useState(false);
 
@@ -104,7 +105,7 @@ export function HelpPageClient({ initialArticles }: HelpPageClientProps) {
     if (fuseSearchResults.length > 0) {
       setDisplayItems(fuseSearchResults.map((r) => r.item));
       setFuseResults(fuseSearchResults);
-      const bestScore = fuseSearchResults[0].score ?? 0;
+      const bestScore = fuseSearchResults[0]?.score ?? 0;
       setShowClosestMessage(bestScore > FUZZY_THRESHOLD);
       return;
     }

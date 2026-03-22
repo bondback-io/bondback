@@ -236,7 +236,7 @@ export function ReviewForm({ jobId, revieweeType, onSuccess }: ReviewFormProps) 
                     existingCount: reviewPhotos.length,
                   });
                   if (errors.length) {
-                    setError(errors[0]);
+                    setError(errors[0] ?? null);
                   }
                   const headerValid: File[] = [];
                   for (const f of validFiles) {

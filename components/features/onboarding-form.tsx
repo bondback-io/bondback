@@ -122,8 +122,8 @@ export const OnboardingForm = ({
     }
 
     const maxTravelKm = 30;
-    const roles: ProfileRole[] =
-      values.role === "both" ? ["lister", "cleaner"] : ["lister"];
+    // cleaner / both already redirected above; only "lister" reaches here
+    const roles: ProfileRole[] = ["lister"];
 
     const result = await saveOnboardingProfile({
       roles,
@@ -226,7 +226,6 @@ export const OnboardingForm = ({
               <Label htmlFor="date_of_birth">Date of birth (optional)</Label>
               <Input
                 id="date_of_birth"
-                name="date_of_birth"
                 type="date"
                 {...form.register("date_of_birth")}
               />
@@ -284,10 +283,11 @@ export const OnboardingForm = ({
                             setSuburbSuggestions([]);
                             return;
                           }
+                          const rows = data as SuburbEntry[];
                           const filtered = stateCode
-                            ? data.filter((s) => s.state === stateCode)
-                            : data;
-                          setSuburbSuggestions(filtered as SuburbEntry[]);
+                            ? rows.filter((s) => s.state === stateCode)
+                            : rows;
+                          setSuburbSuggestions(filtered);
                         });
                     }}
                   />
