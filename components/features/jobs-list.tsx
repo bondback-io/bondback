@@ -52,7 +52,7 @@ function haversineKm(
 const INITIAL_PAGE_SIZE = 20;
 const PRELOAD_IMAGE_COUNT = 4;
 /** Off until we fix gesture conflict with vertical scroll (react-swipeable preventScrollOnSwipe). */
-const ENABLE_JOB_CARD_SWIPE = false;
+const ENABLE_JOB_CARD_SWIPE = true;
 /** Off until pull-to-refresh can coexist with scroll without fighting the browser. */
 const ENABLE_JOBS_PULL_TO_REFRESH = false;
 /** When list has more than this many cards, use @tanstack/react-virtual (window virtualizer) for performance. */

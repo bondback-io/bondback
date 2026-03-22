@@ -51,8 +51,164 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
     }
   };
 
+  const statusLine =
+    job.status === "disputed" || job.status === "in_review" || job.status === "dispute_negotiating"
+      ? "Disputed"
+      : job.status === "in_progress"
+        ? "In progress"
+        : job.status === "accepted"
+          ? "Awaiting approval"
+          : job.status === "completed"
+            ? "Completed"
+            : job.status;
+
+  const statusPillClass =
+    job.status === "disputed" || job.status === "in_review" || job.status === "dispute_negotiating"
+      ? "border-red-400/80 bg-red-500/15 text-red-900 dark:border-red-600/50 dark:bg-red-950/60 dark:text-red-100"
+      : job.status === "in_progress"
+        ? "border-emerald-300/80 bg-emerald-500/15 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/60 dark:text-emerald-100"
+        : job.status === "accepted"
+          ? "border-sky-400/80 bg-sky-500/15 text-sky-900 dark:border-sky-600/50 dark:bg-sky-950/60 dark:text-sky-100"
+          : job.status === "completed"
+            ? "border-emerald-300/80 bg-emerald-500/15 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/60 dark:text-emerald-100"
+            : "border-border bg-muted text-muted-foreground dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300";
+
+  const bedsBaths =
+    listing != null
+      ? `${listing.bedrooms} bed · ${listing.bathrooms} bath`
+      : null;
+
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition-all duration-200 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 [@media(hover:hover)]:hover:-translate-y-0.5 [@media(hover:hover)]:hover:shadow-xl active:scale-[0.98]">
+    <>
+      {/* Mobile (&lt;768px): thumb-friendly hero + bold price + large CTAs */}
+      <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-md dark:border-gray-800 dark:bg-gray-950 md:hidden">
+        <div className="relative min-h-[180px] max-h-[220px] h-[200px] w-full overflow-hidden bg-muted dark:bg-gray-800">
+          <Link
+            href={jobHref}
+            className="absolute inset-0 z-0 block"
+            aria-label={`View job: ${title}`}
+          >
+            {thumb ? (
+              <Image
+                src={thumb}
+                alt={listing?.title ? `Photo for ${listing.title}` : "Job photo"}
+                fill
+                quality={75}
+                className="object-cover"
+                sizes="100vw"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-400" aria-hidden>
+                <Briefcase className="h-10 w-10" />
+              </div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-transparent" aria-hidden />
+          </Link>
+          <div className="absolute left-3 top-3 z-10 min-w-0" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 rounded-full bg-background/90 text-muted-foreground hover:bg-background dark:bg-gray-900/90"
+                  aria-label="Open job actions menu"
+                >
+                  <MoreVertical className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link href={jobHref} className="flex cursor-pointer items-center gap-2">
+                    <Eye className="h-4 w-4" />
+                    View Details
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={`/messages?job=${job.id}`} className="flex cursor-pointer items-center gap-2">
+                    <MessageCircle className="h-4 w-4" />
+                    Message Lister
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings#support" className="flex cursor-pointer items-center gap-2">
+                    <Flag className="h-4 w-4" />
+                    Report Issue
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleShare} className="flex cursor-pointer items-center gap-2">
+                  <Share2 className="h-4 w-4" />
+                  Share Listing
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4 border-t border-border px-4 pb-5 pt-4 dark:border-gray-800">
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Job price
+            </p>
+            <p className="text-4xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
+              {listing ? formatCents(listing.current_lowest_bid_cents ?? 0) : "—"}
+            </p>
+            <div
+              className={cn(
+                "inline-flex w-fit max-w-full rounded-xl border-2 px-3 py-2 text-base font-bold leading-tight",
+                statusPillClass
+              )}
+            >
+              {statusLine}
+            </div>
+            {daysLeft != null && (
+              <p className="text-sm font-medium text-muted-foreground">{daysLeft} days left</p>
+            )}
+          </div>
+
+          <p className="line-clamp-2 text-base font-semibold leading-snug text-foreground dark:text-gray-100">{title}</p>
+          {listing && (
+            <p className="flex items-center gap-1 text-base text-muted-foreground dark:text-gray-400">
+              <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+              {formatLocationWithState(listing.suburb, listing.postcode)}
+            </p>
+          )}
+          {bedsBaths && (
+            <p className="text-base text-muted-foreground dark:text-gray-500">{bedsBaths}</p>
+          )}
+          <p className="text-xs text-muted-foreground dark:text-gray-500">
+            Price includes 12% platform fee paid by the lister
+          </p>
+
+          <div className="flex flex-col gap-3 pt-1">
+            {isDisputed && (
+              <Button
+                variant="destructive"
+                size="lg"
+                className="min-h-12 w-full rounded-xl text-base font-semibold"
+                type="button"
+                onClick={() => router.push(`${jobHref}#dispute`)}
+              >
+                View Dispute
+              </Button>
+            )}
+            <Button asChild size="lg" className="min-h-12 w-full rounded-xl text-base font-semibold shadow-md">
+              <Link href={jobHref} className="flex items-center justify-center gap-2">
+                <Eye className="h-5 w-5 shrink-0" aria-hidden />
+                View job
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="secondary" className="min-h-12 w-full rounded-xl text-base font-semibold">
+              <Link href={`/messages?job=${job.id}`} className="flex items-center justify-center gap-2">
+                <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
+                Message lister
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="group relative hidden flex-col overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition-all duration-200 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 md:flex [@media(hover:hover)]:hover:-translate-y-0.5 [@media(hover:hover)]:hover:shadow-xl active:scale-[0.98]">
       <Link
         href={jobHref}
         className="flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg rounded-b-none"
@@ -196,5 +352,6 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
         </div>
       </Link>
     </div>
+    </>
   );
 }

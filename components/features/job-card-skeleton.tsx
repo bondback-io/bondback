@@ -16,33 +16,43 @@ export function JobCardSkeleton({ className }: { className?: string }) {
         className
       )}
     >
-      <div className="relative h-[200px] w-full overflow-hidden bg-muted dark:bg-gray-800 sm:aspect-[4/3] sm:h-auto">
-        <Skeleton className="absolute inset-0 rounded-none animate-shimmer" aria-hidden />
+      {/* Mobile: matches JobCard hero + stacked body */}
+      <div className="md:hidden">
+        <div className="relative h-[200px] w-full min-h-[180px] max-h-[220px] overflow-hidden bg-muted dark:bg-gray-800">
+          <Skeleton className="absolute inset-0 rounded-none animate-shimmer" aria-hidden />
+        </div>
+        <div className="space-y-3 border-t border-border bg-card px-4 pb-5 pt-4 dark:border-gray-800 dark:bg-gray-950">
+          <Skeleton className="h-3 w-24 animate-shimmer" />
+          <Skeleton className="h-10 w-36 animate-shimmer" />
+          <Skeleton className="h-12 w-full max-w-xs rounded-xl animate-shimmer" />
+          <Skeleton className="h-5 w-full animate-shimmer" />
+          <Skeleton className="h-5 w-2/3 animate-shimmer" />
+          <Skeleton className="h-12 w-full rounded-xl animate-shimmer" />
+          <Skeleton className="h-12 w-full rounded-xl animate-shimmer" />
+        </div>
       </div>
-      <CardContent className="flex flex-1 flex-col gap-4 p-5 dark:border-t dark:border-gray-800 md:p-4">
-        {/* Title + subtitle */}
-        <div className="space-y-1.5">
-          <Skeleton className="h-5 w-4/5 animate-shimmer" />
-          <Skeleton className="h-3.5 w-2/3 animate-shimmer" />
+      {/* Desktop */}
+      <div className="hidden md:flex md:flex-col">
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted dark:bg-gray-800">
+          <Skeleton className="absolute inset-0 rounded-none animate-shimmer" aria-hidden />
         </div>
-        {/* Badge placeholders (e.g. beds, baths, status) */}
-        <div className="flex flex-wrap gap-2">
-          <Skeleton className="h-4 w-10 animate-shimmer" />
-          <Skeleton className="h-4 w-10 animate-shimmer" />
-          <Skeleton className="h-5 w-16 rounded-full animate-shimmer" />
-        </div>
-        {/* Price line */}
-        <div className="flex justify-between gap-2">
-          <Skeleton className="h-6 w-20 animate-shimmer" />
-          <Skeleton className="h-4 w-16 animate-shimmer" />
-        </div>
-        <div className="flex justify-between gap-2">
-          <Skeleton className="h-8 w-20 animate-shimmer" />
-          <Skeleton className="h-4 w-16 animate-shimmer" />
-        </div>
-        <Skeleton className="h-6 w-24 rounded-full animate-shimmer" />
-        <Skeleton className="h-12 w-full rounded-lg md:h-10 animate-shimmer" />
-      </CardContent>
+        <CardContent className="flex flex-1 flex-col gap-4 p-4 dark:border-t dark:border-gray-800">
+          <div className="space-y-1.5">
+            <Skeleton className="h-5 w-4/5 animate-shimmer" />
+            <Skeleton className="h-3.5 w-2/3 animate-shimmer" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-4 w-10 animate-shimmer" />
+            <Skeleton className="h-4 w-10 animate-shimmer" />
+            <Skeleton className="h-5 w-16 rounded-full animate-shimmer" />
+          </div>
+          <div className="flex justify-between gap-2">
+            <Skeleton className="h-6 w-20 animate-shimmer" />
+            <Skeleton className="h-4 w-16 animate-shimmer" />
+          </div>
+          <Skeleton className="h-10 w-full rounded-lg animate-shimmer" />
+        </CardContent>
+      </div>
     </Card>
   );
 }

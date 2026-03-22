@@ -62,7 +62,11 @@ import {
   checkImageHeader,
 } from "@/lib/photo-validation";
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
-import { updateListingInitialPhotos } from "@/lib/actions/listings";
+import {
+  updateListingInitialPhotos,
+  updateListingCoverPhoto,
+  triggerNewListingJobAlerts,
+} from "@/lib/actions/listings";
 
 const propertyTypes = ["apartment", "house", "townhouse", "studio"] as const;
 type PropertyType = (typeof propertyTypes)[number];
@@ -401,167 +405,174 @@ export function NewListingForm({
     setSubmitError(null);
     setIsSubmitting(true);
 
-    const reserve = values.reservePrice;
-    const buyNow = values.buyNowPrice?.trim()
-      ? Number(values.buyNowPrice)
-      : null;
-    const startingPrice = calculateEstimatedPrice(values, addonCustomPrices);
-    if (buyNow != null && buyNow >= startingPrice) {
-      setIsSubmitting(false);
-      setSubmitError("Buy-now price must be lower than the starting bid price.");
-      return;
-    }
-
-    const durationDays = values.durationDays;
-    const moveOutDateStr = format(values.moveOutDate, "yyyy-MM-dd");
-    const endTime = new Date(
-      Date.now() + durationDays * 24 * 60 * 60 * 1000
-    ).toISOString();
-
-    const specialParts = values.specialAreas.length
-      ? `Special areas: ${values.specialAreas.join(", ")}. `
-      : "";
-    const instructions = [specialParts, values.instructions ?? ""].filter(Boolean).join("").trim() || null;
-
-    const title = `${values.bedrooms} ${values.bedrooms === 1 ? "Bedroom" : "Bedrooms"} + ${values.bathrooms} ${values.bathrooms === 1 ? "Bathroom" : "Bathrooms"} ${values.propertyType.charAt(0).toUpperCase() + values.propertyType.slice(1)} in ${values.suburb}`;
-
-    if (initialPhotoFiles.length > PHOTO_LIMITS.LISTING_INITIAL) {
-      setIsSubmitting(false);
-      toast({
-        variant: "destructive",
-        title: "Too many photos",
-        description: `Max ${PHOTO_LIMITS.LISTING_INITIAL} initial condition photos allowed.`,
-      });
-      return;
-    }
-    if (initialPhotoFiles.length < 1) {
-      setIsSubmitting(false);
-      toast({
-        variant: "destructive",
-        title: "Initial photos required",
-        description: "Upload at least 1 initial condition photo (step 3) before publishing.",
-      });
-      return;
-    }
-
-    const row = buildListingInsertRow({
-      lister_id: listerId,
-      title,
-      description: instructions,
-      property_address: values.propertyAddress?.trim() || null,
-      suburb: values.suburb,
-      postcode: values.postcode,
-      property_type: values.propertyType,
-      bedrooms: values.bedrooms,
-      bathrooms: values.bathrooms,
-      addons: values.addons,
-      special_instructions: instructions,
-      move_out_date: moveOutDateStr,
-      photo_urls: null,
-      reserve_cents: Math.round(reserve * 100),
-      reserve_price: Math.round(reserve * 100),
-      buy_now_cents: buyNow ? Math.round(buyNow * 100) : null,
-      base_price: Math.round(startingPrice * 100),
-      starting_price_cents: Math.round(startingPrice * 100),
-      current_lowest_bid_cents: Math.round(startingPrice * 100),
-      duration_days: durationDays,
-      status: "live",
-      end_time: endTime,
-      end_date: endTime.slice(0, 10),
-      preferred_dates: [moveOutDateStr],
-    });
-
-    const { data: inserted, error } = await supabase
-      .from("listings")
-      .insert(row as never)
-      .select("id")
-      .maybeSingle();
-
-    if (error || !inserted) {
-      setIsSubmitting(false);
-      const msg = error?.message ?? "Failed to create listing.";
-      setSubmitError(msg);
-      toast({ variant: "destructive", title: "Error", description: msg });
-      return;
-    }
-
-    const listingId = String((inserted as { id: string }).id);
-    const total = initialPhotoFiles.length;
-    const uploadedUrls: string[] = [];
-
-    setFileStatuses(initialPhotoFiles.map(() => ({ status: "pending" as const })));
-    setUploading(true);
     try {
-      for (let i = 0; i < initialPhotoFiles.length; i++) {
-        setFileStatuses((prev) =>
-          prev.map((s, j) => (j === i ? { ...s, status: "uploading" as const } : s))
-        );
-        setUploadProgress(total > 0 ? Math.round(((i + 1) / total) * 100) : 0);
-        const file = initialPhotoFiles[i];
-        if (!file) continue;
-        const fd = new FormData();
-        fd.append("file", file);
-        const { results, error: actionError } = await uploadProcessedPhotos(fd, {
-          bucket: "condition-photos",
-          pathPrefix: `listings/${listingId}/initial`,
-          maxFiles: 1,
-          generateThumb: true,
-        });
-        const res = results[0];
-        if (actionError || !res?.url) {
-          const err = res?.error ?? actionError ?? "Upload failed";
-          setFileStatuses((prev) =>
-            prev.map((s, j) => (j === i ? { ...s, status: "error" as const, error: err } : s))
-          );
-          setSubmitError(err);
-          toast({ variant: "destructive", title: "Upload failed", description: `${file.name}: ${err}` });
-          setUploading(false);
-          setIsSubmitting(false);
-          return;
-        }
-        uploadedUrls.push(res.url);
-        setFileStatuses((prev) =>
-          prev.map((s, j) =>
-            j === i
-              ? { ...s, status: "success" as const, url: res.url, thumbUrl: res.thumbnailUrl }
-              : s
-          )
-        );
-      }
-    } finally {
-      setUploadProgress(100);
-      setUploading(false);
-    }
-
-    if (uploadedUrls.length > 0) {
-      const updateResult = await updateListingInitialPhotos(listingId, uploadedUrls);
-      if (!updateResult.ok) {
-        setSubmitError(updateResult.error);
-        toast({
-          variant: "destructive",
-          title: "Photos uploaded but save failed",
-          description: updateResult.error,
-        });
-        setUploading(false);
-        setIsSubmitting(false);
+      const reserve = values.reservePrice;
+      const buyNow = values.buyNowPrice?.trim()
+        ? Number(values.buyNowPrice)
+        : null;
+      const startingPrice = calculateEstimatedPrice(values, addonCustomPrices);
+      if (buyNow != null && buyNow >= startingPrice) {
+        setSubmitError("Buy-now price must be lower than the starting bid price.");
         return;
       }
-      const { updateListingCoverPhoto } = await import("@/lib/actions/listings");
-      const coverUrl =
-        uploadedUrls[Math.min(coverPhotoIndex, uploadedUrls.length - 1)] ?? uploadedUrls[0];
-      await updateListingCoverPhoto(listingId, coverUrl ?? null);
-    }
 
-    setCreatedListingId(listingId);
-    setCreated(true);
-    // SMS (Twilio) + push (Expo) to cleaners within max_travel_km — fire-and-forget
-    import("@/lib/actions/listings").then(({ triggerNewListingJobAlerts }) =>
-      triggerNewListingJobAlerts(listingId)
-    );
-    toast({
-      title: "Listing created",
-      description: "Cleaners can now bid on your bond clean.",
-    });
+      const durationDays = values.durationDays;
+      const moveOutDateStr = format(values.moveOutDate, "yyyy-MM-dd");
+      const endTime = new Date(
+        Date.now() + durationDays * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      const specialParts = values.specialAreas.length
+        ? `Special areas: ${values.specialAreas.join(", ")}. `
+        : "";
+      const instructions = [specialParts, values.instructions ?? ""].filter(Boolean).join("").trim() || null;
+
+      const title = `${values.bedrooms} ${values.bedrooms === 1 ? "Bedroom" : "Bedrooms"} + ${values.bathrooms} ${values.bathrooms === 1 ? "Bathroom" : "Bathrooms"} ${values.propertyType.charAt(0).toUpperCase() + values.propertyType.slice(1)} in ${values.suburb}`;
+
+      if (initialPhotoFiles.length > PHOTO_LIMITS.LISTING_INITIAL) {
+        toast({
+          variant: "destructive",
+          title: "Too many photos",
+          description: `Max ${PHOTO_LIMITS.LISTING_INITIAL} initial condition photos allowed.`,
+        });
+        return;
+      }
+      if (initialPhotoFiles.length < 1) {
+        toast({
+          variant: "destructive",
+          title: "Initial photos required",
+          description: "Upload at least 1 initial condition photo (step 3) before publishing.",
+        });
+        return;
+      }
+
+      const row = buildListingInsertRow({
+        lister_id: listerId,
+        title,
+        description: instructions,
+        property_address: values.propertyAddress?.trim() || null,
+        suburb: values.suburb,
+        postcode: values.postcode,
+        property_type: values.propertyType,
+        bedrooms: values.bedrooms,
+        bathrooms: values.bathrooms,
+        addons: values.addons,
+        special_instructions: instructions,
+        move_out_date: moveOutDateStr,
+        photo_urls: null,
+        reserve_cents: Math.round(reserve * 100),
+        reserve_price: Math.round(reserve * 100),
+        buy_now_cents: buyNow ? Math.round(buyNow * 100) : null,
+        base_price: Math.round(startingPrice * 100),
+        starting_price_cents: Math.round(startingPrice * 100),
+        current_lowest_bid_cents: Math.round(startingPrice * 100),
+        duration_days: durationDays,
+        status: "live",
+        end_time: endTime,
+        end_date: endTime.slice(0, 10),
+        preferred_dates: [moveOutDateStr],
+      });
+
+      const { data: inserted, error } = await supabase
+        .from("listings")
+        .insert(row as never)
+        .select("id")
+        .maybeSingle();
+
+      if (error || !inserted) {
+        const msg = error?.message ?? "Failed to create listing.";
+        setSubmitError(msg);
+        toast({ variant: "destructive", title: "Error", description: msg });
+        return;
+      }
+
+      const listingId = String((inserted as { id: string }).id);
+      const total = initialPhotoFiles.length;
+      const uploadedUrls: string[] = [];
+
+      setFileStatuses(initialPhotoFiles.map(() => ({ status: "pending" as const })));
+      setUploading(true);
+      try {
+        for (let i = 0; i < initialPhotoFiles.length; i++) {
+          setFileStatuses((prev) =>
+            prev.map((s, j) => (j === i ? { ...s, status: "uploading" as const } : s))
+          );
+          setUploadProgress(total > 0 ? Math.round(((i + 1) / total) * 100) : 0);
+          const file = initialPhotoFiles[i];
+          if (!file) continue;
+          const fd = new FormData();
+          fd.append("file", file);
+          const { results, error: actionError } = await uploadProcessedPhotos(fd, {
+            bucket: "condition-photos",
+            pathPrefix: `listings/${listingId}/initial`,
+            maxFiles: 1,
+            generateThumb: true,
+          });
+          const res = results[0];
+          if (actionError || !res?.url) {
+            const err = res?.error ?? actionError ?? "Upload failed";
+            setFileStatuses((prev) =>
+              prev.map((s, j) => (j === i ? { ...s, status: "error" as const, error: err } : s))
+            );
+            setSubmitError(err);
+            toast({ variant: "destructive", title: "Upload failed", description: `${file.name}: ${err}` });
+            return;
+          }
+          uploadedUrls.push(res.url);
+          setFileStatuses((prev) =>
+            prev.map((s, j) =>
+              j === i
+                ? { ...s, status: "success" as const, url: res.url, thumbUrl: res.thumbnailUrl }
+                : s
+            )
+          );
+        }
+      } finally {
+        setUploadProgress(100);
+        setUploading(false);
+      }
+
+      if (uploadedUrls.length > 0) {
+        const updateResult = await updateListingInitialPhotos(listingId, uploadedUrls);
+        if (!updateResult.ok) {
+          setSubmitError(updateResult.error);
+          toast({
+            variant: "destructive",
+            title: "Photos uploaded but save failed",
+            description: updateResult.error,
+          });
+          return;
+        }
+        const coverUrl =
+          uploadedUrls[Math.min(coverPhotoIndex, uploadedUrls.length - 1)] ?? uploadedUrls[0];
+        const coverRes = await updateListingCoverPhoto(listingId, coverUrl ?? null);
+        if (!coverRes.ok) {
+          toast({
+            variant: "destructive",
+            title: "Cover photo not saved",
+            description: coverRes.error,
+          });
+        }
+      }
+
+      setCreatedListingId(listingId);
+      setCreated(true);
+      // SMS (Twilio) + push (Expo) to cleaners within max_travel_km — fire-and-forget
+      void triggerNewListingJobAlerts(listingId).catch(() => {
+        /* non-blocking */
+      });
+      toast({
+        title: "Listing created",
+        description: "Cleaners can now bid on your bond clean.",
+      });
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Something went wrong while publishing.";
+      setSubmitError(msg);
+      toast({ variant: "destructive", title: "Error", description: msg });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (created) {

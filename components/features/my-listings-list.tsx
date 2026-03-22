@@ -38,10 +38,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { formatLocationWithState } from "@/lib/state-from-postcode";
+import { formatAuctionTimeLeftShort } from "@/components/JobCard";
+import { MyListingsCardMobile } from "@/components/features/my-listings-card-mobile";
 
 export type MyListingsListProps = {
   initialListings: ListingRow[];
   listerId: string;
+  /** Logged-in lister's verification badges (same chips as marketplace cards) */
+  listerVerificationBadges?: string[] | null;
   /** When set, open the edit panel for this listing id (e.g. from /listings/[id]/edit redirect). */
   initialEditListingId?: string | null;
   /** Platform fee % (lister pays on top of job price). Used for fee breakdown on job cards. */
@@ -77,6 +82,7 @@ export function MyListingsList({
   viewTab = "active_listings",
   initialActiveJobsSnapshot,
   initialActiveListingIds,
+  listerVerificationBadges = null,
 }: MyListingsListProps) {
   const [listings, setListings] = useState<ListingRow[]>(initialListings);
   const [activeListingIds, setActiveListingIds] = useState<
@@ -618,13 +624,251 @@ export function MyListingsList({
       }
     }
 
+    const coverUrl = getListingCoverUrl(listing) ?? "/placeholder-listing.png";
+    const endTsMs = parseUtcTimestamp(listing.end_time);
+    const auctionHoursLeft = (endTsMs - Date.now()) / (1000 * 60 * 60);
+    const showHotMobile =
+      isLive &&
+      listing.status === "live" &&
+      !isCancelledListing &&
+      auctionHoursLeft > 0 &&
+      auctionHoursLeft < 24;
+
+    const locationLine = formatLocationWithState(listing.suburb, listing.postcode);
+    const bedsBathsLine = `${listing.bedrooms} bed · ${listing.bathrooms} bath`;
+
+    const jobCents = listing.current_lowest_bid_cents ?? 0;
+    const feeCents = Math.round((jobCents * feePercentage) / 100);
+    const totalCents = jobCents + feeCents;
+
+    let mobilePriceLabel = "";
+    let mobilePriceDisplay = "";
+    let mobileStatusPill = "";
+    let mobileStatusPillClass = "";
+
+    if (isJobCard || isCancelledListing) {
+      if (jobStatus === "completed") {
+        mobilePriceLabel = "Total you paid (job + fee)";
+        mobilePriceDisplay = formatCents(totalCents);
+      } else if (isDisputedListing) {
+        mobilePriceLabel = "Job amount";
+        mobilePriceDisplay = formatCents(jobCents);
+      } else if (isCancelledListing) {
+        mobilePriceLabel = "Listing";
+        mobilePriceDisplay = formatCents(jobCents);
+      } else {
+        mobilePriceLabel = "Total you pay (job + fee)";
+        mobilePriceDisplay = formatCents(totalCents);
+      }
+      mobileStatusPill =
+        isJobCard && progressCount > 0 && !isCancelledListing
+          ? `${statusLabel} ${progressCount}/5`
+          : statusLabel;
+      if (isCancelledListing) {
+        mobileStatusPillClass =
+          "border-red-400/80 bg-red-500/15 text-red-900 dark:border-red-600/50 dark:bg-red-950/60 dark:text-red-100";
+      } else if (isDisputedListing) {
+        mobileStatusPillClass =
+          "border-amber-400/80 bg-amber-500/20 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/50 dark:text-amber-100";
+      } else if (jobStatus === "completed") {
+        mobileStatusPillClass =
+          "border-emerald-300/80 bg-emerald-500/15 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/60 dark:text-emerald-100";
+      } else if (jobStatus === "in_progress") {
+        mobileStatusPillClass =
+          "border-amber-400/80 bg-amber-500/20 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/50 dark:text-amber-100";
+      } else if (jobStatus === "accepted") {
+        mobileStatusPillClass =
+          "border-sky-400/80 bg-sky-500/15 text-sky-900 dark:border-sky-600/50 dark:bg-sky-950/60 dark:text-sky-100";
+      } else {
+        mobileStatusPillClass =
+          "border-emerald-300/80 bg-emerald-500/15 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/60 dark:text-emerald-100";
+      }
+    } else if (isLive) {
+      mobilePriceLabel = "Current lowest bid";
+      mobilePriceDisplay = formatCents(listing.current_lowest_bid_cents);
+      const endingSoon = auctionHoursLeft > 0 && auctionHoursLeft < 24;
+      mobileStatusPill = endingSoon
+        ? `Ending Soon · ${formatAuctionTimeLeftShort(endTsMs)}`
+        : `Live · ${formatAuctionTimeLeftShort(endTsMs)}`;
+      mobileStatusPillClass = endingSoon
+        ? "border-amber-400/80 bg-amber-500/20 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/50 dark:text-amber-100"
+        : "border-emerald-300/80 bg-emerald-500/15 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/60 dark:text-emerald-100";
+    } else if (kind === "ended") {
+      mobilePriceLabel = isEndedNoBids ? "Auction ended" : "Final bid";
+      mobilePriceDisplay = formatCents(listing.current_lowest_bid_cents);
+      if (isEndedNoBids) {
+        mobileStatusPill = "Ended · no bids";
+        mobileStatusPillClass =
+          "border-red-400/80 bg-red-500/15 text-red-900 dark:border-red-600/50 dark:bg-red-950/60 dark:text-red-100";
+      } else if (
+        jobStatus === "cancelled" ||
+        cancelledListingIds.has(listing.id as unknown as string | number)
+      ) {
+        mobileStatusPill = "Cancelled";
+        mobileStatusPillClass =
+          "border-red-400/80 bg-red-500/15 text-red-900 dark:border-red-600/50 dark:bg-red-950/60 dark:text-red-100";
+      } else {
+        mobileStatusPill = "Ended";
+        mobileStatusPillClass =
+          "border-border bg-muted text-muted-foreground dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300";
+      }
+    } else {
+      mobilePriceLabel = "Amount";
+      mobilePriceDisplay = formatCents(listing.current_lowest_bid_cents);
+      mobileStatusPill = statusLabel;
+      mobileStatusPillClass =
+        "border-border bg-muted text-muted-foreground dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300";
+    }
+
+    const primaryLabel =
+      kind === "ended"
+        ? "View listing history"
+        : isActiveJob
+          ? "Open job"
+          : kind === "completed"
+            ? "View Job History"
+            : isLive
+              ? "View Job Bids"
+              : "View & bids";
+
+    const primaryHref = `/jobs/${listing.id}`;
+    const showMobileSecondaryMessages =
+      !!jobInfo &&
+      (isJobCard || isCancelledListing) &&
+      !!jobInfo.winnerId &&
+      jobStatus !== "cancelled" &&
+      (jobStatus === "in_progress" ||
+        jobStatus === "completed" ||
+        isDisputedListing);
+
     return (
-      <Card
-        key={listing.id}
-        className={`${cardClass} ${
-          kind === "completed" ? "text-xs sm:text-[11px]" : ""
-        }`}
-      >
+      <div key={listing.id} className="h-full">
+        <div className="md:hidden">
+          <MyListingsCardMobile
+            listingId={listing.id}
+            title={listing.title}
+            coverUrl={coverUrl}
+            listerVerificationBadges={listerVerificationBadges}
+            showHot={showHotMobile}
+            showCountdown={false}
+            endTime={listing.end_time}
+            statusPill={mobileStatusPill}
+            statusPillClassName={mobileStatusPillClass}
+            priceLabel={mobilePriceLabel}
+            priceDisplay={mobilePriceDisplay}
+            locationLine={locationLine}
+            bedsBathsLine={bedsBathsLine}
+            cardClassName={cardClass}
+            primaryHref={primaryHref}
+            primaryLabel={primaryLabel}
+            secondaryHref={
+              showMobileSecondaryMessages && jobInfo
+                ? `/messages?job=${jobInfo.jobId}`
+                : undefined
+            }
+            secondaryLabel={showMobileSecondaryMessages ? "Messages" : undefined}
+            showCancel={!isActiveJob && isLive && !isCancelledListing}
+            onCancel={
+              !isActiveJob && isLive && !isCancelledListing
+                ? () => {
+                    void (async () => {
+                      const confirmed = window.confirm(
+                        "Are you sure you want to cancel this listing? This will stop new bids but keep the listing in your history."
+                      );
+                      if (!confirmed) return;
+                      const res = await cancelListing(listing.id);
+                      if (!res.ok) {
+                        alert(res.error);
+                      }
+                    })();
+                  }
+                : undefined
+            }
+          >
+            <>
+              {(isJobCard || isCancelledListing) && (
+                <div className="space-y-2">
+                  {isCancelledListing && (
+                    <p className="text-sm font-medium text-red-900 dark:text-red-200">
+                      Cancelled
+                      {cancelledDateLabel ? ` (${cancelledDateLabel})` : ""}
+                    </p>
+                  )}
+                  {isDisputedListing && (
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      Dispute in progress — open the job to respond.
+                    </p>
+                  )}
+                  {jobStatus === "completed" && (
+                    <p className="text-sm text-emerald-800 dark:text-emerald-200">
+                      {completedDateLabel
+                        ? `Completed ${completedDateLabel}`
+                        : "Completed"}
+                    </p>
+                  )}
+                  {isJobCard &&
+                    !isCancelledListing &&
+                    !isDisputedListing &&
+                    jobStatus !== "completed" && (
+                      <p className="text-xs text-muted-foreground">
+                        Job {formatCents(jobCents)} + {feePercentage}% fee ={" "}
+                        {formatCents(totalCents)} total
+                      </p>
+                    )}
+                </div>
+              )}
+              {jobInfo && (isJobCard || isCancelledListing) && (
+                <div className="flex min-h-0 flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-sm dark:border-gray-800">
+                  <span className="font-medium text-muted-foreground">
+                    Assigned
+                  </span>
+                  <div className="flex min-w-0 items-center justify-end gap-2">
+                    {isCancelledListing ? (
+                      <span className="font-medium text-muted-foreground">
+                        Un-assigned
+                      </span>
+                    ) : jobStatus === "in_progress" ||
+                      jobStatus === "completed" ||
+                      isDisputedListing ? (
+                      <>
+                        {jobInfo.winnerId ? (
+                          <Link
+                            href={`/cleaners/${jobInfo.winnerId}`}
+                            className="truncate font-semibold text-sky-800 hover:underline dark:text-sky-300"
+                          >
+                            {jobInfo.winnerName}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">{jobInfo.winnerName}</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-right text-muted-foreground">
+                        Approve job to see cleaner
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {!isJobCard && isLive && (
+                <p className="text-sm text-muted-foreground">
+                  Starting {formatCents(listing.starting_price_cents)} ·{" "}
+                  {bidIdSet.has(listing.id as unknown as string | number)
+                    ? "1+"
+                    : "0"}{" "}
+                  bids
+                </p>
+              )}
+            </>
+          </MyListingsCardMobile>
+        </div>
+        <Card
+          className={cn(
+            "hidden h-full flex-col md:flex",
+            cardClass,
+            kind === "completed" ? "text-xs sm:text-[11px]" : ""
+          )}
+        >
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-end gap-2">
             {isLive && !isCancelledListing && (
@@ -956,6 +1200,7 @@ export function MyListingsList({
           )}
         </CardFooter>
       </Card>
+      </div>
     );
   };
 

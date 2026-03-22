@@ -7,15 +7,7 @@ import type { Database } from "@/types/supabase";
 import { buildLiveListingsQuery } from "@/lib/jobs-query";
 import { buildListerCardDataByListingId } from "@/lib/lister-card-data";
 import { JobsList } from "@/components/features/jobs-list";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -27,6 +19,7 @@ import {
 import { SearchX } from "lucide-react";
 import { JobsPageMobileShell } from "@/components/features/jobs-page-mobile-shell";
 import { OfflineJobsPrimer } from "@/components/offline/offline-jobs-primer";
+import { FindJobsSearch } from "@/components/features/find-jobs-search";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -220,274 +213,90 @@ export default async function JobsPage({
     <JobsPageMobileShell>
     <OfflineJobsPrimer jobsListQuery={jobsListQuery}>
     <section className="page-inner space-y-6">
-      <Card className="overflow-hidden border-0 bg-gradient-to-r from-emerald-50 via-white to-sky-50 shadow-xl dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 dark:border dark:border-gray-800">
-        <CardHeader className="gap-1 pb-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <div>
-              <CardTitle className="text-xl font-semibold md:text-3xl dark:text-gray-100">
-                Find local bond cleans to bid on
+      <Card className="overflow-hidden border border-emerald-200/60 bg-gradient-to-br from-emerald-50/90 via-white to-sky-50/80 shadow-lg dark:border-gray-800 dark:from-gray-900 dark:via-gray-900 dark:to-gray-950">
+        <CardHeader className="gap-2 pb-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-lg font-bold leading-tight text-foreground md:text-2xl dark:text-gray-100">
+                Find bond cleans
               </CardTitle>
-              <CardDescription className="text-sm md:text-base dark:text-gray-400">
-                Browse live Bond Back listings near you. Filter by suburb, postcode, price and
-                property details to find the right jobs.
+              <CardDescription className="text-sm text-muted-foreground dark:text-gray-400">
+                Search by area and distance — refine price & property in{" "}
+                <span className="font-medium text-foreground dark:text-gray-300">More filters</span>.
               </CardDescription>
-              {(suburbFilter || postcodeFilter || radiusFilter) && (
-                <p className="mt-1 text-xs text-muted-foreground dark:text-gray-400">
-                  Showing {initialListings.length} bond clean
-                  {initialListings.length === 1 ? "" : "s"} within approximately{" "}
-                  {activeRadiusKm}km of{" "}
-                  {[suburbFilter, postcodeFilter].filter(Boolean).join(" ") || "your search"}.
-                </p>
-              )}
             </div>
-            <div className="flex flex-col items-start gap-2 text-sm text-muted-foreground md:items-end dark:text-gray-400">
-              <span className="text-xs uppercase tracking-wide">
-                {initialListings.length} bond cleans found
-              </span>
-              <form
-                action="/jobs"
-                method="GET"
-                className="flex items-center gap-2 text-xs"
-              >
-                {/* Preserve existing filters when sorting */}
-                {suburbFilter && <input type="hidden" name="suburb" value={suburbFilter} />}
-                {postcodeFilter && <input type="hidden" name="postcode" value={postcodeFilter} />}
-                {radiusFilter && <input type="hidden" name="radius_km" value={radiusFilter} />}
-                {searchParams?.center_lat && (
-                  <input type="hidden" name="center_lat" value={searchParams.center_lat} />
-                )}
-                {searchParams?.center_lon && (
-                  <input type="hidden" name="center_lon" value={searchParams.center_lon} />
-                )}
-                {minPriceFilter && (
-                  <input type="hidden" name="min_price" value={minPriceFilter} />
-                )}
-                {maxPriceFilter && (
-                  <input type="hidden" name="max_price" value={maxPriceFilter} />
-                )}
-                {bedroomsFilter && (
-                  <input type="hidden" name="bedrooms" value={bedroomsFilter} />
-                )}
-                {bathroomsFilter && (
-                  <input type="hidden" name="bathrooms" value={bathroomsFilter} />
-                )}
-                {propertyTypeFilter && (
-                  <input type="hidden" name="property_type" value={propertyTypeFilter} />
-                )}
-                <label
-                  htmlFor="sort"
-                  className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400"
-                >
-                  Sort
-                </label>
-                <Select name="sort" defaultValue={sort || "ending-soon"}>
-                  <SelectTrigger id="sort" className="h-8 w-48 text-xs">
-                    <SelectValue placeholder="Ending soon" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ending-soon">Ending soon</SelectItem>
-                    <SelectItem value="newest">Newest first</SelectItem>
-                    <SelectItem value="price-asc">Price low to high</SelectItem>
-                    <SelectItem value="price-desc">Price high to low</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button type="submit" size="sm" variant="outline" className="h-8 px-3 text-xs">
-                  Apply
-                </Button>
-              </form>
-            </div>
+            <Badge
+              variant="secondary"
+              className="shrink-0 rounded-full px-3 py-1 text-xs font-semibold tabular-nums"
+            >
+              {initialListings.length} found
+            </Badge>
           </div>
+          {(suburbFilter || postcodeFilter || radiusFilter) && (
+            <p className="text-xs text-muted-foreground dark:text-gray-500">
+              ~{activeRadiusKm} km of{" "}
+              <span className="font-medium text-foreground dark:text-gray-300">
+                {[suburbFilter, postcodeFilter].filter(Boolean).join(" ") || "your search"}
+              </span>
+            </p>
+          )}
         </CardHeader>
         <CardContent className="space-y-3 pt-0">
-          {/* Filter bar — sticky on mobile, hides on scroll down */}
-          <div data-sticky-filter className="pb-2 transition-transform duration-300 md:pb-0">
-          <form
-            action="/jobs"
-            method="GET"
-            className="flex flex-col gap-3 md:flex-row md:items-end"
-            aria-label="Filter jobs by suburb, postcode, and more"
-          >
-          <div className="flex-1 space-y-1.5">
-            <label
-              htmlFor="suburb"
-              className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400"
-            >
-              Suburb
-            </label>
-            <Input
-              id="suburb"
-              name="suburb"
-              defaultValue={suburbFilter}
-              placeholder="e.g. LITTLE MOUNTAIN"
+          <div data-sticky-filter className="transition-transform duration-300">
+            <FindJobsSearch
+              variant="jobs"
+              defaultRadiusKm={defaultRadiusKm}
+              initial={{
+                suburb: suburbFilter,
+                postcode: postcodeFilter,
+                radius_km: radiusFilter,
+                center_lat: searchParams?.center_lat,
+                center_lon: searchParams?.center_lon,
+                sort: sort || undefined,
+                min_price: minPriceFilter,
+                max_price: maxPriceFilter,
+                bedrooms: bedroomsFilter,
+                bathrooms: bathroomsFilter,
+                property_type: propertyTypeFilter,
+              }}
             />
-          </div>
-          <div className="w-full space-y-1.5 md:w-40">
-            <label
-              htmlFor="postcode"
-              className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400"
-            >
-              Postcode
-            </label>
-            <Input
-              id="postcode"
-              name="postcode"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]{4}"
-              maxLength={4}
-              defaultValue={postcodeFilter}
-              placeholder="4551"
-            />
-          </div>
-          {/* Simple advanced filters */}
-          <div className="flex flex-1 flex-wrap gap-3 text-xs text-muted-foreground dark:text-gray-400">
-            <div className="w-full space-y-1.5 md:w-32">
-              <label
-                htmlFor="min_price"
-                className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400"
-              >
-                Min price ($)
-              </label>
-              <Input
-                id="min_price"
-                name="min_price"
-                type="number"
-                min={0}
-                defaultValue={minPriceFilter}
-                placeholder="0"
-                className="h-8"
-              />
-            </div>
-            <div className="w-full space-y-1.5 md:w-32">
-              <label
-                htmlFor="max_price"
-                className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400"
-              >
-                Max price ($)
-              </label>
-              <Input
-                id="max_price"
-                name="max_price"
-                type="number"
-                min={0}
-                defaultValue={maxPriceFilter}
-                placeholder="1000"
-                className="h-8"
-              />
-            </div>
-            <div className="w-full space-y-1.5 md:w-28">
-              <label
-                htmlFor="bedrooms"
-                className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400"
-              >
-                Bedrooms
-              </label>
-              <Select name="bedrooms" defaultValue={bedroomsFilter || "any"}>
-                <SelectTrigger id="bedrooms" className="h-8 text-xs">
-                  <SelectValue placeholder="Any" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any</SelectItem>
-                  <SelectItem value="1">1</SelectItem>
-                  <SelectItem value="2">2</SelectItem>
-                  <SelectItem value="3">3</SelectItem>
-                  <SelectItem value="4">4</SelectItem>
-                  <SelectItem value="5">5+</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-full space-y-1.5 md:w-28">
-              <label
-                htmlFor="bathrooms"
-                className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400"
-              >
-                Bathrooms
-              </label>
-              <Select name="bathrooms" defaultValue={bathroomsFilter || "any"}>
-                <SelectTrigger id="bathrooms" className="h-8 text-xs">
-                  <SelectValue placeholder="Any" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any</SelectItem>
-                  <SelectItem value="1">1</SelectItem>
-                  <SelectItem value="2">2</SelectItem>
-                  <SelectItem value="3">3</SelectItem>
-                  <SelectItem value="4">4+</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-full space-y-1.5 md:w-40">
-              <label
-                htmlFor="property_type"
-                className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400"
-              >
-                Property type
-              </label>
-              <Select name="property_type" defaultValue={propertyTypeFilter || "any"}>
-                <SelectTrigger id="property_type" className="h-8 text-xs">
-                  <SelectValue placeholder="Any" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any</SelectItem>
-                  <SelectItem value="Apartment">Apartment</SelectItem>
-                  <SelectItem value="House">House</SelectItem>
-                  <SelectItem value="Townhouse">Townhouse</SelectItem>
-                  <SelectItem value="Unit">Unit</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-end md:justify-end">
-            <div className="flex flex-1 flex-wrap items-center gap-2 text-xs text-muted-foreground dark:text-gray-400 md:justify-end">
-              {minPriceFilter || maxPriceFilter ? (
-                <Badge variant="outline">
-                  Price{" "}
-                  {minPriceFilter && `from $${minPriceFilter}`}
-                  {minPriceFilter && maxPriceFilter && " "}
-                  {maxPriceFilter && `to $${maxPriceFilter}`}
-                </Badge>
-              ) : null}
-              {bedroomsFilter && bedroomsFilter !== "any" && (
-                <Badge variant="outline">
-                  {Number(bedroomsFilter) >= 5 ? "5+ bedrooms" : `${bedroomsFilter} bedrooms`}
-                </Badge>
-              )}
-              {bathroomsFilter && bathroomsFilter !== "any" && (
-                <Badge variant="outline">
-                  {Number(bathroomsFilter) >= 4 ? "4+ bathrooms" : `${bathroomsFilter} bathrooms`}
-                </Badge>
-              )}
-              {propertyTypeFilter && propertyTypeFilter !== "any" && (
-                <Badge variant="outline">{propertyTypeFilter}</Badge>
-              )}
-            </div>
-            <div className="flex w-full gap-2 md:w-auto md:justify-end">
-              <Button
-                type="submit"
-                className="w-full md:w-auto"
-              >
-                Search
-              </Button>
-              {(suburbFilter ||
-                postcodeFilter ||
-                radiusFilter ||
-                minPriceFilter ||
-                maxPriceFilter ||
-                (bedroomsFilter && bedroomsFilter !== "any") ||
-                (bathroomsFilter && bathroomsFilter !== "any") ||
-                (propertyTypeFilter && propertyTypeFilter !== "any")) && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full md:w-auto"
-                  asChild
-                >
+            {(suburbFilter ||
+              postcodeFilter ||
+              radiusFilter ||
+              minPriceFilter ||
+              maxPriceFilter ||
+              (bedroomsFilter && bedroomsFilter !== "any") ||
+              (bathroomsFilter && bathroomsFilter !== "any") ||
+              (propertyTypeFilter && propertyTypeFilter !== "any")) && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Active:
+                </span>
+                {minPriceFilter || maxPriceFilter ? (
+                  <Badge variant="outline" className="rounded-full text-xs">
+                    ${minPriceFilter || "0"}–${maxPriceFilter || "∞"}
+                  </Badge>
+                ) : null}
+                {bedroomsFilter && bedroomsFilter !== "any" && (
+                  <Badge variant="outline" className="rounded-full text-xs">
+                    {Number(bedroomsFilter) >= 5 ? "5+ bed" : `${bedroomsFilter} bed`}
+                  </Badge>
+                )}
+                {bathroomsFilter && bathroomsFilter !== "any" && (
+                  <Badge variant="outline" className="rounded-full text-xs">
+                    {Number(bathroomsFilter) >= 4 ? "4+ bath" : `${bathroomsFilter} bath`}
+                  </Badge>
+                )}
+                {propertyTypeFilter && propertyTypeFilter !== "any" && (
+                  <Badge variant="outline" className="rounded-full text-xs capitalize">
+                    {propertyTypeFilter}
+                  </Badge>
+                )}
+                <Button variant="ghost" size="sm" className="ml-auto h-8 rounded-full text-xs" asChild>
                   <Link href={clearHref}>Clear all</Link>
                 </Button>
-              )}
-            </div>
-          </div>
-          </form>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

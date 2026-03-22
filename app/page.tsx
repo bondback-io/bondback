@@ -1,6 +1,6 @@
 import { LandingHero } from "@/components/features/landing-hero";
 import { HowItWorks } from "@/components/features/how-it-works";
-import { SuburbPostcodeSearch } from "@/components/features/suburb-postcode-search";
+import { FindJobsSearch } from "@/components/features/find-jobs-search";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminOnlyToast } from "@/components/admin/admin-only-toast";
@@ -28,26 +28,26 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
 
       {/* 1.5 Search section */}
       <section className="container">
-        <Card className="overflow-hidden border-0 bg-gradient-to-r from-emerald-50 via-white to-sky-50 shadow-xl dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 dark:border dark:border-gray-800">
-          <CardHeader className="gap-1 pb-4">
-            <CardTitle className="text-xl font-semibold md:text-3xl dark:text-gray-100">
+        <Card className="overflow-hidden border border-emerald-200/50 bg-gradient-to-br from-emerald-50/90 via-white to-sky-50/70 shadow-lg dark:border-gray-800 dark:from-gray-900 dark:via-gray-900 dark:to-gray-950">
+          <CardHeader className="gap-1 pb-2">
+            <CardTitle className="text-lg font-bold leading-snug md:text-2xl dark:text-gray-100">
               {isLoggedIn
-                ? "Find trusted bond cleaners near you – fast & affordable"
-                : "Login to view Jobs"}
+                ? "Find bond cleans near you"
+                : "Login to browse jobs"}
             </CardTitle>
-            <CardDescription className="text-sm md:text-base dark:text-gray-400">
-              Enter your suburb and postcode to see live Bond Back listings in your area.
+            <CardDescription className="text-sm dark:text-gray-400">
+              Suburb, distance, then search — like Airtasker.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 pt-0">
-            <SuburbPostcodeSearch />
-            <p className="text-xs text-muted-foreground md:text-sm dark:text-gray-400">
+          <CardContent className="space-y-3 pt-0">
+            <FindJobsSearch variant="home" defaultRadiusKm={20} />
+            <p className="text-xs text-muted-foreground dark:text-gray-400">
               Or{" "}
               <a
                 href="/listings/new"
                 className="font-semibold text-primary underline-offset-4 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
               >
-                create your own listing &rarr;
+                list your clean →
               </a>
             </p>
             <p className="text-[11px] text-muted-foreground sm:text-xs dark:text-gray-500">

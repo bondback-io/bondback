@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,11 +41,10 @@ import {
   XCircle,
   CheckCircle2,
   Images,
-  ChevronDown,
-  ChevronUp,
   Bookmark,
 } from "lucide-react";
 import { VerificationBadges } from "@/components/shared/verification-badges";
+import { JobCardMarketplaceMobile, formatAuctionTimeLeftShort } from "@/components/JobCard";
 
 export type ListingCardProps = {
   listing: ListingRow;
@@ -82,6 +80,134 @@ function getStatus(listing: ListingRow): "live" | "ending_soon" | "expired" {
   const hoursLeft = (end - now) / (60 * 60 * 1000);
   if (hoursLeft < 24) return "ending_soon";
   return "live";
+}
+
+type OverflowMenuProps = {
+  jobHref: string;
+  listingId: string;
+  isCleaner: boolean;
+  hideCleanerCancelledAuctionUi: boolean;
+  jobStatus: string | null;
+  isListerOwner: boolean;
+  showListerActions: boolean;
+  isLive: boolean;
+  hasAssignedCleaner: boolean;
+  handleShare: () => void;
+  triggerClassName?: string;
+};
+
+function ListingCardOverflowMenu({
+  jobHref,
+  listingId,
+  isCleaner,
+  hideCleanerCancelledAuctionUi,
+  jobStatus,
+  isListerOwner,
+  showListerActions,
+  isLive,
+  hasAssignedCleaner,
+  handleShare,
+  triggerClassName,
+}: OverflowMenuProps) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={
+            triggerClassName ??
+            "h-10 w-10 shrink-0 rounded-full bg-black/30 text-white/90 hover:bg-black/50 hover:text-white dark:bg-black/40 dark:text-white/90 dark:hover:bg-black/60 md:h-8 md:w-8 min-h-[48px] min-w-[48px] md:min-h-0 md:min-w-0"
+          }
+          aria-label="Job actions"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreVertical className="h-5 w-5 md:h-4 md:w-4" aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+        {isCleaner && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href={jobHref} className="flex cursor-pointer items-center gap-2">
+                <Eye className="h-4 w-4 shrink-0" />
+                View Details
+              </Link>
+            </DropdownMenuItem>
+            {!hideCleanerCancelledAuctionUi && (
+              <DropdownMenuItem asChild>
+                <Link href={`/messages?job=${listingId}`} className="flex cursor-pointer items-center gap-2">
+                  <MessageCircle className="h-4 w-4 shrink-0" />
+                  Message Lister
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {jobStatus === "in_progress" && (
+              <DropdownMenuItem asChild>
+                <Link href={`${jobHref}?complete=1`} className="flex cursor-pointer items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  Mark Complete
+                </Link>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem asChild>
+              <Link href={`${jobHref}#save`} className="flex cursor-pointer items-center gap-2">
+                <Bookmark className="h-4 w-4 shrink-0" />
+                Save Job
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {isListerOwner && showListerActions && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href={jobHref} className="flex cursor-pointer items-center gap-2">
+                <Gavel className="h-4 w-4 shrink-0" />
+                View Bids
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={jobHref} className="flex cursor-pointer items-center gap-2">
+                <Pencil className="h-4 w-4 shrink-0" />
+                Edit Listing
+              </Link>
+            </DropdownMenuItem>
+            {isLive && (
+              <DropdownMenuItem asChild>
+                <Link
+                  href={`/jobs/${listingId}?cancel=1`}
+                  className="flex cursor-pointer items-center gap-2 text-destructive focus:text-destructive"
+                >
+                  <XCircle className="h-4 w-4 shrink-0" />
+                  Cancel Job
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {hasAssignedCleaner && (
+              <DropdownMenuItem asChild>
+                <Link href={`/messages?job=${listingId}`} className="flex cursor-pointer items-center gap-2">
+                  <MessageCircle className="h-4 w-4 shrink-0" />
+                  Message Cleaner
+                </Link>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuItem asChild>
+          <Link href="/settings#support" className="flex cursor-pointer items-center gap-2">
+            <Flag className="h-4 w-4 shrink-0" />
+            Report Issue
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => handleShare()} className="flex cursor-pointer items-center gap-2">
+          <Share2 className="h-4 w-4 shrink-0" />
+          Share Listing
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 /**
@@ -191,9 +317,6 @@ export function ListingCard({
     !isListerOwner &&
     typeof listerName === "string" &&
     listerName.trim() !== "";
-  const [mobileExpanded, setMobileExpanded] = useState(false);
-  const hasSecondary =
-    typeof bidCount === "number" || showCleanerBlock || showListerBlock;
   const effectiveCleanerBadges =
     cleanerVerificationBadges && cleanerVerificationBadges.length > 0
       ? cleanerVerificationBadges
@@ -211,6 +334,32 @@ export function ListingCard({
     isLive &&
     !hideCleanerCancelledAuctionUi;
 
+  const statusLineMarket =
+    status === "live"
+      ? `Live · ${formatAuctionTimeLeftShort(endTime)}`
+      : status === "ending_soon"
+        ? `Ending Soon · ${formatAuctionTimeLeftShort(endTime)}`
+        : "Ended";
+  const isHotJob = isLive && (endingInUnder24h || highDemand);
+  const locationLineFull =
+    `${formatLocationWithState(listing.suburb, listing.postcode)}` +
+    (distanceKm != null && !Number.isNaN(distanceKm)
+      ? ` · ~${Math.round(distanceKm)} km`
+      : "");
+
+  const overflowMenuProps: OverflowMenuProps = {
+    jobHref,
+    listingId: String(listing.id),
+    isCleaner,
+    hideCleanerCancelledAuctionUi,
+    jobStatus: jobStatus ?? null,
+    isListerOwner,
+    showListerActions,
+    isLive,
+    hasAssignedCleaner,
+    handleShare,
+  };
+
   return (
     <TooltipProvider delayDuration={300}>
       <Card
@@ -224,7 +373,44 @@ export function ListingCard({
         role="article"
         aria-label={title}
       >
-      {/* 1. Thumbnail — mobile full-width, 200px tall; desktop aspect 4:3 */}
+      <div className="md:hidden">
+        <JobCardMarketplaceMobile
+          jobHref={jobHref}
+          listingId={String(listing.id)}
+          title={title}
+          thumb={thumb}
+          thumbAlt={thumbAlt}
+          priceDisplay={formatCents(listing.current_lowest_bid_cents ?? 0)}
+          priceLabel={hasBuyNow && isLive ? "Fixed price" : "Current lowest bid"}
+          statusLine={statusLineMarket}
+          statusVariant={status}
+          locationLine={locationLineFull}
+          beds={listing.bedrooms as number | undefined}
+          baths={listing.bathrooms as number | undefined}
+          isHot={isHotJob}
+          listerVerificationBadges={effectiveListerBadges}
+          showListerTrust={showListerBlock && effectiveListerBadges.length > 0}
+          menu={
+            <ListingCardOverflowMenu
+              {...overflowMenuProps}
+              triggerClassName="h-11 w-11 shrink-0 rounded-full bg-black/40 text-white/95 shadow-md hover:bg-black/55 hover:text-white dark:bg-black/50 dark:hover:bg-black/65"
+            />
+          }
+          priority={priority}
+          isLive={isLive}
+          showCleanerMobileActions={showCleanerMobileActions}
+          showPlaceBid={showPlaceBid}
+          hasBuyNow={hasBuyNow}
+          buyNowCents={typeof listing.buy_now_cents === "number" ? listing.buy_now_cents : null}
+          isListerOwner={isListerOwner}
+          showListerActions={showListerActions}
+          hasAssignedCleaner={hasAssignedCleaner}
+          hideCleanerCancelledAuctionUi={hideCleanerCancelledAuctionUi}
+        />
+      </div>
+
+      <div className="hidden md:flex md:flex-col">
+      {/* 1. Thumbnail — desktop aspect 4:3 */}
       <div className="relative h-[200px] w-full overflow-hidden bg-muted dark:bg-gray-800 md:aspect-[4/3] md:h-auto">
         <Link
           href={jobHref}
@@ -254,7 +440,7 @@ export function ListingCard({
           <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/40 [@media(hover:none)]:bg-black/20" aria-hidden />
         </Link>
 
-        {/* Status badge + menu — over image */}
+        {/* Status badge + menu — over image (desktop) */}
         <div className="absolute left-3 top-3 right-3 z-10 flex items-start justify-between gap-2">
           <Badge
             variant="secondary"
@@ -273,101 +459,7 @@ export function ListingCard({
             {status === "ending_soon" && "Ending soon"}
             {status === "expired" && "Expired"}
           </Badge>
-          {/* Quick-action ellipsis — keeps card clean; all secondary actions in dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 shrink-0 rounded-full bg-black/30 text-white/90 hover:bg-black/50 hover:text-white dark:bg-black/40 dark:text-white/90 dark:hover:bg-black/60 md:h-8 md:w-8 min-h-[48px] min-w-[48px] md:min-h-0 md:min-w-0"
-                aria-label="Job actions"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreVertical className="h-5 w-5 md:h-4 md:w-4" aria-hidden />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
-              {/* Cleaner view */}
-              {isCleaner && (
-                <>
-                  <DropdownMenuItem asChild>
-                    <Link href={jobHref} className="flex cursor-pointer items-center gap-2">
-                      <Eye className="h-4 w-4 shrink-0" />
-                      View Details
-                    </Link>
-                  </DropdownMenuItem>
-                  {!hideCleanerCancelledAuctionUi && (
-                  <DropdownMenuItem asChild>
-                    <Link href={`/messages?job=${listing.id}`} className="flex cursor-pointer items-center gap-2">
-                      <MessageCircle className="h-4 w-4 shrink-0" />
-                      Message Lister
-                    </Link>
-                  </DropdownMenuItem>
-                  )}
-                  {jobStatus === "in_progress" && (
-                    <DropdownMenuItem asChild>
-                      <Link href={`${jobHref}?complete=1`} className="flex cursor-pointer items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 shrink-0" />
-                        Mark Complete
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem asChild>
-                    <Link href={`${jobHref}#save`} className="flex cursor-pointer items-center gap-2">
-                      <Bookmark className="h-4 w-4 shrink-0" />
-                      Save Job
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              {/* Lister view */}
-              {isListerOwner && showListerActions && (
-                <>
-                  <DropdownMenuItem asChild>
-                    <Link href={jobHref} className="flex cursor-pointer items-center gap-2">
-                      <Gavel className="h-4 w-4 shrink-0" />
-                      View Bids
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href={jobHref} className="flex cursor-pointer items-center gap-2">
-                      <Pencil className="h-4 w-4 shrink-0" />
-                      Edit Listing
-                    </Link>
-                  </DropdownMenuItem>
-                  {isLive && (
-                    <DropdownMenuItem asChild>
-                      <Link href={`/jobs/${listing.id}?cancel=1`} className="flex cursor-pointer items-center gap-2 text-destructive focus:text-destructive">
-                        <XCircle className="h-4 w-4 shrink-0" />
-                        Cancel Job
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  {hasAssignedCleaner && (
-                    <DropdownMenuItem asChild>
-                      <Link href={`/messages?job=${listing.id}`} className="flex cursor-pointer items-center gap-2">
-                        <MessageCircle className="h-4 w-4 shrink-0" />
-                        Message Cleaner
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              {/* Common */}
-              <DropdownMenuItem asChild>
-                <Link href="/settings#support" className="flex cursor-pointer items-center gap-2">
-                  <Flag className="h-4 w-4 shrink-0" />
-                  Report Issue
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleShare()} className="flex cursor-pointer items-center gap-2">
-                <Share2 className="h-4 w-4 shrink-0" />
-                Share Listing
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ListingCardOverflowMenu {...overflowMenuProps} />
         </div>
       </div>
 
@@ -449,81 +541,23 @@ export function ListingCard({
           )}
         </p>
 
-        {/* Mobile: condensed secondary (badges) + tap-to-expand for full bid count + cleaner */}
-        {hasSecondary && (
-          <div className="flex flex-wrap items-center gap-2 md:hidden">
-            {typeof bidCount === "number" && (
-              <Badge variant="secondary" className="gap-1 text-[10px] font-medium dark:bg-gray-800 dark:text-gray-200">
-                <Gavel className="h-3 w-3 shrink-0" aria-hidden />
-                {bidCount}
-              </Badge>
-            )}
-            {showCleanerBlock && (cleanerRating != null || (cleanerReviewCount != null && Number(cleanerReviewCount) > 0)) && (
-              <Badge variant="secondary" className="gap-1 text-[10px] font-medium text-amber-700 dark:bg-amber-900/50 dark:text-yellow-300">
-                <Star className="h-3 w-3 shrink-0 fill-current" aria-hidden />
-                {cleanerRating != null ? Number(cleanerRating).toFixed(1) : "—"}
-              </Badge>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="min-h-[48px] min-w-[48px] shrink-0 px-2 text-xs text-muted-foreground md:min-h-0 md:min-w-0"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMobileExpanded((v) => !v); }}
-              aria-expanded={mobileExpanded}
-              aria-label={mobileExpanded ? "Show less" : "Show more details"}
-            >
-              {mobileExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              <span className="sr-only">{mobileExpanded ? "Less" : "More"}</span>
-            </Button>
-          </div>
-        )}
-
-        {/* Lister trust row (non-owner): name + verification badges */}
+        {/* Lister trust row (non-owner): name + verification badges — desktop */}
         {showListerBlock && (
-          <div
-            className={cn(
-              "flex flex-wrap items-center gap-2 text-sm",
-              hasSecondary && "hidden md:flex"
-            )}
-          >
-            <span className="text-muted-foreground dark:text-gray-400">Property lister:</span>
-            <span className="font-medium text-foreground dark:text-gray-100">{listerName}</span>
-            <VerificationBadges badges={effectiveListerBadges} showLabel={false} size="sm" />
-          </div>
-        )}
-        {showListerBlock && hasSecondary && mobileExpanded && (
-          <div className="flex flex-wrap items-center gap-2 text-sm md:hidden">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted-foreground dark:text-gray-400">Property lister:</span>
             <span className="font-medium text-foreground dark:text-gray-100">{listerName}</span>
             <VerificationBadges badges={effectiveListerBadges} showLabel={false} size="sm" />
           </div>
         )}
 
-        {/* Cleaner block (when job assigned): name + Verified ABN, rating stars + review count — hidden on mobile unless expanded */}
+        {/* Cleaner block (when job assigned) — desktop */}
         {showCleanerBlock && (
-          <div className={cn("flex flex-wrap items-center gap-2 text-sm", hasSecondary && "hidden md:flex")}>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="font-medium text-foreground dark:text-gray-100">{cleanerName || "Cleaner"}</span>
             <VerificationBadges badges={effectiveCleanerBadges} showLabel={false} size="sm" />
             {(cleanerRating != null || (cleanerReviewCount != null && Number(cleanerReviewCount) > 0)) && (
               <span className="flex items-center gap-1 text-amber-600 dark:text-yellow-400">
                 <Star className="h-3.5 w-3.5 shrink-0 fill-current" aria-hidden />
-                <span className="tabular-nums">{cleanerRating != null ? Number(cleanerRating).toFixed(1) : "—"}</span>
-                {cleanerReviewCount != null && Number(cleanerReviewCount) > 0 && (
-                  <span className="text-muted-foreground dark:text-gray-400">({Number(cleanerReviewCount)} reviews)</span>
-                )}
-              </span>
-            )}
-          </div>
-        )}
-        {/* Mobile expanded: show full cleaner block */}
-        {showCleanerBlock && hasSecondary && mobileExpanded && (
-          <div className="flex flex-wrap items-center gap-2 text-sm md:hidden">
-            <span className="font-medium text-foreground dark:text-gray-100">{cleanerName || "Cleaner"}</span>
-            <VerificationBadges badges={effectiveCleanerBadges} showLabel={false} size="sm" />
-            {(cleanerRating != null || (cleanerReviewCount != null && Number(cleanerReviewCount) > 0)) && (
-              <span className="flex items-center gap-1 text-amber-600 dark:text-yellow-400">
-                <Star className="h-3.5 w-3.5 shrink-0 fill-current" />
                 <span className="tabular-nums">{cleanerRating != null ? Number(cleanerRating).toFixed(1) : "—"}</span>
                 {cleanerReviewCount != null && Number(cleanerReviewCount) > 0 && (
                   <span className="text-muted-foreground dark:text-gray-400">({Number(cleanerReviewCount)} reviews)</span>
@@ -566,8 +600,8 @@ export function ListingCard({
           )}
         </div>
 
-        {/* Bid count badge — hidden on mobile when condensed (tap More to expand) */}
-        <div className={cn("flex items-center gap-2", hasSecondary && "hidden md:flex")}>
+        {/* Bid count — desktop */}
+        <div className="flex items-center gap-2">
           {typeof bidCount === "number" ? (
             <Badge variant="secondary" className="gap-1.5 text-xs font-medium dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700" aria-label={`${bidCount} bid${bidCount !== 1 ? "s" : ""}`}>
               <Gavel className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -582,118 +616,10 @@ export function ListingCard({
             <span className="text-sm text-muted-foreground dark:text-gray-400">Open for bids</span>
           )}
         </div>
-        {hasSecondary && mobileExpanded && (
-          <div className="flex items-center gap-2 md:hidden">
-            {typeof bidCount === "number" ? (
-              <Badge variant="secondary" className="gap-1.5 text-xs font-medium dark:bg-gray-800 dark:text-gray-200" aria-label={`${bidCount} bid${bidCount !== 1 ? "s" : ""}`}>
-                <Gavel className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                {bidCount} bid{bidCount !== 1 ? "s" : ""}
-              </Badge>
-            ) : hasBids ? (
-              <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Bids placed</span>
-            ) : (
-              <span className="text-sm text-muted-foreground dark:text-gray-400">Open for bids</span>
-            )}
-          </div>
-        )}
 
-        {/* Primary CTAs — mobile (<md): stacked full-width; desktop: unchanged compact pattern */}
-        <div className="mt-auto flex flex-col gap-2.5 pt-2 md:gap-2 md:pt-1">
-          <div className="flex flex-col gap-2.5 md:hidden">
-            <Button
-              asChild
-              size="lg"
-              variant="default"
-              className="min-h-12 w-full rounded-xl text-base font-semibold shadow-sm transition-transform active:scale-95"
-            >
-              <Link
-                href={jobHref}
-                className="flex min-h-12 w-full items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                aria-label={`View details for ${title}`}
-              >
-                <Eye className="h-5 w-5 shrink-0" aria-hidden />
-                View Details
-              </Link>
-            </Button>
-
-            {showCleanerMobileActions && hasBuyNow && (
-              <BuyNowButton
-                listingId={listing.id}
-                buyNowCents={listing.buy_now_cents as number}
-                disabled={!isLive}
-                className="min-h-12 w-full rounded-xl text-base font-semibold active:scale-95"
-              />
-            )}
-
-            {showCleanerMobileActions && showPlaceBid && (
-              <Button
-                asChild
-                size="lg"
-                className="min-h-12 w-full rounded-xl border-0 bg-blue-600 text-base font-semibold text-white shadow-sm hover:bg-blue-700 active:scale-95 dark:bg-blue-600 dark:hover:bg-blue-500"
-              >
-                <Link
-                  href={jobHref}
-                  className="flex min-h-12 w-full items-center justify-center gap-2"
-                  aria-label={`Bid on ${title}`}
-                >
-                  <Gavel className="h-5 w-5 shrink-0" aria-hidden />
-                  Bid Now
-                </Link>
-              </Button>
-            )}
-
-            {showCleanerMobileActions && (
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="min-h-12 w-full rounded-xl border-2 border-border bg-background text-base font-semibold active:scale-95 dark:border-gray-600 dark:bg-gray-900 dark:hover:bg-gray-800"
-              >
-                <Link
-                  href={`/messages?job=${listing.id}`}
-                  className="flex min-h-12 w-full items-center justify-center gap-2"
-                  aria-label="Message lister"
-                >
-                  <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
-                  Message Lister
-                </Link>
-              </Button>
-            )}
-
-            {isListerOwner && showListerActions && isLive && (
-              <div className="flex flex-col gap-2.5">
-                <Button
-                  asChild
-                  size="lg"
-                  variant="secondary"
-                  className="min-h-12 w-full rounded-xl text-base font-semibold active:scale-95"
-                >
-                  <Link href={jobHref} className="flex min-h-12 w-full items-center justify-center gap-2">
-                    <Gavel className="h-5 w-5 shrink-0" aria-hidden />
-                    View Bids
-                  </Link>
-                </Button>
-                {hasAssignedCleaner && (
-                  <Button
-                    asChild
-                    size="lg"
-                    variant="outline"
-                    className="min-h-12 w-full rounded-xl text-base font-semibold active:scale-95"
-                  >
-                    <Link
-                      href={`/messages?job=${listing.id}`}
-                      className="flex min-h-12 w-full items-center justify-center gap-2"
-                    >
-                      <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
-                      Message Cleaner
-                    </Link>
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="hidden flex-col gap-2 md:flex">
+        {/* Primary CTAs — desktop */}
+        <div className="mt-auto flex flex-col gap-2 pt-1">
+          <div className="flex flex-col gap-2">
             {isCleaner && isLive && hasBuyNow && !hideCleanerCancelledAuctionUi && (
               <BuyNowButton
                 listingId={listing.id}
@@ -717,6 +643,7 @@ export function ListingCard({
           </div>
         </div>
       </CardContent>
+      </div>
     </Card>
     </TooltipProvider>
   );

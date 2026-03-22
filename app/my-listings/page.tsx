@@ -42,11 +42,15 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
 
   const { data } = await supabase
     .from("profiles")
-    .select("roles, active_role")
+    .select("roles, active_role, verification_badges")
     .eq("id", session.user.id)
     .maybeSingle();
 
-  const profile = data as { roles: string[] | null; active_role: string | null } | null;
+  const profile = data as {
+    roles: string[] | null;
+    active_role: string | null;
+    verification_badges?: string[] | null;
+  } | null;
   const roles = (profile?.roles ?? []) as string[];
   const activeRole = profile?.active_role ?? (roles[0] ?? null);
 
@@ -280,6 +284,11 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
           <MyListingsList
             initialListings={initialListings}
             listerId={session.user.id}
+            listerVerificationBadges={
+              Array.isArray(profile?.verification_badges)
+                ? profile.verification_badges
+                : null
+            }
             initialEditListingId={editId}
             feePercentage={feePercentage}
             initialActiveJobsSnapshot={initialActiveJobsSnapshot}
