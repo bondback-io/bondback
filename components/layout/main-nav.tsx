@@ -24,8 +24,6 @@ import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { SessionWithProfile } from "@/lib/types";
-import { MobileMenuSearch } from "@/components/features/mobile-menu-search";
-
 export type MainNavProps = {
   isLoggedIn: boolean;
   isCleaner: boolean;
@@ -146,11 +144,6 @@ function MobileNavContent({
         </SheetClose>
       </div>
 
-      {/* Mobile search */}
-      <div className="border-b border-border py-4 dark:border-gray-800">
-        <MobileMenuSearch onNavigate={onNavigate} />
-      </div>
-
       {/* Main links */}
       <nav className="space-y-0.5 pt-4" aria-label="Main navigation">
         {!isLoggedIn && (
@@ -164,20 +157,14 @@ function MobileNavContent({
             <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4 dark:border-gray-800">
               <SheetClose asChild>
                 <Link
-                  href="/login?role=lister"
-                  className={cn(MOBILE_ROW, "justify-center rounded-full border border-sky-200 bg-sky-50 py-3 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300")}
+                  href="/login"
+                  className={cn(
+                    MOBILE_ROW,
+                    "justify-center rounded-full border border-border bg-muted/50 py-3 font-semibold text-foreground hover:bg-muted dark:border-border dark:bg-muted/30"
+                  )}
                   onClick={onNavigate}
                 >
-                  Log in as Lister
-                </Link>
-              </SheetClose>
-              <SheetClose asChild>
-                <Link
-                  href="/login?role=cleaner"
-                  className={cn(MOBILE_ROW, "justify-center rounded-full border border-emerald-200 bg-emerald-50 py-3 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300")}
-                  onClick={onNavigate}
-                >
-                  Log in as Cleaner
+                  Log in
                 </Link>
               </SheetClose>
               <SheetClose asChild>

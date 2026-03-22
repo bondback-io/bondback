@@ -4,12 +4,6 @@ import { Button } from "@/components/ui/button";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { UserMenu } from "@/components/layout/user-menu";
 import { RoleSwitcher } from "@/components/layout/RoleSwitcher";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { ChatPanelToggle } from "@/components/layout/chat-panel-toggle";
 import { MainNav } from "@/components/layout/main-nav";
@@ -101,7 +95,7 @@ export const Header = async ({
                 <RoleSwitcher session={session} />
                 {stripeTestMode && (
                   <span
-                    className="rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-900"
+                    className="rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:bg-amber-400/90 dark:text-amber-950"
                     title="Stripe test mode is on. No real charges."
                   >
                     Test mode
@@ -145,34 +139,14 @@ export const Header = async ({
             aria-label="Account and tools"
           >
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="min-h-9 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-                  >
-                    Log in
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="w-48 rounded-xl border-border/80 py-1 shadow-lg dark:border-gray-800 dark:bg-gray-900"
-                >
-                  <DropdownMenuItem
-                    asChild
-                    className="cursor-pointer rounded-lg py-2.5 text-sky-700 focus:bg-sky-50 focus:text-sky-900 dark:text-sky-300 dark:focus:bg-sky-900/30 dark:focus:text-sky-100"
-                  >
-                    <Link href="/login?role=lister">Log in as Lister</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    asChild
-                    className="cursor-pointer rounded-lg py-2.5 text-emerald-700 focus:bg-emerald-50 focus:text-emerald-900 dark:text-emerald-300 dark:focus:bg-emerald-900/30 dark:focus:text-emerald-100"
-                  >
-                    <Link href="/login?role=cleaner">Log in as Cleaner</Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                variant="ghost"
+                size="sm"
+                asChild
+                className="min-h-9 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+              >
+                <Link href="/login">Log in</Link>
+              </Button>
               <Button
                 asChild
                 size="sm"

@@ -70,7 +70,7 @@ export function FeaturedJobsCarousel({
       return;
     }
 
-    const loginUrl = `/login?role=cleaner&next=${encodeURIComponent(jobUrl)}`;
+    const loginUrl = `/login?next=${encodeURIComponent(jobUrl)}`;
     router.push(loginUrl);
   };
 

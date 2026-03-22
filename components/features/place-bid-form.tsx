@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { placeBid } from "@/lib/actions/bids";
 import { Button } from "@/components/ui/button";
@@ -110,7 +111,18 @@ export function PlaceBidForm({
   if (!isCleaner) {
     return (
       <p className="text-sm text-muted-foreground">
-        Log in as a cleaner to place a bid.
+        {currentUserId ? (
+          <>
+            Switch to <strong>Cleaner</strong> mode in the header or Settings to place a bid.
+          </>
+        ) : (
+          <>
+            <Link href="/login" className="font-medium text-primary underline underline-offset-2">
+              Log in
+            </Link>
+            , then switch to Cleaner mode to place a bid.
+          </>
+        )}
       </p>
     );
   }

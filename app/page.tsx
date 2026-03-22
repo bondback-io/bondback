@@ -2,11 +2,8 @@ import { LandingHero } from "@/components/features/landing-hero";
 import { HowItWorks } from "@/components/features/how-it-works";
 import { SuburbPostcodeSearch } from "@/components/features/suburb-postcode-search";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { Database } from "@/types/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminOnlyToast } from "@/components/admin/admin-only-toast";
-
-type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
 type HomePageProps = { searchParams?: Promise<{ error?: string }> };
 
@@ -18,24 +15,6 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-
-  let viewerIsCleaner = false;
-  let canSwitchToCleaner = false;
-
-  if (session) {
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("roles, active_role")
-      .eq("id", session.user.id)
-      .maybeSingle();
-
-    const profile = profileData as { roles: string[] | null; active_role: string | null } | null;
-    const roles = (profile?.roles ?? []) as string[];
-    const activeRole = profile?.active_role ?? (roles[0] ?? null);
-    const hasCleaner = roles.includes("cleaner");
-    viewerIsCleaner = hasCleaner && activeRole === "cleaner";
-    canSwitchToCleaner = hasCleaner && activeRole !== "cleaner";
-  }
 
   const isLoggedIn = !!session;
 

@@ -40,7 +40,7 @@ import { SettingsPaymentReturnHandler } from "@/components/settings/settings-pay
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 const sectionClass =
-  "rounded-lg border border-border bg-card/80 p-5 transition-all dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100 md:p-4";
+  "rounded-lg border border-border bg-card/80 p-5 text-card-foreground transition-colors md:p-4 dark:border-border dark:bg-card/90";
 
 function SectionHeader({
   icon: Icon,
@@ -53,10 +53,10 @@ function SectionHeader({
 }) {
   return (
     <div className={cn("mb-3 flex items-center gap-2", className)}>
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground dark:bg-gray-800 dark:text-gray-300 md:h-8 md:w-8">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground md:h-8 md:w-8">
         <Icon className="h-5 w-5 md:h-4 md:w-4" />
       </div>
-      <CardTitle className="text-lg !mb-0 dark:text-gray-100">
+      <CardTitle className="text-lg !mb-0">
         {title}
       </CardTitle>
     </div>
@@ -162,11 +162,9 @@ export default async function SettingsPage({
               </TabsList>
 
               <TabsContent value="profile" className="mt-4 transition-opacity duration-200 data-[state=inactive]:hidden">
-                <div className={sectionClass}>
+                <div className={cn(sectionClass, "space-y-6")}>
                   <SectionHeader icon={User} title="Profile" />
-                  <div className="mb-4 border-b border-border pb-4 dark:border-gray-700">
-                    <SettingsRolesSection roles={roles} activeRole={activeRole} />
-                  </div>
+                  <SettingsRolesSection roles={roles} activeRole={activeRole} />
                   <SettingsProfileForm profile={{ ...p, isCleaner }} />
                 </div>
               </TabsContent>
@@ -316,10 +314,9 @@ export default async function SettingsPage({
                   Profile
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className={sectionClass}>
-                    <div className="mb-4 border-b border-border pb-4 dark:border-gray-700">
-                      <SettingsRolesSection roles={roles} activeRole={activeRole} />
-                    </div>
+                  <div className={cn(sectionClass, "space-y-6")}>
+                    <SectionHeader icon={User} title="Profile" />
+                    <SettingsRolesSection roles={roles} activeRole={activeRole} />
                     <SettingsProfileForm profile={{ ...p, isCleaner }} />
                   </div>
                 </AccordionContent>

@@ -40,16 +40,13 @@ function isItemActive(pathname: string, href: string): boolean {
   return pathname === href || (href !== "/" && pathname.startsWith(href));
 }
 
-/** Second tab: lister → My Listings; cleaner → Jobs (My Jobs at cleaner dashboard). */
+/** Second tab: lister → My Listings; cleaner → My Jobs (/jobs). */
 function isJobsTabActive(pathname: string, activeRole: Role): boolean {
   if (activeRole === "lister") {
     return pathname === "/my-listings" || pathname.startsWith("/my-listings/");
   }
   if (activeRole === "cleaner") {
-    return (
-      pathname === "/cleaner/dashboard" ||
-      pathname.startsWith("/cleaner/dashboard/")
-    );
+    return pathname === "/jobs" || pathname.startsWith("/jobs/");
   }
   return pathname === "/jobs" || pathname.startsWith("/jobs/");
 }
@@ -121,18 +118,19 @@ export function MobileBottomNav() {
       if (cancelled) return;
       const pr = row as { active_role?: string | null; roles?: string[] | null } | null;
       const ar = pr?.active_role;
-      const r = Array.isArray(pr?.roles) ? pr.roles : [];
+      const raw = Array.isArray(pr?.roles) ? pr.roles : [];
+      const roles: Role[] = [];
+      for (const x of raw) {
+        if (x === "lister" || x === "cleaner") roles.push(x);
+      }
       let next: Role = null;
-      if (ar === "lister" || ar === "cleaner") {
+      // Mirror lib/supabase/session.ts: use DB active_role when set, else roles[0]
+      if (roles.length === 0) {
+        next = null;
+      } else if (ar === "lister" || ar === "cleaner") {
         next = ar;
-      } else if (r.includes("lister") && !r.includes("cleaner")) {
-        next = "lister";
-      } else if (r.includes("cleaner") && !r.includes("lister")) {
-        next = "cleaner";
-      } else if (r.includes("lister")) {
-        next = "lister";
-      } else if (r.includes("cleaner")) {
-        next = "cleaner";
+      } else {
+        next = roles[0]!;
       }
       setActiveRole(next);
     })();
@@ -147,13 +145,13 @@ export function MobileBottomNav() {
     activeRole === "lister"
       ? "/my-listings"
       : activeRole === "cleaner"
-        ? "/cleaner/dashboard"
+        ? "/jobs"
         : "/jobs";
   const jobsTabLabel =
     activeRole === "lister"
       ? "My Listings"
       : activeRole === "cleaner"
-        ? "Jobs"
+        ? "My Jobs"
         : "Jobs";
   const JobsIcon = activeRole === "lister" ? List : Briefcase;
 
@@ -209,7 +207,7 @@ export function MobileBottomNav() {
             aria-current={isJobsTabActive(currentPath, activeRole) ? "page" : undefined}
             aria-label={
               activeRole === "cleaner"
-                ? "Jobs — My jobs"
+                ? "My Jobs — browse and manage jobs"
                 : activeRole === "lister"
                   ? "My Listings"
                   : "Jobs"

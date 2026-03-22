@@ -27,7 +27,6 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const supabase = createBrowserSupabaseClient();
   const signupHref = searchParams.toString() ? `/signup?${searchParams.toString()}` : "/signup";
-  const role = searchParams.get("role");
   const bannedParam = searchParams.get("banned");
   const bannedReason = searchParams.get("reason") ?? null;
   const [message, setMessage] = useState<string | null>(null);
@@ -105,39 +104,10 @@ function LoginForm() {
     <section className="page-inner flex justify-center">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          {role === "cleaner" ? (
-            <>
-              <CardTitle className="text-lg font-semibold text-emerald-700">
-                Cleaner Login
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Not a cleaner?{" "}
-                <Link
-                  href="/login?role=lister"
-                  className="font-medium text-sky-700 underline underline-offset-2"
-                >
-                  Lister login
-                </Link>
-              </p>
-            </>
-          ) : role === "lister" ? (
-            <>
-              <CardTitle className="text-lg font-semibold text-sky-700">
-                Lister Login
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Not a lister?{" "}
-                <Link
-                  href="/login?role=cleaner"
-                  className="font-medium text-emerald-700 underline underline-offset-2"
-                >
-                  Cleaner login
-                </Link>
-              </p>
-            </>
-          ) : (
-            <CardTitle>Log in to Bond Back</CardTitle>
-          )}
+          <CardTitle>Log in to Bond Back</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            One account for listers and cleaners — switch roles anytime after you sign in.
+          </p>
         </CardHeader>
         <CardContent>
           <form

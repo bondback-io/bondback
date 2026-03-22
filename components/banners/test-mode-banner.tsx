@@ -40,17 +40,16 @@ export function TestModeBanner({ stripeTestMode }: TestModeBannerProps) {
       <div
         role="banner"
         aria-label="Stripe test mode active"
-        className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between gap-3 border-b border-amber-600/50 px-3 py-2 text-sm text-gray-900 shadow-md md:px-4"
-        style={{ backgroundColor: "#f59e0b" }}
+        className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between gap-3 border-b border-amber-600/50 bg-amber-400 px-3 py-2 text-sm text-amber-950 shadow-md dark:border-amber-500/40 dark:bg-amber-900/95 dark:text-amber-50 md:px-4"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
           <span className="shrink-0 font-semibold uppercase tracking-wide">
             Test mode active
           </span>
-          <span className="hidden text-gray-900/90 sm:inline">
+          <span className="hidden text-amber-950/90 dark:text-amber-100/95 sm:inline">
             — No real money is processed. All Stripe operations are simulated.
           </span>
-          <span className="text-gray-900/90 sm:hidden">
+          <span className="text-amber-950/90 dark:text-amber-100/95 sm:hidden">
             No real charges. Stripe simulated.
           </span>
         </div>
@@ -59,14 +58,14 @@ export function TestModeBanner({ stripeTestMode }: TestModeBannerProps) {
             asChild
             size="sm"
             variant="secondary"
-            className="h-8 border-gray-800/30 bg-gray-900/10 text-gray-900 hover:bg-gray-900/20"
+            className="h-8 border-amber-950/25 bg-amber-950/10 text-amber-950 hover:bg-amber-950/20 dark:border-amber-200/30 dark:bg-amber-100/15 dark:text-amber-50 dark:hover:bg-amber-100/25"
           >
             <Link href="/admin/global-settings">Go to Global Settings</Link>
           </Button>
           <button
             type="button"
             onClick={handleDismiss}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-900/80 hover:bg-gray-900/15 hover:text-gray-900"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-amber-950/85 hover:bg-amber-950/15 hover:text-amber-950 dark:text-amber-100/90 dark:hover:bg-amber-100/15 dark:hover:text-amber-50"
             aria-label="Dismiss test mode banner"
           >
             <X className="h-4 w-4" />
