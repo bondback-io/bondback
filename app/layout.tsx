@@ -17,7 +17,7 @@ import { GlobalOfflineBanner } from "@/components/layout/global-offline-banner";
 import { FirstJobRewardsNudge } from "@/components/banners/first-job-rewards-nudge";
 import { getFirstJobRewardsNudgeVisible } from "@/lib/beta-banners";
 import { RegisterExpoPushToken } from "@/components/pwa/register-expo-push-token";
-import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { ContextualFab } from "@/components/layout/contextual-fab";
 
 export const metadata: Metadata = {
@@ -100,7 +100,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                 stripeTestMode={stripeTestMode}
               />
               <GlobalOfflineBanner />
-              <main className="page-main pt-4">
+              <main className="page-main pt-4 pb-[max(4.75rem,env(safe-area-inset-bottom))] md:pb-4">
                 <div className="container mx-auto px-4 pt-2">
                   <FirstJobRewardsNudge visible={showFirstJobNudge} />
                 </div>

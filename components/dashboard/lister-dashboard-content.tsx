@@ -5,10 +5,10 @@ import {
   DashboardStickyHeader,
   QuickStatsRow,
   QuickActionsRow,
-  DashboardListingCard,
   CollapsibleActivityFeed,
   DashboardEmptyState,
 } from "@/components/dashboard";
+import { DashboardListingCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 import { XCircle, ChevronDown } from "lucide-react";
 import type { ListingRow } from "@/lib/listings";
 
@@ -93,7 +93,7 @@ export function ListerDashboardContent({
               const endMs = parseUtcTimestamp(listing.end_time);
               const isUrgent = endMs > nowMs && endMs - nowMs < oneDayMs;
               return (
-                <DashboardListingCard
+                <DashboardListingCardWithSwipe
                   key={listing.id}
                   listing={listing}
                   bidCount={bidCountByListingId[String(listing.id)] ?? 0}

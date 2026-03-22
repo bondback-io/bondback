@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +25,7 @@ function isFabRoute(pathname: string, role: ProfileRole | null): boolean {
   if (!pathname || !role) return false;
   const routes = role === "lister" ? FAB_ROUTES_LISTER : FAB_ROUTES_CLEANER;
   return routes.some(
-    (route) => pathname === route || pathname.startsWith(route + "/")
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
 }
 
@@ -34,9 +35,8 @@ function useHideFabContext() {
 
   useEffect(() => {
     const onResize = () => {
-      // Optional: hide when visual viewport is small (e.g. keyboard open on mobile)
       const vv = window.visualViewport;
-      const keyboardLikelyOpen = vv && vv.height < window.screen.height * 0.75;
+      const keyboardLikelyOpen = vv && vv.height < window.screen.height * 0.72;
       setHide(!!keyboardLikelyOpen);
     };
     const onDialogToggle = () => {
@@ -45,7 +45,12 @@ function useHideFabContext() {
     };
     window.visualViewport?.addEventListener("resize", onResize);
     const observer = new MutationObserver(onDialogToggle);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-state"] });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-state"],
+    });
     onResize();
     onDialogToggle();
     return () => {
@@ -57,43 +62,91 @@ function useHideFabContext() {
   return hide;
 }
 
+/** Subtle pulse when cleaner may have new work (dashboard / home; not on /jobs). */
+function useCleanerJobsPulse(pathname: string | null, role: ProfileRole | null) {
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    if (role !== "cleaner" || !pathname) {
+      setPulse(false);
+      return;
+    }
+    const onJobs =
+      pathname === "/jobs" || pathname.startsWith("/jobs/");
+    const onMain =
+      pathname === "/dashboard" ||
+      pathname === "/cleaner/dashboard" ||
+      pathname.startsWith("/cleaner/dashboard/");
+    setPulse(onMain && !onJobs);
+  }, [pathname, role]);
+  return pulse;
+}
+
 export type ContextualFabProps = {
-  /** Current user active role from server (session). */
   activeRole: ProfileRole | null;
   className?: string;
 };
 
 /**
- * Role-aware floating action button. Shown only on mobile (< 768px) and on relevant screens.
- * Lister: "+ Create Listing" (primary). Cleaner: "Browse Jobs" (Search icon, emerald).
+ * Role-aware FAB: bottom-right, round pill with label.
+ * Lister: green primary. Cleaner: blue. Framer Motion pulse on cleaner main screens.
  */
 export function ContextualFab({ activeRole, className }: ContextualFabProps) {
   const pathname = usePathname();
   const hideForContext = useHideFabContext();
+  const prefersReducedMotion = useReducedMotion();
+  const pulseCleaner = useCleanerJobsPulse(pathname ?? null, activeRole);
 
-  const show = activeRole && isFabRoute(pathname ?? "", activeRole) && !hideForContext;
+  const show =
+    activeRole && isFabRoute(pathname ?? "", activeRole) && !hideForContext;
 
   if (!show) return null;
 
   const isLister = activeRole === "lister";
   const href = isLister ? "/listings/new" : "/jobs";
-  const label = isLister ? "Create Listing" : "Browse Jobs";
+  const label = isLister ? "Create Listing" : "Find Nearby Jobs";
   const Icon = isLister ? Plus : Search;
 
   return (
-    <Link
-      href={href}
+    <motion.div
       className={cn(
-        "fixed z-50 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition active:scale-95 md:hidden",
-        "bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] right-4",
-        isLister
-          ? "bg-primary hover:bg-primary/90 dark:bg-primary dark:hover:bg-primary/90"
-          : "bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500",
+        "fixed z-50 md:hidden",
+        "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4 max-w-[min(100vw-2rem,20rem)]",
         className
       )}
-      aria-label={label}
+      initial={false}
+      animate={
+        !prefersReducedMotion && !isLister && pulseCleaner
+          ? {
+              scale: [1, 1.03, 1],
+              boxShadow: [
+                "0 10px 40px -10px rgba(37, 99, 235, 0.35)",
+                "0 14px 44px -8px rgba(37, 99, 235, 0.55)",
+                "0 10px 40px -10px rgba(37, 99, 235, 0.35)",
+              ],
+            }
+          : {}
+      }
+      transition={{
+        duration: 2.4,
+        repeat: prefersReducedMotion || isLister || !pulseCleaner ? 0 : Infinity,
+        ease: "easeInOut",
+      }}
     >
-      <Icon className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
-    </Link>
+      <Link
+        href={href}
+        className={cn(
+          "flex min-h-14 items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-semibold text-white shadow-2xl transition active:scale-[0.98]",
+          isLister
+            ? "bg-emerald-600 ring-2 ring-emerald-400/35 hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            : "bg-blue-600 ring-2 ring-blue-400/35 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+        )}
+        aria-label={isLister ? "Create listing" : "Find nearby jobs"}
+      >
+        <Icon className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
+        <span className="truncate">
+          {isLister ? "+ Create Listing" : "Find Nearby Jobs"}
+        </span>
+      </Link>
+    </motion.div>
   );
 }

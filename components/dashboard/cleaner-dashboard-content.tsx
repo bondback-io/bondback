@@ -5,10 +5,10 @@ import {
   DashboardStickyHeader,
   QuickStatsRow,
   QuickActionsRow,
-  DashboardJobCard,
   CollapsibleActivityFeed,
   DashboardEmptyState,
 } from "@/components/dashboard";
+import { DashboardJobCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 import { Briefcase, XCircle, ChevronDown } from "lucide-react";
 import type { ListingRow } from "@/lib/listings";
 
@@ -102,7 +102,7 @@ export function CleanerDashboardContent({
                   : null;
               const isUrgent = daysLeft != null && daysLeft <= 1;
               return (
-                <DashboardJobCard
+                <DashboardJobCardWithSwipe
                   key={job.id}
                   job={{
                     id: job.id,

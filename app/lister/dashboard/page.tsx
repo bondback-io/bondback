@@ -5,7 +5,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { Badge } from "@/components/ui/badge";
 import {
-  DashboardStickyHeader,
   QuickStatsRow,
   QuickActionsRow,
   DashboardListingCard,
@@ -13,13 +12,14 @@ import {
   DashboardEmptyState,
   DashboardPullToRefresh,
 } from "@/components/dashboard";
+import {
+  ResponsiveListerListingCards,
+  SwipeableListerActiveJobs,
+} from "@/components/mobile-fab";
+import { cn } from "@/lib/utils";
 import { formatCents, isListingLive, listingIdsWithCancelledJobs } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
-import {
-  ChevronDown,
-  List as ListIcon,
-  XCircle,
-} from "lucide-react";
+import { ChevronDown, XCircle } from "lucide-react";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -49,8 +49,6 @@ export default async function ListerDashboardPage() {
   const profile = profileData as ProfileRow;
   const roles = (profile.roles as string[] | null) ?? [];
   if (!roles.includes("lister")) redirect("/dashboard");
-
-  const activeRole = (profile.active_role as string | null) ?? roles[0] ?? "lister";
 
   const [listingsRes, jobsRes, notificationsRes, globalSettings] = await Promise.all([
     supabase
@@ -171,30 +169,44 @@ export default async function ListerDashboardPage() {
 
   return (
     <DashboardPullToRefresh>
-    <section className="page-inner space-y-6 pb-24 sm:pb-8">
-      {/* Sticky header */}
-      <DashboardStickyHeader
-        title="Lister Dashboard"
-        roleLabel="Lister"
-        role="lister"
-      />
+    <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
+      {/* Sticky title row — role switcher lives in global header on mobile */}
+      <header className="sticky top-0 z-30 -mx-4 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <h1 className="truncate text-lg font-semibold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
+            Lister Dashboard
+          </h1>
+          <Badge
+            className={cn(
+              "shrink-0 text-xs font-medium",
+              "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200"
+            )}
+          >
+            Lister
+          </Badge>
+        </div>
+      </header>
 
-      {/* Quick stats — horizontal scroll on mobile */}
-      <QuickStatsRow stats={stats} scrollOnMobile />
+      {/* Quick stats — horizontal scroll on mobile; larger touch + type on small screens */}
+      <QuickStatsRow
+        stats={stats}
+        scrollOnMobile
+        className="[&_.CardContent]:p-5 md:[&_.CardContent]:p-4 [&_p.text-xl]:text-2xl md:[&_p.text-xl]:text-xl [&_p:first-child]:text-xs md:[&_p:first-child]:text-[11px]"
+      />
 
       {/* Quick actions — hidden on mobile when FAB is shown */}
       <div className="hidden sm:block">
         <QuickActionsRow actions={actions} />
       </div>
 
-      {/* My Active Listings */}
-      <div className="space-y-4">
+      {/* My Active Listings — swipeable cards on mobile, grid on md+ */}
+      <div className="space-y-5 md:space-y-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-foreground dark:text-gray-100">
+          <h2 className="text-xl font-bold tracking-tight text-foreground dark:text-gray-100 md:text-base md:font-semibold">
             My Active Listings
           </h2>
           {liveListings.length > 0 && (
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary" className="px-2.5 py-1 text-sm md:text-xs">
               {liveListings.length} live
             </Badge>
           )}
@@ -208,66 +220,54 @@ export default async function ListerDashboardPage() {
             icon="list"
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {liveListings.map((listing) => {
+          <ResponsiveListerListingCards
+            items={liveListings.map((listing) => {
               const endMs = parseUtcTimestamp(listing.end_time);
               const isUrgent = endMs > nowMs && endMs - nowMs < oneDayMs;
-              return (
-                <DashboardListingCard
-                  key={listing.id}
-                  listing={listing}
-                  bidCount={bidCountByListingId[String(listing.id)] ?? 0}
-                  isUrgent={isUrgent}
-                  feePercentage={feePercentage}
-                />
-              );
+              return {
+                listing,
+                bidCount: bidCountByListingId[String(listing.id)] ?? 0,
+                isUrgent,
+                feePercentage,
+              };
             })}
-          </div>
+          />
         )}
       </div>
 
       {/* Two-column: Active jobs list + Recent activity */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 lg:col-span-1">
-          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 dark:border-gray-800">
-            <h2 className="text-sm font-semibold text-foreground dark:text-gray-100">
+      <div className="grid gap-8 lg:grid-cols-3 lg:gap-6">
+        <div className="rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 lg:col-span-1 md:rounded-xl md:border">
+          <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
+            <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
               Active Jobs
             </h2>
             {activeJobs.length > 0 && (
               <Link
                 href="/my-listings?tab=active_listings"
-                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                className="min-h-10 px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline md:min-h-0 md:text-xs md:font-medium"
               >
                 View all
               </Link>
             )}
           </div>
-          <div className="p-3">
+          <div className="p-4 md:p-3">
             {activeJobs.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground dark:text-gray-400">
+              <p className="py-8 text-center text-base text-muted-foreground dark:text-gray-400 md:py-6 md:text-sm">
                 No active jobs.
               </p>
             ) : (
-              <ul className="space-y-1">
-                {activeJobs.slice(0, 5).map((job) => {
+              <SwipeableListerActiveJobs
+                items={activeJobs.slice(0, 5).map((job) => {
                   const listing = listingMap.get(job.listing_id);
-                  return (
-                    <li key={job.id}>
-                      <Link
-                        href={`/jobs/${job.id}`}
-                        className="block rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-muted/50 dark:hover:bg-gray-800/50"
-                      >
-                        <span className="font-medium text-foreground dark:text-gray-100">
-                          {listing?.title ?? `Job #${job.id}`}
-                        </span>
-                        <span className="ml-1 text-muted-foreground dark:text-gray-400">
-                          · View
-                        </span>
-                      </Link>
-                    </li>
-                  );
+                  return {
+                    jobId: Number(job.id),
+                    title: listing?.title ?? `Job #${job.id}`,
+                    suburb: listing?.suburb ?? null,
+                    postcode: listing?.postcode != null ? String(listing.postcode) : null,
+                  };
                 })}
-              </ul>
+              />
             )}
           </div>
         </div>
@@ -282,8 +282,8 @@ export default async function ListerDashboardPage() {
       </div>
 
       {/* Cancelled jobs — collapsible */}
-      <details className="group rounded-xl border border-border bg-card dark:border-gray-800 dark:bg-gray-900/50">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-foreground dark:text-gray-200 [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:rounded-xl md:border">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-2 px-5 py-4 text-base font-semibold text-foreground dark:text-gray-200 md:min-h-0 md:px-4 md:py-3 md:text-sm md:font-medium [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2">
             <XCircle className="h-4 w-4 text-destructive" />
             Cancelled jobs
@@ -334,6 +334,7 @@ export default async function ListerDashboardPage() {
           )}
         </div>
       </details>
+
     </section>
     </DashboardPullToRefresh>
   );

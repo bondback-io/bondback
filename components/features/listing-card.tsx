@@ -401,7 +401,7 @@ export function ListingCard({
         {/* Title + location + Photos badge */}
         <div className="space-y-1.5">
           <div className="flex items-start gap-2">
-            <h3 className="line-clamp-2 flex-1 text-lg font-bold leading-tight text-foreground dark:text-gray-100" style={{ fontSize: "clamp(1rem, 4vw, 1.25rem)" }}>
+            <h3 className="line-clamp-2 flex-1 text-xl font-bold leading-snug text-foreground dark:text-gray-100 md:text-base md:font-semibold md:leading-tight">
               {title}
             </h3>
             {hasPhotos && (
@@ -415,7 +415,7 @@ export function ListingCard({
               </Tooltip>
             )}
           </div>
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground dark:text-gray-400">
+          <p className="flex items-center gap-1.5 text-base text-muted-foreground dark:text-gray-400 md:text-sm">
             <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span>
               {formatLocationWithState(listing.suburb, listing.postcode)}

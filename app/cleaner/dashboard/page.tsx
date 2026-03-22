@@ -5,14 +5,14 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { Badge } from "@/components/ui/badge";
 import {
-  DashboardStickyHeader,
   QuickStatsRow,
   QuickActionsRow,
-  DashboardJobCard,
   CollapsibleActivityFeed,
   DashboardEmptyState,
   DashboardPullToRefresh,
 } from "@/components/dashboard";
+import { ResponsiveCleanerJobCards } from "@/components/mobile-fab";
+import { cn } from "@/lib/utils";
 import { formatCents } from "@/lib/listings";
 import {
   XCircle,
@@ -43,8 +43,6 @@ export default async function CleanerDashboardPage() {
   const profile = profileData as ProfileRow;
   const roles = (profile.roles as string[] | null) ?? [];
   if (!roles.includes("cleaner")) redirect("/dashboard");
-
-  const activeRole = (profile.active_role as string | null) ?? roles[0] ?? "cleaner";
 
   const { data: jobsData } = await supabase
     .from("jobs")
@@ -137,30 +135,44 @@ export default async function CleanerDashboardPage() {
 
   return (
     <DashboardPullToRefresh>
-    <section className="page-inner space-y-6 pb-24 sm:pb-8">
-      {/* Sticky header */}
-      <DashboardStickyHeader
-        title="Cleaner Dashboard"
-        roleLabel="Cleaner"
-        role="cleaner"
-      />
+    <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
+      {/* Sticky title row — role switcher lives in global header on mobile */}
+      <header className="sticky top-0 z-30 -mx-4 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <h1 className="truncate text-lg font-semibold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
+            Cleaner Dashboard
+          </h1>
+          <Badge
+            className={cn(
+              "shrink-0 text-xs font-medium",
+              "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200"
+            )}
+          >
+            Cleaner
+          </Badge>
+        </div>
+      </header>
 
-      {/* Quick stats — horizontal scroll on mobile */}
-      <QuickStatsRow stats={stats} scrollOnMobile />
+      {/* Quick stats — larger type + padding on mobile; rating stays prominent */}
+      <QuickStatsRow
+        stats={stats}
+        scrollOnMobile
+        className="[&_.CardContent]:p-5 md:[&_.CardContent]:p-4 [&_p.text-xl]:text-2xl md:[&_p.text-xl]:text-xl [&_p:first-child]:text-xs md:[&_p:first-child]:text-[11px]"
+      />
 
       {/* Quick actions — hidden on mobile when FAB is shown */}
       <div className="hidden sm:block">
         <QuickActionsRow actions={actions} />
       </div>
 
-      {/* My Active Jobs */}
-      <div className="space-y-4">
+      {/* My Active Jobs — swipeable on mobile, grid on md+ */}
+      <div className="space-y-5 md:space-y-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-foreground dark:text-gray-100">
+          <h2 className="text-xl font-bold tracking-tight text-foreground dark:text-gray-100 md:text-base md:font-semibold">
             My Active Jobs
           </h2>
           {activeJobs.length > 0 && (
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary" className="px-2.5 py-1 text-sm md:text-xs">
               {activeJobs.length} active
             </Badge>
           )}
@@ -174,8 +186,13 @@ export default async function CleanerDashboardPage() {
             icon="briefcase"
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {activeJobs.map((job) => {
+          <ResponsiveCleanerJobCards
+            ratingStars={
+              averageRatingValue != null && !Number.isNaN(averageRatingValue)
+                ? averageRatingValue
+                : null
+            }
+            items={activeJobs.map((job) => {
               const listing = listingsMap.get(job.listing_id as string) ?? null;
               const moveOutRaw = listing?.move_out_date;
               const moveOut = moveOutRaw ? new Date(moveOutRaw) : null;
@@ -190,22 +207,19 @@ export default async function CleanerDashboardPage() {
                     )
                   : null;
               const isUrgent = daysLeft != null && daysLeft <= 1;
-              return (
-                <DashboardJobCard
-                  key={job.id}
-                  job={{
-                    id: job.id,
-                    listing_id: job.listing_id,
-                    status: job.status,
-                    cleaner_confirmed_complete: job.cleaner_confirmed_complete,
-                  }}
-                  listing={listing}
-                  daysLeft={daysLeft}
-                  isUrgent={isUrgent}
-                />
-              );
+              return {
+                job: {
+                  id: job.id,
+                  listing_id: String(job.listing_id),
+                  status: job.status,
+                  cleaner_confirmed_complete: job.cleaner_confirmed_complete,
+                },
+                listing,
+                daysLeft,
+                isUrgent,
+              };
             })}
-          </div>
+          />
         )}
       </div>
 
@@ -217,8 +231,8 @@ export default async function CleanerDashboardPage() {
       />
 
       {/* Cancelled jobs — collapsible */}
-      <details className="group rounded-xl border border-border bg-card dark:border-gray-800 dark:bg-gray-900/50">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-foreground dark:text-gray-200 [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:rounded-xl md:border">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-2 px-5 py-4 text-base font-semibold text-foreground dark:text-gray-200 md:min-h-0 md:px-4 md:py-3 md:text-sm md:font-medium [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2">
             <XCircle className="h-4 w-4 text-destructive" />
             Cancelled jobs
@@ -269,6 +283,7 @@ export default async function CleanerDashboardPage() {
           )}
         </div>
       </details>
+
     </section>
     </DashboardPullToRefresh>
   );

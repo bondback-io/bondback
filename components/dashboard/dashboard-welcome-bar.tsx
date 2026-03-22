@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { RoleSwitcher } from "@/components/layout/role-switcher";
+import { RoleSwitcher } from "@/components/layout/RoleSwitcher";
 import { cn } from "@/lib/utils";
 
 export type DashboardWelcomeBarProps = {

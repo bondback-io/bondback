@@ -7,6 +7,7 @@ import { PayoutScheduleForm } from "@/components/settings/payout-schedule-form";
 import { getProfileCompletion } from "@/lib/profile-completion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { ProfileCompletionMobileRing } from "@/components/features/profile-completion-mobile";
 import { Star } from "lucide-react";
 import type { Database } from "@/types/supabase";
 import { VerificationBadges } from "@/components/shared/verification-badges";
@@ -124,10 +125,10 @@ const ProfilePage = async () => {
   };
 
   return (
-    <section className="page-inner space-y-6">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl dark:text-gray-100">
+    <section className="page-inner space-y-8 md:space-y-6">
+      <div className="flex flex-col gap-5 md:gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight md:text-3xl md:font-semibold dark:text-gray-100">
             My Profile
           </h1>
           <VerificationBadges
@@ -140,7 +141,10 @@ const ProfilePage = async () => {
           roles={roles as ("lister" | "cleaner")[]}
           activeRole={activeRole}
         />
-        <Card className="max-w-xl border-emerald-100 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/40">
+        <div className="md:hidden">
+          <ProfileCompletionMobileRing percent={percent} message={message} />
+        </div>
+        <Card className="hidden max-w-xl border-emerald-100 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/40 md:block">
           <CardContent className="space-y-2 pt-4">
             <Progress
               value={percent}

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { ListingCard } from "@/components/features/listing-card";
 import { JobCardSkeleton, JobCardSkeletonGrid } from "@/components/features/job-card-skeleton";
 import { PullToRefresh } from "@/components/features/pull-to-refresh";
-import { SwipeToSaveWrapper } from "@/components/features/swipe-to-save-wrapper";
+import { CardSwipeActions } from "@/components/features/card-swipe-actions";
+import { addSavedListingId, removeSavedListingId } from "@/lib/saved-listings-local";
 import { getListingCoverUrl } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
@@ -14,8 +15,10 @@ import type { JobsListFilters } from "@/lib/jobs-query";
 import { getJobsPage } from "@/lib/actions/jobs-list";
 import type { ListerCardData } from "@/lib/lister-card-data";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
+import { Gavel, Loader2, MapPin, Star } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 function haversineKm(
   lat1: number,
@@ -61,7 +64,7 @@ export type JobsListProps = {
 
 export function JobsList({
   initialListings,
-  radiusKm = 30,
+  radiusKm: _radiusKm = 30,
   isCleaner = false,
   currentUserId = null,
   centerLat = null,
@@ -80,8 +83,20 @@ export function JobsList({
   const [loadingMore, setLoadingMore] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(initialListings.length >= INITIAL_PAGE_SIZE);
+  /** Mobile-only quick radius (10–50 km); client filter when center lat/lon exist */
+  const [mobileRadiusKm, setMobileRadiusKm] = useState(10);
+  const [isMobile, setIsMobile] = useState(false);
   const supabase = createBrowserSupabaseClient();
   const { toast } = useToast();
+  const router = useRouter();
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -189,17 +204,26 @@ export function JobsList({
     (l) => l.status === "live" && parseUtcTimestamp(l.end_time) > nowMs
   );
 
+  const displayListings = useMemo(() => {
+    if (!isMobile || centerLat == null || centerLon == null) return live;
+    return live.filter((l) => {
+      const row = l as ListingRow & { lat?: number; lon?: number };
+      if (typeof row.lat !== "number" || typeof row.lon !== "number") return true;
+      return haversineKm(centerLat, centerLon, row.lat, row.lon) <= mobileRadiusKm;
+    });
+  }, [live, isMobile, centerLat, centerLon, mobileRadiusKm]);
+
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMarginTop, setScrollMarginTop] = useState(0);
   useEffect(() => {
-    if (listRef.current && live.length > VIRTUALIZE_THRESHOLD) {
+    if (listRef.current && displayListings.length > VIRTUALIZE_THRESHOLD) {
       const top = listRef.current.getBoundingClientRect().top + window.scrollY;
       setScrollMarginTop(top);
     }
-  }, [live.length]);
+  }, [displayListings.length]);
 
   const rowVirtualizer = useWindowVirtualizer({
-    count: live.length > VIRTUALIZE_THRESHOLD ? live.length : 0,
+    count: displayListings.length > VIRTUALIZE_THRESHOLD ? displayListings.length : 0,
     estimateSize: () => ESTIMATED_CARD_HEIGHT,
     getScrollElement: () => window,
     scrollMargin: scrollMarginTop,
@@ -207,16 +231,16 @@ export function JobsList({
     gap: 12,
   });
 
-  const useVirtualList = live.length > VIRTUALIZE_THRESHOLD;
+  const useVirtualList = displayListings.length > VIRTUALIZE_THRESHOLD;
   const virtualItems = useVirtualList ? rowVirtualizer.getVirtualItems() : [];
 
   // Preload first 3–4 thumbnails for LCP (run when initial list identity changes)
-  const preloadKey = live
+  const preloadKey = displayListings
     .slice(0, PRELOAD_IMAGE_COUNT)
     .map((l) => l.id)
     .join(",");
   useEffect(() => {
-    const urls = live
+    const urls = displayListings
       .slice(0, PRELOAD_IMAGE_COUNT)
       .map((l) => getListingCoverUrl(l))
       .filter((u): u is string => Boolean(u));
@@ -230,7 +254,7 @@ export function JobsList({
       links.push(link);
     });
     return () => links.forEach((link) => link.remove());
-  }, [preloadKey]);
+  }, [preloadKey, displayListings]);
 
   function renderCard(listing: ListingRow, index: number) {
     const row = listing as ListingRow & { lat?: number; lon?: number };
@@ -259,18 +283,34 @@ export function JobsList({
         listerVerificationBadges={listerCard?.listerVerificationBadges ?? null}
       />
     );
+    const canSwipeBrowse = isCleaner && !isListerOwner;
+    if (!canSwipeBrowse) {
+      return card;
+    }
+    const listingId = String(listing.id);
     return (
-      <SwipeToSaveWrapper key={listing.id} className="md:block">
+      <CardSwipeActions
+        key={listing.id}
+        className="md:block"
+        rightIcon={Gavel}
+        leftIcon={Star}
+        rightActionLabel="Quick bid"
+        leftActionLabel="Save"
+        onSwipeRight={() => router.push(`/jobs/${listingId}`)}
+        onSwipeLeft={() => {
+          addSavedListingId(listingId);
+          toast({
+            title: "Saved to favourites",
+            description: "Stored on this device.",
+            actionButton: {
+              label: "Undo",
+              onClick: () => removeSavedListingId(listingId),
+            },
+          });
+        }}
+      >
         {card}
-      </SwipeToSaveWrapper>
-    );
-  }
-
-  if (live.length === 0) {
-    return (
-      <p className="text-center text-sm text-muted-foreground">
-        No live jobs right now. Check back later or broaden your radius (stub: {radiusKm}km).
-      </p>
+      </CardSwipeActions>
     );
   }
 
@@ -282,7 +322,7 @@ export function JobsList({
           <span className="text-sm text-muted-foreground dark:text-gray-400">Loading more jobs…</span>
         </div>
       )}
-      {!hasMore && live.length > 0 && !loadingMore && (
+      {!hasMore && displayListings.length > 0 && !loadingMore && (
         <p className="text-sm text-muted-foreground dark:text-gray-400">No more jobs</p>
       )}
       {hasMore && !loadingMore && (
@@ -295,7 +335,7 @@ export function JobsList({
           <Button
             variant="outline"
             onClick={() => loadMore()}
-            className="hidden min-h-[44px] sm:inline-flex focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="hidden min-h-12 sm:inline-flex focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Load more jobs"
           >
             Load more
@@ -307,6 +347,18 @@ export function JobsList({
 
   const listContent = isRefreshing ? (
     <JobCardSkeletonGrid count={6} />
+  ) : displayListings.length === 0 ? (
+    <p className="px-2 py-8 text-center text-base font-medium leading-relaxed text-muted-foreground md:text-sm">
+      {live.length === 0 ? (
+        <>No live jobs right now. Check back later or adjust your search filters.</>
+      ) : (
+        <>
+          No jobs within this radius on mobile.{" "}
+          <span className="font-semibold text-foreground">Increase the slider</span> (up to 50 km) or
+          broaden your search.
+        </>
+      )}
+    </p>
   ) : useVirtualList ? (
     <div ref={listRef} className="w-full">
       <div
@@ -317,7 +369,7 @@ export function JobsList({
         }}
       >
         {virtualItems.map((virtualRow) => {
-          const listing = live[virtualRow.index];
+          const listing = displayListings[virtualRow.index];
           if (!listing) return null;
           return (
             <div
@@ -339,12 +391,46 @@ export function JobsList({
     </div>
   ) : (
     <div className="w-full">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {live.map((listing, index) => renderCard(listing, index))}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-6">
+        {displayListings.map((listing, index) => renderCard(listing, index))}
       </div>
       {infiniteScrollFooter}
     </div>
   );
+
+  const mobileRadiusControl =
+    centerLat != null && centerLon != null ? (
+      <div className="mb-5 flex flex-col gap-4 rounded-3xl border-2 border-primary/25 bg-gradient-to-br from-primary/10 to-sky-500/5 p-5 shadow-sm dark:border-primary/30 dark:from-primary/15 dark:to-gray-900/40 md:hidden">
+        <div className="flex items-end justify-between gap-3">
+          <div className="flex items-center gap-2 text-primary">
+            <MapPin className="h-8 w-8 shrink-0" strokeWidth={2} aria-hidden />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Quick radius
+              </p>
+              <p className="text-3xl font-extrabold tabular-nums leading-none text-foreground dark:text-gray-50">
+                {mobileRadiusKm}
+                <span className="ml-1 text-xl font-bold text-muted-foreground">km</span>
+              </p>
+            </div>
+          </div>
+        </div>
+        <Slider
+          min={10}
+          max={50}
+          step={1}
+          value={[mobileRadiusKm]}
+          onValueChange={(v) => setMobileRadiusKm(v[0] ?? 10)}
+          className="w-full py-2 [&_[role=slider]]:h-12 [&_[role=slider]]:w-12 [&_[role=slider]]:min-h-[48px] [&_[role=slider]]:min-w-[48px]"
+          aria-label="Search radius in kilometers"
+        />
+        <p className="text-sm font-medium leading-snug text-muted-foreground">
+          Swipe right: <span className="font-semibold text-emerald-700 dark:text-emerald-400">quick bid</span>
+          {" · "}
+          Swipe left: <span className="font-semibold text-amber-700 dark:text-amber-400">save</span>
+        </p>
+      </div>
+    ) : null;
 
   return (
     <PullToRefresh
@@ -352,6 +438,7 @@ export function JobsList({
       disabled={isRefreshing}
       releaseToRefreshLabel="Release to refresh"
     >
+      {mobileRadiusControl}
       {listContent}
     </PullToRefresh>
   );

@@ -14,6 +14,8 @@ type ToastVariant = "default" | "destructive";
 
 export type ToastAction = { label: string; href: string };
 
+export type ToastActionButton = { label: string; onClick: () => void };
+
 type ToastOptions = {
   id?: string;
   title?: string;
@@ -21,6 +23,8 @@ type ToastOptions = {
   variant?: ToastVariant;
   /** Optional action button (e.g. "View" linking to job) */
   action?: ToastAction;
+  /** Optional button (e.g. Undo) — avoids full page navigation */
+  actionButton?: ToastActionButton;
 };
 
 type ToastContextValue = {
@@ -62,7 +66,21 @@ export function ToastProviderWithContext({ children }: { children: React.ReactNo
             {t.description && (
               <ToastDescription>{t.description}</ToastDescription>
             )}
-            {t.action && (
+            {t.actionButton && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="rounded-md bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 dark:bg-primary/20 dark:hover:bg-primary/30"
+                  onClick={() => {
+                    t.actionButton?.onClick();
+                    if (t.id) dismiss(t.id);
+                  }}
+                >
+                  {t.actionButton.label}
+                </button>
+              </div>
+            )}
+            {t.action && !t.actionButton && (
               <div className="mt-2">
                 <Link
                   href={t.action.href}
