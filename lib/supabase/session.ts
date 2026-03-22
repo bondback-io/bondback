@@ -35,32 +35,46 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
     (typeof isAdminValue === "string" &&
       ["true", "t", "yes", "1"].includes(String(isAdminValue).toLowerCase().trim()));
 
-  let roles: ProfileRole[] = (row ? ["lister"] : []);
+  /**
+   * Roles: `[]` in DB = signed up but not yet chosen lister/cleaner (Airtasker-style flow).
+   * `null` on legacy rows = treat as lister-only for backwards compatibility.
+   */
+  let roles: ProfileRole[] = [];
   if (row?.roles != null) {
     if (Array.isArray(row.roles)) {
       roles = (row.roles as unknown[]).filter(
         (r): r is ProfileRole => r === "lister" || r === "cleaner"
       );
-      if (roles.length === 0) roles = ["lister"];
+      if (roles.length === 0 && row.roles.length > 0) {
+        roles = ["lister"];
+      }
     } else if (typeof row.roles === "string") {
       try {
         const parsed = JSON.parse(row.roles) as unknown;
-        roles = Array.isArray(parsed)
-          ? (parsed as unknown[]).filter(
-              (r): r is ProfileRole => r === "lister" || r === "cleaner"
-            )
-          : ["lister"];
-        if (roles.length === 0) roles = ["lister"];
+        if (Array.isArray(parsed)) {
+          roles = (parsed as unknown[]).filter(
+            (r): r is ProfileRole => r === "lister" || r === "cleaner"
+          );
+          if (roles.length === 0 && parsed.length > 0) {
+            roles = ["lister"];
+          }
+        } else {
+          roles = ["lister"];
+        }
       } catch {
         roles = ["lister"];
       }
     }
+  } else if (row) {
+    roles = ["lister"];
   }
 
   let activeRole: ProfileRole | null =
-    (row?.active_role === "lister" || row?.active_role === "cleaner"
-      ? row.active_role
-      : null) ?? (roles[0] ?? null);
+    roles.length === 0
+      ? null
+      : (row?.active_role === "lister" || row?.active_role === "cleaner"
+          ? row.active_role
+          : null) ?? (roles[0] ?? null);
 
   if (process.env.NODE_ENV !== "production") {
     // Server-side debug log for admin/roles issues

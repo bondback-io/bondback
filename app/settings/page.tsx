@@ -165,7 +165,7 @@ export default async function SettingsPage({
                 <div className={sectionClass}>
                   <SectionHeader icon={User} title="Profile" />
                   <div className="mb-4 border-b border-border pb-4 dark:border-gray-700">
-                    <SettingsRolesSection roles={roles} />
+                    <SettingsRolesSection roles={roles} activeRole={activeRole} />
                   </div>
                   <SettingsProfileForm profile={{ ...p, isCleaner }} />
                 </div>
@@ -318,7 +318,7 @@ export default async function SettingsPage({
                 <AccordionContent>
                   <div className={sectionClass}>
                     <div className="mb-4 border-b border-border pb-4 dark:border-gray-700">
-                      <SettingsRolesSection roles={roles} />
+                      <SettingsRolesSection roles={roles} activeRole={activeRole} />
                     </div>
                     <SettingsProfileForm profile={{ ...p, isCleaner }} />
                   </div>

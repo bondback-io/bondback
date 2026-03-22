@@ -19,6 +19,10 @@ import {
   ChevronDown,
   CheckCircle2,
 } from "lucide-react";
+import { getProfileCompletion } from "@/lib/profile-completion";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -134,6 +138,24 @@ export default async function CleanerDashboardPage() {
     created_at: n.created_at,
   }));
 
+  const nowMs = Date.now();
+  const createdAtMs = profile.created_at ? new Date(profile.created_at).getTime() : 0;
+  const welcomeWithinMs = 7 * 24 * 60 * 60 * 1000;
+  const showWelcomeBanner =
+    createdAtMs > 0 && nowMs - createdAtMs < welcomeWithinMs;
+
+  const portfolioCount = Array.isArray(profile.portfolio_photo_urls)
+    ? profile.portfolio_photo_urls.length
+    : 0;
+  const showPhotoProgressNudge = portfolioCount === 0;
+
+  const completion = getProfileCompletion({
+    ...profile,
+    active_role: "cleaner",
+  } as ProfileRow);
+  const showCompletionFallbackNudge =
+    !showPhotoProgressNudge && completion.percent < 100;
+
   return (
     <DashboardPullToRefresh>
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
@@ -153,6 +175,72 @@ export default async function CleanerDashboardPage() {
           </Badge>
         </div>
       </header>
+
+      {showWelcomeBanner && (
+        <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-background shadow-sm dark:border-emerald-800/60 dark:from-emerald-950/40 dark:to-gray-950">
+          <CardHeader className="space-y-1 pb-2 pt-5 sm:pt-4">
+            <CardTitle className="text-xl font-bold tracking-tight sm:text-lg">
+              Welcome to Bond Back
+            </CardTitle>
+            <CardDescription className="text-base text-muted-foreground sm:text-sm">
+              You&apos;re set up as a cleaner — add portfolio photos and browse jobs to land your first bond clean.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {showPhotoProgressNudge && (
+        <Card className="border-amber-200/90 bg-amber-50/50 dark:border-amber-800/60 dark:bg-amber-950/25">
+          <CardContent className="space-y-4 pt-5 sm:pt-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-lg font-semibold text-foreground dark:text-gray-100 sm:text-base">
+                  75% complete — add photos to win more jobs
+                </p>
+                <p className="text-sm text-muted-foreground dark:text-gray-400">
+                  Portfolio photos help listers trust your work — upload before/after shots from past bond cleans.
+                </p>
+              </div>
+              <Button
+                asChild
+                size="lg"
+                className="h-12 w-full shrink-0 px-6 text-base font-semibold sm:h-11 sm:w-auto"
+              >
+                <Link href="/profile">Add photos</Link>
+              </Button>
+            </div>
+            <Progress value={75} className="h-3" />
+          </CardContent>
+        </Card>
+      )}
+
+      {showCompletionFallbackNudge && (
+        <Card className="border-sky-200/80 bg-sky-50/40 dark:border-sky-800/50 dark:bg-sky-950/20">
+          <CardContent className="space-y-4 pt-5 sm:pt-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-lg font-semibold text-foreground dark:text-gray-100 sm:text-base">
+                  {completion.percent}% complete
+                </p>
+                {completion.message && (
+                  <p className="text-sm text-muted-foreground dark:text-gray-400">
+                    {completion.message}
+                  </p>
+                )}
+              </div>
+              <Button
+                asChild
+                size="lg"
+                variant="secondary"
+                className="h-12 w-full shrink-0 px-6 text-base font-semibold sm:h-11 sm:w-auto"
+              >
+                <Link href="/profile">Finish profile</Link>
+              </Button>
+            </div>
+            <Progress value={completion.percent} className="h-3" />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick stats — larger type + padding on mobile; rating stays prominent */}
       <QuickStatsRow

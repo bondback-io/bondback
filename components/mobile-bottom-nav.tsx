@@ -2,16 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House, Briefcase, MessageCircle, User } from "lucide-react";
+import { useEffect, useState } from "react";
+import { House, Briefcase, MessageCircle, User, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatPanel } from "@/components/chat/chat-panel-context";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Home", icon: House },
-  { href: "/jobs", label: "Jobs", icon: Briefcase },
-  { href: "/messages", label: "Messages", icon: MessageCircle, showUnread: true as const },
-  { href: "/profile", label: "Profile", icon: User },
-] as const;
+type Role = "lister" | "cleaner" | null;
 
 const BOTTOM_NAV_ROUTES = [
   "/dashboard",
@@ -41,6 +38,20 @@ function isItemActive(pathname: string, href: string): boolean {
     );
   }
   return pathname === href || (href !== "/" && pathname.startsWith(href));
+}
+
+/** Second tab: lister → My Listings; cleaner → Jobs (My Jobs at cleaner dashboard). */
+function isJobsTabActive(pathname: string, activeRole: Role): boolean {
+  if (activeRole === "lister") {
+    return pathname === "/my-listings" || pathname.startsWith("/my-listings/");
+  }
+  if (activeRole === "cleaner") {
+    return (
+      pathname === "/cleaner/dashboard" ||
+      pathname.startsWith("/cleaner/dashboard/")
+    );
+  }
+  return pathname === "/jobs" || pathname.startsWith("/jobs/");
 }
 
 function MessagesTabLink({ active }: { active: boolean }) {
@@ -92,8 +103,59 @@ function MessagesTabLink({ active }: { active: boolean }) {
 export function MobileBottomNav() {
   const pathname = usePathname();
   const currentPath = pathname ?? "";
+  const [activeRole, setActiveRole] = useState<Role>(null);
+
+  useEffect(() => {
+    const supabase = createBrowserSupabaseClient();
+    let cancelled = false;
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user || cancelled) return;
+      const { data: row } = await supabase
+        .from("profiles")
+        .select("active_role, roles")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      const pr = row as { active_role?: string | null; roles?: string[] | null } | null;
+      const ar = pr?.active_role;
+      const r = Array.isArray(pr?.roles) ? pr.roles : [];
+      let next: Role = null;
+      if (ar === "lister" || ar === "cleaner") {
+        next = ar;
+      } else if (r.includes("lister") && !r.includes("cleaner")) {
+        next = "lister";
+      } else if (r.includes("cleaner") && !r.includes("lister")) {
+        next = "cleaner";
+      } else if (r.includes("lister")) {
+        next = "lister";
+      } else if (r.includes("cleaner")) {
+        next = "cleaner";
+      }
+      setActiveRole(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (!isBottomNavRoute(currentPath)) return null;
+
+  const jobsTabHref =
+    activeRole === "lister"
+      ? "/my-listings"
+      : activeRole === "cleaner"
+        ? "/cleaner/dashboard"
+        : "/jobs";
+  const jobsTabLabel =
+    activeRole === "lister"
+      ? "My Listings"
+      : activeRole === "cleaner"
+        ? "Jobs"
+        : "Jobs";
+  const JobsIcon = activeRole === "lister" ? List : Briefcase;
 
   return (
     <nav
@@ -107,46 +169,103 @@ export function MobileBottomNav() {
         )}
       >
         <div className="mx-auto flex max-w-lg items-end justify-between gap-0.5 px-1">
-          {NAV_ITEMS.map((item) => {
-            const active = isItemActive(currentPath, item.href);
-            const Icon = item.icon;
+          <Link
+            href="/dashboard"
+            className={cn(
+              "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
+              isItemActive(currentPath, "/dashboard")
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
+            )}
+            aria-current={isItemActive(currentPath, "/dashboard") ? "page" : undefined}
+          >
+            <House
+              className={cn(
+                "h-7 w-7 shrink-0",
+                isItemActive(currentPath, "/dashboard") ? "stroke-[2.5]" : "stroke-[2]"
+              )}
+              aria-hidden
+            />
+            <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
+              Home
+            </span>
+            <span
+              className={cn(
+                "h-0.5 w-7 rounded-full",
+                isItemActive(currentPath, "/dashboard") ? "bg-primary" : "bg-transparent"
+              )}
+              aria-hidden
+            />
+          </Link>
 
-            if ("showUnread" in item && item.showUnread) {
-              return <MessagesTabLink key={item.href} active={active} />;
+          <Link
+            href={jobsTabHref}
+            className={cn(
+              "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
+              isJobsTabActive(currentPath, activeRole)
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
+            )}
+            aria-current={isJobsTabActive(currentPath, activeRole) ? "page" : undefined}
+            aria-label={
+              activeRole === "cleaner"
+                ? "Jobs — My jobs"
+                : activeRole === "lister"
+                  ? "My Listings"
+                  : "Jobs"
             }
+          >
+            <JobsIcon
+              className={cn(
+                "h-7 w-7 shrink-0",
+                isJobsTabActive(currentPath, activeRole) ? "stroke-[2.5]" : "stroke-[2]"
+              )}
+              aria-hidden
+            />
+            <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
+              {jobsTabLabel}
+            </span>
+            <span
+              className={cn(
+                "h-0.5 w-7 rounded-full",
+                isJobsTabActive(currentPath, activeRole) ? "bg-primary" : "bg-transparent"
+              )}
+              aria-hidden
+            />
+          </Link>
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
-                  active
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
-                )}
-                aria-current={active ? "page" : undefined}
-              >
-                <Icon
-                  className={cn(
-                    "h-7 w-7 shrink-0",
-                    active ? "stroke-[2.5]" : "stroke-[2]"
-                  )}
-                  aria-hidden
-                />
-                <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
-                  {item.label}
-                </span>
-                <span
-                  className={cn(
-                    "h-0.5 w-7 rounded-full",
-                    active ? "bg-primary" : "bg-transparent"
-                  )}
-                  aria-hidden
-                />
-              </Link>
-            );
-          })}
+          <MessagesTabLink
+            active={isItemActive(currentPath, "/messages")}
+          />
+
+          <Link
+            href="/profile"
+            className={cn(
+              "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
+              isItemActive(currentPath, "/profile")
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
+            )}
+            aria-current={isItemActive(currentPath, "/profile") ? "page" : undefined}
+          >
+            <User
+              className={cn(
+                "h-7 w-7 shrink-0",
+                isItemActive(currentPath, "/profile") ? "stroke-[2.5]" : "stroke-[2]"
+              )}
+              aria-hidden
+            />
+            <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
+              Profile
+            </span>
+            <span
+              className={cn(
+                "h-0.5 w-7 rounded-full",
+                isItemActive(currentPath, "/profile") ? "bg-primary" : "bg-transparent"
+              )}
+              aria-hidden
+            />
+          </Link>
         </div>
       </div>
     </nav>

@@ -21,6 +21,10 @@ import { formatCents, isListingLive, listingIdsWithCancelledJobs } from "@/lib/l
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ChevronDown, XCircle } from "lucide-react";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getProfileCompletion } from "@/lib/profile-completion";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -167,6 +171,17 @@ export default async function ListerDashboardPage() {
   const nowMs = Date.now();
   const oneDayMs = 24 * 60 * 60 * 1000;
 
+  const createdAtMs = profile.created_at ? new Date(profile.created_at).getTime() : 0;
+  const welcomeWithinMs = 7 * 24 * 60 * 60 * 1000;
+  const showWelcomeBanner =
+    createdAtMs > 0 && nowMs - createdAtMs < welcomeWithinMs;
+
+  const completion = getProfileCompletion({
+    ...profile,
+    active_role: "lister",
+  } as ProfileRow);
+  const showProfileProgressNudge = completion.percent < 100;
+
   return (
     <DashboardPullToRefresh>
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
@@ -186,6 +201,44 @@ export default async function ListerDashboardPage() {
           </Badge>
         </div>
       </header>
+
+      {showWelcomeBanner && (
+        <Card className="border-sky-200/80 bg-gradient-to-br from-sky-50 to-background shadow-sm dark:border-sky-800/60 dark:from-sky-950/40 dark:to-gray-950">
+          <CardHeader className="space-y-1 pb-2 pt-5 sm:pt-4">
+            <CardTitle className="text-xl font-bold tracking-tight sm:text-lg">
+              Welcome to Bond Back
+            </CardTitle>
+            <CardDescription className="text-base text-muted-foreground sm:text-sm">
+              You&apos;re set up as a lister — create a listing with clear photos so cleaners can bid with confidence.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {showProfileProgressNudge && (
+        <Card className="border-amber-200/90 bg-amber-50/50 dark:border-amber-800/60 dark:bg-amber-950/25">
+          <CardContent className="space-y-4 pt-5 sm:pt-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-lg font-semibold text-foreground dark:text-gray-100 sm:text-base">
+                  75% complete — add photos to win more jobs
+                </p>
+                <p className="text-sm text-muted-foreground dark:text-gray-400">
+                  Finish your profile and use great photos on listings — listers with complete profiles get more bids.
+                </p>
+              </div>
+              <Button
+                asChild
+                size="lg"
+                className="h-12 w-full shrink-0 px-6 text-base font-semibold sm:h-11 sm:w-auto"
+              >
+                <Link href="/profile">Complete profile</Link>
+              </Button>
+            </div>
+            <Progress value={75} className="h-3" />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick stats — horizontal scroll on mobile; larger touch + type on small screens */}
       <QuickStatsRow

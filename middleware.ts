@@ -3,9 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 
 const PROTECTED_PATHS = ["/dashboard", "/listings/new", "/jobs", "/profile", "/my-listings", "/onboarding", "/admin"];
 
-/** Public onboarding routes: role choice and signup before auth */
+/**
+ * Public onboarding routes (no session). `/onboarding/role-choice` is auth-only
+ * (user lands there after `/signup`); legacy pre-auth flows stay public here.
+ */
 const PUBLIC_ONBOARDING = [
-  "/onboarding/role-choice",
   "/onboarding/signup",
   "/onboarding/lister/details",
   "/onboarding/cleaner/details",

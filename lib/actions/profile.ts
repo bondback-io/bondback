@@ -103,6 +103,7 @@ export async function setActiveRole(role: ProfileRole): Promise<{ ok: boolean; e
   revalidatePath("/jobs");
   revalidatePath("/my-listings");
   revalidatePath("/profile");
+  revalidatePath("/settings");
 
   return { ok: true };
 }

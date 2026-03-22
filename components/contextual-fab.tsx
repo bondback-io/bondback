@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ProfileRole = "lister" | "cleaner";
@@ -77,7 +77,7 @@ export type ContextualFabProps = {
 
 /**
  * Airtasker-style round FAB (64×64px), mobile only.
- * Lister: green + Create Listing · Cleaner: blue + Find Nearby Jobs (labels via aria/title).
+ * Lister: green round + Create Listing · Cleaner: blue pill + Search + “Find Jobs” → /jobs (area search).
  */
 export function ContextualFab({ activeRole, className }: ContextualFabProps) {
   const pathname = usePathname();
@@ -92,13 +92,13 @@ export function ContextualFab({ activeRole, className }: ContextualFabProps) {
 
   const isLister = activeRole === "lister";
   const href = isLister ? "/listings/new" : "/jobs";
-  const ariaLabel = isLister ? "+ Create Listing" : "+ Find Nearby Jobs";
+  const ariaLabel = isLister ? "Create new listing" : "Find jobs";
 
   return (
     <motion.div
       className={cn(
         "fixed z-50 md:hidden",
-        "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4",
+        "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4 max-w-[calc(100vw-2rem)]",
         className
       )}
       initial={false}
@@ -125,14 +125,21 @@ export function ContextualFab({ activeRole, className }: ContextualFabProps) {
         href={href}
         title={ariaLabel}
         className={cn(
-          "flex h-16 w-16 min-h-[4rem] min-w-[4rem] items-center justify-center rounded-full text-white shadow-2xl ring-2 transition active:scale-95",
+          "flex items-center justify-center text-white shadow-2xl ring-2 transition active:scale-95",
           isLister
-            ? "bg-emerald-600 ring-emerald-400/50 hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-            : "bg-blue-600 ring-blue-400/50 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+            ? "h-16 w-16 min-h-[4rem] min-w-[4rem] rounded-full bg-emerald-600 ring-emerald-400/50 hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            : "min-h-14 gap-2 rounded-full bg-blue-600 px-5 py-3.5 text-sm font-semibold ring-blue-400/50 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
         )}
         aria-label={ariaLabel}
       >
-        <Plus className="h-10 w-10 shrink-0" strokeWidth={2.75} aria-hidden />
+        {isLister ? (
+          <Plus className="h-10 w-10 shrink-0" strokeWidth={2.75} aria-hidden />
+        ) : (
+          <>
+            <Search className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
+            <span className="truncate">Find Jobs</span>
+          </>
+        )}
       </Link>
     </motion.div>
   );

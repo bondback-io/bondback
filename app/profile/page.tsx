@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { ProfileForm } from "@/components/features/profile-form";
@@ -5,10 +6,11 @@ import { ProfileRoleActions } from "@/components/features/profile-role-actions";
 import { ConnectBankAccount } from "@/components/features/connect-bank-account";
 import { PayoutScheduleForm } from "@/components/settings/payout-schedule-form";
 import { getProfileCompletion } from "@/lib/profile-completion";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ProfileCompletionMobileRing } from "@/components/features/profile-completion-mobile";
-import { Star } from "lucide-react";
+import { Camera, MapPin, Star, BadgeCheck, Phone } from "lucide-react";
 import type { Database } from "@/types/supabase";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { recomputeVerificationBadgesForUser, syncCurrentUserEmailVerification } from "@/lib/actions/verification";
@@ -52,6 +54,14 @@ const ProfilePage = async () => {
 
   const { percent, message } = getProfileCompletion(profile);
   const isCleaner = roles.includes("cleaner");
+
+  const abnDigits = (profile.abn ?? "").replace(/\D/g, "");
+  const needsAbn = isCleaner && abnDigits.length !== 11;
+  const portfolioCount = Array.isArray(profile.portfolio_photo_urls)
+    ? profile.portfolio_photo_urls.length
+    : 0;
+  const needsPortfolioPhotos = isCleaner && portfolioCount === 0;
+  const showCompleteProfileCard = percent < 100;
 
   const globalSettings = await getGlobalSettings();
   const referralEnabled = globalSettings?.referral_enabled === true;
@@ -144,6 +154,104 @@ const ProfilePage = async () => {
         <div className="md:hidden">
           <ProfileCompletionMobileRing percent={percent} message={message} />
         </div>
+
+        {showCompleteProfileCard && (
+          <Card className="max-w-2xl border-2 border-primary/25 bg-primary/5 shadow-sm dark:border-primary/30 dark:bg-primary/10">
+            <CardHeader className="space-y-2 pb-2">
+              <CardTitle className="text-2xl font-bold tracking-tight md:text-xl">
+                Complete your profile
+              </CardTitle>
+              <CardDescription className="text-base md:text-sm">
+                One-tap shortcuts — finish these to rank higher and win more work.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 pb-6">
+              <Progress
+                value={percent}
+                className="h-3"
+                indicatorClassName={
+                  percent < 40
+                    ? "bg-amber-500"
+                    : percent < 80
+                      ? "bg-sky-500"
+                      : "bg-emerald-500"
+                }
+              />
+              <p className="text-sm font-medium text-foreground dark:text-gray-100">
+                {percent}% complete
+                {message ? (
+                  <span className="font-normal text-muted-foreground dark:text-gray-400">
+                    {" "}
+                    — {message}
+                  </span>
+                ) : null}
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                {isCleaner && needsAbn && (
+                  <Button
+                    asChild
+                    size="lg"
+                    className="h-14 min-h-[56px] w-full justify-center text-base font-semibold sm:flex-1"
+                  >
+                    <Link href="#abn">
+                      <BadgeCheck className="mr-2 h-5 w-5 shrink-0" aria-hidden />
+                      Add ABN
+                    </Link>
+                  </Button>
+                )}
+                {isCleaner && (needsPortfolioPhotos || !profile.profile_photo_url?.trim()) && (
+                  <Button
+                    asChild
+                    size="lg"
+                    variant="secondary"
+                    className="h-14 min-h-[56px] w-full justify-center text-base font-semibold sm:flex-1"
+                  >
+                    <Link href="#portfolio-photos">
+                      <Camera className="mr-2 h-5 w-5 shrink-0" aria-hidden />
+                      Add photos
+                    </Link>
+                  </Button>
+                )}
+                {isCleaner && (
+                  <Button
+                    asChild
+                    size="lg"
+                    variant="outline"
+                    className="h-14 min-h-[56px] w-full justify-center border-2 text-base font-semibold sm:flex-1"
+                  >
+                    <Link href="#max_travel_km">
+                      <MapPin className="mr-2 h-5 w-5 shrink-0" aria-hidden />
+                      Set max travel km
+                    </Link>
+                  </Button>
+                )}
+                {!isCleaner && !profile.phone?.trim() && (
+                  <Button
+                    asChild
+                    size="lg"
+                    className="h-14 min-h-[56px] w-full justify-center text-base font-semibold sm:flex-1"
+                  >
+                    <Link href="#phone">
+                      <Phone className="mr-2 h-5 w-5 shrink-0" aria-hidden />
+                      Add phone
+                    </Link>
+                  </Button>
+                )}
+                {!isCleaner && !profile.suburb?.trim() && (
+                  <Button
+                    asChild
+                    size="lg"
+                    variant="secondary"
+                    className="h-14 min-h-[56px] w-full justify-center text-base font-semibold sm:flex-1"
+                  >
+                    <Link href="#suburb">Add suburb</Link>
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="hidden max-w-xl border-emerald-100 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/40 md:block">
           <CardContent className="space-y-2 pt-4">
             <Progress
@@ -273,6 +381,7 @@ const ProfilePage = async () => {
           </Card>
         </>
       )}
+      <div id="portfolio-photos" className="scroll-mt-28" tabIndex={-1} aria-hidden />
       <ProfileForm profile={profile} email={session.user.email ?? null} />
     </section>
   );

@@ -18,7 +18,7 @@ export function MobileDashboardFab({
 }) {
   const isLister = variant === "lister";
   const href = isLister ? "/listings/new" : "/jobs";
-  const label = isLister ? "Create New Listing" : "Find Nearby Jobs";
+  const label = isLister ? "Create New Listing" : "Find Jobs";
 
   return (
     <Link

@@ -69,6 +69,145 @@ export async function saveOnboardingProfile(profile: {
 }
 
 /**
+ * After `/signup` (session present): create a minimal profile row with `roles: []`
+ * until the user picks lister vs cleaner on `/onboarding/role-choice`.
+ * Preserves dual-role backend; first concrete role is applied in `saveRoleChoice`.
+ */
+export async function upsertMinimalProfileAfterSignup(input: {
+  full_name: string;
+  postcode: string | null;
+  referralCode?: string | null;
+}): Promise<SaveOnboardingResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  const userId = session.user.id;
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      error: "Server configuration error (admin client unavailable).",
+    };
+  }
+
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("roles, referred_by")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const existingRoles = (existing?.roles as string[] | null) ?? [];
+  if (existingRoles.length > 0) {
+    revalidatePath("/dashboard");
+    return { ok: true };
+  }
+
+  let referredBy: string | null = null;
+  const rawRef = input.referralCode?.trim();
+  if (rawRef) {
+    const normalized = rawRef.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (normalized.length >= 4) {
+      const { data: refProfile } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("referral_code", normalized)
+        .maybeSingle();
+      const rid = (refProfile as { id?: string } | null)?.id;
+      if (rid && rid !== userId) {
+        referredBy = rid;
+      }
+    }
+  }
+
+  const alreadyReferred = (existing as { referred_by?: string | null } | null)?.referred_by;
+
+  const row: ProfileInsert = {
+    id: userId,
+    full_name: input.full_name.trim() || null,
+    postcode: input.postcode?.trim() || null,
+    suburb: "",
+    max_travel_km: 30,
+    roles: [],
+    ...(!alreadyReferred && referredBy ? { referred_by: referredBy } : {}),
+  };
+
+  const { error } = await admin.from("profiles").upsert(row as never, { onConflict: "id" });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/onboarding");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+/**
+ * Cleaner quick-setup: optional ABN + travel radius after `saveRoleChoice("cleaner")`.
+ */
+export async function saveCleanerQuickSetup(input: {
+  abn: string | null;
+  max_travel_km: number;
+}): Promise<SaveOnboardingResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  const userId = session.user.id;
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      error: "Server configuration error (admin client unavailable).",
+    };
+  }
+
+  const { data: profile, error: fetchErr } = await admin
+    .from("profiles")
+    .select("roles")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (fetchErr || !profile) {
+    return { ok: false, error: "Profile not found." };
+  }
+
+  const roles = (profile.roles as string[] | null) ?? [];
+  if (!roles.includes("cleaner")) {
+    return { ok: false, error: "Complete role choice as a cleaner first." };
+  }
+
+  const digits = (input.abn ?? "").replace(/\D/g, "");
+  const abn = digits.length === 11 ? digits : null;
+
+  const { error } = await admin
+    .from("profiles")
+    .update({
+      abn,
+      max_travel_km: Math.min(200, Math.max(5, Math.round(input.max_travel_km))),
+    } as never)
+    .eq("id", userId);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/onboarding");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+/**
  * Save cleaner onboarding: full profile fields + role = cleaner.
  * Redirects handled by caller (/jobs).
  */
@@ -185,8 +324,10 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
   revalidatePath("/dashboard");
 
   if (choice === "both") return { ok: true, redirect: "/onboarding/both" };
-  if (choice === "cleaner") return { ok: true, redirect: "/onboarding/cleaner/details" };
-  return { ok: true, redirect: "/dashboard" };
+  if (choice === "cleaner") {
+    return { ok: true, redirect: "/onboarding/cleaner/quick-setup" };
+  }
+  return { ok: true, redirect: "/onboarding/lister/quick-setup" };
 }
 
 export type UnlockRoleResult =
