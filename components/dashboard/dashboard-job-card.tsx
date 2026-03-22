@@ -113,7 +113,7 @@ export function DashboardJobCard({
         </div>
         <div className="space-y-4 border-t border-border bg-card px-4 pb-5 pt-4 dark:border-gray-800 dark:bg-gray-950">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
               Job value
             </p>
             <p className="text-4xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
@@ -125,7 +125,7 @@ export function DashboardJobCard({
                   "mt-2 inline-flex rounded-xl border-2 px-3 py-2 text-base font-bold",
                   isUrgent
                     ? "border-amber-400/80 bg-amber-500/15 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100"
-                    : "border-border bg-muted/40 text-foreground dark:border-gray-700 dark:bg-gray-900"
+                    : "border-border bg-muted/40 text-foreground dark:border-gray-600 dark:bg-gray-900/80 dark:text-gray-100"
                 )}
               >
                 <Clock className="mr-2 h-5 w-5 shrink-0 opacity-80" aria-hidden />
@@ -152,7 +152,12 @@ export function DashboardJobCard({
                 View Details
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="min-h-12 w-full rounded-xl border-2 text-base font-semibold dark:border-gray-600">
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="min-h-12 w-full rounded-xl border-2 text-base font-semibold dark:border-gray-500 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
+            >
               <Link href={`/messages?job=${job.id}`} className="flex items-center justify-center gap-2">
                 <MessageCircle className="h-5 w-5" aria-hidden />
                 Message Lister

@@ -295,35 +295,38 @@ export function FindJobsSearch({
             autoComplete="address-level2"
             placeholder="Suburb or area"
             className={cn(
-              "h-12 min-h-[48px] rounded-2xl border-2 pl-10 pr-3 text-base shadow-sm",
-              "placeholder:text-muted-foreground/80",
-              "focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:bg-gray-900/80"
+              "h-12 min-h-[48px] rounded-2xl border-2 border-border bg-background pl-10 pr-3 text-base text-foreground shadow-sm",
+              "placeholder:text-muted-foreground",
+              "focus-visible:ring-2 focus-visible:ring-emerald-500/40",
+              "dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500"
             )}
             aria-label="Suburb or area"
             aria-autocomplete="list"
             aria-expanded={open && results.length > 0}
           />
           {open && query.trim().length >= 2 && (
-            <div className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-56 overflow-y-auto rounded-xl border-2 border-border bg-popover shadow-xl dark:border-gray-700 dark:bg-gray-900">
+            <div className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-56 overflow-y-auto rounded-xl border-2 border-border bg-popover shadow-xl dark:border-gray-600 dark:bg-gray-950">
               {isPending && (
-                <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground dark:text-gray-400">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Searching…
                 </div>
               )}
               {!isPending && results.length === 0 && (
-                <div className="px-3 py-3 text-sm text-muted-foreground">No suburbs found</div>
+                <div className="px-3 py-3 text-sm text-muted-foreground dark:text-gray-400">
+                  No suburbs found
+                </div>
               )}
               {!isPending &&
                 results.map((row) => (
                   <button
                     key={`${row.suburb}-${row.postcode}-${row.state}`}
                     type="button"
-                    className="flex w-full min-h-[48px] flex-col items-start justify-center px-3 py-2.5 text-left text-sm hover:bg-muted active:bg-muted/80 dark:hover:bg-gray-800"
+                    className="flex w-full min-h-[48px] flex-col items-start justify-center px-3 py-2.5 text-left text-sm text-foreground hover:bg-muted active:bg-muted/80 dark:text-gray-100 dark:hover:bg-gray-800/90 dark:active:bg-gray-800"
                     onClick={() => handleSelect(row)}
                   >
-                    <span className="font-semibold text-foreground">{row.suburb}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="font-semibold">{row.suburb}</span>
+                    <span className="text-xs text-muted-foreground dark:text-gray-400">
                       {row.postcode}
                       {row.state ? ` · ${row.state}` : ""}
                     </span>
@@ -344,7 +347,7 @@ export function FindJobsSearch({
             pattern="[0-9]{4}"
             maxLength={4}
             placeholder="Postcode"
-            className="h-12 min-h-[48px] rounded-2xl border-2 px-3 text-center text-base tabular-nums shadow-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:bg-gray-900/80"
+            className="h-12 min-h-[48px] rounded-2xl border-2 border-border bg-background px-3 text-center text-base tabular-nums text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500"
             aria-label="Postcode (optional)"
           />
         </div>
@@ -352,7 +355,7 @@ export function FindJobsSearch({
 
       {/* Radius chips — thumb-sized, horizontal scroll on small screens */}
       <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-500">
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
           Distance
         </p>
         <div
@@ -371,8 +374,8 @@ export function FindJobsSearch({
                   "shrink-0 snap-start rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
                   "min-h-[44px] min-w-[3.25rem] border-2",
                   active
-                    ? "border-emerald-600 bg-emerald-600 text-white shadow-md dark:border-emerald-500 dark:bg-emerald-600"
-                    : "border-border bg-background text-foreground hover:border-emerald-500/50 hover:bg-emerald-50/80 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800"
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-md dark:border-emerald-500 dark:bg-emerald-600 dark:text-white"
+                    : "border-border bg-background text-foreground hover:border-emerald-500/50 hover:bg-emerald-50/80 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:hover:border-emerald-500/40 dark:hover:bg-gray-800/90"
                 )}
                 aria-pressed={active}
                 aria-label={`${km} kilometres`}
@@ -409,7 +412,7 @@ export function FindJobsSearch({
           type="button"
           variant="outline"
           size="lg"
-          className="h-12 min-h-[48px] w-full shrink-0 rounded-2xl border-2 sm:w-auto"
+          className="h-12 min-h-[48px] w-full shrink-0 rounded-2xl border-2 border-border bg-background text-foreground hover:bg-muted active:bg-muted/80 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
           onClick={handleUseLocation}
           disabled={isLocating}
           aria-label="Use my current location"
@@ -438,7 +441,7 @@ export function FindJobsSearch({
               <Button
                 type="button"
                 variant="secondary"
-                className="h-11 w-full rounded-2xl border border-border/80 text-base font-medium sm:w-auto"
+                className="h-11 w-full rounded-2xl border border-border/80 bg-secondary text-secondary-foreground text-base font-medium sm:w-auto dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
               >
                 <SlidersHorizontal className="mr-2 h-5 w-5" aria-hidden />
                 More filters
@@ -453,18 +456,27 @@ export function FindJobsSearch({
                 )}
               </Button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl px-4 pb-6 pt-2" title="More filters">
+            <SheetContent
+              side="bottom"
+              className="max-h-[85vh] rounded-t-2xl border-border bg-background px-4 pb-6 pt-2 dark:border-gray-800 dark:bg-gray-950"
+              title="More filters"
+            >
               <div className="text-left">
-                <SheetTitle className="text-lg">Refine results</SheetTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <SheetTitle className="text-lg text-foreground dark:text-gray-100">Refine results</SheetTitle>
+                <p className="mt-1 text-sm text-muted-foreground dark:text-gray-400">
                   Sort order, price range, and property details.
                 </p>
               </div>
               <div className="mt-4 space-y-4 overflow-y-auto pb-4">
                 <div className="space-y-2">
-                  <Label htmlFor={`${formHtmlId}-sort`}>Sort by</Label>
+                  <Label htmlFor={`${formHtmlId}-sort`} className="text-foreground dark:text-gray-200">
+                    Sort by
+                  </Label>
                   <Select value={sort} onValueChange={setSort}>
-                    <SelectTrigger id={`${formHtmlId}-sort`} className="h-12 rounded-xl">
+                    <SelectTrigger
+                      id={`${formHtmlId}-sort`}
+                      className="h-12 rounded-xl border-border bg-background dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -477,7 +489,9 @@ export function FindJobsSearch({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor={`${formHtmlId}-min`}>Min price ($)</Label>
+                    <Label htmlFor={`${formHtmlId}-min`} className="text-foreground dark:text-gray-200">
+                      Min price ($)
+                    </Label>
                     <Input
                       id={`${formHtmlId}-min`}
                       type="number"
@@ -485,11 +499,13 @@ export function FindJobsSearch({
                       value={minPrice}
                       onChange={(e) => setMinPrice(e.target.value)}
                       placeholder="0"
-                      className="h-12 rounded-xl"
+                      className="h-12 rounded-xl border-border bg-background text-foreground dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor={`${formHtmlId}-max`}>Max price ($)</Label>
+                    <Label htmlFor={`${formHtmlId}-max`} className="text-foreground dark:text-gray-200">
+                      Max price ($)
+                    </Label>
                     <Input
                       id={`${formHtmlId}-max`}
                       type="number"
@@ -497,15 +513,15 @@ export function FindJobsSearch({
                       value={maxPrice}
                       onChange={(e) => setMaxPrice(e.target.value)}
                       placeholder="Any"
-                      className="h-12 rounded-xl"
+                      className="h-12 rounded-xl border-border bg-background text-foreground dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label>Bedrooms</Label>
+                    <Label className="text-foreground dark:text-gray-200">Bedrooms</Label>
                     <Select value={bedrooms} onValueChange={setBedrooms}>
-                      <SelectTrigger className="h-12 rounded-xl">
+                      <SelectTrigger className="h-12 rounded-xl border-border bg-background dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                         <SelectValue placeholder="Any" />
                       </SelectTrigger>
                       <SelectContent>
@@ -519,9 +535,9 @@ export function FindJobsSearch({
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Bathrooms</Label>
+                    <Label className="text-foreground dark:text-gray-200">Bathrooms</Label>
                     <Select value={bathrooms} onValueChange={setBathrooms}>
-                      <SelectTrigger className="h-12 rounded-xl">
+                      <SelectTrigger className="h-12 rounded-xl border-border bg-background dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                         <SelectValue placeholder="Any" />
                       </SelectTrigger>
                       <SelectContent>
@@ -535,9 +551,9 @@ export function FindJobsSearch({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Property type</Label>
+                  <Label className="text-foreground dark:text-gray-200">Property type</Label>
                   <Select value={propertyType} onValueChange={setPropertyType}>
-                    <SelectTrigger className="h-12 rounded-xl">
+                    <SelectTrigger className="h-12 rounded-xl border-border bg-background dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                       <SelectValue placeholder="Any" />
                     </SelectTrigger>
                     <SelectContent>
@@ -550,11 +566,11 @@ export function FindJobsSearch({
                   </Select>
                 </div>
               </div>
-              <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row">
+              <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4 dark:border-gray-800 sm:flex-row">
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-12 w-full rounded-xl"
+                  className="h-12 w-full rounded-xl border-border dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800"
                   onClick={() => {
                     setSort("ending-soon");
                     setMinPrice("");

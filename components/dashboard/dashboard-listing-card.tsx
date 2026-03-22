@@ -79,12 +79,14 @@ export function DashboardListingCard({
         </div>
         <div className="space-y-4 border-t border-border bg-card px-4 pb-5 pt-4 dark:border-gray-800 dark:bg-gray-950">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Current bid</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+              Current bid
+            </p>
             <p className="text-4xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
               {formatCents(currentBid)}
             </p>
             {buyNow != null && Number(buyNow) > 0 && (
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">
+              <p className="mt-1 text-sm font-semibold text-muted-foreground dark:text-gray-300">
                 Buy now {formatCents(Number(buyNow))}
               </p>
             )}
@@ -108,14 +110,14 @@ export function DashboardListingCard({
               {bathrooms != null ? `${bathrooms} bath` : ""}
             </p>
           )}
-          <p className="line-clamp-2 text-sm font-semibold">{listing.title}</p>
+          <p className="line-clamp-2 text-sm font-semibold text-foreground dark:text-gray-100">{listing.title}</p>
           {bidCount > 0 && (
-            <p className="text-sm font-semibold text-muted-foreground">
+            <p className="text-sm font-semibold text-muted-foreground dark:text-gray-400">
               <Gavel className="mr-1 inline h-4 w-4" />
               {bidCount} bid{bidCount !== 1 ? "s" : ""}
             </p>
           )}
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground dark:text-gray-400">
             Platform fee ({feePercentage}%):{" "}
             <span className="font-semibold text-foreground dark:text-gray-100">{formatCents(currentPlatformFeeCents)}</span>
           </p>

@@ -227,7 +227,7 @@ export default async function JobsPage({
             </div>
             <Badge
               variant="secondary"
-              className="shrink-0 rounded-full px-3 py-1 text-xs font-semibold tabular-nums"
+              className="shrink-0 rounded-full px-3 py-1 text-xs font-semibold tabular-nums dark:bg-gray-800 dark:text-gray-100"
             >
               {initialListings.length} found
             </Badge>
@@ -242,7 +242,7 @@ export default async function JobsPage({
           )}
         </CardHeader>
         <CardContent className="space-y-3 pt-0">
-          <div data-sticky-filter className="transition-transform duration-300">
+          <div className="space-y-2">
             <FindJobsSearch
               variant="jobs"
               defaultRadiusKm={defaultRadiusKm}
@@ -269,30 +269,38 @@ export default async function JobsPage({
               (bathroomsFilter && bathroomsFilter !== "any") ||
               (propertyTypeFilter && propertyTypeFilter !== "any")) && (
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
                   Active:
                 </span>
                 {minPriceFilter || maxPriceFilter ? (
-                  <Badge variant="outline" className="rounded-full text-xs">
+                  <Badge
+                    variant="outline"
+                    className="rounded-full border-gray-600 text-xs text-foreground dark:border-gray-500 dark:text-gray-200"
+                  >
                     ${minPriceFilter || "0"}–${maxPriceFilter || "∞"}
                   </Badge>
                 ) : null}
                 {bedroomsFilter && bedroomsFilter !== "any" && (
-                  <Badge variant="outline" className="rounded-full text-xs">
+                  <Badge variant="outline" className="rounded-full border-gray-600 text-xs dark:border-gray-500 dark:text-gray-200">
                     {Number(bedroomsFilter) >= 5 ? "5+ bed" : `${bedroomsFilter} bed`}
                   </Badge>
                 )}
                 {bathroomsFilter && bathroomsFilter !== "any" && (
-                  <Badge variant="outline" className="rounded-full text-xs">
+                  <Badge variant="outline" className="rounded-full border-gray-600 text-xs dark:border-gray-500 dark:text-gray-200">
                     {Number(bathroomsFilter) >= 4 ? "4+ bath" : `${bathroomsFilter} bath`}
                   </Badge>
                 )}
                 {propertyTypeFilter && propertyTypeFilter !== "any" && (
-                  <Badge variant="outline" className="rounded-full text-xs capitalize">
+                  <Badge variant="outline" className="rounded-full border-gray-600 text-xs capitalize dark:border-gray-500 dark:text-gray-200">
                     {propertyTypeFilter}
                   </Badge>
                 )}
-                <Button variant="ghost" size="sm" className="ml-auto h-8 rounded-full text-xs" asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-8 rounded-full text-xs text-muted-foreground dark:text-gray-400 dark:hover:text-gray-100"
+                  asChild
+                >
                   <Link href={clearHref}>Clear all</Link>
                 </Button>
               </div>

@@ -167,7 +167,7 @@ export function JobCardMarketplaceMobile({
       </div>
 
       {/* Body */}
-      <div className="flex flex-col gap-4 border-t border-border bg-card px-4 pb-5 pt-4 dark:border-gray-800 dark:bg-gray-950 sm:px-5">
+      <div className="flex flex-col gap-4 border-t border-border bg-card px-4 pb-5 pt-4 text-foreground dark:border-gray-800 dark:bg-gray-950 sm:px-5">
         <div className="space-y-2">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
             {priceLabel}
@@ -248,7 +248,7 @@ export function JobCardMarketplaceMobile({
                 asChild
                 variant="outline"
                 size="lg"
-                className="min-h-12 rounded-xl border-2 text-base font-semibold active:scale-[0.98] dark:border-gray-600"
+                className="min-h-12 rounded-xl border-2 text-base font-semibold active:scale-[0.98] dark:border-gray-500 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
               >
                 <Link href={`/messages?job=${listingId}`} className="flex items-center justify-center gap-2">
                   <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />

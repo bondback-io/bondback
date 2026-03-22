@@ -152,19 +152,6 @@
   }
 }
 
-/* Sticky filter bar: hide on scroll down, show on scroll up (mobile only) */
-@media (max-width: 767px) {
-  [data-sticky-filter] {
-    @apply sticky top-0 z-30 bg-background/95 shadow-sm backdrop-blur-sm transition-transform duration-300 ease-out dark:bg-gray-950/95;
-  }
-  [data-sticky-filter].sticky-filter-hidden {
-    transform: translateY(-100%);
-  }
-  [data-sticky-filter].sticky-filter-visible {
-    transform: translateY(0);
-  }
-}
-
 /* Mobile tap highlight: visible focus for accessibility */
 .job-card-tap {
   -webkit-tap-highlight-color: hsl(var(--ring) / 0.3);

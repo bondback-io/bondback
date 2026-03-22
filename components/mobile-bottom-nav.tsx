@@ -40,7 +40,7 @@ function isItemActive(pathname: string, href: string): boolean {
   return pathname === href || (href !== "/" && pathname.startsWith(href));
 }
 
-/** Second tab: lister → My Listings; cleaner → My Jobs (/jobs). */
+/** Second tab: lister → Listings (/my-listings); cleaner → Jobs (/jobs). */
 function isJobsTabActive(pathname: string, activeRole: Role): boolean {
   if (activeRole === "lister") {
     return pathname === "/my-listings" || pathname.startsWith("/my-listings/");
@@ -158,9 +158,9 @@ export function MobileBottomNav() {
         : "/jobs";
   const jobsTabLabel =
     activeRole === "lister"
-      ? "My Listings"
+      ? "Listings"
       : activeRole === "cleaner"
-        ? "My Jobs"
+        ? "Jobs"
         : "Jobs";
   const JobsIcon = activeRole === "lister" ? List : Briefcase;
 
@@ -216,9 +216,9 @@ export function MobileBottomNav() {
             aria-current={isJobsTabActive(currentPath, activeRole) ? "page" : undefined}
             aria-label={
               activeRole === "cleaner"
-                ? "My Jobs — browse and manage jobs"
+                ? "Jobs — browse and manage jobs"
                 : activeRole === "lister"
-                  ? "My Listings"
+                  ? "Listings"
                   : "Jobs"
             }
           >

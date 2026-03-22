@@ -147,7 +147,7 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
 
         <div className="flex flex-col gap-4 border-t border-border px-4 pb-5 pt-4 dark:border-gray-800">
           <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
               Job price
             </p>
             <p className="text-4xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
@@ -162,7 +162,7 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
               {statusLine}
             </div>
             {daysLeft != null && (
-              <p className="text-sm font-medium text-muted-foreground">{daysLeft} days left</p>
+              <p className="text-sm font-medium text-muted-foreground dark:text-gray-400">{daysLeft} days left</p>
             )}
           </div>
 
@@ -198,7 +198,12 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
                 View job
               </Link>
             </Button>
-            <Button asChild size="lg" variant="secondary" className="min-h-12 w-full rounded-xl text-base font-semibold">
+            <Button
+              asChild
+              size="lg"
+              variant="secondary"
+              className="min-h-12 w-full rounded-xl text-base font-semibold dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+            >
               <Link href={`/messages?job=${job.id}`} className="flex items-center justify-center gap-2">
                 <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
                 Message lister

@@ -69,7 +69,7 @@ export function MyListingsCardMobile({
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-md dark:border-gray-800 dark:bg-gray-950",
+        "flex flex-col overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-md dark:border-gray-700 dark:bg-gray-950",
         cardClassName
       )}
     >
@@ -120,7 +120,9 @@ export function MyListingsCardMobile({
         )}
 
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{priceLabel}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+            {priceLabel}
+          </p>
           <p className="text-4xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
             {priceDisplay}
           </p>
@@ -148,7 +150,12 @@ export function MyListingsCardMobile({
             </Link>
           </Button>
           {secondaryHref && secondaryLabel && (
-            <Button asChild size="lg" variant="secondary" className="min-h-12 w-full rounded-xl text-base font-semibold">
+            <Button
+              asChild
+              size="lg"
+              variant="secondary"
+              className="min-h-12 w-full rounded-xl text-base font-semibold dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+            >
               <Link href={secondaryHref}>{secondaryLabel}</Link>
             </Button>
           )}

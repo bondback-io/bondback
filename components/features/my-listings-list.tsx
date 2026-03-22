@@ -810,7 +810,7 @@ export function MyListingsList({
                     !isCancelledListing &&
                     !isDisputedListing &&
                     jobStatus !== "completed" && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground dark:text-gray-400">
                         Job {formatCents(jobCents)} + {feePercentage}% fee ={" "}
                         {formatCents(totalCents)} total
                       </p>
@@ -819,12 +819,12 @@ export function MyListingsList({
               )}
               {jobInfo && (isJobCard || isCancelledListing) && (
                 <div className="flex min-h-0 flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-sm dark:border-gray-800">
-                  <span className="font-medium text-muted-foreground">
+                  <span className="font-medium text-muted-foreground dark:text-gray-400">
                     Assigned
                   </span>
                   <div className="flex min-w-0 items-center justify-end gap-2">
                     {isCancelledListing ? (
-                      <span className="font-medium text-muted-foreground">
+                      <span className="font-medium text-muted-foreground dark:text-gray-400">
                         Un-assigned
                       </span>
                     ) : jobStatus === "in_progress" ||
@@ -839,11 +839,11 @@ export function MyListingsList({
                             {jobInfo.winnerName}
                           </Link>
                         ) : (
-                          <span className="font-medium">{jobInfo.winnerName}</span>
+                          <span className="font-medium text-foreground dark:text-gray-200">{jobInfo.winnerName}</span>
                         )}
                       </>
                     ) : (
-                      <span className="text-right text-muted-foreground">
+                      <span className="text-right text-muted-foreground dark:text-gray-400">
                         Approve job to see cleaner
                       </span>
                     )}
@@ -851,7 +851,7 @@ export function MyListingsList({
                 </div>
               )}
               {!isJobCard && isLive && (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground dark:text-gray-400">
                   Starting {formatCents(listing.starting_price_cents)} ·{" "}
                   {bidIdSet.has(listing.id as unknown as string | number)
                     ? "1+"
