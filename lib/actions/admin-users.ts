@@ -1,0 +1,243 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createNotification } from "@/lib/actions/notifications";
+import { logAdminActivity } from "@/lib/admin-activity-log";
+import type {
+  AdminNotificationPrefsResult,
+  BanResult,
+  DeleteUserResult,
+  EditRoleResult,
+  UnbanResult,
+} from "@/lib/actions/admin-users-types";
+
+async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { ok: false as const, error: "Not authenticated", adminId: null };
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  if (!profile || !(profile as { is_admin?: boolean }).is_admin)
+    return { ok: false as const, error: "Not authorised", adminId: null };
+  return { ok: true as const, adminId: session.user.id };
+}
+
+/** Admin only: ban user with reason. Double-confirm in UI before calling. */
+export async function banUser(
+  userId: string,
+  reason: string
+): Promise<BanResult> {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireAdmin(supabase);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const adminId = auth.adminId!;
+
+  const trimmed = (reason ?? "").trim();
+  if (!trimmed) return { ok: false, error: "Reason is required." };
+  if (userId === adminId) return { ok: false, error: "You cannot ban yourself." };
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      is_banned: true,
+      banned_at: now,
+      banned_reason: trimmed,
+      banned_by: adminId,
+    } as Record<string, unknown>)
+    .eq("id", userId);
+
+  if (error) return { ok: false, error: error.message };
+  await logAdminActivity({ adminId, actionType: "user_banned", targetType: "user", targetId: userId, details: { reason: trimmed } });
+
+  const message = `Your account has been banned for: ${trimmed}. Contact support@bondback.com.`;
+  await createNotification(userId, "new_message", null, message);
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/dashboard");
+  return { ok: true };
+}
+
+/** Admin only: unban user. Clear banned_at, banned_reason, banned_by. */
+export async function unbanUser(userId: string): Promise<UnbanResult> {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireAdmin(supabase);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      is_banned: false,
+      banned_at: null,
+      banned_reason: null,
+      banned_by: null,
+    } as Record<string, unknown>)
+    .eq("id", userId);
+
+  if (error) return { ok: false, error: error.message };
+  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_unbanned", targetType: "user", targetId: userId, details: {} });
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/dashboard");
+  return { ok: true };
+}
+
+/** Call after sign-in to check if current user is banned; used by login page. */
+export async function checkBanAfterLogin(): Promise<
+  { banned: false } | { banned: true; reason: string | null }
+> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { banned: false };
+
+  const { data: row } = await supabase
+    .from("profiles")
+    .select("is_banned, banned_reason")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  const profile = row as { is_banned?: boolean; banned_reason?: string | null } | null;
+  if (!profile || !profile.is_banned) return { banned: false };
+  return { banned: true, reason: profile.banned_reason ?? null };
+}
+
+/** Admin only: soft delete user (set is_deleted = true). Does not delete auth user. */
+export async function adminDeleteUser(userId: string): Promise<DeleteUserResult> {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireAdmin(supabase);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  if (userId === auth.adminId) return { ok: false, error: "Cannot delete your own account." };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      is_deleted: true,
+      updated_at: new Date().toISOString(),
+    } as Record<string, unknown>)
+    .eq("id", userId);
+
+  if (error) return { ok: false, error: error.message };
+  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_deleted", targetType: "user", targetId: userId, details: { soft_delete: true } });
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/dashboard");
+  return { ok: true };
+}
+
+/** Admin only: set roles and active_role. role = "lister" | "cleaner" | "admin". */
+export async function adminEditRole(
+  userId: string,
+  role: "lister" | "cleaner" | "admin"
+): Promise<EditRoleResult> {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireAdmin(supabase);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const updates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (role === "admin") {
+    updates.roles = ["lister", "cleaner"];
+    updates.active_role = "lister";
+    updates.is_admin = true;
+  } else {
+    updates.is_admin = false;
+    updates.roles = role === "cleaner" ? ["cleaner", "lister"] : ["lister", "cleaner"];
+    updates.active_role = role;
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update(updates)
+    .eq("id", userId);
+
+  if (error) return { ok: false, error: error.message };
+  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_role_updated", targetType: "user", targetId: userId, details: { role } });
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/users/" + userId);
+  revalidatePath("/admin/dashboard");
+  return { ok: true };
+}
+
+/** Admin only: set force-disable all emails for a user (and optionally lock preferences). */
+export async function adminSetEmailForceDisabled(
+  userId: string,
+  forceDisabled: boolean,
+  lockPreferences?: boolean
+): Promise<AdminNotificationPrefsResult> {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireAdmin(supabase);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const updates: Record<string, unknown> = {
+    email_force_disabled: forceDisabled,
+    updated_at: new Date().toISOString(),
+  };
+  if (typeof lockPreferences === "boolean") {
+    updates.email_preferences_locked = lockPreferences;
+  }
+  if (forceDisabled) {
+    updates.notification_preferences = {};
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update(updates)
+    .eq("id", userId);
+
+  if (error) return { ok: false, error: error.message };
+  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_email_force_disabled", targetType: "user", targetId: userId, details: { forceDisabled, lockPreferences } });
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+  return { ok: true };
+}
+
+/** Admin only: set whether user can change their notification preferences. */
+export async function adminSetEmailPreferencesLock(
+  userId: string,
+  locked: boolean
+): Promise<AdminNotificationPrefsResult> {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireAdmin(supabase);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      email_preferences_locked: locked,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+
+  if (error) return { ok: false, error: error.message };
+  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_email_preferences_lock", targetType: "user", targetId: userId, details: { locked } });
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+  return { ok: true };
+}
+
+/** Admin only: override notification_preferences JSON for a user. */
+export async function adminUpdateNotificationPreferences(
+  userId: string,
+  prefs: Record<string, boolean>
+): Promise<AdminNotificationPrefsResult> {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireAdmin(supabase);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      notification_preferences: prefs,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+
+  if (error) return { ok: false, error: error.message };
+  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_notification_preferences_updated", targetType: "user", targetId: userId, details: { keys: Object.keys(prefs) } });
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+  return { ok: true };
+}

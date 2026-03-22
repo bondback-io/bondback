@@ -1,0 +1,45 @@
+﻿# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+
+# Env & secrets (keep .env.example tracked)
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Testing
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Supabase CLI temp
+supabase/.temp/
+
+# Expo
+.expo/
+
+# Misc
+*.pem

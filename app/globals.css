@@ -1,0 +1,207 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --border: 214.3 31.8% 91.4%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --ring: 222.2 84% 56.3%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20% 65%;
+    --border: 217.2 32.6% 17.5%;
+    --card: 222.2 84% 6%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 6%;
+    --popover-foreground: 210 40% 98%;
+    --ring: 217.2 91% 60%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased transition-colors duration-200;
+    @apply dark:bg-gray-950 dark:text-gray-100;
+    overflow-x: hidden;
+  }
+
+  a {
+    @apply text-primary underline-offset-4 hover:underline;
+    @apply dark:text-blue-300 dark:hover:text-blue-200;
+  }
+}
+
+/* Dark mode base overrides for readability */
+.dark {
+  color-scheme: dark;
+}
+
+.page-shell {
+  @apply flex min-h-screen flex-col bg-background transition-colors duration-200;
+  @apply dark:bg-gray-950;
+}
+
+.page-main {
+  @apply flex-1;
+}
+
+.page-inner {
+  @apply container mx-auto py-8;
+}
+
+/* Empty states and dashed borders */
+.dark .border-dashed {
+  @apply border-gray-700;
+}
+
+/* Recharts / chart tooltips in dark mode */
+.dark .recharts-tooltip-wrapper,
+.dark .recharts-default-tooltip {
+  @apply !bg-gray-900 !border-gray-700 !text-gray-100;
+}
+
+/* Dropdowns: solid background, no transparency overlap */
+[data-radix-popper-content-wrapper] [data-state="open"] {
+  @apply z-50;
+}
+[data-radix-dropdown-menu-content],
+[data-radix-popover-content] {
+  @apply !bg-background dark:!bg-gray-900;
+}
+
+/* Respect prefers-reduced-motion: disable or shorten animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Mobile PWA: cap transition duration for snappy feel and battery */
+@media (max-width: 768px) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.15s !important;
+  }
+}
+
+/* ========== High-performance skeleton loading ========== */
+/* Shimmer keyframes: gradient sweep for zero-CLS placeholders */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Light: muted gradient (shadcn Skeleton uses animate-pulse; this is for custom blocks) */
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted-foreground) / 0.25) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Dark: gray-800 → gray-700 gradient for darker shimmer */
+.dark .animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(31 41 55) 0%,
+    rgb(55 65 81) 50%,
+    rgb(31 41 55) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+/* prefers-reduced-motion: disable all skeleton animation (zero motion) */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer {
+    animation: none;
+    background: hsl(var(--muted));
+  }
+  .dark .animate-shimmer {
+    background: rgb(31 41 55);
+  }
+}
+
+/* Sticky filter bar: hide on scroll down, show on scroll up (mobile only) */
+@media (max-width: 767px) {
+  [data-sticky-filter] {
+    @apply sticky top-0 z-30 bg-background/95 shadow-sm backdrop-blur-sm transition-transform duration-300 ease-out dark:bg-gray-950/95;
+  }
+  [data-sticky-filter].sticky-filter-hidden {
+    transform: translateY(-100%);
+  }
+  [data-sticky-filter].sticky-filter-visible {
+    transform: translateY(0);
+  }
+}
+
+/* Mobile tap highlight: visible focus for accessibility */
+.job-card-tap {
+  -webkit-tap-highlight-color: hsl(var(--ring) / 0.3);
+  tap-highlight-color: hsl(var(--ring) / 0.3);
+}
+@media (min-width: 768px) {
+  .job-card-tap {
+    -webkit-tap-highlight-color: transparent;
+    tap-highlight-color: transparent;
+  }
+}
+
+/* Help article markdown content */
+.help-article-content h1 {
+  @apply text-xl font-semibold text-foreground dark:text-gray-100 mt-6 mb-2;
+}
+.help-article-content h1:first-child {
+  @apply mt-0;
+}
+.help-article-content h2 {
+  @apply text-lg font-semibold text-foreground dark:text-gray-100 mt-5 mb-2;
+}
+.help-article-content p {
+  @apply text-muted-foreground dark:text-gray-300 my-2 leading-relaxed;
+}
+.help-article-content ul {
+  @apply my-3 pl-5 list-disc space-y-1 text-muted-foreground dark:text-gray-300;
+}
+.help-article-content ol {
+  @apply my-3 pl-5 list-decimal space-y-1 text-muted-foreground dark:text-gray-300;
+}
+.help-article-content li {
+  @apply my-0.5;
+}
+.help-article-content strong {
+  @apply font-semibold text-foreground dark:text-gray-100;
+}
+.help-article-content a {
+  @apply text-primary underline-offset-4 hover:underline dark:text-blue-300 dark:hover:text-blue-200;
+}

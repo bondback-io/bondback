@@ -1,0 +1,54 @@
+# Bond Back – Cursor rules
+
+You are an expert TypeScript developer building **Bond Back**, an Australian reverse-auction marketplace for bond cleaning services.
+
+## Tech stack
+
+- **Framework:** Next.js 15+ (App Router), React 18
+- **UI:** Tailwind CSS, shadcn/ui (Button, Input, Card, Label, Select, Skeleton, Toast, etc.)
+- **Backend:** Supabase (auth, Postgres, RLS, Realtime, Storage)
+- **Payments:** Stripe Connect (escrow, manual capture, payouts)
+- **Forms:** React Hook Form + Zod
+- **PWA:** Service worker (scripts/service-worker.js → copied to public/), IndexedDB (idb) for offline bids, Background Sync, Expo push for sync completion
+
+## Code style
+
+- Use **TypeScript** everywhere with strict types. No `any` unless necessary and commented.
+- Prefer **server components** and **server actions** over client components and API routes when possible.
+- **Client components:** Add `"use client"` only when needed (hooks, events, browser APIs).
+- Functional components, `const` over `let`/`var`, destructure imports, small focused modules with brief comments.
+- Keep changes minimal and focused; ask for clarification when requirements are ambiguous.
+
+## Conventions
+
+- **Database:** Use Supabase client from `lib/supabase/` (server, client, admin). Respect RLS; use admin client only in server-side code where RLS is bypassed.
+- **Server actions:** Live in `lib/actions/` (e.g. `bids.ts`, `jobs.ts`). Mark with `"use server"`; return `{ ok: true } | { ok: false; error: string }` for form/API-like actions.
+- **API routes:** Use for callers that need HTTP (e.g. service worker, webhooks). Put in `app/api/`. Use `createServerSupabaseClient()` for auth from cookies.
+- **Australian context:** AUD currency ($), ABN validation where needed, Australian postcodes/suburbs; use existing helpers in `lib/` (e.g. state-from-postcode, bond-cleaning-guidelines).
+
+## Marketplace flow
+
+- **Lister** creates listings (with calculator); **Cleaner** places lower bids; lowest bid wins if ≤ reserve.
+- Escrow and payouts via Stripe (manual capture, release on lister approval).
+- Notifications: email (Resend), SMS (Twilio), push (Expo); rate limits and preferences in profiles and global settings.
+
+## File and feature locations
+
+- **Auth/session:** `lib/supabase/session.ts`, `getSessionWithProfile()`
+- **Bids:** `lib/actions/bids.ts` (placeBid, cancelLastBid), `app/api/bids/route.ts` (for SW/offline sync)
+- **Offline bids:** `lib/offline-bids-db.ts` (IndexedDB), Background Sync in service worker, `POST /api/send-push` for sync completion push
+- **Push/Expo:** `lib/notifications/push.ts`, `lib/actions/push-token.ts`, `app/api/send-push/route.ts`, `RegisterExpoPushToken` in layout
+- **Service worker:** Edit `scripts/service-worker.js`; run `node scripts/copy-sw.js` or use prebuild so `public/service-worker.js` is updated.
+- **Migrations:** Supabase SQL in `supabase/migrations/`; name with timestamp prefix.
+
+## UI and accessibility
+
+- Use shadcn/ui components; match existing patterns (e.g. toast for success/error, skeletons for loading).
+- Respect **prefers-reduced-motion**: avoid or shorten animations where applicable (see globals.css and skeleton usage).
+- **Dark mode:** Use theme-aware classes (e.g. `dark:bg-gray-900`); test both themes.
+
+## Do not
+
+- Add unnecessary dependencies; prefer existing libs and patterns.
+- Expose secrets or API keys in client code; use env vars (e.g. `NEXT_PUBLIC_*` only for public values).
+- Skip error handling or loading states on data-fetching or form submit paths.
