@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AdminBackupButton } from "@/components/admin/admin-backup-button";
 import { AdminExportDataButton } from "@/components/admin/admin-export-data-button";
@@ -292,7 +292,9 @@ export default async function AdminDashboardPage() {
           variant="destructive"
         >
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle className="text-sm font-semibold">Error loading data</AlertTitle>
+          <h5 className="font-medium leading-none tracking-tight text-sm font-semibold">
+            Error loading data
+          </h5>
           <AlertDescription className="text-xs sm:text-sm">{error}</AlertDescription>
         </Alert>
       )}
