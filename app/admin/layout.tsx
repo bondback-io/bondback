@@ -21,5 +21,7 @@ export default async function AdminLayout({
     redirect("/dashboard");
   }
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-[60vh] bg-muted/15 dark:bg-gray-950/80">{children}</div>
+  );
 }
