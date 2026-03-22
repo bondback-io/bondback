@@ -12,18 +12,22 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile | null> => {
   const supabase = await createServerSupabaseClient();
 
+  /**
+   * Prefer getUser() over getSession() on the server: validates the JWT with Supabase
+   * and avoids trusting cookie-only session data (stale / wrong user after login).
+   */
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return null;
   }
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("*, is_admin")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .maybeSingle();
 
   const row = profile as ProfileRow | null;
@@ -80,15 +84,15 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
     // Server-side debug log for admin/roles issues
     // eslint-disable-next-line no-console
     console.log("[getSessionWithProfile]", {
-      userId: session.user.id,
-      email: session.user.email,
+      userId: user.id,
+      email: user.email,
       is_admin: row?.is_admin,
       isAdmin,
     });
   }
 
   const out: SessionWithProfile = {
-    user: { id: session.user.id, email: session.user.email ?? undefined },
+    user: { id: user.id, email: user.email ?? undefined },
     profile: row
       ? {
           full_name: row.full_name,

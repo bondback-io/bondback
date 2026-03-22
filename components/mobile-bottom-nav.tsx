@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { House, Briefcase, MessageCircle, User, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatPanel } from "@/components/chat/chat-panel-context";
@@ -102,42 +102,51 @@ export function MobileBottomNav() {
   const currentPath = pathname ?? "";
   const [activeRole, setActiveRole] = useState<Role>(null);
 
+  const refreshActiveRole = useCallback(async () => {
+    const supabase = createBrowserSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setActiveRole(null);
+      return;
+    }
+    const { data: row } = await supabase
+      .from("profiles")
+      .select("active_role, roles")
+      .eq("id", user.id)
+      .maybeSingle();
+    const pr = row as { active_role?: string | null; roles?: string[] | null } | null;
+    const ar = pr?.active_role;
+    const raw = Array.isArray(pr?.roles) ? pr.roles : [];
+    const roles: Role[] = [];
+    for (const x of raw) {
+      if (x === "lister" || x === "cleaner") roles.push(x);
+    }
+    let next: Role = null;
+    if (roles.length === 0) {
+      next = null;
+    } else if (ar === "lister" || ar === "cleaner") {
+      next = ar;
+    } else {
+      next = roles[0]!;
+    }
+    setActiveRole(next);
+  }, []);
+
+  useEffect(() => {
+    refreshActiveRole();
+  }, [pathname, refreshActiveRole]);
+
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
-    let cancelled = false;
-    (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user || cancelled) return;
-      const { data: row } = await supabase
-        .from("profiles")
-        .select("active_role, roles")
-        .eq("id", session.user.id)
-        .maybeSingle();
-      if (cancelled) return;
-      const pr = row as { active_role?: string | null; roles?: string[] | null } | null;
-      const ar = pr?.active_role;
-      const raw = Array.isArray(pr?.roles) ? pr.roles : [];
-      const roles: Role[] = [];
-      for (const x of raw) {
-        if (x === "lister" || x === "cleaner") roles.push(x);
-      }
-      let next: Role = null;
-      // Mirror lib/supabase/session.ts: use DB active_role when set, else roles[0]
-      if (roles.length === 0) {
-        next = null;
-      } else if (ar === "lister" || ar === "cleaner") {
-        next = ar;
-      } else {
-        next = roles[0]!;
-      }
-      setActiveRole(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      refreshActiveRole();
+    });
+    return () => subscription.unsubscribe();
+  }, [refreshActiveRole]);
 
   if (!isBottomNavRoute(currentPath)) return null;
 

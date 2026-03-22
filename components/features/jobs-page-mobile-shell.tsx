@@ -1,26 +1,18 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { PullToRefresh } from "@/components/features/pull-to-refresh";
 import { StickyFilterBehavior } from "@/components/features/sticky-filter-behavior";
 import { BackToTop } from "@/components/features/back-to-top";
-import { useToast } from "@/components/ui/use-toast";
 
+/**
+ * Mobile jobs page chrome (sticky filters + back-to-top).
+ * Pull-to-refresh was removed here — it duplicated JobsList's pull wrapper and
+ * fought vertical scrolling / browser gestures.
+ */
 export function JobsPageMobileShell({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const { toast } = useToast();
-
-  const handleRefresh = async () => {
-    router.refresh();
-    toast({ title: "Updated", description: "Results refreshed." });
-  };
-
   return (
     <>
       <StickyFilterBehavior />
-      <PullToRefresh onRefresh={handleRefresh}>
-        {children}
-      </PullToRefresh>
+      {children}
       <BackToTop />
     </>
   );

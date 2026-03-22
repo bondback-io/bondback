@@ -19,6 +19,7 @@ import { getFirstJobRewardsNudgeVisible } from "@/lib/beta-banners";
 import { RegisterExpoPushToken } from "@/components/pwa/register-expo-push-token";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ContextualFab } from "@/components/contextual-fab";
+import { SessionSync } from "@/components/auth/session-sync";
 
 export const metadata: Metadata = {
   title: "Bond Back · Bond cleaning reverse-auction",
@@ -88,6 +89,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         ) : null}
         <TestModeBanner stripeTestMode={stripeTestMode} />
         <PwaRegisterSw />
+        <SessionSync />
         <RegisterExpoPushToken />
         <Toaster>
           <ChatPanelProvider

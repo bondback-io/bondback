@@ -113,6 +113,7 @@ function SignupForm() {
           setSubmitting(false);
           return;
         }
+        router.refresh();
         router.replace("/onboarding/role-choice");
         return;
       }

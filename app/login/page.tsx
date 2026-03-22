@@ -91,6 +91,8 @@ function LoginForm() {
             return;
           }
           const next = searchParams.get("next") ?? "/dashboard";
+          // Revalidate RSC + cookies so header/layout see the new session immediately
+          router.refresh();
           router.replace(next);
           return;
         }

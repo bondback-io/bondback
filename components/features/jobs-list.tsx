@@ -51,6 +51,10 @@ function haversineKm(
 
 const INITIAL_PAGE_SIZE = 20;
 const PRELOAD_IMAGE_COUNT = 4;
+/** Off until we fix gesture conflict with vertical scroll (react-swipeable preventScrollOnSwipe). */
+const ENABLE_JOB_CARD_SWIPE = false;
+/** Off until pull-to-refresh can coexist with scroll without fighting the browser. */
+const ENABLE_JOBS_PULL_TO_REFRESH = false;
 /** When list has more than this many cards, use @tanstack/react-virtual (window virtualizer) for performance. */
 const VIRTUALIZE_THRESHOLD = 30;
 /** Taller cards on mobile (stacked CTAs + thumb). */
@@ -301,7 +305,7 @@ export function JobsList({
         listerVerificationBadges={listerCard?.listerVerificationBadges ?? null}
       />
     );
-    const canSwipeBrowse = isCleaner && !isListerOwner;
+    const canSwipeBrowse = ENABLE_JOB_CARD_SWIPE && isCleaner && !isListerOwner;
     if (!canSwipeBrowse) {
       return card;
     }
@@ -473,12 +477,16 @@ export function JobsList({
             />
             <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
               {isCleaner ? (
-                <>
-                  Swipe card right:{" "}
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">Quick bid</span>
-                  {" · "}left:{" "}
-                  <span className="font-semibold text-yellow-700 dark:text-yellow-400">Save</span>
-                </>
+                ENABLE_JOB_CARD_SWIPE ? (
+                  <>
+                    Swipe card right:{" "}
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">Quick bid</span>
+                    {" · "}left:{" "}
+                    <span className="font-semibold text-yellow-700 dark:text-yellow-400">Save</span>
+                  </>
+                ) : (
+                  "Open a listing to place a bid or save it to favourites."
+                )
               ) : (
                 "Swipe gestures are available when browsing as a cleaner."
               )}
@@ -488,9 +496,8 @@ export function JobsList({
       </TooltipProvider>
     ) : null;
 
-  return (
-    <>
-      {mobileRadiusStickyBar}
+  const listWrapper =
+    ENABLE_JOBS_PULL_TO_REFRESH ? (
       <PullToRefresh
         onRefresh={refresh}
         disabled={isRefreshing}
@@ -498,6 +505,14 @@ export function JobsList({
       >
         {listContent}
       </PullToRefresh>
+    ) : (
+      listContent
+    );
+
+  return (
+    <>
+      {mobileRadiusStickyBar}
+      {listWrapper}
     </>
   );
 }
