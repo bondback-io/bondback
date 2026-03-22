@@ -5,12 +5,15 @@ import { secureJobAtPrice } from "@/lib/actions/jobs";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/listings";
 import { ConnectRequiredModal } from "@/components/features/connect-required-modal";
+import { cn } from "@/lib/utils";
 
 export type BuyNowButtonProps = {
   listingId: string;
   buyNowCents: number;
   disabled?: boolean;
   currentUserId?: string | null;
+  /** Optional classes for the trigger button (e.g. mobile min-height). */
+  className?: string;
 };
 
 const CONNECT_ERROR_MARKER = "connect your bank account";
@@ -20,6 +23,7 @@ export function BuyNowButton({
   buyNowCents,
   disabled,
   currentUserId = null,
+  className,
 }: BuyNowButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +60,7 @@ export function BuyNowButton({
         variant="success"
         onClick={handleClick}
         disabled={disabled || loading}
+        className={cn(className)}
       >
         {loading ? "Securing…" : `Secure at this price – ${formatCents(buyNowCents)}`}
       </Button>

@@ -29,7 +29,7 @@ export function RoleChoiceClient() {
         <h1 className="text-2xl font-semibold tracking-tight dark:text-gray-100 md:text-3xl">
           Who are you today?
         </h1>
-        <p className="text-sm text-muted-foreground dark:text-gray-400">
+        <p className="text-base text-muted-foreground dark:text-gray-400 md:text-sm">
           Choose how you&apos;ll use Bond Back. You can add the other role anytime in Settings.
         </p>
       </div>
@@ -44,7 +44,7 @@ export function RoleChoiceClient() {
               <Home className="h-6 w-6 text-sky-600 dark:text-sky-400" />
             </div>
             <CardTitle className="text-lg dark:text-gray-100">I&apos;m a Lister</CardTitle>
-            <CardDescription className="text-sm dark:text-gray-400">
+            <CardDescription className="text-base dark:text-gray-400 md:text-sm">
               I need my property cleaned. I&apos;ll list a bond clean and hire a cleaner.
             </CardDescription>
           </CardHeader>
@@ -59,7 +59,7 @@ export function RoleChoiceClient() {
               <Sparkles className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
             </div>
             <CardTitle className="text-lg dark:text-gray-100">I&apos;m a Cleaner</CardTitle>
-            <CardDescription className="text-sm dark:text-gray-400">
+            <CardDescription className="text-base dark:text-gray-400 md:text-sm">
               I want to earn money. I&apos;ll bid on bond clean jobs and get hired.
             </CardDescription>
           </CardHeader>
@@ -74,7 +74,7 @@ export function RoleChoiceClient() {
               <Users className="h-6 w-6 text-amber-600 dark:text-amber-400" />
             </div>
             <CardTitle className="text-lg dark:text-gray-100">I want to do both</CardTitle>
-            <CardDescription className="text-sm dark:text-gray-400">
+            <CardDescription className="text-base dark:text-gray-400 md:text-sm">
               List jobs and clean. Switch between roles anytime in the header.
             </CardDescription>
           </CardHeader>

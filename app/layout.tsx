@@ -17,8 +17,8 @@ import { GlobalOfflineBanner } from "@/components/layout/global-offline-banner";
 import { FirstJobRewardsNudge } from "@/components/banners/first-job-rewards-nudge";
 import { getFirstJobRewardsNudgeVisible } from "@/lib/beta-banners";
 import { RegisterExpoPushToken } from "@/components/pwa/register-expo-push-token";
-import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
-import { ContextualFab } from "@/components/layout/contextual-fab";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { ContextualFab } from "@/components/contextual-fab";
 
 export const metadata: Metadata = {
   title: "Bond Back · Bond cleaning reverse-auction",

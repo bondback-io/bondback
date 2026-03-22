@@ -5,15 +5,29 @@ import { useSwipeable } from "react-swipeable";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const THRESHOLD_PX = 72;
-const MAX_DRAG_PX = 100;
+/** Minimum horizontal distance (px) to count as an intentional swipe */
+const THRESHOLD_PX = 80;
+/** Alternative: fast flick with shorter travel */
+const SHORT_DISTANCE_PX = 42;
+/** Velocity threshold (react-swipeable units, ~px/ms) for a quick flick */
+const VELOCITY_THRESHOLD = 0.35;
+const MAX_DRAG_PX = 120;
 
 function vibrateShort() {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     (navigator as Navigator & { vibrate: (n: number | number[]) => boolean }).vibrate(
-      16
+      18
     );
   }
+}
+
+function shouldTriggerSwipe(deltaX: number, velocity?: number): boolean {
+  const abs = Math.abs(deltaX);
+  if (abs >= THRESHOLD_PX) return true;
+  if (abs >= SHORT_DISTANCE_PX && typeof velocity === "number" && Math.abs(velocity) >= VELOCITY_THRESHOLD) {
+    return true;
+  }
+  return false;
 }
 
 export function useIsMobileSwipeWidth() {
@@ -31,22 +45,19 @@ export function useIsMobileSwipeWidth() {
 export type CardSwipeActionsProps = {
   children: React.ReactNode;
   className?: string;
-  /** Swipe right (finger moves right, +Δx): green panel on the left — e.g. Quick bid / View bids / Mark complete */
+  /** Swipe right (finger moves right, +Δx): primary action — green panel */
   onSwipeRight?: () => void;
-  /** Swipe left (−Δx): amber panel on the right — e.g. Save / Message / Cancel */
+  /** Swipe left (−Δx): secondary action — yellow panel */
   onSwipeLeft?: () => void;
-  /** Icon shown on the green (right-swipe) reveal */
   rightIcon?: LucideIcon;
-  /** Icon shown on the amber (left-swipe) reveal */
   leftIcon?: LucideIcon;
-  /** Accessible labels for overlays */
   rightActionLabel?: string;
   leftActionLabel?: string;
 };
 
 /**
- * Mobile-only (&lt;768px) horizontal swipe with coloured underlays and icons.
- * Desktop: inert wrapper (no swipe, no overflow clipping).
+ * Mobile-only (&lt;768px) horizontal swipe with green (right) / yellow (left) underlays.
+ * Desktop: no swipe; children render unchanged.
  */
 export function CardSwipeActions({
   children,
@@ -70,10 +81,14 @@ export function CardSwipeActions({
     },
     onSwiped: (e) => {
       const dx = e.deltaX;
-      if (dx >= THRESHOLD_PX && onSwipeRight) {
+      const vel =
+        typeof (e as { velocity?: number }).velocity === "number"
+          ? (e as { velocity: number }).velocity
+          : undefined;
+      if (dx > 0 && onSwipeRight && shouldTriggerSwipe(dx, vel)) {
         vibrateShort();
         onSwipeRight();
-      } else if (dx <= -THRESHOLD_PX && onSwipeLeft) {
+      } else if (dx < 0 && onSwipeLeft && shouldTriggerSwipe(dx, vel)) {
         vibrateShort();
         onSwipeLeft();
       }
@@ -82,7 +97,24 @@ export function CardSwipeActions({
     trackMouse: false,
     trackTouch: true,
     preventScrollOnSwipe: true,
+    delta: 10,
   });
+
+  const onKeyDown = React.useCallback(
+    (ev: React.KeyboardEvent) => {
+      if (!isMobile) return;
+      if (ev.key === "ArrowRight" && onSwipeRight) {
+        ev.preventDefault();
+        vibrateShort();
+        onSwipeRight();
+      } else if (ev.key === "ArrowLeft" && onSwipeLeft) {
+        ev.preventDefault();
+        vibrateShort();
+        onSwipeLeft();
+      }
+    },
+    [isMobile, onSwipeLeft, onSwipeRight]
+  );
 
   if (!isMobile) {
     return <div className={className}>{children}</div>;
@@ -93,44 +125,72 @@ export function CardSwipeActions({
   }
 
   const leftRevealOpacity =
-    offset > 8 ? Math.min(1, offset / 72) : 0;
+    offset > 8 ? Math.min(1, offset / THRESHOLD_PX) : 0;
   const rightRevealOpacity =
-    offset < -8 ? Math.min(1, -offset / 72) : 0;
+    offset < -8 ? Math.min(1, -offset / THRESHOLD_PX) : 0;
 
   return (
     <div
       {...handlers}
+      {...(onSwipeRight || onSwipeLeft
+        ? {
+            tabIndex: 0,
+            role: "group",
+            "aria-label":
+              onSwipeRight && onSwipeLeft
+                ? "Swipe right or left for actions, or use arrow keys"
+                : onSwipeRight
+                  ? "Swipe right for action, or press Arrow Right"
+                  : "Swipe left for action, or press Arrow Left",
+            onKeyDown,
+          }
+        : {})}
       className={cn(
-        "relative overflow-hidden rounded-xl md:overflow-visible",
+        "relative touch-pan-y overflow-hidden rounded-xl md:overflow-visible",
+        "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className
       )}
     >
-      {/* Green underlay: revealed when swiping right */}
+      {/* Green underlay — swipe right (reveals from left) */}
       <div
-        className="pointer-events-none absolute inset-y-0 left-0 z-0 flex w-[min(100%,7rem)] items-center justify-center rounded-l-xl bg-emerald-600 text-white shadow-inner dark:bg-emerald-600"
+        className="pointer-events-none absolute inset-y-0 left-0 z-0 flex w-[min(100%,8rem)] items-center justify-center rounded-l-xl bg-emerald-600 text-white shadow-inner dark:bg-emerald-600"
         style={{ opacity: leftRevealOpacity }}
         aria-hidden
       >
         {RightIcon ? (
-          <span className="flex flex-col items-center gap-0.5 px-1">
-            <RightIcon className="h-8 w-8 shrink-0" strokeWidth={2.25} aria-hidden />
-            <span className="max-w-[5rem] text-center text-[10px] font-semibold leading-tight opacity-95">
+          <span className="flex flex-col items-center gap-1 px-1">
+            <RightIcon
+              className={cn(
+                "h-9 w-9 shrink-0 transition-transform duration-150",
+                offset > 40 && "scale-110"
+              )}
+              strokeWidth={2.25}
+              aria-hidden
+            />
+            <span className="max-w-[5.5rem] text-center text-[10px] font-semibold leading-tight opacity-95">
               {rightActionLabel}
             </span>
           </span>
         ) : null}
       </div>
 
-      {/* Amber underlay: revealed when swiping left */}
+      {/* Yellow underlay — swipe left (reveals from right) */}
       <div
-        className="pointer-events-none absolute inset-y-0 right-0 z-0 flex w-[min(100%,7rem)] items-center justify-center rounded-r-xl bg-amber-400 text-amber-950 shadow-inner dark:bg-amber-500 dark:text-amber-950"
+        className="pointer-events-none absolute inset-y-0 right-0 z-0 flex w-[min(100%,8rem)] items-center justify-center rounded-r-xl bg-yellow-400 text-yellow-950 shadow-inner dark:bg-yellow-500 dark:text-yellow-950"
         style={{ opacity: rightRevealOpacity }}
         aria-hidden
       >
         {LeftIcon ? (
-          <span className="flex flex-col items-center gap-0.5 px-1">
-            <LeftIcon className="h-8 w-8 shrink-0" strokeWidth={2.25} aria-hidden />
-            <span className="max-w-[5rem] text-center text-[10px] font-semibold leading-tight opacity-95">
+          <span className="flex flex-col items-center gap-1 px-1">
+            <LeftIcon
+              className={cn(
+                "h-9 w-9 shrink-0 transition-transform duration-150",
+                offset < -40 && "scale-110"
+              )}
+              strokeWidth={2.25}
+              aria-hidden
+            />
+            <span className="max-w-[5.5rem] text-center text-[10px] font-semibold leading-tight opacity-95">
               {leftActionLabel}
             </span>
           </span>

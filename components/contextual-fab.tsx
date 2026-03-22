@@ -4,22 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ProfileRole = "lister" | "cleaner";
 
-/** Routes where the FAB is shown (per role). */
-const FAB_ROUTES_LISTER = [
-  "/dashboard",
-  "/lister/dashboard",
-  "/my-listings",
-];
-const FAB_ROUTES_CLEANER = [
-  "/dashboard",
-  "/cleaner/dashboard",
-  "/jobs",
-];
+const FAB_ROUTES_LISTER = ["/dashboard", "/lister/dashboard", "/my-listings"];
+const FAB_ROUTES_CLEANER = ["/dashboard", "/cleaner/dashboard", "/jobs"];
 
 function isFabRoute(pathname: string, role: ProfileRole | null): boolean {
   if (!pathname || !role) return false;
@@ -29,7 +20,6 @@ function isFabRoute(pathname: string, role: ProfileRole | null): boolean {
   );
 }
 
-/** Hide FAB when a full-screen modal or keyboard might be open. */
 function useHideFabContext() {
   const [hide, setHide] = useState(false);
 
@@ -62,7 +52,7 @@ function useHideFabContext() {
   return hide;
 }
 
-/** Subtle pulse when cleaner may have new work (dashboard / home; not on /jobs). */
+/** Pulse when cleaner is on a “home” screen (not already browsing /jobs). */
 function useCleanerJobsPulse(pathname: string | null, role: ProfileRole | null) {
   const [pulse, setPulse] = useState(false);
   useEffect(() => {
@@ -70,8 +60,7 @@ function useCleanerJobsPulse(pathname: string | null, role: ProfileRole | null) 
       setPulse(false);
       return;
     }
-    const onJobs =
-      pathname === "/jobs" || pathname.startsWith("/jobs/");
+    const onJobs = pathname === "/jobs" || pathname.startsWith("/jobs/");
     const onMain =
       pathname === "/dashboard" ||
       pathname === "/cleaner/dashboard" ||
@@ -87,8 +76,8 @@ export type ContextualFabProps = {
 };
 
 /**
- * Role-aware FAB: bottom-right, round pill with label.
- * Lister: green primary. Cleaner: blue. Framer Motion pulse on cleaner main screens.
+ * Airtasker-style round FAB (64×64px), mobile only.
+ * Lister: green + Create Listing · Cleaner: blue + Find Nearby Jobs (labels via aria/title).
  */
 export function ContextualFab({ activeRole, className }: ContextualFabProps) {
   const pathname = usePathname();
@@ -103,49 +92,47 @@ export function ContextualFab({ activeRole, className }: ContextualFabProps) {
 
   const isLister = activeRole === "lister";
   const href = isLister ? "/listings/new" : "/jobs";
-  const label = isLister ? "Create Listing" : "Find Nearby Jobs";
-  const Icon = isLister ? Plus : Search;
+  const ariaLabel = isLister ? "+ Create Listing" : "+ Find Nearby Jobs";
 
   return (
     <motion.div
       className={cn(
         "fixed z-50 md:hidden",
-        "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4 max-w-[min(100vw-2rem,20rem)]",
+        "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4",
         className
       )}
       initial={false}
       animate={
         !prefersReducedMotion && !isLister && pulseCleaner
           ? {
-              scale: [1, 1.03, 1],
+              scale: [1, 1.06, 1],
               boxShadow: [
-                "0 10px 40px -10px rgba(37, 99, 235, 0.35)",
-                "0 14px 44px -8px rgba(37, 99, 235, 0.55)",
-                "0 10px 40px -10px rgba(37, 99, 235, 0.35)",
+                "0 12px 40px -8px rgba(37, 99, 235, 0.45)",
+                "0 16px 48px -6px rgba(37, 99, 235, 0.6)",
+                "0 12px 40px -8px rgba(37, 99, 235, 0.45)",
               ],
             }
           : {}
       }
       transition={{
         duration: 2.4,
-        repeat: prefersReducedMotion || isLister || !pulseCleaner ? 0 : Infinity,
+        repeat:
+          prefersReducedMotion || isLister || !pulseCleaner ? 0 : Infinity,
         ease: "easeInOut",
       }}
     >
       <Link
         href={href}
+        title={ariaLabel}
         className={cn(
-          "flex min-h-14 items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-semibold text-white shadow-2xl transition active:scale-[0.98]",
+          "flex h-16 w-16 min-h-[4rem] min-w-[4rem] items-center justify-center rounded-full text-white shadow-2xl ring-2 transition active:scale-95",
           isLister
-            ? "bg-emerald-600 ring-2 ring-emerald-400/35 hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-            : "bg-blue-600 ring-2 ring-blue-400/35 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+            ? "bg-emerald-600 ring-emerald-400/50 hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            : "bg-blue-600 ring-blue-400/50 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
         )}
-        aria-label={isLister ? "Create listing" : "Find nearby jobs"}
+        aria-label={ariaLabel}
       >
-        <Icon className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
-        <span className="truncate">
-          {isLister ? "+ Create Listing" : "Find Nearby Jobs"}
-        </span>
+        <Plus className="h-10 w-10 shrink-0" strokeWidth={2.75} aria-hidden />
       </Link>
     </motion.div>
   );

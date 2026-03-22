@@ -573,15 +573,15 @@ export function NewListingForm({
             <CardTitle className="text-xl dark:text-gray-100">
               Listing created successfully
             </CardTitle>
-            <CardDescription className="text-sm dark:text-gray-400">
+            <CardDescription className="text-base md:text-sm dark:text-gray-400">
               Cleaners can now review your details and start bidding.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center gap-3">
-            <Button asChild variant="outline">
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Button asChild variant="outline" size="lg" className="w-full min-h-12 sm:w-auto md:min-h-0">
               <Link href="/dashboard">Go to dashboard</Link>
             </Button>
-            <Button asChild>
+            <Button asChild size="lg" className="w-full min-h-12 sm:w-auto md:min-h-0">
               <Link
                 href={
                   createdListingId ? `/jobs/${createdListingId}` : "/my-listings"
@@ -598,28 +598,32 @@ export function NewListingForm({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <section className="page-inner space-y-6 pb-12">
+      <section className="page-inner space-y-8 pb-12 md:space-y-6">
         {/* Stepper */}
         <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
-          <CardContent className="p-4 sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-muted-foreground dark:text-gray-400">
+          <CardContent className="p-5 sm:p-6 md:p-6">
+            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+              <p className="text-lg font-semibold tabular-nums text-muted-foreground dark:text-gray-400 md:text-sm md:font-medium">
                 Step {step} of 5
               </p>
-              <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+              <p className="text-lg font-semibold text-foreground dark:text-gray-100 md:text-sm">
                 {STEPS[step - 1]?.title}
               </p>
             </div>
-            <Progress value={(step / 5) * 100} className="h-2" />
-            <div className="mt-3 flex justify-between text-xs text-muted-foreground dark:text-gray-500">
+            <Progress value={(step / 5) * 100} className="h-4 md:h-2" />
+            <div className="mt-4 flex flex-col gap-2 text-base font-medium text-muted-foreground dark:text-gray-500 md:mt-3 md:flex-row md:justify-between md:gap-0 md:text-xs md:font-normal">
               {STEPS.map((s) => (
                 <span
                   key={s.id}
                   className={cn(
-                    step >= s.id && "font-medium text-foreground dark:text-gray-300"
+                    "max-md:rounded-md max-md:border max-md:border-transparent max-md:px-2 max-md:py-2.5",
+                    step === s.id &&
+                      "max-md:border-primary/30 max-md:bg-primary/10 max-md:text-foreground dark:max-md:bg-primary/20 dark:max-md:text-gray-100",
+                    step >= s.id &&
+                      "font-medium text-foreground dark:text-gray-300"
                   )}
                 >
-                  {s.id}. {s.title}
+                  <span className="tabular-nums font-bold md:font-medium">{s.id}.</span> {s.title}
                 </span>
               ))}
             </div>
@@ -633,7 +637,7 @@ export function NewListingForm({
             // This gives the user time to review step 5 (reserve, duration, buy now) before creating.
           }}
           noValidate
-          className="space-y-6"
+          className="space-y-8 md:space-y-6"
         >
           {/* Step 1: Property basics */}
           {step === 1 && (
@@ -646,13 +650,13 @@ export function NewListingForm({
                   Tell us about your property so we can suggest a fair starting price.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label htmlFor="propertyType">Property type</Label>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <HelpCircle className="h-4 w-4 text-muted-foreground dark:text-gray-500" />
+                        <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
                       </TooltipTrigger>
                       <TooltipContent>
                         Property type affects base pricing. Apartments and studios typically cost less than houses.
@@ -692,7 +696,7 @@ export function NewListingForm({
                       <Label htmlFor="bedrooms">Bedrooms</Label>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <HelpCircle className="h-4 w-4 text-muted-foreground dark:text-gray-500" />
+                          <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
                         </TooltipTrigger>
                         <TooltipContent>
                           More bedrooms usually mean a higher base price for the bond clean.
@@ -718,7 +722,7 @@ export function NewListingForm({
                       <Label htmlFor="bathrooms">Bathrooms</Label>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <HelpCircle className="h-4 w-4 text-muted-foreground dark:text-gray-500" />
+                          <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
                         </TooltipTrigger>
                         <TooltipContent>
                           Bathroom count is used in our pricing calculator.
@@ -746,7 +750,7 @@ export function NewListingForm({
                     <Label>Special areas</Label>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <HelpCircle className="h-4 w-4 text-muted-foreground dark:text-gray-500" />
+                        <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
                       </TooltipTrigger>
                       <TooltipContent>
                         Tick areas that apply. Selected areas are automatically added to Add-ons in step 4 where you can set a price for each.
@@ -788,13 +792,13 @@ export function NewListingForm({
                   This helps cleaners find your property and give accurate bids.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label htmlFor="suburb">Suburb</Label>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <HelpCircle className="h-4 w-4 text-muted-foreground dark:text-gray-500" />
+                        <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
                       </TooltipTrigger>
                       <TooltipContent>
                         Start typing to search Australian suburbs. Postcode will auto-fill when you select one.
@@ -802,7 +806,7 @@ export function NewListingForm({
                     </Tooltip>
                   </div>
                   <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground dark:text-gray-500" />
+                    <MapPin className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
                     <Input
                       id="suburb"
                       className="pl-9 dark:bg-gray-800 dark:border-gray-700"
@@ -851,7 +855,7 @@ export function NewListingForm({
                     )}
                   </div>
                   {form.formState.errors.suburb && (
-                    <p className="text-xs text-destructive">
+                    <p className="text-base text-destructive md:text-xs">
                       {form.formState.errors.suburb.message}
                     </p>
                   )}
@@ -860,7 +864,7 @@ export function NewListingForm({
                 <div className="space-y-2">
                   <Label htmlFor="postcode">Postcode</Label>
                   <div className="relative">
-                    <Hash className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground dark:text-gray-500" />
+                    <Hash className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
                     <Input
                       id="postcode"
                       className="pl-9 dark:bg-gray-800 dark:border-gray-700"
@@ -871,7 +875,7 @@ export function NewListingForm({
                     />
                   </div>
                   {form.formState.errors.postcode && (
-                    <p className="text-xs text-destructive">
+                    <p className="text-base text-destructive md:text-xs">
                       {form.formState.errors.postcode.message}
                     </p>
                   )}
@@ -902,12 +906,12 @@ export function NewListingForm({
                   Upload clear before photos of the entire property. This helps cleaners bid accurately and protects you in bond disputes. You must select one photo as the cover—it will be shown on job cards.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 p-5 pt-0 md:p-6 md:pt-0">
                 <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 dark:border-gray-700 dark:bg-gray-800/50">
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button type="button" variant="outline" className="gap-2" asChild>
+                    <Button type="button" variant="outline" size="lg" className="min-h-12 w-full gap-2 sm:w-auto md:min-h-0" asChild>
                       <label htmlFor="photos" className="cursor-pointer">
-                        <ImagePlus className="h-4 w-4" />
+                        <ImagePlus className="h-5 w-5 md:h-4 md:w-4" />
                         Upload photos (3–15 recommended)
                       </label>
                     </Button>
@@ -925,7 +929,7 @@ export function NewListingForm({
                   </div>
                   {uploading && (
                     <div className="mt-4 space-y-2">
-                      <Progress value={uploadProgress} className="h-2" />
+                      <Progress value={uploadProgress} className="h-4 md:h-2" />
                       <p className="text-xs text-muted-foreground dark:text-gray-400">
                         Uploading… {uploadProgress}%
                       </p>
@@ -1050,9 +1054,9 @@ export function NewListingForm({
                   Select extra services. The estimated price updates in real time.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
                 <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-800 dark:bg-emerald-950/40">
-                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
+                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-800 dark:text-emerald-200 max-md:text-sm">
                     Estimated price
                   </p>
                   <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">
@@ -1137,7 +1141,7 @@ export function NewListingForm({
                     <Label>Move-out date</Label>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <HelpCircle className="h-4 w-4 text-muted-foreground dark:text-gray-500" />
+                        <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
                       </TooltipTrigger>
                       <TooltipContent>
                         When do you need the bond clean completed? Cleaners will use this to plan.
@@ -1196,12 +1200,12 @@ export function NewListingForm({
                   Set your reserve and how long cleaners can bid.
                 </CardDescription>
                 {initialPhotoFiles.length < 1 && (
-                  <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                  <p className="mt-2 text-base text-amber-600 dark:text-amber-400 md:text-sm">
                     Add at least 1 initial condition photo in step 3 to publish.
                   </p>
                 )}
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
                 <div className="space-y-2">
                   <Label htmlFor="reservePrice">Reserve price (AUD)</Label>
                   <Input
@@ -1209,7 +1213,7 @@ export function NewListingForm({
                     type="number"
                     min={50}
                     inputMode="decimal"
-                    className="min-h-11 text-base dark:bg-gray-800 dark:border-gray-700 sm:min-h-10 sm:text-sm"
+                    className="dark:bg-gray-800 dark:border-gray-700"
                     {...form.register("reservePrice", {
                       valueAsNumber: true,
                       onChange: (e) => {
@@ -1307,7 +1311,7 @@ export function NewListingForm({
                     min={0}
                     inputMode="decimal"
                     placeholder="Leave blank for auction only"
-                    className="min-h-11 text-base dark:bg-gray-800 dark:border-gray-700 sm:min-h-10 sm:text-sm"
+                    className="dark:bg-gray-800 dark:border-gray-700"
                     {...form.register("buyNowPrice")}
                   />
                   {form.formState.errors.buyNowPrice && (
@@ -1364,24 +1368,31 @@ export function NewListingForm({
           )}
 
           {submitError && (
-            <p className="text-sm text-destructive">{submitError}</p>
+            <p
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-base font-medium text-destructive md:border-0 md:bg-transparent md:p-0 md:text-sm md:font-normal"
+            >
+              {submitError}
+            </p>
           )}
 
           {/* Navigation */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-col-reverse gap-3 pt-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-4 md:pt-0">
             <Button
               type="button"
               variant="outline"
+              size="lg"
               onClick={() => setStep((s) => Math.max(1, s - 1))}
               disabled={step === 1}
-              className="gap-1"
+              className="h-12 min-h-[48px] w-full gap-2 md:h-10 md:min-h-0 md:w-auto"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-5 w-5 md:h-4 md:w-4" />
               Back
             </Button>
             {step < 5 ? (
               <Button
                 type="button"
+                size="lg"
                 onClick={async () => {
                   let ok = true;
                   if (step === 1) {
@@ -1393,21 +1404,22 @@ export function NewListingForm({
                   }
                   if (ok) setStep((s) => s + 1);
                 }}
-                className="gap-1"
+                className="h-12 min-h-[48px] w-full gap-2 md:h-10 md:min-h-0 md:w-auto"
               >
                 Next
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-5 w-5 md:h-4 md:w-4" />
               </Button>
             ) : (
               <Button
                 type="button"
+                size="lg"
                 disabled={
                   isSubmitting ||
                   uploading ||
                   initialPhotoFiles.length < 1 ||
                   initialPhotoFiles.length > PHOTO_LIMITS.LISTING_INITIAL
                 }
-                className="bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                className="h-12 min-h-[48px] w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 md:h-10 md:min-h-0 md:w-auto"
                 onClick={() => {
                   void form.handleSubmit(onSubmit)();
                 }}

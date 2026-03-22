@@ -91,7 +91,7 @@ export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
             type="date"
             defaultValue={profile?.date_of_birth ?? ""}
           />
-          <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+          <p className="text-base text-muted-foreground dark:text-gray-500 md:text-[11px]">
             Used for birthday wishes from Bond Back. We don’t share this.
           </p>
         </div>
@@ -110,7 +110,7 @@ export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
             inputMode="numeric"
             autoComplete="off"
           />
-          <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+          <p className="text-base text-muted-foreground dark:text-gray-500 md:text-[11px]">
             Same as in your profile. Required for professional cleaners.
           </p>
         </div>
@@ -151,7 +151,7 @@ export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
           rows={4}
         />
       </div>
-      <Button type="submit" size="sm" className="rounded-full" disabled={isPending}>
+      <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-10 md:min-h-0 md:w-auto" disabled={isPending}>
         {isPending ? "Saving…" : "Save profile"}
       </Button>
     </form>
@@ -205,9 +205,9 @@ function SendTestSmsButton() {
   return (
     <Button
       type="button"
-      size="sm"
+      size="lg"
       variant="outline"
-      className="rounded-full"
+      className="h-12 min-h-[48px] w-full rounded-full md:h-8 md:min-h-0 md:w-auto"
       disabled={testing}
       onClick={handleTest}
     >
@@ -280,19 +280,19 @@ export function SettingsNotificationsForm({
         });
       }}
     >
-      <p className="text-xs text-muted-foreground sm:text-sm dark:text-gray-400">
+      <p className="text-base text-muted-foreground dark:text-gray-400 md:text-sm">
         Choose which emails you receive. Critical (payment, dispute) are on by default.
       </p>
       {locked && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-100">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+        <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50/70 px-4 py-3 text-base dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-100 md:px-3 md:py-2 md:text-sm">
+          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400 md:h-4 md:w-4" />
           <p>Notification preferences are locked by an administrator. Contact support to change them.</p>
         </div>
       )}
       <div className="space-y-4">
         {prefKeys.map((key) => (
-          <div key={key} className="flex items-center justify-between gap-4">
-            <Label htmlFor={key} className="flex-1 text-sm dark:text-gray-200 cursor-pointer">
+          <div key={key} className="flex min-h-[52px] items-center justify-between gap-4 py-1 md:min-h-0 md:py-0">
+            <Label htmlFor={key} className="flex-1 cursor-pointer text-base dark:text-gray-200 md:text-sm">
               {NOTIFICATION_LABELS[key]}
             </Label>
             <input
@@ -324,17 +324,17 @@ export function SettingsNotificationsForm({
           />
         ))}
       </div>
-      <p className="text-xs text-muted-foreground dark:text-gray-500">
+      <p className="text-base text-muted-foreground dark:text-gray-500 md:text-xs">
         &ldquo;Receive all non-critical emails&rdquo; overrides individual toggles for non-critical types when on.
       </p>
-      <p className="text-xs text-muted-foreground dark:text-gray-500">
+      <p className="text-base text-muted-foreground dark:text-gray-500 md:text-xs">
         SMS notifications use your profile phone number and are limited to 5 per day. Critical events only (new job near you, bid accepted, job approved to start, payment released, dispute opened).
       </p>
-      <p className="text-xs text-muted-foreground dark:text-gray-500">
+      <p className="text-base text-muted-foreground dark:text-gray-500 md:text-xs">
         Push notifications require the Bond Back mobile app. Turn on the toggle here, then register your device in the app to receive alerts (max 5 per day).
       </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" size="sm" className="rounded-full" disabled={isPending || locked}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-8 md:min-h-0 md:w-auto" disabled={isPending || locked}>
           {isPending ? "Saving…" : "Save notification settings"}
         </Button>
         <SendTestSmsButton />
@@ -346,6 +346,7 @@ export function SettingsNotificationsForm({
 export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean }) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const [publicProfile, setPublicProfile] = useState(profilePublic);
 
   return (
     <form
@@ -371,15 +372,18 @@ export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean 
         });
       }}
     >
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm dark:text-gray-200">Show my profile publicly in search results</span>
-        <input
-          type="checkbox"
-          name="profile_public"
-          defaultChecked={profilePublic}
+      <input type="hidden" name="profile_public" value={publicProfile ? "on" : ""} readOnly aria-hidden />
+      <div className="flex min-h-[52px] items-center justify-between gap-4">
+        <Label htmlFor="profile_public_switch" className="flex-1 cursor-pointer text-base dark:text-gray-200 md:text-sm">
+          Show my profile publicly in search results
+        </Label>
+        <Switch
+          id="profile_public_switch"
+          checked={publicProfile}
+          onCheckedChange={setPublicProfile}
         />
-      </label>
-      <Button type="submit" size="sm" className="rounded-full" disabled={isPending}>
+      </div>
+      <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-8 md:min-h-0 md:w-auto" disabled={isPending}>
         {isPending ? "Saving…" : "Save privacy settings"}
       </Button>
     </form>
@@ -446,7 +450,7 @@ export function SettingsPasswordForm() {
           onChange={(e) => setCurrentPassword(e.target.value)}
           placeholder="Enter your current password"
           required
-          className="max-w-xs"
+          className="w-full max-w-full md:max-w-xs"
         />
       </div>
       <div className="space-y-2">
@@ -463,7 +467,7 @@ export function SettingsPasswordForm() {
           placeholder="At least 6 characters"
           required
           minLength={6}
-          className="max-w-xs"
+          className="w-full max-w-full md:max-w-xs"
         />
       </div>
       <div className="space-y-2">
@@ -480,10 +484,10 @@ export function SettingsPasswordForm() {
           placeholder="Re-enter new password"
           required
           minLength={6}
-          className="max-w-xs"
+          className="w-full max-w-full md:max-w-xs"
         />
       </div>
-      <Button type="submit" size="sm" className="rounded-full" disabled={isPending}>
+      <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-8 md:min-h-0 md:w-auto" disabled={isPending}>
         {isPending ? "Updating…" : "Change password"}
       </Button>
     </form>

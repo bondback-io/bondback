@@ -18,8 +18,6 @@ export { CollapsibleActivityFeed } from "./collapsible-activity-feed";
 export type { CollapsibleActivityFeedProps } from "./collapsible-activity-feed";
 export { DashboardEmptyState } from "./dashboard-empty-state";
 export type { DashboardEmptyStateProps } from "./dashboard-empty-state";
-export { DashboardRoleTabs } from "./dashboard-role-tabs";
-export type { DashboardRoleTabsProps } from "./dashboard-role-tabs";
 export { ListerDashboardContent } from "./lister-dashboard-content";
 export type { ListerDashboardContentProps } from "./lister-dashboard-content";
 export { CleanerDashboardContent } from "./cleaner-dashboard-content";

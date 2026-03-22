@@ -38,7 +38,7 @@ export type CleanerDashboardContentProps = {
 
 const CLEANER_ACTIONS = [
   { label: "Browse Available Jobs", href: "/jobs", primary: true, icon: "search" as const },
-  { label: "My Active Jobs", href: "/dashboard", icon: "briefcase" as const },
+  { label: "My Active Jobs", href: "/cleaner/dashboard", icon: "briefcase" as const },
   { label: "My Earnings", href: "/earnings", icon: "dollar-sign" as const },
 ];
 

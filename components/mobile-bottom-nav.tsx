@@ -4,15 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { House, Briefcase, MessageCircle, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useChatPanel } from "@/components/chat/chat-panel-context";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Home", icon: House },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
-  { href: "/messages", label: "Messages", icon: MessageCircle },
+  { href: "/messages", label: "Messages", icon: MessageCircle, showUnread: true as const },
   { href: "/profile", label: "Profile", icon: User },
 ] as const;
 
-/** Routes where the bottom nav is shown (mobile &lt; 768px only). */
 const BOTTOM_NAV_ROUTES = [
   "/dashboard",
   "/lister/dashboard",
@@ -43,9 +43,51 @@ function isItemActive(pathname: string, href: string): boolean {
   return pathname === href || (href !== "/" && pathname.startsWith(href));
 }
 
+function MessagesTabLink({ active }: { active: boolean }) {
+  const { unreadTotal } = useChatPanel();
+  const showBadge = unreadTotal > 0;
+
+  return (
+    <Link
+      href="/messages"
+      className={cn(
+        "relative flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
+        active
+          ? "text-primary"
+          : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
+      )}
+      aria-current={active ? "page" : undefined}
+    >
+      <span className="relative inline-flex">
+        <MessageCircle
+          className={cn(
+            "h-7 w-7 shrink-0",
+            active ? "stroke-[2.5]" : "stroke-[2]"
+          )}
+          aria-hidden
+        />
+        {showBadge && (
+          <span className="absolute -right-1.5 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-background dark:ring-gray-950">
+            {unreadTotal > 9 ? "9+" : unreadTotal}
+          </span>
+        )}
+      </span>
+      <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
+        Messages
+      </span>
+      <span
+        className={cn(
+          "h-0.5 w-7 rounded-full",
+          active ? "bg-primary" : "bg-transparent"
+        )}
+        aria-hidden
+      />
+    </Link>
+  );
+}
+
 /**
- * Thumb-friendly bottom tab bar: icons only (24–28px), primary underline for active tab.
- * Fixed bottom, top shadow. Visible only below `md` (max-width 767px).
+ * Fixed bottom tab bar (mobile &lt;768px): 4 large tabs, unread badge on Messages.
  */
 export function MobileBottomNav() {
   const pathname = usePathname();
@@ -64,23 +106,27 @@ export function MobileBottomNav() {
           "dark:border-gray-800 dark:bg-gray-950/95 dark:shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.45)]"
         )}
       >
-        <div className="mx-auto flex max-w-lg items-end justify-between px-2">
+        <div className="mx-auto flex max-w-lg items-end justify-between gap-0.5 px-1">
           {NAV_ITEMS.map((item) => {
             const active = isItemActive(currentPath, item.href);
             const Icon = item.icon;
+
+            if ("showUnread" in item && item.showUnread) {
+              return <MessagesTabLink key={item.href} active={active} />;
+            }
+
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "relative flex min-h-12 min-w-[3rem] flex-1 flex-col items-center justify-end gap-1 pb-1 pt-2 transition-colors active:scale-[0.97]",
+                  "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
                   active
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
                 )}
                 aria-current={active ? "page" : undefined}
               >
-                <span className="sr-only">{item.label}</span>
                 <Icon
                   className={cn(
                     "h-7 w-7 shrink-0",
@@ -88,10 +134,12 @@ export function MobileBottomNav() {
                   )}
                   aria-hidden
                 />
-                {/* Primary underline */}
+                <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
+                  {item.label}
+                </span>
                 <span
                   className={cn(
-                    "h-0.5 w-8 rounded-full transition-colors",
+                    "h-0.5 w-7 rounded-full",
                     active ? "bg-primary" : "bg-transparent"
                   )}
                   aria-hidden

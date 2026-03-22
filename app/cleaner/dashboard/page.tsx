@@ -17,6 +17,7 @@ import { formatCents } from "@/lib/listings";
 import {
   XCircle,
   ChevronDown,
+  CheckCircle2,
 } from "lucide-react";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -121,7 +122,7 @@ export default async function CleanerDashboardPage() {
       primary: true,
       icon: "search" as const,
     },
-    { label: "My Active Jobs", href: "/dashboard", icon: "briefcase" as const },
+    { label: "My Active Jobs", href: "/cleaner/dashboard", icon: "briefcase" as const },
     { label: "My Earnings", href: "/earnings", icon: "dollar-sign" as const },
   ];
 
@@ -221,6 +222,55 @@ export default async function CleanerDashboardPage() {
             })}
           />
         )}
+      </div>
+
+      {/* Completed jobs — vertical list */}
+      <div className="rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:rounded-xl md:border">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
+          <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
+            Completed Jobs
+          </h2>
+          {completedJobs.length > 0 && (
+            <Link
+              href="/earnings"
+              className="min-h-10 px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline md:min-h-0 md:text-xs md:font-medium"
+            >
+              View all
+            </Link>
+          )}
+        </div>
+        <div className="p-4 md:p-3">
+          {completedJobs.length === 0 ? (
+            <p className="py-6 text-center text-base text-muted-foreground dark:text-gray-400 md:py-5 md:text-sm">
+              No completed jobs yet. Finished jobs and payouts appear here.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {completedJobs.slice(0, 5).map((job) => {
+                const listing = listingsMap.get(job.listing_id as string);
+                return (
+                  <li key={job.id}>
+                    <Link
+                      href={`/jobs/${job.id}`}
+                      className="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 transition-colors hover:bg-muted/50 dark:border-gray-800 dark:hover:bg-gray-800/50 md:min-h-12"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-base font-semibold text-foreground dark:text-gray-100 md:line-clamp-1">
+                          {listing?.title ?? `Job #${job.id}`}
+                        </p>
+                        <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                          Completed
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold text-primary">View →</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
 
       {/* Recent Activity — collapsible */}

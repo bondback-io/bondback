@@ -19,10 +19,10 @@ export function LogoutButton() {
     <Button
       variant="outline"
       size="sm"
-      className="rounded-full gap-1.5"
+      className="rounded-full gap-2 h-12 min-h-[48px] w-full text-base md:h-8 md:min-h-0 md:w-auto md:text-xs"
       onClick={handleLogout}
     >
-      <LogOut className="h-3.5 w-3.5" />
+      <LogOut className="h-5 w-5 md:h-3.5 md:w-3.5" />
       Log out
     </Button>
   );

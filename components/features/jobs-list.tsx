@@ -8,6 +8,11 @@ import { JobCardSkeleton, JobCardSkeletonGrid } from "@/components/features/job-
 import { PullToRefresh } from "@/components/features/pull-to-refresh";
 import { CardSwipeActions } from "@/components/features/card-swipe-actions";
 import { addSavedListingId, removeSavedListingId } from "@/lib/saved-listings-local";
+import {
+  clampRadiusKm,
+  getStoredRadiusKm,
+  setStoredRadiusKm,
+} from "@/lib/jobs-radius-local";
 import { getListingCoverUrl } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
@@ -16,8 +21,15 @@ import { getJobsPage } from "@/lib/actions/jobs-list";
 import type { ListerCardData } from "@/lib/lister-card-data";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
-import { Gavel, Loader2, MapPin, Star } from "lucide-react";
+import { Gavel, HelpCircle, Loader2, MapPin, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 function haversineKm(
@@ -41,7 +53,8 @@ const INITIAL_PAGE_SIZE = 20;
 const PRELOAD_IMAGE_COUNT = 4;
 /** When list has more than this many cards, use @tanstack/react-virtual (window virtualizer) for performance. */
 const VIRTUALIZE_THRESHOLD = 30;
-const ESTIMATED_CARD_HEIGHT = 420;
+/** Taller cards on mobile (stacked CTAs + thumb). */
+const ESTIMATED_CARD_HEIGHT = 540;
 
 export type JobsListProps = {
   initialListings: ListingRow[];
@@ -83,8 +96,10 @@ export function JobsList({
   const [loadingMore, setLoadingMore] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(initialListings.length >= INITIAL_PAGE_SIZE);
-  /** Mobile-only quick radius (10–50 km); client filter when center lat/lon exist */
-  const [mobileRadiusKm, setMobileRadiusKm] = useState(10);
+  /** Mobile-only radius (5–100 km); client filter when center lat/lon exist; persisted locally */
+  const [mobileRadiusKm, setMobileRadiusKm] = useState(() =>
+    clampRadiusKm(_radiusKm)
+  );
   const [isMobile, setIsMobile] = useState(false);
   const supabase = createBrowserSupabaseClient();
   const { toast } = useToast();
@@ -97,6 +112,10 @@ export function JobsList({
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, []);
+
+  useEffect(() => {
+    setMobileRadiusKm(getStoredRadiusKm(_radiusKm));
+  }, [_radiusKm]);
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -270,7 +289,6 @@ export function JobsList({
     const listerCard = listerCardDataByListingId[String(listing.id)];
     const card = (
       <ListingCard
-        key={listing.id}
         listing={listing}
         showPlaceBid
         isCleaner={isCleaner}
@@ -296,7 +314,7 @@ export function JobsList({
         leftIcon={Star}
         rightActionLabel="Quick bid"
         leftActionLabel="Save"
-        onSwipeRight={() => router.push(`/jobs/${listingId}`)}
+        onSwipeRight={() => router.push(`/jobs/${listingId}?quickBid=1`)}
         onSwipeLeft={() => {
           addSavedListingId(listingId);
           toast({
@@ -354,7 +372,7 @@ export function JobsList({
       ) : (
         <>
           No jobs within this radius on mobile.{" "}
-          <span className="font-semibold text-foreground">Increase the slider</span> (up to 50 km) or
+          <span className="font-semibold text-foreground">Increase the slider</span> (up to 100 km) or
           broaden your search.
         </>
       )}
@@ -398,49 +416,89 @@ export function JobsList({
     </div>
   );
 
-  const mobileRadiusControl =
+  const mobileRadiusStickyBar =
     centerLat != null && centerLon != null ? (
-      <div className="mb-5 flex flex-col gap-4 rounded-3xl border-2 border-primary/25 bg-gradient-to-br from-primary/10 to-sky-500/5 p-5 shadow-sm dark:border-primary/30 dark:from-primary/15 dark:to-gray-900/40 md:hidden">
-        <div className="flex items-end justify-between gap-3">
-          <div className="flex items-center gap-2 text-primary">
-            <MapPin className="h-8 w-8 shrink-0" strokeWidth={2} aria-hidden />
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Quick radius
-              </p>
-              <p className="text-3xl font-extrabold tabular-nums leading-none text-foreground dark:text-gray-50">
-                {mobileRadiusKm}
-                <span className="ml-1 text-xl font-bold text-muted-foreground">km</span>
-              </p>
+      <TooltipProvider delayDuration={200}>
+        <div
+          data-sticky-filter
+          className="sticky top-0 z-40 -mx-4 mb-4 border-b border-border bg-background/95 px-4 pb-3 pt-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85 transition-transform duration-300 dark:border-gray-800 dark:bg-gray-950/95 md:hidden sticky-filter-visible"
+        >
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <MapPin className="h-6 w-6 shrink-0 text-primary" strokeWidth={2} aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-tight text-foreground dark:text-gray-100">
+                    Jobs within {mobileRadiusKm} km
+                  </p>
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">
+                    Drag to filter · Saved on this device
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Badge variant="secondary" className="tabular-nums text-sm font-bold">
+                  {mobileRadiusKm} km
+                </Badge>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="rounded-full p-2 text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label="How radius filtering works"
+                    >
+                      <HelpCircle className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    Only listings with map coordinates are filtered by distance. Others stay visible.
+                    Radius is stored in your browser (default matches your profile travel setting when
+                    available).
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
+            <Slider
+              min={5}
+              max={100}
+              step={5}
+              value={[mobileRadiusKm]}
+              onValueChange={(v) => {
+                const next = clampRadiusKm(v[0] ?? 30);
+                setMobileRadiusKm(next);
+                setStoredRadiusKm(next);
+              }}
+              className="w-full py-1 [&_[role=slider]]:h-11 [&_[role=slider]]:w-11 [&_[role=slider]]:min-h-[44px] [&_[role=slider]]:min-w-[44px]"
+              aria-label={`Search radius: ${mobileRadiusKm} kilometers`}
+            />
+            <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
+              {isCleaner ? (
+                <>
+                  Swipe card right:{" "}
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">Quick bid</span>
+                  {" · "}left:{" "}
+                  <span className="font-semibold text-yellow-700 dark:text-yellow-400">Save</span>
+                </>
+              ) : (
+                "Swipe gestures are available when browsing as a cleaner."
+              )}
+            </p>
           </div>
         </div>
-        <Slider
-          min={10}
-          max={50}
-          step={1}
-          value={[mobileRadiusKm]}
-          onValueChange={(v) => setMobileRadiusKm(v[0] ?? 10)}
-          className="w-full py-2 [&_[role=slider]]:h-12 [&_[role=slider]]:w-12 [&_[role=slider]]:min-h-[48px] [&_[role=slider]]:min-w-[48px]"
-          aria-label="Search radius in kilometers"
-        />
-        <p className="text-sm font-medium leading-snug text-muted-foreground">
-          Swipe right: <span className="font-semibold text-emerald-700 dark:text-emerald-400">quick bid</span>
-          {" · "}
-          Swipe left: <span className="font-semibold text-amber-700 dark:text-amber-400">save</span>
-        </p>
-      </div>
+      </TooltipProvider>
     ) : null;
 
   return (
-    <PullToRefresh
-      onRefresh={refresh}
-      disabled={isRefreshing}
-      releaseToRefreshLabel="Release to refresh"
-    >
-      {mobileRadiusControl}
-      {listContent}
-    </PullToRefresh>
+    <>
+      {mobileRadiusStickyBar}
+      <PullToRefresh
+        onRefresh={refresh}
+        disabled={isRefreshing}
+        releaseToRefreshLabel="Release to refresh"
+      >
+        {listContent}
+      </PullToRefresh>
+    </>
   );
 }
 

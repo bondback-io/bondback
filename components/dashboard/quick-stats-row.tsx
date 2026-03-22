@@ -13,27 +13,25 @@ export type StatItem = {
 export type QuickStatsRowProps = {
   stats: StatItem[];
   className?: string;
-  /** On mobile, show as horizontal scroll row instead of 2x2 grid */
+  /**
+   * @deprecated No longer uses horizontal scroll — stats always use a 2×2 grid on small screens.
+   * Kept for API compatibility with existing call sites.
+   */
   scrollOnMobile?: boolean;
 };
 
-export function QuickStatsRow({ stats, className, scrollOnMobile }: QuickStatsRowProps) {
+export function QuickStatsRow({ stats, className }: QuickStatsRowProps) {
   return (
     <div
       className={cn(
-        scrollOnMobile
-          ? "flex gap-3 overflow-x-auto pb-1 sm:overflow-visible sm:grid sm:grid-cols-4 sm:gap-4"
-          : "grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4",
+        "grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4",
         className
       )}
     >
       {stats.map((stat, i) => (
         <Card
           key={i}
-          className={cn(
-            "overflow-hidden border-border bg-card shadow-sm transition hover:shadow-md dark:border-gray-800 dark:bg-gray-900/50",
-            scrollOnMobile && "min-w-[140px] shrink-0 sm:min-w-0"
-          )}
+          className="overflow-hidden border-border bg-card shadow-sm transition hover:shadow-md dark:border-gray-800 dark:bg-gray-900/50"
         >
           <CardContent className="p-4">
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground dark:text-gray-500">

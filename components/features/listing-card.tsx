@@ -205,6 +205,12 @@ export function ListingCard({
       ? listerVerificationBadges
       : [];
 
+  const showCleanerMobileActions =
+    isCleaner &&
+    !isListerOwner &&
+    isLive &&
+    !hideCleanerCancelledAuctionUi;
+
   return (
     <TooltipProvider delayDuration={300}>
       <Card
@@ -212,14 +218,14 @@ export function ListingCard({
           "group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-md transition-all duration-200",
           "dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800",
           "[@media(hover:hover)]:hover:scale-[1.02] [@media(hover:hover)]:hover:shadow-xl [@media(hover:hover)]:hover:ring-2 [@media(hover:hover)]:hover:ring-primary/20 [@media(hover:hover)]:hover:border-primary/30",
-          "job-card-tap active:scale-[0.98] md:active:scale-100",
+          "job-card-tap active:scale-[0.95] md:active:scale-[0.99]",
           "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:outline-none"
         )}
         role="article"
         aria-label={title}
       >
-      {/* 1. Thumbnail — mobile fixed height 180–220px (4:3), lazy next/image; desktop aspect 4:3 */}
-      <div className="relative h-[200px] w-full overflow-hidden bg-muted dark:bg-gray-800 sm:aspect-[4/3] sm:h-auto">
+      {/* 1. Thumbnail — mobile full-width, 200px tall; desktop aspect 4:3 */}
+      <div className="relative h-[200px] w-full overflow-hidden bg-muted dark:bg-gray-800 md:aspect-[4/3] md:h-auto">
         <Link
           href={jobHref}
           className="absolute inset-0 z-0 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.98] transition-transform min-h-[48px] min-w-[48px]"
@@ -254,7 +260,7 @@ export function ListingCard({
             variant="secondary"
             aria-label={status === "live" ? "Live" : status === "ending_soon" ? "Ending soon" : "Expired"}
             className={cn(
-              "text-[10px] font-semibold uppercase tracking-wide shadow-sm",
+              "px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm md:px-2 md:py-0.5 md:text-[10px] md:font-semibold",
               status === "live" &&
                 "border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
               status === "ending_soon" &&
@@ -277,7 +283,7 @@ export function ListingCard({
                 aria-label="Job actions"
                 onClick={(e) => e.stopPropagation()}
               >
-                <MoreVertical className="h-4 w-4" aria-hidden />
+                <MoreVertical className="h-5 w-5 md:h-4 md:w-4" aria-hidden />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
@@ -366,19 +372,19 @@ export function ListingCard({
       </div>
 
       {/* 2. Main info + Price + CTA — larger padding on mobile for touch */}
-      <CardContent className="flex flex-1 flex-col gap-4 p-5 dark:bg-gray-900 dark:border-t dark:border-gray-800 md:p-4">
+      <CardContent className="flex flex-1 flex-col gap-4 p-6 dark:bg-gray-900 dark:border-t dark:border-gray-800 md:gap-3 md:p-4">
         {/* Urgency badges — compact row */}
         {(endingInUnder24h || highDemand || (noBidsYet && isLive)) && (
           <div className="flex flex-wrap items-center gap-1.5">
             {endingInUnder24h && (
-              <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px] font-semibold dark:bg-red-950 dark:text-red-200 dark:border-red-800" aria-label="Ending in under 24 hours">
+              <Badge className="border-red-200 bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200 md:text-[10px] md:font-semibold" aria-label="Ending in under 24 hours">
                 Ending in &lt;24h
               </Badge>
             )}
             {highDemand && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge className="bg-violet-100 text-violet-800 border-violet-200 text-[10px] font-semibold dark:bg-violet-950 dark:text-violet-200 dark:border-violet-800" aria-label="High demand – many cleaners interested">
+                  <Badge className="border-violet-200 bg-violet-100 px-2 py-0.5 text-xs font-bold text-violet-800 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200 md:text-[10px] md:font-semibold" aria-label="High demand – many cleaners interested">
                     High Demand
                   </Badge>
                 </TooltipTrigger>
@@ -388,7 +394,7 @@ export function ListingCard({
             {noBidsYet && isLive && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="secondary" className="text-[10px] font-medium text-muted-foreground border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700" aria-label="No bids yet">
+                  <Badge variant="secondary" className="border-gray-200 px-2 py-0.5 text-xs font-semibold text-muted-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 md:text-[10px] md:font-medium" aria-label="No bids yet">
                     No Bids Yet
                   </Badge>
                 </TooltipTrigger>
@@ -401,22 +407,22 @@ export function ListingCard({
         {/* Title + location + Photos badge */}
         <div className="space-y-1.5">
           <div className="flex items-start gap-2">
-            <h3 className="line-clamp-2 flex-1 text-xl font-bold leading-snug text-foreground dark:text-gray-100 md:text-base md:font-semibold md:leading-tight">
+            <h3 className="line-clamp-2 flex-1 text-xl font-bold leading-snug tracking-tight text-foreground dark:text-gray-100 md:text-base md:font-semibold md:leading-tight">
               {title}
             </h3>
             {hasPhotos && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="shrink-0 rounded p-0.5 text-muted-foreground dark:text-gray-400" aria-label="Photos available">
-                    <Images className="h-4 w-4" />
+                    <Images className="h-5 w-5 md:h-4 md:w-4" />
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>Photos available</TooltipContent>
               </Tooltip>
             )}
           </div>
-          <p className="flex items-center gap-1.5 text-base text-muted-foreground dark:text-gray-400 md:text-sm">
-            <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <p className="flex items-center gap-2 text-base text-muted-foreground dark:text-gray-400 md:gap-1.5 md:text-sm">
+            <MapPin className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5" aria-hidden />
             <span>
               {formatLocationWithState(listing.suburb, listing.postcode)}
               {distanceKm != null && !Number.isNaN(distanceKm) && (
@@ -535,7 +541,7 @@ export function ListingCard({
             </p>
             <p
               className={cn(
-                "text-2xl font-bold tabular-nums",
+                "text-2xl font-bold tabular-nums md:text-xl md:font-bold",
                 (isLowPrice || hasBuyNow) && isLive
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-foreground dark:text-gray-100"
@@ -591,28 +597,124 @@ export function ListingCard({
           </div>
         )}
 
-        {/* Primary CTA — min 48px touch targets on mobile */}
-        <div className="mt-auto flex flex-col gap-2 pt-1">
-          {isCleaner && isLive && hasBuyNow && !hideCleanerCancelledAuctionUi && (
-            <BuyNowButton
-              listingId={listing.id}
-              buyNowCents={listing.buy_now_cents as number}
-              disabled={!isLive}
-            />
-          )}
-          {showPlaceBid && isLive && !hideCleanerCancelledAuctionUi ? (
-            <Button asChild className="min-h-[48px] w-full rounded-lg transition-transform active:scale-[0.98] md:min-h-10" size="default">
-              <Link href={jobHref} className="flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[48px] md:min-h-0" aria-label={`Bid on ${title}`}>
-                Bid now
+        {/* Primary CTAs — mobile (<md): stacked full-width; desktop: unchanged compact pattern */}
+        <div className="mt-auto flex flex-col gap-2.5 pt-2 md:gap-2 md:pt-1">
+          <div className="flex flex-col gap-2.5 md:hidden">
+            <Button
+              asChild
+              size="lg"
+              variant="default"
+              className="min-h-12 w-full rounded-xl text-base font-semibold shadow-sm transition-transform active:scale-95"
+            >
+              <Link
+                href={jobHref}
+                className="flex min-h-12 w-full items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label={`View details for ${title}`}
+              >
+                <Eye className="h-5 w-5 shrink-0" aria-hidden />
+                View Details
               </Link>
             </Button>
-          ) : (
-            <Button asChild variant="outline" className="min-h-[48px] w-full rounded-lg transition-transform active:scale-[0.98] dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 md:min-h-10" size="default">
-              <Link href={jobHref} className="flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[48px] md:min-h-0" aria-label={`View details for ${title}`}>
-                View details
-              </Link>
-            </Button>
-          )}
+
+            {showCleanerMobileActions && hasBuyNow && (
+              <BuyNowButton
+                listingId={listing.id}
+                buyNowCents={listing.buy_now_cents as number}
+                disabled={!isLive}
+                className="min-h-12 w-full rounded-xl text-base font-semibold active:scale-95"
+              />
+            )}
+
+            {showCleanerMobileActions && showPlaceBid && (
+              <Button
+                asChild
+                size="lg"
+                className="min-h-12 w-full rounded-xl border-0 bg-blue-600 text-base font-semibold text-white shadow-sm hover:bg-blue-700 active:scale-95 dark:bg-blue-600 dark:hover:bg-blue-500"
+              >
+                <Link
+                  href={jobHref}
+                  className="flex min-h-12 w-full items-center justify-center gap-2"
+                  aria-label={`Bid on ${title}`}
+                >
+                  <Gavel className="h-5 w-5 shrink-0" aria-hidden />
+                  Bid Now
+                </Link>
+              </Button>
+            )}
+
+            {showCleanerMobileActions && (
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="min-h-12 w-full rounded-xl border-2 border-border bg-background text-base font-semibold active:scale-95 dark:border-gray-600 dark:bg-gray-900 dark:hover:bg-gray-800"
+              >
+                <Link
+                  href={`/messages?job=${listing.id}`}
+                  className="flex min-h-12 w-full items-center justify-center gap-2"
+                  aria-label="Message lister"
+                >
+                  <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
+                  Message Lister
+                </Link>
+              </Button>
+            )}
+
+            {isListerOwner && showListerActions && isLive && (
+              <div className="flex flex-col gap-2.5">
+                <Button
+                  asChild
+                  size="lg"
+                  variant="secondary"
+                  className="min-h-12 w-full rounded-xl text-base font-semibold active:scale-95"
+                >
+                  <Link href={jobHref} className="flex min-h-12 w-full items-center justify-center gap-2">
+                    <Gavel className="h-5 w-5 shrink-0" aria-hidden />
+                    View Bids
+                  </Link>
+                </Button>
+                {hasAssignedCleaner && (
+                  <Button
+                    asChild
+                    size="lg"
+                    variant="outline"
+                    className="min-h-12 w-full rounded-xl text-base font-semibold active:scale-95"
+                  >
+                    <Link
+                      href={`/messages?job=${listing.id}`}
+                      className="flex min-h-12 w-full items-center justify-center gap-2"
+                    >
+                      <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
+                      Message Cleaner
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden flex-col gap-2 md:flex">
+            {isCleaner && isLive && hasBuyNow && !hideCleanerCancelledAuctionUi && (
+              <BuyNowButton
+                listingId={listing.id}
+                buyNowCents={listing.buy_now_cents as number}
+                disabled={!isLive}
+              />
+            )}
+            {showPlaceBid && isLive && !hideCleanerCancelledAuctionUi ? (
+              <Button asChild className="min-h-10 w-full rounded-lg transition-transform active:scale-[0.98] md:min-h-10" size="default">
+                <Link href={jobHref} className="flex min-h-10 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label={`Bid on ${title}`}>
+                  Bid now
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="outline" className="min-h-10 w-full rounded-lg transition-transform active:scale-[0.98] dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 md:min-h-10" size="default">
+                <Link href={jobHref} className="flex min-h-10 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label={`View details for ${title}`}>
+                  View details
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

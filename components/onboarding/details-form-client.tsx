@@ -93,10 +93,10 @@ export function DetailsFormClient({ role }: Props) {
     <Card className="w-full max-w-md border-border dark:border-gray-800 dark:bg-gray-900">
       <CardHeader className="space-y-1">
         <CardTitle className="text-xl dark:text-gray-100">{title}</CardTitle>
-        <CardDescription className="text-sm dark:text-gray-400">{description}</CardDescription>
+        <CardDescription className="text-base dark:text-gray-400 md:text-sm">{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5 md:space-y-4">
           <div className="space-y-2">
             <Label htmlFor="full_name" className="dark:text-gray-200">Full name</Label>
             <Input
@@ -171,27 +171,28 @@ export function DetailsFormClient({ role }: Props) {
                 placeholder="e.g. 12345678901"
                 className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
               />
-              <p className="text-xs text-muted-foreground dark:text-gray-400">
+              <p className="text-base text-muted-foreground dark:text-gray-400 md:text-xs">
                 Required for cleaners. Verified against the Australian Business Register.
               </p>
             </div>
           )}
           {error && (
-            <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+            <p className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-base font-medium text-destructive dark:border-red-800 dark:bg-red-950/40 dark:text-red-200 md:px-3 md:py-2 md:text-sm md:font-normal">
               {error}
             </p>
           )}
-          <div className="flex flex-wrap gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:flex-wrap">
             <Button
               type="button"
               variant="outline"
+              size="lg"
               onClick={() => router.push("/onboarding/role-choice")}
-              className="gap-1 dark:border-gray-700 dark:hover:bg-gray-800"
+              className="h-12 min-h-[48px] w-full gap-2 dark:border-gray-700 dark:hover:bg-gray-800 sm:w-auto md:h-10 md:min-h-0"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-5 w-5 md:h-4 md:w-4" />
               Back
             </Button>
-            <Button type="submit" disabled={loading} className="dark:bg-gray-800 dark:hover:bg-gray-700">
+            <Button type="submit" disabled={loading} size="lg" className="h-12 min-h-[48px] w-full dark:bg-gray-800 dark:hover:bg-gray-700 sm:w-auto md:h-10 md:min-h-0">
               {loading ? "Continuing…" : "Continue"}
             </Button>
           </div>

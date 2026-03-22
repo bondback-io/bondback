@@ -40,7 +40,7 @@ import { SettingsPaymentReturnHandler } from "@/components/settings/settings-pay
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 const sectionClass =
-  "rounded-lg border border-border bg-card/80 p-4 transition-all dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100";
+  "rounded-lg border border-border bg-card/80 p-5 transition-all dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100 md:p-4";
 
 function SectionHeader({
   icon: Icon,
@@ -53,10 +53,10 @@ function SectionHeader({
 }) {
   return (
     <div className={cn("mb-3 flex items-center gap-2", className)}>
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground dark:bg-gray-800 dark:text-gray-300">
-        <Icon className="h-4 w-4" />
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground dark:bg-gray-800 dark:text-gray-300 md:h-8 md:w-8">
+        <Icon className="h-5 w-5 md:h-4 md:w-4" />
       </div>
-      <CardTitle className="text-base md:text-lg !mb-0 dark:text-gray-100">
+      <CardTitle className="text-lg !mb-0 dark:text-gray-100">
         {title}
       </CardTitle>
     </div>
@@ -114,17 +114,17 @@ export default async function SettingsPage({
   return (
     <section className="page-inner space-y-6">
       <SettingsPaymentReturnHandler />
-      <div>
+      <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl dark:text-gray-100">
           Settings
         </h1>
-        <p className="text-sm text-muted-foreground dark:text-gray-400">
+        <p className="text-base text-muted-foreground dark:text-gray-400 md:text-sm">
           Manage your profile, notifications, security and preferences.
         </p>
       </div>
 
       <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-        <CardContent className="p-3 sm:p-4">
+        <CardContent className="p-4 sm:p-5 md:p-4">
           {/* Desktop: Tabs */}
           <div className="hidden md:block">
             <Tabs defaultValue={initialTab} className="space-y-4">
@@ -463,9 +463,9 @@ export default async function SettingsPage({
           </div>
 
           {/* Account actions (bottom) */}
-          <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-border pt-4 dark:border-gray-700">
+          <div className="mt-6 flex flex-col gap-3 border-t border-border pt-4 dark:border-gray-700 sm:flex-row sm:flex-wrap sm:items-center">
             <LogoutButton />
-            <Button variant="destructive" size="sm" className="rounded-full" disabled title="Contact support to delete account">
+            <Button variant="destructive" size="sm" className="h-12 min-h-[48px] w-full rounded-full text-base md:h-8 md:min-h-0 md:w-auto md:text-xs" disabled title="Contact support to delete account">
               Delete account
             </Button>
           </div>

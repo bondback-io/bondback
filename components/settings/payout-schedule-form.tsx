@@ -47,10 +47,10 @@ export function PayoutScheduleForm({ initial }: PayoutScheduleFormProps) {
 
   return (
     <div className="space-y-2">
-      <Label className="text-sm font-medium text-muted-foreground dark:text-gray-300">
+      <Label className="text-base font-medium text-muted-foreground dark:text-gray-300 md:text-sm">
         My payout schedule
       </Label>
-      <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+      <p className="text-base text-muted-foreground dark:text-gray-400 md:text-[11px]">
         How often you receive payouts from completed jobs. &quot;Follow Platform Default&quot; uses the platform default (see admin settings).
       </p>
       <Select
@@ -58,7 +58,7 @@ export function PayoutScheduleForm({ initial }: PayoutScheduleFormProps) {
         onValueChange={handleChange}
         disabled={isPending}
       >
-        <SelectTrigger className="w-full max-w-[220px] dark:bg-gray-900 dark:border-gray-700">
+        <SelectTrigger className="w-full max-w-full md:max-w-[220px] dark:bg-gray-900 dark:border-gray-700">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

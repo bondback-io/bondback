@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition, useCallback, type ChangeEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { format } from "date-fns";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -314,7 +314,26 @@ export function JobDetail({
   const isSold = !!hasActiveJob;
 
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [paymentSuccessToastShown, setPaymentSuccessToastShown] = useState(false);
+
+  /** Mobile /jobs list swipe “Quick bid” → scroll to bid form; strip query after. */
+  useEffect(() => {
+    if (searchParams.get("quickBid") !== "1") return;
+    const scrollToBid = () =>
+      document.getElementById("place-bid")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    requestAnimationFrame(scrollToBid);
+    const t = window.setTimeout(scrollToBid, 350);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("quickBid");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    return () => window.clearTimeout(t);
+  }, [searchParams, pathname, router]);
+
   useEffect(() => {
     const payment = searchParams.get("payment");
     const sessionId = searchParams.get("session_id");
@@ -2435,7 +2454,10 @@ export function JobDetail({
       </Card>
 
       {showAuctionActions && (
-        <Card>
+        <Card
+          id="place-bid"
+          className="scroll-mt-20 md:scroll-mt-8"
+        >
           <CardHeader>
             <CardTitle>Place a lower bid</CardTitle>
           </CardHeader>

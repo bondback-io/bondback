@@ -439,7 +439,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                 {...cleanerForm.register("full_name")}
               />
               {cleanerForm.formState.errors.full_name && (
-                <p className="text-xs text-destructive">
+                <p className="text-base text-destructive md:text-xs">
                   {cleanerForm.formState.errors.full_name.message}
                 </p>
               )}
@@ -454,7 +454,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
               <Label htmlFor="phone">Phone (Australian)</Label>
               <Input id="phone" type="tel" {...cleanerForm.register("phone")} />
               {cleanerForm.formState.errors.phone && (
-                <p className="text-xs text-destructive">
+                <p className="text-base text-destructive md:text-xs">
                   {cleanerForm.formState.errors.phone.message}
                 </p>
               )}
@@ -492,7 +492,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                 Australian Business Number. Required for professional cleaners; helps listers trust your profile.
               </p>
               {cleanerForm.formState.errors.abn && (
-                <p className="text-xs text-destructive">
+                <p className="text-base text-destructive md:text-xs">
                   {cleanerForm.formState.errors.abn.message}
                 </p>
               )}
@@ -560,7 +560,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                     }}
                   />
                   {cleanerForm.formState.errors.suburb && (
-                    <p className="text-xs text-destructive">
+                    <p className="text-base text-destructive md:text-xs">
                       {cleanerForm.formState.errors.suburb.message}
                     </p>
                   )}
@@ -593,7 +593,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                     {...cleanerForm.register("postcode")}
                   />
                   {cleanerForm.formState.errors.postcode && (
-                    <p className="text-xs text-destructive">
+                    <p className="text-base text-destructive md:text-xs">
                       {cleanerForm.formState.errors.postcode.message}
                     </p>
                   )}
@@ -691,7 +691,8 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                 <Button
                   type="button"
                   variant="secondary"
-                  size="sm"
+                  size="lg"
+                  className="h-12 min-h-[48px] w-full md:h-8 md:min-h-0 md:w-auto"
                   disabled={savingTravelRadius}
                   onClick={async () => {
                     const km = cleanerForm.getValues("max_travel_km") ?? 30;
@@ -885,10 +886,12 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
             </div>
 
             {submitError && (
-              <p className="text-sm text-destructive">{submitError}</p>
+              <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-base font-medium text-destructive md:border-0 md:bg-transparent md:p-0 md:text-sm md:font-normal">
+                {submitError}
+              </p>
             )}
 
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} size="lg" className="h-12 min-h-[48px] w-full md:h-10 md:min-h-0 md:w-auto">
               {isSubmitting ? "Saving..." : "Save profile"}
             </Button>
           </form>
@@ -956,7 +959,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
             <Label htmlFor="full_name">Full name</Label>
             <Input id="full_name" {...listerForm.register("full_name")} />
             {listerForm.formState.errors.full_name && (
-              <p className="text-xs text-destructive">
+              <p className="text-base text-destructive md:text-xs">
                 {listerForm.formState.errors.full_name.message}
               </p>
             )}
@@ -969,7 +972,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
             <Label htmlFor="phone">Phone (Australian)</Label>
             <Input id="phone" type="tel" {...listerForm.register("phone")} />
             {listerForm.formState.errors.phone && (
-              <p className="text-xs text-destructive">
+              <p className="text-base text-destructive md:text-xs">
                 {listerForm.formState.errors.phone.message}
               </p>
             )}
@@ -1047,7 +1050,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                   }}
                 />
                 {listerForm.formState.errors.suburb && (
-                  <p className="text-xs text-destructive">
+                  <p className="text-base text-destructive md:text-xs">
                     {listerForm.formState.errors.suburb.message}
                   </p>
                 )}
@@ -1077,7 +1080,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                 <Label htmlFor="postcode">Postcode</Label>
                 <Input id="postcode" {...listerForm.register("postcode")} />
                 {listerForm.formState.errors.postcode && (
-                  <p className="text-xs text-destructive">
+                  <p className="text-base text-destructive md:text-xs">
                     {listerForm.formState.errors.postcode.message}
                   </p>
                 )}
@@ -1085,9 +1088,11 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
             </div>
           </div>
           {submitError && (
-            <p className="text-sm text-destructive">{submitError}</p>
+            <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-base font-medium text-destructive md:border-0 md:bg-transparent md:p-0 md:text-sm md:font-normal">
+              {submitError}
+            </p>
           )}
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="submit" disabled={isSubmitting} size="lg" className="h-12 min-h-[48px] w-full md:h-10 md:min-h-0 md:w-auto">
             {isSubmitting ? "Saving..." : "Save profile"}
           </Button>
         </form>

@@ -63,11 +63,15 @@ export const Header = async ({
     >
       {session ? (
         <>
-          {/* Mobile: logo | role pill | avatar (thumb-friendly) */}
+          {/* Mobile: logo + role pill (left) · theme + avatar (right) */}
           <div className="flex min-h-[3.25rem] w-full items-center justify-between gap-2 px-3 py-2 md:hidden">
-            <LogoMark />
-            <div className="min-w-0 flex-1 px-1 flex justify-center">
-              <RoleSwitcher session={session} variant="compact" />
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <LogoMark />
+              <RoleSwitcher
+                session={session}
+                variant="compact"
+                className="min-w-0 shrink"
+              />
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
               <ThemeToggle />
