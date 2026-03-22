@@ -20,7 +20,7 @@ export async function getStripeServer(): Promise<Stripe> {
   if (stripeServer) return stripeServer;
 
   const { secretKey } = await getStripeConfig();
-  stripeServer = new Stripe(secretKey, { apiVersion: "2023-10-16" });
+  stripeServer = new Stripe(secretKey, { apiVersion: "2025-02-24.acacia" });
 
   return stripeServer;
 }
@@ -34,7 +34,7 @@ export function getStripeServerForMode(mode: StripeMode): Stripe {
   if (existing) return existing;
 
   const { secretKey } = getStripeConfigForMode(mode);
-  const stripe = new Stripe(secretKey, { apiVersion: "2023-10-16" });
+  const stripe = new Stripe(secretKey, { apiVersion: "2025-02-24.acacia" });
   stripeServerByMode[mode] = stripe;
   return stripe;
 }

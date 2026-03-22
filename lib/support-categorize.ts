@@ -53,6 +53,7 @@ function normalizeCategory(raw: string): SupportCategory {
   const m = s.match(CATEGORY_REGEX);
   if (m) {
     const cap = m[1];
+    if (!cap) return "Other";
     return SUPPORT_CATEGORIES.find(
       (c) => c.toLowerCase() === cap.toLowerCase()
     ) ?? "Other";

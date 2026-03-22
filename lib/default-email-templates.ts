@@ -50,6 +50,15 @@ function buildTemplates(): Record<EmailTemplateType, DefaultTemplate> {
       subject: "Job #[JobId] complete – review & approve & release funds – " + APP_NAME,
       body: "Hi {name},\n\nThe cleaner has marked **Job #[JobId]** as complete and uploaded after-photos.\n\n**Next step:** Review the checklist and photos. If everything looks good, approve & release funds from escrow. You have 48 hours to review or open a dispute if needed.\n\n[View job & approve & release funds](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
     },
+    job_cancelled_by_lister: {
+      subject: "Listing cancelled – Job #[JobId] – " + APP_NAME,
+      body:
+        "Hi {name},\n\nThe property lister has **cancelled** the listing linked to Job #[JobId]. You have been unassigned from this job.\n\nIf you had questions about timing or scope, you can browse other bond cleans on the marketplace.\n\n[Browse jobs](" +
+        APP_URL +
+        "/jobs)\n\nThe " +
+        APP_NAME +
+        " team",
+    },
     payment_released: {
       subject: "Payment of [Amount] released – thank you – " + APP_NAME,
       body: "Hi {name},\n\nPayment of **[Amount]** for Job #[JobId] has been released to you.\n\nThank you for completing this bond clean through " + APP_NAME + ". We hope the experience was smooth.\n\n**What's next?** You can leave a review for the lister from your dashboard.\n\n[View job](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",

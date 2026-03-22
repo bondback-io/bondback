@@ -7,6 +7,8 @@ import type { Database } from "@/types/supabase";
 import { createNotification } from "@/lib/actions/notifications";
 
 type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
+type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
+type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
 export type UpdateListingDetailsResult =
   | { ok: true }
@@ -40,7 +42,9 @@ export async function updateListingDetails(
     return { ok: false, error: "Listing not found." };
   }
 
-  if (listing.lister_id !== session.user.id) {
+  const row = listing as Pick<ListingRow, "id" | "lister_id">;
+
+  if (row.lister_id !== session.user.id) {
     return { ok: false, error: "You are not allowed to edit this listing." };
   }
 
@@ -107,14 +111,16 @@ export async function updateListingInitialPhotos(
     return { ok: false, error: "Listing not found." };
   }
 
-  if (listing.lister_id !== session.user.id) {
+  const rowInitial = listing as Pick<ListingRow, "id" | "lister_id">;
+
+  if (rowInitial.lister_id !== session.user.id) {
     return { ok: false, error: "You are not allowed to edit this listing." };
   }
 
   const arr = Array.isArray(photoUrls) ? photoUrls.slice(0, PHOTO_LIMITS.LISTING_INITIAL) : [];
   const { error: updateError } = await supabase
     .from("listings")
-    .update({ initial_photos: arr.length > 0 ? arr : null } as ListingUpdate)
+    .update({ initial_photos: arr.length > 0 ? arr : null } as ListingUpdate as never)
     .eq("id", listingId);
 
   if (updateError) {
@@ -159,13 +165,15 @@ export async function updateListingCoverPhoto(
     return { ok: false, error: "Listing not found." };
   }
 
-  if (listing.lister_id !== session.user.id) {
+  const rowCover = listing as Pick<ListingRow, "id" | "lister_id">;
+
+  if (rowCover.lister_id !== session.user.id) {
     return { ok: false, error: "You are not allowed to edit this listing." };
   }
 
   const { error: updateError } = await supabase
     .from("listings")
-    .update({ cover_photo_url: coverPhotoUrl } as ListingUpdate)
+    .update({ cover_photo_url: coverPhotoUrl } as ListingUpdate as never)
     .eq("id", listingId);
 
   if (updateError) {
@@ -207,27 +215,34 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
     return { ok: false, error: "Listing not found." };
   }
 
-  if (listing.lister_id !== session.user.id) {
+  const rowCancel = listing as Pick<ListingRow, "id" | "lister_id" | "status">;
+
+  if (rowCancel.lister_id !== session.user.id) {
     return { ok: false, error: "You are not allowed to cancel this listing." };
   }
 
-  if (listing.status !== "live") {
+  if (rowCancel.status !== "live") {
     return { ok: false, error: "Only live listings can be cancelled." };
   }
 
   // Some databases enforce a CHECK constraint on status (e.g. 'live' or 'ended').
   // Use 'ended' to represent a cancelled/closed auction so we don't violate it.
   // Also cancel any active job linked to this listing so it is no longer actionable.
-  const { data: linkedJobs } = await supabase
+  const { data: linkedJobsRaw } = await supabase
     .from("jobs")
     .select("id, winner_id, status")
     .eq("listing_id", listingId)
     .in("status", ["accepted", "in_progress"]);
 
+  const linkedJobs = (linkedJobsRaw ?? []) as Pick<
+    JobRow,
+    "id" | "winner_id" | "status"
+  >[];
+
   const nowIso = new Date().toISOString();
   const { error: updateError } = await supabase
     .from("listings")
-    .update({ status: "ended" } as ListingUpdate)
+    .update({ status: "ended" } as ListingUpdate as never)
     .eq("id", listingId);
 
   if (updateError) {

@@ -40,6 +40,9 @@ export async function updateProfile(
   }
 
   const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Server configuration error (admin client unavailable)." };
+  }
   const { error } = await admin
     .from("profiles")
     .update({ ...safeUpdates, updated_at: new Date().toISOString() } as never)
@@ -83,9 +86,12 @@ export async function setActiveRole(role: ProfileRole): Promise<{ ok: boolean; e
   }
 
   const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Server configuration error (admin client unavailable)." };
+  }
   const { error } = await admin
     .from("profiles")
-    .update({ active_role: role } as ProfileUpdate)
+    .update({ active_role: role } as ProfileUpdate as never)
     .eq("id", userId);
 
   if (error) {
@@ -125,7 +131,7 @@ export async function updateMaxTravelKm(
   if (!admin) return { ok: false, error: "Server error." };
   const { error } = await admin
     .from("profiles")
-    .update({ max_travel_km: clamped, updated_at: new Date().toISOString() } as ProfileUpdate)
+    .update({ max_travel_km: clamped, updated_at: new Date().toISOString() } as ProfileUpdate as never)
     .eq("id", userId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/profile");

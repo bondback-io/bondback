@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import {
   createSupabaseAdminClient,
@@ -67,7 +68,7 @@ export async function createNotification(
 
   // Use admin client so we can insert for any user_id (RLS only allows auth.uid() = user_id for anon)
   const admin = createSupabaseAdminClient();
-  const client = admin ?? supabase;
+  const client = (admin ?? supabase) as SupabaseClient<Database>;
   const { error } = await client.from("notifications").insert(row as never);
 
   if (error) {
@@ -244,7 +245,7 @@ export async function markNotificationRead(
 
   const { error } = await supabase
     .from("notifications")
-    .update({ is_read: true } as Database["public"]["Tables"]["notifications"]["Update"])
+    .update({ is_read: true } as Database["public"]["Tables"]["notifications"]["Update"] as never)
     .eq("id", id)
     .eq("user_id", session.user.id);
 
@@ -271,7 +272,7 @@ export async function markAllNotificationsRead(): Promise<{
 
   const { error } = await supabase
     .from("notifications")
-    .update({ is_read: true } as Database["public"]["Tables"]["notifications"]["Update"])
+    .update({ is_read: true } as Database["public"]["Tables"]["notifications"]["Update"] as never)
     .eq("user_id", session.user.id)
     .eq("is_read", false);
 

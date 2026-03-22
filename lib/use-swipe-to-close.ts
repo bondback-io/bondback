@@ -18,16 +18,20 @@ export function useSwipeToClose(
   const start = useRef({ x: 0, y: 0 });
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (!t) return;
     start.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
+      x: t.clientX,
+      y: t.clientY,
     };
   }, []);
 
   const onTouchEnd = useCallback(
     (e: React.TouchEvent) => {
-      const endX = e.changedTouches[0].clientX;
-      const endY = e.changedTouches[0].clientY;
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+      const endX = touch.clientX;
+      const endY = touch.clientY;
       const dx = endX - start.current.x;
       const dy = endY - start.current.y;
 

@@ -165,7 +165,7 @@ export async function submitSupportTicket(
       job_id: jobId,
       listing_id: listingId,
       attachment_urls: attachmentUrls,
-    })
+    } as never)
     .select("id")
     .single();
 
@@ -174,7 +174,7 @@ export async function submitSupportTicket(
     return { ok: false, error: error.message };
   }
 
-  const tid = data?.id ?? "";
+  const tid = (data as { id?: string } | null)?.id ?? "";
   const displayId = ticketDisplayId(tid);
 
   if (suggestedCategory != null || confidence != null || aiReason) {

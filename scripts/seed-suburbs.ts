@@ -58,7 +58,7 @@ async function main() {
 
   const text = await res.text();
   const lines = text.split(/\r?\n/);
-  const header = lines[0];
+  const header = lines[0] ?? "";
 
   console.log("CSV header:", header);
 
@@ -113,7 +113,7 @@ async function main() {
 
   // Process lines after header
   for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const line = (lines[i] ?? "").trim();
     if (!line) continue;
 
     // Simple CSV splitting: this dataset does not contain embedded commas
@@ -125,11 +125,11 @@ async function main() {
       continue;
     }
 
-    const postcode = cols[idxPostcode].replace(/^"|"$/g, "").trim();
-    const locality = cols[idxLocality].replace(/^"|"$/g, "").trim();
-    const state = cols[idxState].replace(/^"|"$/g, "").trim();
-    const latStr = cols[idxLat].replace(/^"|"$/g, "").trim();
-    const lonStr = cols[idxLon].replace(/^"|"$/g, "").trim();
+    const postcode = (cols[idxPostcode] ?? "").replace(/^"|"$/g, "").trim();
+    const locality = (cols[idxLocality] ?? "").replace(/^"|"$/g, "").trim();
+    const state = (cols[idxState] ?? "").replace(/^"|"$/g, "").trim();
+    const latStr = (cols[idxLat] ?? "").replace(/^"|"$/g, "").trim();
+    const lonStr = (cols[idxLon] ?? "").replace(/^"|"$/g, "").trim();
 
     if (!postcode || !locality) {
       skipped++;

@@ -1,9 +1,14 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 /**
  * Look up lat/lon for a postcode from the suburbs table (first row for that postcode).
  * Returns null if not found or table has no lat/lon.
+ *
+ * Uses `SupabaseClient<any>` so callers with typed `Database` (where `suburbs` may be absent)
+ * don't trigger excessive type instantiation.
  */
 export async function getSuburbLatLon(
-  admin: { from: (table: string) => { select: (cols: string) => { eq: (col: string, val: string) => { limit: (n: number) => Promise<{ data: unknown[] | null }> } } } },
+  admin: SupabaseClient<any>,
   postcode: string,
   _suburb?: string | null
 ): Promise<{ lat: number; lon: number } | null> {
@@ -11,7 +16,7 @@ export async function getSuburbLatLon(
   const pcDigits = pc.replace(/\D/g, "");
   const search = pcDigits.length >= 4 ? pcDigits.slice(0, 4) : pc;
   if (!search) return null;
-  const { data: rows } = await (admin as any)
+  const { data: rows } = await admin
     .from("suburbs")
     .select("lat, lon")
     .eq("postcode", search)

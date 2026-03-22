@@ -49,6 +49,12 @@ export async function saveOnboardingProfile(profile: {
   };
 
   const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      error: "Server configuration error (admin client unavailable).",
+    };
+  }
   const { error } = await admin
     .from("profiles")
     .upsert(row as never, { onConflict: "id" });
@@ -104,6 +110,12 @@ export async function saveOnboardingCleanerProfile(profile: {
   };
 
   const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      error: "Server configuration error (admin client unavailable).",
+    };
+  }
   const { error } = await admin
     .from("profiles")
     .upsert(row as never, { onConflict: "id" });

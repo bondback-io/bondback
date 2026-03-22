@@ -82,7 +82,7 @@ export function buildLiveListingsQuery(
       query = query.order("reserve_cents", { ascending: true, nullsFirst: true });
       break;
     case "price-desc":
-      query = query.order("reserve_cents", { ascending: false, nullsLast: true });
+      query = query.order("reserve_cents", { ascending: false, nullsFirst: false });
       break;
     case "ending-soon":
       query = query.order("end_time", { ascending: true });

@@ -425,10 +425,13 @@ export interface Database {
             | "new_message"
             | "job_completed"
             | "payment_released"
+            | "funds_ready"
             | "dispute_opened"
             | "dispute_resolved"
             | "job_created"
+            | "job_approved_to_start"
             | "new_bid"
+            | "job_cancelled_by_lister"
             | "referral_reward";
           job_id: number | null;
           message_text: string;
@@ -443,10 +446,13 @@ export interface Database {
             | "new_message"
             | "job_completed"
             | "payment_released"
+            | "funds_ready"
             | "dispute_opened"
             | "dispute_resolved"
             | "job_created"
+            | "job_approved_to_start"
             | "new_bid"
+            | "job_cancelled_by_lister"
             | "referral_reward";
           job_id?: number | null;
           message_text: string;
@@ -461,10 +467,13 @@ export interface Database {
             | "new_message"
             | "job_completed"
             | "payment_released"
+            | "funds_ready"
             | "dispute_opened"
             | "dispute_resolved"
             | "job_created"
+            | "job_approved_to_start"
             | "new_bid"
+            | "job_cancelled_by_lister"
             | "referral_reward";
           job_id?: number | null;
           message_text?: string;

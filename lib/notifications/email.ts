@@ -280,6 +280,8 @@ export async function buildPaymentReceiptEmail(params: {
   const element = React.createElement(PaymentReceipt, {
     ...params,
     jobId: String(params.jobId),
+    jobTitle: params.jobTitle ?? undefined,
+    platformAbn: params.platformAbn ?? undefined,
   });
   const html = await render(element);
   const subject =

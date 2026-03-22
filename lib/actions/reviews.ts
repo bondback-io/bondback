@@ -6,6 +6,7 @@ import type { Database } from "@/types/supabase";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 
 type ReviewsRow = Database["public"]["Tables"]["reviews"]["Row"];
+type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
 export type SubmitReviewInput = {
   jobId: number;
@@ -47,14 +48,23 @@ export async function submitReview(
     return { ok: false, error: "Job not found." };
   }
 
-  if (job.status !== "completed") {
+  const row = job as Pick<
+    JobRow,
+    | "id"
+    | "lister_id"
+    | "winner_id"
+    | "status"
+    | "payment_released_at"
+  >;
+
+  if (row.status !== "completed") {
     return {
       ok: false,
       error: "You can only leave a review after the job is completed.",
     };
   }
 
-  if (!(job as { payment_released_at?: string | null }).payment_released_at) {
+  if (!row.payment_released_at) {
     return {
       ok: false,
       error: "Reviews are available only after escrow funds are released.",
@@ -62,8 +72,8 @@ export async function submitReview(
   }
 
   const userId = session.user.id;
-  const isLister = userId === job.lister_id;
-  const isCleaner = userId === job.winner_id;
+  const isLister = userId === row.lister_id;
+  const isCleaner = userId === row.winner_id;
 
   if (!isLister && !isCleaner) {
     return {
@@ -75,9 +85,9 @@ export async function submitReview(
   // Determine reviewer / reviewee
   let revieweeId: string | null = null;
   if (input.revieweeType === "cleaner") {
-    revieweeId = job.winner_id;
+    revieweeId = row.winner_id;
   } else {
-    revieweeId = job.lister_id;
+    revieweeId = row.lister_id;
   }
 
   if (!revieweeId) {
@@ -96,7 +106,7 @@ export async function submitReview(
   const { data: existing } = await supabase
     .from("reviews")
     .select("id")
-    .eq("job_id", job.id as never)
+    .eq("job_id", row.id as never)
     .eq("reviewer_id", userId as never)
     .eq("reviewee_type", input.revieweeType as never)
     .limit(1);
@@ -124,7 +134,7 @@ export async function submitReview(
   const { data: inserted, error: insertError } = await supabase
     .from("reviews")
     .insert({
-      job_id: job.id as number,
+      job_id: row.id as number,
       reviewer_id: userId,
       reviewee_id: revieweeId,
       reviewee_role: input.revieweeType,
@@ -147,18 +157,23 @@ export async function submitReview(
     };
   }
 
+  const insertedRow = inserted as Pick<
+    ReviewsRow,
+    "id" | "reviewee_id" | "reviewee_type"
+  >;
+
   // Best-effort: recompute averages for the reviewee
   try {
     await recomputeProfileAverages(
-      inserted.reviewee_id as string,
-      inserted.reviewee_type as "cleaner" | "lister"
+      insertedRow.reviewee_id as string,
+      insertedRow.reviewee_type as "cleaner" | "lister"
     );
-    await recomputeVerificationBadgesForUser(inserted.reviewee_id as string);
+    await recomputeVerificationBadgesForUser(insertedRow.reviewee_id as string);
   } catch {
     // ignore rating recompute errors
   }
 
-  return { ok: true, reviewId: inserted.id as number };
+  return { ok: true, reviewId: insertedRow.id as number };
 }
 
 export type AttachReviewPhotosResult =
@@ -189,11 +204,16 @@ export async function attachReviewPhotos(
     return { ok: false, error: "Review not found." };
   }
 
-  if (review.reviewer_id !== session.user.id) {
+  const reviewRow = review as Pick<
+    ReviewsRow,
+    "id" | "reviewer_id" | "review_photos" | "reviewee_id" | "reviewee_type"
+  >;
+
+  if (reviewRow.reviewer_id !== session.user.id) {
     return { ok: false, error: "You can only modify your own reviews." };
   }
 
-  const existing = (review.review_photos ?? []) as string[];
+  const existing = (reviewRow.review_photos ?? []) as string[];
   const maxReviewPhotos = PHOTO_LIMITS.REVIEW;
   if (photoPaths.length > maxReviewPhotos - existing.length) {
     return {
@@ -215,10 +235,10 @@ export async function attachReviewPhotos(
   // Best-effort: recompute averages
   try {
     await recomputeProfileAverages(
-      review.reviewee_id as string,
-      review.reviewee_type as "cleaner" | "lister"
+      reviewRow.reviewee_id as string,
+      reviewRow.reviewee_type as "cleaner" | "lister"
     );
-    await recomputeVerificationBadgesForUser(review.reviewee_id as string);
+    await recomputeVerificationBadgesForUser(reviewRow.reviewee_id as string);
   } catch {
     // ignore errors
   }

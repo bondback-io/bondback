@@ -1,5 +1,6 @@
 "use server";
 
+import type Stripe from "stripe";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getEffectivePayoutSchedule, type PayoutScheduleInterval } from "@/lib/payout-schedule";
@@ -69,7 +70,13 @@ export async function createConnectAccount(
     }
 
     // Use session-scoped client to read profile. Try full columns first; fallback to minimal if roles/active_role missing.
-    let profile: { id: string; stripe_connect_id?: string | null; roles?: string[] | string | null; active_role?: string | null } | null = null;
+    type ConnectProfileRow = {
+      id: string;
+      stripe_connect_id?: string | null;
+      roles?: string[] | string | null;
+      active_role?: string | null;
+    };
+    let profile: ConnectProfileRow | null = null;
     let profileError: { code?: string; message?: string } | null = null;
 
     const fullRes = await supabase
@@ -92,13 +99,13 @@ export async function createConnectAccount(
           error: `Could not load your profile. ${fullRes.error.message ?? fullRes.error.code ?? "Unknown error"}. Check that you are logged in and the profiles table exists.`,
         };
       }
-      profile = minimalRes.data as typeof profile;
+      profile = minimalRes.data as ConnectProfileRow | null;
       if (profile) {
         profile.roles = ["cleaner"];
         profile.active_role = "cleaner";
       }
     } else {
-      profile = fullRes.data as typeof profile;
+      profile = fullRes.data as ConnectProfileRow | null;
     }
 
     if (!profile) {
@@ -416,7 +423,7 @@ export async function createInstantPayout(
 
 /** Resolve effective payout interval for a user from profile + global_settings. */
 async function getEffectivePayoutScheduleForUser(
-  admin: ReturnType<typeof createSupabaseAdminClient>,
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
   userId: string
 ): Promise<PayoutScheduleInterval> {
   try {

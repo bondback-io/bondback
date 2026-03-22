@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
@@ -391,23 +392,32 @@ export async function createJobCheckoutSession(
     return { ok: false, error: "Job not found." };
   }
 
-  if (job.lister_id !== session.user.id) {
+  const row = job as {
+    id: number | string;
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    listing_id: string;
+    agreed_amount_cents?: number | null;
+    payment_intent_id?: string | null;
+  };
+
+  if (row.lister_id !== session.user.id) {
     return { ok: false, error: "Only the lister can pay and start this job." };
   }
 
-  if (job.status !== "accepted") {
+  if (row.status !== "accepted") {
     return { ok: false, error: "Job must be in 'accepted' status to pay and start." };
   }
 
-  const j = job as { payment_intent_id?: string | null; agreed_amount_cents?: number | null };
-  if (j.payment_intent_id?.trim()) {
+  if (row.payment_intent_id?.trim()) {
     return { ok: false, error: "Payment is already held in escrow for this job." };
   }
 
   const { data: listing } = await supabase
     .from("listings")
     .select("id, title, suburb, postcode, buy_now_cents, reserve_cents")
-    .eq("id", job.listing_id)
+    .eq("id", row.listing_id)
     .maybeSingle();
 
   if (!listing) {
@@ -415,7 +425,7 @@ export async function createJobCheckoutSession(
   }
 
   // Use job's agreed amount, or fall back to listing price so Pay & Start Job still works
-  let agreedCents = j.agreed_amount_cents ?? 0;
+  let agreedCents = row.agreed_amount_cents ?? 0;
   if (agreedCents < 1) {
     const listingRow = listing as { buy_now_cents?: number | null; reserve_cents?: number | null };
     agreedCents = listingRow.buy_now_cents ?? listingRow.reserve_cents ?? 0;
@@ -438,7 +448,7 @@ export async function createJobCheckoutSession(
   const { data: listerProfile } = await supabase
     .from("profiles")
     .select("stripe_payment_method_id, stripe_customer_id")
-    .eq("id", job.lister_id)
+    .eq("id", row.lister_id)
     .maybeSingle();
 
   const pmId = (listerProfile as { stripe_payment_method_id?: string | null } | null)?.stripe_payment_method_id?.trim();
@@ -557,7 +567,7 @@ export async function fulfillJobPaymentFromSession(
   const pi =
     typeof cs.payment_intent === "string"
       ? await stripe.paymentIntents.retrieve(cs.payment_intent)
-      : (cs.payment_intent as import("stripe").PaymentIntent | null);
+      : (cs.payment_intent as Stripe.PaymentIntent | null);
 
   if (!pi?.id) {
     return { ok: false, error: "No PaymentIntent on session." };
@@ -569,10 +579,22 @@ export async function fulfillJobPaymentFromSession(
     .eq("id", numericJobId)
     .maybeSingle();
 
-  if (!job || job.lister_id !== session.user.id) {
+  if (!job) {
     return { ok: false, error: "Job not found or you are not the lister." };
   }
-  if (job.status !== "accepted") {
+
+  const checkoutJob = job as {
+    id: number | string;
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    listing_id: string;
+  };
+
+  if (checkoutJob.lister_id !== session.user.id) {
+    return { ok: false, error: "Job not found or you are not the lister." };
+  }
+  if (checkoutJob.status !== "accepted") {
     return { ok: true };
   }
 
@@ -591,9 +613,9 @@ export async function fulfillJobPaymentFromSession(
     return { ok: false, error: updateError.message };
   }
 
-  if ((job as { winner_id?: string | null }).winner_id) {
+  if (checkoutJob.winner_id) {
     await createNotification(
-      (job as { winner_id: string }).winner_id,
+      checkoutJob.winner_id,
       "job_approved_to_start",
       numericJobId,
       "Lister approved – you can start the job."
@@ -611,10 +633,11 @@ export async function fulfillJobPaymentFromSession(
     const { data: listingForChecklist } = await supabase
       .from("listings")
       .select("addons")
-      .eq("id", job.listing_id as never)
+      .eq("id", checkoutJob.listing_id as never)
       .maybeSingle();
 
-    const addons = (listingForChecklist?.addons ?? []) as string[];
+    const addons = ((listingForChecklist as { addons?: string[] | null } | null)?.addons ??
+      []) as string[];
     const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
     const isSpecialArea = (key: string) =>
       (specialAreaKeys as readonly string[]).includes(key);
@@ -661,14 +684,23 @@ export async function ensureJobChecklistIfEmpty(
     .eq("id", numericJobId as never)
     .maybeSingle();
 
-  if (!job || job.status !== "in_progress") return;
+  if (!job) return;
+
+  const checklistJob = job as {
+    status: string;
+    listing_id: string;
+    lister_id: string;
+    winner_id: string | null;
+  };
+
+  if (checklistJob.status !== "in_progress") return;
 
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) return;
   const userId = session.user.id;
-  if (userId !== job.lister_id && userId !== job.winner_id) return;
+  if (userId !== checklistJob.lister_id && userId !== checklistJob.winner_id) return;
 
   const { data: existing } = await supabase
     .from("job_checklist_items")
@@ -680,9 +712,10 @@ export async function ensureJobChecklistIfEmpty(
   const { data: listingForChecklist } = await supabase
     .from("listings")
     .select("addons")
-    .eq("id", job.listing_id as never)
+    .eq("id", checklistJob.listing_id as never)
     .maybeSingle();
-  const addons = (listingForChecklist?.addons ?? []) as string[];
+  const addons = ((listingForChecklist as { addons?: string[] | null } | null)?.addons ??
+    []) as string[];
   const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
   const isSpecialArea = (key: string) =>
     (specialAreaKeys as readonly string[]).includes(key);
@@ -736,19 +769,27 @@ export async function approveJobStart(
     return { ok: false, error: "Job not found." };
   }
 
-  if (job.lister_id !== session.user.id) {
+  const approveRow = job as {
+    id: number | string;
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    listing_id: string;
+    payment_intent_id?: string | null;
+  };
+
+  if (approveRow.lister_id !== session.user.id) {
     return { ok: false, error: "Only the lister can approve the job start." };
   }
 
-  if (job.status !== "accepted") {
+  if (approveRow.status !== "accepted") {
     return {
       ok: false,
       error: "Job must be in 'accepted' status to approve start.",
     };
   }
 
-  const j = job as { payment_intent_id?: string | null };
-  if (!j.payment_intent_id?.trim()) {
+  if (!approveRow.payment_intent_id?.trim()) {
     return {
       ok: false,
       error: "Pay and start the job first (Pay & Start Job) so funds are in escrow.",
@@ -758,14 +799,14 @@ export async function approveJobStart(
   const { error: updateError } = await supabase
     .from("jobs")
     .update({ status: "in_progress", updated_at: new Date().toISOString() } as Partial<JobRow> as never)
-    .eq("id", job.id as never);
+    .eq("id", approveRow.id as never);
 
   if (updateError) {
     return { ok: false, error: updateError.message };
   }
 
   const numericJobId =
-    typeof job.id === "number" ? job.id : Number(job.id);
+    typeof approveRow.id === "number" ? approveRow.id : Number(approveRow.id);
 
   const { data: existingItems } = await supabase
     .from("job_checklist_items")
@@ -777,10 +818,11 @@ export async function approveJobStart(
     const { data: listingForChecklist } = await supabase
       .from("listings")
       .select("addons")
-      .eq("id", job.listing_id as never)
+      .eq("id", approveRow.listing_id as never)
       .maybeSingle();
 
-    const addons = (listingForChecklist?.addons ?? []) as string[];
+    const addons = ((listingForChecklist as { addons?: string[] | null } | null)?.addons ??
+      []) as string[];
 
     const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
     const isSpecialArea = (key: string) =>
@@ -827,17 +869,17 @@ export async function approveJobStart(
     }
   }
 
-  if (job.winner_id) {
+  if (approveRow.winner_id) {
     await createNotification(
-      job.winner_id,
+      approveRow.winner_id,
       "job_accepted",
-      typeof job.id === "number" ? job.id : Number(job.id),
+      typeof approveRow.id === "number" ? approveRow.id : Number(approveRow.id),
       "Job has started. You can begin work."
     );
   }
 
   revalidatePath("/dashboard");
-  revalidatePath(`/jobs/${job.id}`);
+  revalidatePath(`/jobs/${approveRow.id}`);
 
   return { ok: true };
 }
@@ -873,16 +915,22 @@ export async function cancelJobByLister(
     return { ok: false, error: "Job not found." };
   }
 
-  if (job.lister_id !== session.user.id) {
+  const cancelRow = job as {
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    payment_intent_id?: string | null;
+  };
+
+  if (cancelRow.lister_id !== session.user.id) {
     return { ok: false, error: "Only the lister can cancel this job." };
   }
 
-  if (job.status !== "accepted") {
+  if (cancelRow.status !== "accepted") {
     return { ok: false, error: "Job can only be cancelled while it is pending your payment (accepted, before Pay & Start Job)." };
   }
 
-  const j = job as { payment_intent_id?: string | null };
-  if (j.payment_intent_id?.trim()) {
+  if (cancelRow.payment_intent_id?.trim()) {
     return { ok: false, error: "Payment is already held in escrow. To cancel after payment, please open a dispute or contact support." };
   }
 
@@ -896,9 +944,9 @@ export async function cancelJobByLister(
     return { ok: false, error: updateError.message };
   }
 
-  if (job.winner_id) {
+  if (cancelRow.winner_id) {
     await createNotification(
-      job.winner_id,
+      cancelRow.winner_id,
       "job_cancelled_by_lister",
       numericJobId,
       "This job listing has been cancelled by the property lister. You have been unassigned from the job."
@@ -953,16 +1001,28 @@ export async function markJobChecklistFinished(
     };
   }
 
-  if (job.winner_id !== session.user.id) {
+  const row = job as Pick<
+    JobRow,
+    | "id"
+    | "lister_id"
+    | "winner_id"
+    | "status"
+    | "cleaner_confirmed_complete"
+    | "cleaner_confirmed_at"
+    | "auto_release_at"
+    | "auto_release_at_original"
+  >;
+
+  if (row.winner_id !== session.user.id) {
     return { ok: false, error: "Only the cleaner can mark tasks finished." };
   }
 
   const isAlreadyCompletedPending =
-    job.status === "completed_pending_approval" &&
-    job.cleaner_confirmed_complete &&
-    job.cleaner_confirmed_at;
+    row.status === "completed_pending_approval" &&
+    row.cleaner_confirmed_complete &&
+    row.cleaner_confirmed_at;
 
-  if (job.status !== "in_progress" && !isAlreadyCompletedPending) {
+  if (row.status !== "in_progress" && !isAlreadyCompletedPending) {
     return {
       ok: false,
       error: "Job must be in progress to finish the checklist.",
@@ -975,7 +1035,7 @@ export async function markJobChecklistFinished(
 
   // If the cleaner already confirmed completion earlier, keep the same baseline
   // using `cleaner_confirmed_at` rather than "now".
-  const baselineIso = job.cleaner_confirmed_at ?? nowIso;
+  const baselineIso = row.cleaner_confirmed_at ?? nowIso;
   const baselineMs = new Date(baselineIso).getTime();
   const autoReleaseAtIso = new Date(
     baselineMs + autoReleaseHours * 60 * 60 * 1000
@@ -983,8 +1043,8 @@ export async function markJobChecklistFinished(
 
   if (
     isAlreadyCompletedPending &&
-    job.auto_release_at &&
-    job.auto_release_at_original
+    row.auto_release_at &&
+    row.auto_release_at_original
   ) {
     return { ok: true };
   }
@@ -994,30 +1054,30 @@ export async function markJobChecklistFinished(
     .update(
       {
         cleaner_confirmed_complete: true,
-        cleaner_confirmed_at: job.cleaner_confirmed_at ?? nowIso,
+        cleaner_confirmed_at: row.cleaner_confirmed_at ?? nowIso,
         status: "completed_pending_approval",
         auto_release_at: autoReleaseAtIso,
         auto_release_at_original: autoReleaseAtIso,
         completed_at: nowIso,
       } as Partial<JobRow> as never
     )
-    .eq("id", job.id as never);
+    .eq("id", row.id as never);
 
   if (updateError) {
     return { ok: false, error: updateError.message };
   }
 
-  if (job.lister_id) {
+  if (row.lister_id) {
     await createNotification(
-      job.lister_id,
+      row.lister_id,
       "job_completed",
-      typeof job.id === "number" ? job.id : Number(job.id),
+      typeof row.id === "number" ? row.id : Number(row.id),
       "Job complete – review photos and approve within 48 hours or funds auto-release."
     );
   }
 
   revalidatePath("/dashboard");
-  revalidatePath(`/jobs/${job.id}`);
+  revalidatePath(`/jobs/${row.id}`);
 
   return { ok: true };
 }
@@ -1034,8 +1094,8 @@ export async function releaseJobFunds(
   jobId: string | number,
   options?: { supabase?: SupabaseClient<Database> }
 ): Promise<ReleaseJobFundsResult> {
-  const supabase =
-    options?.supabase ?? (await createServerSupabaseClient());
+  const supabase = (options?.supabase ??
+    (await createServerSupabaseClient())) as SupabaseClient<Database>;
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
   const { data: job, error: jobError } = await supabase
@@ -1307,13 +1367,24 @@ export async function finalizeJobPayment(
     return { ok: false, error: "Job not found." };
   }
 
-  if (job.lister_id !== session.user.id) {
+  const row = job as Pick<
+    JobRow,
+    | "id"
+    | "lister_id"
+    | "winner_id"
+    | "status"
+    | "cleaner_confirmed_complete"
+    | "listing_id"
+    | "agreed_amount_cents"
+  >;
+
+  if (row.lister_id !== session.user.id) {
     return { ok: false, error: "Only the lister can finalize payment." };
   }
 
   if (
-    job.status !== "in_progress" &&
-    job.status !== "completed_pending_approval"
+    row.status !== "in_progress" &&
+    row.status !== "completed_pending_approval"
   ) {
     return {
       ok: false,
@@ -1322,7 +1393,7 @@ export async function finalizeJobPayment(
   }
 
   const numericJobId =
-    typeof job.id === "number" ? job.id : Number(job.id);
+    typeof row.id === "number" ? row.id : Number(row.id);
 
   // New flow: ready for release when checklist is complete and 3+ after-photos are uploaded
   // (no separate "mark complete" action; cleaner completing checklist + photos is enough)
@@ -1375,32 +1446,31 @@ export async function finalizeJobPayment(
       ? { transferId: releaseResult.transferId, paymentIntentId: releaseResult.paymentIntentId }
       : undefined;
 
-  const jobRow = job as { cleaner_confirmed_complete?: boolean; cleaner_confirmed_at?: string | null };
   const updatePayload: Partial<JobRow> & { status: string } = { status: "completed" };
-  if (!jobRow.cleaner_confirmed_complete) {
+  if (!row.cleaner_confirmed_complete) {
     (updatePayload as Record<string, unknown>).cleaner_confirmed_complete = true;
     (updatePayload as Record<string, unknown>).cleaner_confirmed_at = new Date().toISOString();
   }
   const { error: updateError } = await supabase
     .from("jobs")
     .update(updatePayload as Partial<JobRow> as never)
-    .eq("id", job.id as never);
+    .eq("id", row.id as never);
 
   if (updateError) {
     return { ok: false, error: updateError.message };
   }
 
-  if (job.listing_id) {
+  if (row.listing_id) {
     await supabase
       .from("listings")
       .update({ status: "ended" } as never)
-      .eq("id", job.listing_id as never);
+      .eq("id", row.listing_id as never);
   }
 
-  if (job.winner_id) {
-    const agreedCentsForSms = (job as { agreed_amount_cents?: number | null }).agreed_amount_cents ?? 0;
+  if (row.winner_id) {
+    const agreedCentsForSms = row.agreed_amount_cents ?? 0;
     await createNotification(
-      job.winner_id,
+      row.winner_id,
       "payment_released",
       numericJobId,
       "Payment has been released. Funds are on the way to your connected bank account.",
@@ -1408,26 +1478,26 @@ export async function finalizeJobPayment(
     );
   }
 
-  const agreedCents = (job as { agreed_amount_cents?: number | null }).agreed_amount_cents ?? 0;
-  if (agreedCents >= 1 && job.lister_id) {
+  const agreedCents = row.agreed_amount_cents ?? 0;
+  if (agreedCents >= 1 && row.lister_id) {
     const settings = await getGlobalSettings();
     const feePct =
       (settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12) / 100;
     const feeCents = Math.round(agreedCents * feePct);
     const totalCents = agreedCents + feeCents;
     let jobTitle: string | null = null;
-    if (job.listing_id) {
+    if (row.listing_id) {
       const { data: listing } = await supabase
         .from("listings")
         .select("title")
-        .eq("id", job.listing_id)
+        .eq("id", row.listing_id)
         .maybeSingle();
       jobTitle = (listing as { title?: string } | null)?.title ?? null;
     }
     await sendPaymentReceiptEmails({
       jobId: numericJobId,
-      listerId: job.lister_id,
-      cleanerId: job.winner_id,
+      listerId: row.lister_id,
+      cleanerId: row.winner_id,
       amountCents: totalCents,
       feeCents,
       netCents: agreedCents,
@@ -1436,12 +1506,12 @@ export async function finalizeJobPayment(
     });
   }
 
-  if (job.winner_id) await recomputeVerificationBadgesForUser(job.winner_id);
-  if (job.lister_id) await recomputeVerificationBadgesForUser(job.lister_id);
+  if (row.winner_id) await recomputeVerificationBadgesForUser(row.winner_id);
+  if (row.lister_id) await recomputeVerificationBadgesForUser(row.lister_id);
 
   revalidatePath("/dashboard");
   revalidatePath("/jobs");
-  revalidatePath(`/jobs/${job.id}`);
+  revalidatePath(`/jobs/${row.id}`);
 
   return { ok: true, ...debugPayload };
 }
@@ -2311,23 +2381,32 @@ export async function notifyFundsReady(
     return { ok: false, error: "Job not found." };
   }
 
-  if (!job.lister_id) {
+  const row = job as Pick<
+    JobRow,
+    | "id"
+    | "lister_id"
+    | "winner_id"
+    | "status"
+    | "cleaner_confirmed_complete"
+    | "cleaner_confirmed_at"
+  >;
+
+  if (!row.lister_id) {
     return { ok: false, error: "Job has no lister." };
   }
 
-  const jobRow = job as { winner_id?: string | null; status?: string; cleaner_confirmed_complete?: boolean; cleaner_confirmed_at?: string | null };
-  if (jobRow.winner_id !== session.user.id) {
+  if (row.winner_id !== session.user.id) {
     return { ok: false, error: "Only the cleaner can notify that funds are ready." };
   }
-  if (jobRow.status !== "in_progress") {
+  if (row.status !== "in_progress") {
     return { ok: false, error: "Job is not in progress." };
   }
 
   const numericJobId =
-    typeof job.id === "number" ? job.id : Number(job.id);
+    typeof row.id === "number" ? row.id : Number(row.id);
 
   // New flow: auto "mark complete" when checklist + 3 after-photos are done
-  if (!jobRow.cleaner_confirmed_complete || !jobRow.cleaner_confirmed_at) {
+  if (!row.cleaner_confirmed_complete || !row.cleaner_confirmed_at) {
     const { data: items, error: checklistError } = await supabase
       .from("job_checklist_items")
       .select("is_completed")
@@ -2359,29 +2438,29 @@ export async function notifyFundsReady(
       .update(
         { cleaner_confirmed_complete: true, cleaner_confirmed_at: nowIso } as Partial<JobRow> as never
       )
-      .eq("id", job.id as never);
+      .eq("id", row.id as never);
     if (updateError) {
       return { ok: false, error: updateError.message };
     }
-    if (job.lister_id) {
+    if (row.lister_id) {
       await createNotification(
-        job.lister_id,
+        row.lister_id,
         "job_completed",
         numericJobId,
-        "Cleaner marked Job #" + String(job.id) + " complete – review photos and approve & release funds."
+        "Cleaner marked Job #" + String(row.id) + " complete – review photos and approve & release funds."
       );
     }
   }
 
   await createNotification(
-    job.lister_id,
+    row.lister_id,
     "funds_ready",
     numericJobId,
     "Your cleaner has finished the checklist and uploaded after-photos. Review everything and release funds when you’re ready."
   );
 
   revalidatePath("/dashboard");
-  revalidatePath(`/jobs/${job.id}`);
+  revalidatePath(`/jobs/${row.id}`);
 
   return { ok: true };
 }
