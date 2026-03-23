@@ -5,7 +5,7 @@ import type { JobsListFilters } from "@/lib/jobs-query";
 /**
  * GET /api/jobs
  * Returns jobs list (live listings + bid counts) for offline cache and client use.
- * Query: same filters as jobs page (suburb, postcode, sort, min_price, max_price, bedrooms, bathrooms, property_type).
+ * Query: same filters as jobs page (suburb, postcode, sort, prices, bid range, buy_now_only, bedrooms, etc.).
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -15,6 +15,9 @@ export async function GET(request: Request) {
     sort: searchParams.get("sort") ?? undefined,
     min_price: searchParams.get("min_price") ?? undefined,
     max_price: searchParams.get("max_price") ?? undefined,
+    min_bid_price: searchParams.get("min_bid_price") ?? undefined,
+    max_bid_price: searchParams.get("max_bid_price") ?? undefined,
+    buy_now_only: searchParams.get("buy_now_only") ?? undefined,
     bedrooms: searchParams.get("bedrooms") ?? undefined,
     bathrooms: searchParams.get("bathrooms") ?? undefined,
     property_type: searchParams.get("property_type") ?? undefined,

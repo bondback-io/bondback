@@ -14,10 +14,16 @@ import type { ListingRow } from "@/lib/listings";
 
 type JobRow = { id: number; listing_id: string; status: string; updated_at?: string | null };
 
+export type CancelledDashboardRow =
+  | { kind: "job"; id: string; cancelledAt: string; job: JobRow }
+  | { kind: "listing"; id: string; cancelledAt: string; listing: ListingRow };
+
 export type ListerDashboardContentProps = {
   liveListings: ListingRow[];
   activeJobs: JobRow[];
-  cancelledJobs: JobRow[];
+  /** Merged cancelled jobs + listings ended early (no job row); sorted by date. */
+  cancelledRows: CancelledDashboardRow[];
+  totalCancelledItems: number;
   listingMap: Map<string, ListingRow>;
   stats: { label: string; value: string | number }[];
   activityItems: { id: string; type: string; message_text: string | null; job_id: number | null; created_at: string }[];
@@ -45,7 +51,8 @@ const LISTER_ACTIONS = [
 export function ListerDashboardContent({
   liveListings,
   activeJobs,
-  cancelledJobs,
+  cancelledRows,
+  totalCancelledItems,
   listingMap,
   stats,
   activityItems,
@@ -158,38 +165,67 @@ export function ListerDashboardContent({
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-foreground dark:text-gray-200 [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2">
             <XCircle className="h-4 w-4 text-destructive" />
-            Cancelled jobs
-            {cancelledJobs.length > 0 && (
+            Cancelled listings / jobs
+            {totalCancelledItems > 0 && (
               <Badge variant="destructive" className="text-xs">
-                {cancelledJobs.length}
+                {totalCancelledItems}
               </Badge>
             )}
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
         </summary>
         <div className="border-t border-border px-4 py-3 dark:border-gray-800">
-          {cancelledJobs.length === 0 ? (
+          {totalCancelledItems === 0 ? (
             <p className="text-xs text-muted-foreground dark:text-gray-500">
-              No cancelled jobs. Cancelled jobs appear here for history.
+              No cancelled listings or jobs yet. Items you cancel appear here for history.
             </p>
           ) : (
             <ul className="space-y-2">
-              {cancelledJobs.map((job) => {
-                const listing = listingMap.get(String(job.listing_id));
-                const jobRow = job as { updated_at?: string | null };
-                const cancelledAt = jobRow.updated_at ? format(new Date(jobRow.updated_at), "d MMM yyyy") : null;
+              {cancelledRows.map((row) => {
+                if (row.kind === "job") {
+                  const { job } = row;
+                  const listing = listingMap.get(String(job.listing_id));
+                  const jobRow = job as { updated_at?: string | null };
+                  const cancelledAt = jobRow.updated_at
+                    ? format(new Date(jobRow.updated_at), "d MMM yyyy")
+                    : null;
+                  return (
+                    <li key={row.id}>
+                      <Link
+                        href={`/jobs/${job.id}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground dark:text-gray-100">
+                            {listing?.title ?? `Job #${job.id}`}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                            Job cancelled by you
+                            {cancelledAt && ` · ${cancelledAt}`} · Un-assigned
+                          </p>
+                        </div>
+                        <span className="text-xs font-medium text-primary">View →</span>
+                      </Link>
+                    </li>
+                  );
+                }
+                const { listing } = row;
+                const cancelledAt = row.cancelledAt
+                  ? format(new Date(row.cancelledAt), "d MMM yyyy")
+                  : null;
                 return (
-                  <li key={job.id}>
+                  <li key={row.id}>
                     <Link
-                      href={`/jobs/${job.id}`}
+                      href={`/jobs/${listing.id}`}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground dark:text-gray-100">
-                          {listing?.title ?? `Job #${job.id}`}
+                          {listing.title}
                         </p>
                         <p className="text-[11px] text-muted-foreground dark:text-gray-400">
-                          Cancelled by you{cancelledAt && ` · ${cancelledAt}`} · Un-assigned
+                          Listing ended early (auction cancelled)
+                          {cancelledAt && ` · ${cancelledAt}`}
                         </p>
                       </div>
                       <span className="text-xs font-medium text-primary">View →</span>

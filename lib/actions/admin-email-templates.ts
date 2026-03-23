@@ -22,7 +22,7 @@ import { logAdminActivity } from "@/lib/admin-activity-log";
 
 const TEST_SEND_LIMIT_PER_HOUR = 10;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
-const UNSUBSCRIBE_PATH = "/settings";
+const UNSUBSCRIBE_PATH = "/profile";
 
 function getUnsubscribeFooterHtml(): string {
   const url = `${APP_URL}${UNSUBSCRIBE_PATH}`;

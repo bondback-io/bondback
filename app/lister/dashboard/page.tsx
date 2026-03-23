@@ -10,12 +10,9 @@ import {
   DashboardListingCard,
   CollapsibleActivityFeed,
   DashboardEmptyState,
-  DashboardPullToRefresh,
 } from "@/components/dashboard";
-import {
-  ResponsiveListerListingCards,
-  ListerActiveJobsList,
-} from "@/components/mobile-fab";
+import { ListerActiveJobsList } from "@/components/mobile-fab";
+import { ResponsiveListerListingCards } from "@/components/lister/responsive-lister-listing-cards";
 import { cn } from "@/lib/utils";
 import { formatCents, isListingLive, listingIdsWithCancelledJobs } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
@@ -25,7 +22,6 @@ import { getProfileCompletion } from "@/lib/profile-completion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -122,7 +118,45 @@ export default async function ListerDashboardPage() {
       j.status === "completed_pending_approval"
   );
   const cancelledJobs = jobs.filter((j) => j.status === "cancelled");
+  const cancelledJobListingIdSet = new Set(
+    cancelledJobs.map((j) => String(j.listing_id))
+  );
+  /** Listings ended early by lister (bidding stage) — no job row; see cancelled_early_at column. */
+  const cancelledEarlyListings = listings.filter((l) => {
+    const row = l as ListingRow & { cancelled_early_at?: string | null };
+    if (!row.cancelled_early_at) return false;
+    if (cancelledJobListingIdSet.has(String(l.id))) return false;
+    return true;
+  });
+  const totalCancelledItems = cancelledJobs.length + cancelledEarlyListings.length;
   const listingMap = new Map(listings.map((l) => [l.id, l]));
+
+  type CancelledDashboardRow =
+    | { kind: "job"; id: string; cancelledAt: string; job: JobRow }
+    | { kind: "listing"; id: string; cancelledAt: string; listing: ListingRow };
+  const cancelledRows: CancelledDashboardRow[] = [
+    ...cancelledJobs.map((job) => {
+      const jobRow = job as { updated_at?: string | null };
+      return {
+        kind: "job" as const,
+        id: `job-${job.id}`,
+        cancelledAt: jobRow.updated_at ?? "",
+        job,
+      };
+    }),
+    ...cancelledEarlyListings.map((listing) => {
+      const row = listing as ListingRow & { cancelled_early_at?: string | null };
+      return {
+        kind: "listing" as const,
+        id: `listing-${listing.id}`,
+        cancelledAt: row.cancelled_early_at ?? "",
+        listing,
+      };
+    }),
+  ].sort(
+    (a, b) =>
+      new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime()
+  );
 
   const completedListingIds = new Set(
     completedJobs.map((j) => String(j.listing_id))
@@ -183,24 +217,25 @@ export default async function ListerDashboardPage() {
   const showProfileProgressNudge = completion.percent < 100;
 
   return (
-    <DashboardPullToRefresh>
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
-      {/* Sticky title row — role switcher lives in global header on mobile */}
-      <header className="sticky top-0 z-30 -mx-4 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <h1 className="truncate text-lg font-semibold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
-            Lister Dashboard
-          </h1>
-          <Badge
-            className={cn(
-              "shrink-0 text-xs font-medium",
-              "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200"
-            )}
-          >
-            Lister
-          </Badge>
-        </div>
-      </header>
+      {/* Mobile: title — sticky; desktop: title only (no job search / radius — listers use Browse Cleaners / listings) */}
+      <div className="sticky top-0 z-30 -mx-4 space-y-2 border-b border-border bg-background/95 px-4 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 md:static md:mx-0 md:space-y-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+        <header className="flex items-center justify-between gap-3 py-1 sm:static sm:mx-0 sm:px-0 sm:py-0">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <h1 className="truncate text-lg font-semibold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
+              Lister Dashboard
+            </h1>
+            <Badge
+              className={cn(
+                "shrink-0 text-xs font-medium",
+                "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200"
+              )}
+            >
+              Lister
+            </Badge>
+          </div>
+        </header>
+      </div>
 
       {showWelcomeBanner && (
         <Card className="border-sky-200/80 bg-gradient-to-br from-sky-50 to-background shadow-sm dark:border-sky-800/60 dark:from-sky-950/40 dark:to-gray-950">
@@ -288,49 +323,39 @@ export default async function ListerDashboardPage() {
         )}
       </div>
 
-      {/* Two-column: Active jobs list + Recent activity */}
-      <div className="grid gap-8 lg:grid-cols-3 lg:gap-6">
-        <div className="rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 lg:col-span-1 md:rounded-xl md:border">
-          <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
-            <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
-              Active Jobs
-            </h2>
-            {activeJobs.length > 0 && (
-              <Link
-                href="/my-listings?tab=active_listings"
-                className="min-h-10 px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline md:min-h-0 md:text-xs md:font-medium"
-              >
-                View all
-              </Link>
-            )}
-          </div>
-          <div className="p-4 md:p-3">
-            {activeJobs.length === 0 ? (
-              <p className="py-8 text-center text-base text-muted-foreground dark:text-gray-400 md:py-6 md:text-sm">
-                No active jobs.
-              </p>
-            ) : (
-              <ListerActiveJobsList
-                items={activeJobs.slice(0, 5).map((job) => {
-                  const listing = listingMap.get(job.listing_id);
-                  return {
-                    jobId: Number(job.id),
-                    title: listing?.title ?? `Job #${job.id}`,
-                    suburb: listing?.suburb ?? null,
-                    postcode: listing?.postcode != null ? String(listing.postcode) : null,
-                  };
-                })}
-              />
-            )}
-          </div>
+      {/* Active jobs */}
+      <div className="rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:rounded-xl md:border">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
+          <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
+            Active Jobs
+          </h2>
+          {activeJobs.length > 0 && (
+            <Link
+              href="/my-listings?tab=active_listings"
+              className="min-h-10 px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline md:min-h-0 md:text-xs md:font-medium"
+            >
+              View all
+            </Link>
+          )}
         </div>
-
-        <div className="lg:col-span-2">
-          <CollapsibleActivityFeed
-            items={activityItems}
-            viewAllHref="/notifications"
-            emptyMessage="Bids, job updates and payments will appear here."
-          />
+        <div className="p-4 md:p-3">
+          {activeJobs.length === 0 ? (
+            <p className="py-8 text-center text-base text-muted-foreground dark:text-gray-400 md:py-6 md:text-sm">
+              No active jobs.
+            </p>
+          ) : (
+            <ListerActiveJobsList
+              items={activeJobs.slice(0, 5).map((job) => {
+                const listing = listingMap.get(job.listing_id);
+                return {
+                  jobId: Number(job.id),
+                  title: listing?.title ?? `Job #${job.id}`,
+                  suburb: listing?.suburb ?? null,
+                  postcode: listing?.postcode != null ? String(listing.postcode) : null,
+                };
+              })}
+            />
+          )}
         </div>
       </div>
 
@@ -380,46 +405,81 @@ export default async function ListerDashboardPage() {
         </div>
       </div>
 
-      {/* Cancelled jobs — collapsible */}
+      {/* Recent activity — below completed jobs */}
+      <CollapsibleActivityFeed
+        items={activityItems}
+        viewAllHref="/notifications"
+        emptyMessage="Bids, job updates and payments will appear here."
+      />
+
+      {/* Cancelled listings / jobs — jobs with status cancelled + listings ended early (no job row) */}
       <details className="group rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:rounded-xl md:border">
         <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-2 px-5 py-4 text-base font-semibold text-foreground dark:text-gray-200 md:min-h-0 md:px-4 md:py-3 md:text-sm md:font-medium [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2">
             <XCircle className="h-4 w-4 text-destructive" />
-            Cancelled jobs
-            {cancelledJobs.length > 0 && (
+            Cancelled listings / jobs
+            {totalCancelledItems > 0 && (
               <Badge variant="destructive" className="text-xs">
-                {cancelledJobs.length}
+                {totalCancelledItems}
               </Badge>
             )}
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
         </summary>
         <div className="border-t border-border px-4 py-3 dark:border-gray-800">
-          {cancelledJobs.length === 0 ? (
+          {totalCancelledItems === 0 ? (
             <p className="text-xs text-muted-foreground dark:text-gray-500">
-              No cancelled jobs. Cancelled jobs appear here for history.
+              No cancelled listings or jobs yet. Items you cancel appear here for history.
             </p>
           ) : (
             <ul className="space-y-2">
-              {cancelledJobs.map((job) => {
-                const listing = listingMap.get(job.listing_id);
-                const jobRow = job as { updated_at?: string | null };
-                const cancelledAt = jobRow.updated_at
-                  ? format(new Date(jobRow.updated_at), "d MMM yyyy")
+              {cancelledRows.map((row) => {
+                if (row.kind === "job") {
+                  const { job } = row;
+                  const listing = listingMap.get(job.listing_id);
+                  const jobRow = job as { updated_at?: string | null };
+                  const cancelledAt = jobRow.updated_at
+                    ? format(new Date(jobRow.updated_at), "d MMM yyyy")
+                    : null;
+                  return (
+                    <li key={row.id}>
+                      <Link
+                        href={`/jobs/${job.id}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground dark:text-gray-100">
+                            {listing?.title ?? `Job #${job.id}`}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                            Job cancelled by you
+                            {cancelledAt && ` · ${cancelledAt}`} · Un-assigned
+                          </p>
+                        </div>
+                        <span className="text-xs font-medium text-primary">
+                          View →
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                }
+                const { listing } = row;
+                const cancelledAt = row.cancelledAt
+                  ? format(new Date(row.cancelledAt), "d MMM yyyy")
                   : null;
                 return (
-                  <li key={job.id}>
+                  <li key={row.id}>
                     <Link
-                      href={`/jobs/${job.id}`}
+                      href={`/jobs/${listing.id}`}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground dark:text-gray-100">
-                          {listing?.title ?? `Job #${job.id}`}
+                          {listing.title}
                         </p>
                         <p className="text-[11px] text-muted-foreground dark:text-gray-400">
-                          Cancelled by you
-                          {cancelledAt && ` · ${cancelledAt}`} · Un-assigned
+                          Listing ended early (auction cancelled)
+                          {cancelledAt && ` · ${cancelledAt}`}
                         </p>
                       </div>
                       <span className="text-xs font-medium text-primary">
@@ -435,6 +495,5 @@ export default async function ListerDashboardPage() {
       </details>
 
     </section>
-    </DashboardPullToRefresh>
   );
 }

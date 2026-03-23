@@ -28,7 +28,6 @@ import { useToast } from "@/components/ui/use-toast";
 import {
   ChevronDown,
   User,
-  Settings,
   Briefcase,
   DollarSign,
   HelpCircle,
@@ -64,6 +63,15 @@ function useIsMobile() {
 const MOBILE_ROW_CLASS =
   "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
+/** Cleaner "My Jobs" — opens dashboard scrolled to Active jobs (matches `#active-jobs` on page). */
+const CLEANER_JOBS_DASHBOARD_HREF = "/cleaner/dashboard#active-jobs";
+
+function jobsActivityHref(isLister: boolean, hasCleanerRole: boolean) {
+  if (isLister) return "/my-listings";
+  if (hasCleanerRole) return CLEANER_JOBS_DASHBOARD_HREF;
+  return "/dashboard";
+}
+
 export function UserMenu({ session }: UserMenuProps) {
   const router = useRouter();
   const isMobile = useIsMobile();
@@ -87,10 +95,10 @@ export function UserMenu({ session }: UserMenuProps) {
           .toUpperCase()
       : "BB";
 
+  const hasCleanerRole =
+    Array.isArray(session.roles) && session.roles.includes("cleaner");
   const isCleaner =
-    Array.isArray(session.roles) &&
-    session.roles.includes("cleaner") &&
-    session.activeRole === "cleaner";
+    hasCleanerRole && session.activeRole === "cleaner";
   const isLister =
     Array.isArray(session.roles) &&
     session.roles.includes("lister") &&
@@ -140,7 +148,7 @@ export function UserMenu({ session }: UserMenuProps) {
           initials
         )}
       </span>
-      <span className="hidden items-center gap-2 font-medium text-foreground sm:inline dark:text-gray-100">
+      <span className="hidden items-center gap-2 font-medium text-foreground lg:inline dark:text-gray-100">
         <span className="max-w-[100px] truncate text-sm">{displayName}</span>
         {isCleaner && (
           <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
@@ -269,13 +277,13 @@ export function UserMenu({ session }: UserMenuProps) {
                   <Link
                     href="/profile"
                     className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                    aria-label="My Profile"
+                    aria-label="My Account"
                   >
                     <User className="h-5 w-5 shrink-0" aria-hidden />
-                    <span>My Profile</span>
+                    <span>My Account</span>
                   </Link>
                 </SheetClose>
-                {isCleaner && (
+                {hasCleanerRole && !isLister && (
                   <SheetClose asChild>
                     <Link
                       href="/earnings"
@@ -301,7 +309,7 @@ export function UserMenu({ session }: UserMenuProps) {
                 )}
                 <SheetClose asChild>
                   <Link
-                    href={isLister ? "/my-listings" : "/dashboard"}
+                    href={jobsActivityHref(isLister, hasCleanerRole)}
                     className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
                     aria-label={isLister ? "My Listings" : "My Jobs"}
                   >
@@ -321,16 +329,6 @@ export function UserMenu({ session }: UserMenuProps) {
                   >
                     <MessageSquare className="h-5 w-5 shrink-0" aria-hidden />
                     <span>Messages</span>
-                  </Link>
-                </SheetClose>
-                <SheetClose asChild>
-                  <Link
-                    href="/settings"
-                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                    aria-label="Account and Settings"
-                  >
-                    <Settings className="h-5 w-5 shrink-0" aria-hidden />
-                    <span>Settings</span>
                   </Link>
                 </SheetClose>
                 <SheetClose asChild>
@@ -419,13 +417,7 @@ export function UserMenu({ session }: UserMenuProps) {
           <DropdownMenuItem asChild>
             <Link href="/profile" className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800">
               <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span>My Profile</span>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href="/settings" className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800">
-              <Settings className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span>Settings</span>
+              <span>My Account</span>
             </Link>
           </DropdownMenuItem>
 
@@ -444,7 +436,7 @@ export function UserMenu({ session }: UserMenuProps) {
           )}
           <DropdownMenuItem asChild>
             <Link
-              href={isLister ? "/my-listings" : "/dashboard"}
+              href={jobsActivityHref(isLister, hasCleanerRole)}
               className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
             >
               {isLister ? (
@@ -461,7 +453,7 @@ export function UserMenu({ session }: UserMenuProps) {
               <span>Messages</span>
             </Link>
           </DropdownMenuItem>
-          {isCleaner && (
+          {hasCleanerRole && !isLister && (
             <DropdownMenuItem asChild>
               <Link href="/earnings" className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800">
                 <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" />

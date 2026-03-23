@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAbnAutoSaveOnValid } from "@/hooks/use-abn-auto-save-on-valid";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -58,6 +60,16 @@ import {
   checkImageHeader,
 } from "@/lib/photo-validation";
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
+import {
+  clampRadiusKm,
+  setStoredRadiusKm,
+  JOBS_RADIUS_SYNC_SESSION_KEY,
+} from "@/lib/jobs-radius-local";
+import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
+import {
+  AbnValidationInputRow,
+  AbnLiveValidationMessages,
+} from "@/components/features/abn-validation-ui";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -142,6 +154,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
   const isCleaner = roles.includes("cleaner") && activeRole === "cleaner";
 
   const { toast } = useToast();
+  const router = useRouter();
 
   const listerForm = useForm<ListerValues>({
     resolver: zodResolver(listerSchema),
@@ -173,6 +186,16 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       insurance_policy_number: profile.insurance_policy_number ?? "",
       equipment_notes: profile.equipment_notes ?? "",
     },
+  });
+
+  const abnWatch = cleanerForm.watch("abn");
+  const abnLiveValidation = useAbnLiveValidation(abnWatch ?? "");
+
+  useAbnAutoSaveOnValid({
+    enabled: isCleaner,
+    abnRaw: abnWatch ?? "",
+    validation: abnLiveValidation,
+    storedAbn: profile.abn,
   });
 
   const handleProfilePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -375,7 +398,21 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       availability: availability,
     });
     setIsSubmitting(false);
-    if (!result.ok) setSubmitError(result.error);
+    if (!result.ok) {
+      setSubmitError(result.error);
+      return;
+    }
+    const prevKm = clampRadiusKm(
+      Math.min(100, Math.max(5, profile.max_travel_km ?? 30))
+    );
+    const nextKm = clampRadiusKm(values.max_travel_km);
+    if (prevKm !== nextKm) {
+      setStoredRadiusKm(nextKm);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(JOBS_RADIUS_SYNC_SESSION_KEY, "1");
+      }
+    }
+    router.refresh();
   };
 
   if (isCleaner) {
@@ -474,23 +511,35 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
 
             <div className="space-y-2">
               <Label htmlFor="abn">ABN (11 digits)</Label>
-              <Input
-                id="abn"
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                placeholder="e.g. 12345678901"
-                maxLength={11}
-                {...cleanerForm.register("abn", {
-                  onChange: (e) => {
-                    const digits = e.target.value.replace(/\D/g, "").slice(0, 11);
-                    cleanerForm.setValue("abn", digits, { shouldValidate: true });
-                  },
-                })}
+              <Controller
+                name="abn"
+                control={cleanerForm.control}
+                render={({ field }) => (
+                  <AbnValidationInputRow
+                    id="abn"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="e.g. 12345678901"
+                    maxLength={11}
+                    validation={abnLiveValidation}
+                    value={field.value ?? ""}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, 11);
+                      field.onChange(digits);
+                    }}
+                    onBlur={field.onBlur}
+                    ref={field.ref}
+                  />
+                )}
               />
               <p className="text-[11px] text-muted-foreground dark:text-gray-400">
                 Australian Business Number. Required for professional cleaners; helps listers trust your profile.
               </p>
+              <AbnLiveValidationMessages
+                validation={abnLiveValidation}
+                detailsId="abn-validated-abn-details"
+              />
               {cleanerForm.formState.errors.abn && (
                 <p className="text-base text-destructive md:text-xs">
                   {cleanerForm.formState.errors.abn.message}
@@ -700,6 +749,12 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                     try {
                       const result = await updateMaxTravelKm(profile.id, km);
                       if (result.ok) {
+                        const nextKm = clampRadiusKm(km);
+                        setStoredRadiusKm(nextKm);
+                        if (typeof window !== "undefined") {
+                          sessionStorage.setItem(JOBS_RADIUS_SYNC_SESSION_KEY, "1");
+                        }
+                        router.refresh();
                         toast({
                           title: "Travel radius updated",
                           description: `Travel radius updated to ${km} km`,
@@ -787,7 +842,10 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
               </div>
             </div>
 
-            <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50/40 p-4 dark:border-sky-800 dark:bg-sky-950/30">
+            <div
+              id="portfolio-photos"
+              className="scroll-mt-28 space-y-3 rounded-lg border border-sky-200 bg-sky-50/40 p-4 dark:border-sky-800 dark:bg-sky-950/30"
+            >
               <div className="flex items-baseline justify-between gap-2">
                 <div>
                   <Label className="text-xs font-semibold text-sky-900 dark:text-sky-200">

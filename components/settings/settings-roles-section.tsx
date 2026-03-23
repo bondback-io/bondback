@@ -22,7 +22,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { unlockRole } from "@/lib/actions/onboarding";
 import { setActiveRole } from "@/lib/actions/profile";
+import { notifyActiveRoleChanged } from "@/lib/active-role-events";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
+import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
+import {
+  AbnValidationInputRow,
+  AbnLiveValidationMessages,
+} from "@/components/features/abn-validation-ui";
 import { useToast } from "@/components/ui/use-toast";
 import { Brush, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -47,6 +53,7 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
   const [abn, setAbn] = useState("");
   const [loadingUnlock, setLoadingUnlock] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const abnLiveValidation = useAbnLiveValidation(openCleaner ? abn : "");
 
   const hasLister = roles.includes("lister");
   const hasCleaner = roles.includes("cleaner");
@@ -67,6 +74,7 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
         title: role === "lister" ? "Lister mode" : "Cleaner mode",
         description: "Active role updated.",
       });
+      notifyActiveRoleChanged();
       const dest = role === "lister" ? "/lister/dashboard" : "/cleaner/dashboard";
       router.replace(dest);
       router.refresh();
@@ -122,11 +130,11 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
   return (
     <Card
       id="my-roles"
-      className="scroll-mt-24 border-border/80 bg-card shadow-sm dark:border-border dark:bg-card"
+      className="scroll-mt-24 border-border/80 bg-card shadow-sm dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
     >
       <CardHeader className="space-y-1.5 pb-3 sm:pb-4">
-        <CardTitle className="text-lg sm:text-base">Switch role</CardTitle>
-        <CardDescription className="text-base leading-relaxed sm:text-sm">
+        <CardTitle className="text-lg sm:text-base dark:text-gray-100">Switch role</CardTitle>
+        <CardDescription className="text-base leading-relaxed text-muted-foreground sm:text-sm dark:text-gray-400">
           One login — pick which mode you&apos;re using. Add the other role anytime below.
         </CardDescription>
       </CardHeader>
@@ -134,9 +142,9 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
         {/* Dual role: segmented control */}
         {dualRole && (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Active mode</p>
+            <p className="text-sm font-medium text-foreground dark:text-gray-200">Active mode</p>
             <div
-              className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-muted/50 p-1.5 dark:border-border dark:bg-muted/30"
+              className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-muted/50 p-1.5 dark:border-gray-800 dark:bg-gray-900/80"
               role="group"
               aria-label="Switch between Lister and Cleaner"
             >
@@ -146,9 +154,10 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
                 onClick={() => activeRole !== "lister" && switchTo("lister")}
                 className={cn(
                   "flex min-h-[52px] flex-col items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-sm font-semibold transition-all sm:min-h-14",
+                  "disabled:opacity-100",
                   activeRole === "lister"
-                    ? "bg-background text-foreground shadow-md ring-1 ring-sky-500/40 dark:bg-gray-950 dark:text-foreground dark:ring-sky-500/50"
-                    : "text-muted-foreground hover:bg-background/70 hover:text-foreground active:scale-[0.99] dark:hover:bg-gray-900/70"
+                    ? "bg-background text-foreground shadow-md ring-1 ring-sky-500/40 dark:bg-gray-950 dark:text-gray-50 dark:ring-sky-500/50"
+                    : "text-muted-foreground hover:bg-background/70 hover:text-foreground active:scale-[0.99] dark:text-gray-200 dark:hover:bg-gray-800/80 dark:hover:text-gray-50"
                 )}
               >
                 <Home
@@ -156,11 +165,13 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
                     "h-6 w-6",
                     activeRole === "lister"
                       ? "text-sky-600 dark:text-sky-400"
-                      : "opacity-70"
+                      : "opacity-80 dark:opacity-90 dark:text-gray-300"
                   )}
                   aria-hidden
                 />
-                <span>Lister</span>
+                <span className={activeRole === "lister" ? "text-foreground dark:text-gray-50" : "dark:text-gray-200"}>
+                  Lister
+                </span>
               </button>
               <button
                 type="button"
@@ -168,9 +179,10 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
                 onClick={() => activeRole !== "cleaner" && switchTo("cleaner")}
                 className={cn(
                   "flex min-h-[52px] flex-col items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-sm font-semibold transition-all sm:min-h-14",
+                  "disabled:opacity-100",
                   activeRole === "cleaner"
-                    ? "bg-background text-foreground shadow-md ring-1 ring-emerald-500/40 dark:bg-gray-950 dark:text-foreground dark:ring-emerald-500/50"
-                    : "text-muted-foreground hover:bg-background/70 hover:text-foreground active:scale-[0.99] dark:hover:bg-gray-900/70"
+                    ? "bg-background text-foreground shadow-md ring-1 ring-emerald-500/40 dark:bg-gray-950 dark:text-gray-50 dark:ring-emerald-500/50"
+                    : "text-muted-foreground hover:bg-background/70 hover:text-foreground active:scale-[0.99] dark:text-gray-200 dark:hover:bg-gray-800/80 dark:hover:text-gray-50"
                 )}
               >
                 <Brush
@@ -178,14 +190,16 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
                     "h-6 w-6",
                     activeRole === "cleaner"
                       ? "text-emerald-600 dark:text-emerald-400"
-                      : "opacity-70"
+                      : "opacity-80 dark:opacity-90 dark:text-gray-300"
                   )}
                   aria-hidden
                 />
-                <span>Cleaner</span>
+                <span className={activeRole === "cleaner" ? "text-foreground dark:text-gray-50" : "dark:text-gray-200"}>
+                  Cleaner
+                </span>
               </button>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground dark:text-gray-500">
               Tip: You can also switch from the header on any page.
             </p>
           </div>
@@ -200,8 +214,8 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
                   <Home className="h-5 w-5 text-sky-700 dark:text-sky-300" aria-hidden />
                 </span>
                 <div>
-                  <p className="font-semibold text-foreground">Add Lister role</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
+                  <p className="font-semibold text-foreground dark:text-gray-100">Add Lister role</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground dark:text-gray-400">
                     Post bond cleans and hire cleaners.
                   </p>
                 </div>
@@ -228,8 +242,8 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
                   <Brush className="h-5 w-5 text-emerald-700 dark:text-emerald-300" aria-hidden />
                 </span>
                 <div>
-                  <p className="font-semibold text-foreground">Add Cleaner role</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
+                  <p className="font-semibold text-foreground dark:text-gray-100">Add Cleaner role</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground dark:text-gray-400">
                     Bid on jobs (ABN required).
                   </p>
                 </div>
@@ -253,40 +267,49 @@ export function SettingsRolesSection({ roles, activeRole }: Props) {
         )}
 
         {error && !openCleaner && (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="text-sm text-destructive dark:text-red-400" role="alert">
             {error}
           </p>
         )}
 
         <Dialog open={openCleaner} onOpenChange={(o) => !o && setOpenCleaner(false)}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100">
             <DialogHeader>
-              <DialogTitle>Add Cleaner role</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="dark:text-gray-50">Add Cleaner role</DialogTitle>
+              <DialogDescription className="dark:text-gray-400">
                 You&apos;ll gain access to {CLEANER_FEATURES}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
-              <Label htmlFor="settings-unlock-abn">ABN (11 digits)</Label>
-              <Input
+              <Label htmlFor="settings-unlock-abn" className="text-foreground dark:text-gray-200">
+                ABN (11 digits)
+              </Label>
+              <AbnValidationInputRow
                 id="settings-unlock-abn"
                 inputMode="numeric"
                 maxLength={11}
                 placeholder="e.g. 12345678901"
                 value={abn}
                 onChange={(e) => setAbn(e.target.value.replace(/\D/g, "").slice(0, 11))}
-                className="min-h-12 text-base"
+                className="min-h-12 text-base dark:border-gray-700 dark:bg-gray-900"
+                validation={abnLiveValidation}
+              />
+              <AbnLiveValidationMessages
+                validation={abnLiveValidation}
+                detailsId="settings-unlock-abn-validated-abn-details"
               />
             </div>
             {error && openCleaner && (
-              <p className="text-sm text-destructive">{error}</p>
+              <p className="text-sm text-destructive dark:text-red-400" role="alert">
+                {error}
+              </p>
             )}
             <DialogFooter className="flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
                 variant="outline"
                 size="lg"
-                className="min-h-12 w-full sm:w-auto"
+                className="min-h-12 w-full border-gray-600 bg-transparent sm:w-auto dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800"
                 onClick={() => setOpenCleaner(false)}
               >
                 Cancel

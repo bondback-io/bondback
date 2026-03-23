@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
 import type { ProfileRole } from "@/lib/types";
+import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 
@@ -370,7 +371,8 @@ export async function unlockRole(
     return { ok: false, error: "Profile not found." };
   }
 
-  const currentRoles = (profile.roles as string[] | null) ?? [];
+  /** Must match session / `normalizeProfileRolesFromDb` — `null` roles = legacy lister, not []. */
+  const currentRoles = normalizeProfileRolesFromDb(profile.roles, true);
   if (currentRoles.includes(newRole)) {
     return { ok: false, error: "You already have this role." };
   }

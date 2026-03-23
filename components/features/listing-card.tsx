@@ -45,6 +45,8 @@ import {
 } from "lucide-react";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { JobCardMarketplaceMobile, formatAuctionTimeLeftShort } from "@/components/JobCard";
+import { useDistanceUnit } from "@/hooks/use-distance-unit";
+import { formatDistanceKmLabel } from "@/lib/distance-format";
 
 export type ListingCardProps = {
   listing: ListingRow;
@@ -71,9 +73,14 @@ export type ListingCardProps = {
   jobStatus?: string | null;
   /** When true (lister view), show "Message Cleaner" in menu */
   hasAssignedCleaner?: boolean;
+  /** Tighter mobile marketplace row (e.g. /jobs list on small screens). */
+  compactMobileMarketplace?: boolean;
 };
 
 function getStatus(listing: ListingRow): "live" | "ending_soon" | "expired" {
+  if (String(listing.status ?? "").toLowerCase() === "expired") {
+    return "expired";
+  }
   const end = parseUtcTimestamp(listing.end_time);
   const now = Date.now();
   if (now >= end) return "expired";
@@ -180,7 +187,7 @@ function ListingCardOverflowMenu({
                   className="flex cursor-pointer items-center gap-2 text-destructive focus:text-destructive"
                 >
                   <XCircle className="h-4 w-4 shrink-0" />
-                  Cancel Job
+                  Cancel listing
                 </Link>
               </DropdownMenuItem>
             )}
@@ -196,7 +203,7 @@ function ListingCardOverflowMenu({
           </>
         )}
         <DropdownMenuItem asChild>
-          <Link href="/settings#support" className="flex cursor-pointer items-center gap-2">
+          <Link href="/profile#support" className="flex cursor-pointer items-center gap-2">
             <Flag className="h-4 w-4 shrink-0" />
             Report Issue
           </Link>
@@ -261,7 +268,9 @@ export function ListingCard({
   listerVerificationBadges = null,
   jobStatus = null,
   hasAssignedCleaner = false,
+  compactMobileMarketplace = false,
 }: ListingCardProps) {
+  const distanceUnit = useDistanceUnit();
   const jobHref = `/jobs/${listing.id}`;
 
   const handleShare = () => {
@@ -344,7 +353,7 @@ export function ListingCard({
   const locationLineFull =
     `${formatLocationWithState(listing.suburb, listing.postcode)}` +
     (distanceKm != null && !Number.isNaN(distanceKm)
-      ? ` · ~${Math.round(distanceKm)} km`
+      ? ` · ${formatDistanceKmLabel(distanceKm, distanceUnit)}`
       : "");
 
   const overflowMenuProps: OverflowMenuProps = {
@@ -406,6 +415,7 @@ export function ListingCard({
           showListerActions={showListerActions}
           hasAssignedCleaner={hasAssignedCleaner}
           hideCleanerCancelledAuctionUi={hideCleanerCancelledAuctionUi}
+          layout={compactMobileMarketplace ? "compact" : "default"}
         />
       </div>
 
@@ -518,7 +528,9 @@ export function ListingCard({
             <span>
               {formatLocationWithState(listing.suburb, listing.postcode)}
               {distanceKm != null && !Number.isNaN(distanceKm) && (
-                <span className="ml-1 text-foreground/80 dark:text-gray-300">· ~{Math.round(distanceKm)} km</span>
+                <span className="ml-1 text-foreground/80 dark:text-gray-300">
+                  · {formatDistanceKmLabel(distanceKm, distanceUnit)}
+                </span>
               )}
             </span>
           </p>
@@ -590,11 +602,7 @@ export function ListingCard({
               <CountdownTimer
                 endTime={listing.end_time}
                 expiredLabel="Ended"
-                className="text-sm font-semibold tabular-nums text-muted-foreground dark:text-gray-400"
-                urgentBelowHours={24}
-                urgentClassName="text-red-600 font-bold dark:text-red-400"
-                warningBelowHours={72}
-                warningClassName="text-amber-600 font-semibold dark:text-amber-400"
+                className="text-sm font-semibold tabular-nums"
               />
             </div>
           )}

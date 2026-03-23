@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition, useCallback, type ChangeEvent } from "react";
+import { useEffect, useState, useTransition, useCallback, useMemo, type ChangeEvent } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { format } from "date-fns";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -67,7 +67,7 @@ export type JobDetailProps = {
   jobStatus?: string | null;
   isJobLister?: boolean;
   isJobCleaner?: boolean;
-  /** True when the current user owns the listing (lister). Used to allow adding initial photos even when there is no job yet. */
+  /** True when the current user owns the listing and is viewing as lister (active role). Not true in cleaner role even for own listings. */
   isListingOwner?: boolean;
   /** Lister's display name (when job exists). */
   listerName?: string | null;
@@ -162,6 +162,8 @@ export function JobDetail({
   );
   const [cancellingJob, setCancellingJob] = useState(false);
   const [showCancelJobDialog, setShowCancelJobDialog] = useState(false);
+  const [showCancelListingDialog, setShowCancelListingDialog] = useState(false);
+  const [cancellingListing, setCancellingListing] = useState(false);
   const [isApproving, startApproving] = useTransition();
   const [isFinalizing, startFinalizing] = useTransition();
   const [checklist, setChecklist] = useState<ChecklistItem[] | null>(null);
@@ -313,9 +315,38 @@ export function JobDetail({
     isLive && !hasActiveJob && !hideCleanerCancelledAuctionUi;
   const isSold = !!hasActiveJob;
 
+  /** Platform fee on current lowest bid amount (lister view; updates with listing realtime). */
+  const platformFeeOnCurrentBidCents = useMemo(() => {
+    const jobCents = Number(listing.current_lowest_bid_cents ?? 0);
+    if (!Number.isFinite(jobCents) || jobCents <= 0 || !Number.isFinite(feePercentage)) return 0;
+    return Math.round((jobCents * feePercentage) / 100);
+  }, [listing.current_lowest_bid_cents, feePercentage]);
+
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [paymentSuccessToastShown, setPaymentSuccessToastShown] = useState(false);
+
+  /** Lister menu / card: ?cancel=1 opens “cancel listing early” (auction still live, no job yet). */
+  useEffect(() => {
+    if (searchParams.get("cancel") !== "1") return;
+    const stillLive =
+      listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
+    if (isListingOwner && !hasActiveJob && stillLive) {
+      setShowCancelListingDialog(true);
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("cancel");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [
+    searchParams,
+    pathname,
+    router,
+    isListingOwner,
+    hasActiveJob,
+    listing.status,
+    listing.end_time,
+  ]);
 
   /** Mobile /jobs list swipe “Quick bid” → scroll to bid form; strip query after. */
   useEffect(() => {
@@ -745,7 +776,20 @@ export function JobDetail({
         <JobPaymentTimeline {...paymentTimeline} />
       )}
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-3">
+          {isListingOwner && !hasActiveJob && isLive && (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-red-300 text-red-800 hover:bg-red-50 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/40"
+                onClick={() => setShowCancelListingDialog(true)}
+              >
+                Cancel listing
+              </Button>
+            </div>
+          )}
           <div className="flex flex-wrap items-start justify-between gap-2">
             <CardTitle className="text-xl dark:text-gray-100">{listing.title}</CardTitle>
             {!isSold && !hideCleanerCancelledAuctionUi && (
@@ -756,6 +800,10 @@ export function JobDetail({
               />
             )}
           </div>
+          <p className="flex items-center gap-2 text-sm text-muted-foreground dark:text-gray-400">
+            <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+            <span>{formatLocationWithState(listing.suburb, listing.postcode)}</span>
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {hasActiveJob && (listerName || cleanerName) && (
@@ -804,6 +852,16 @@ export function JobDetail({
               <span className="font-medium">
                 This listing is currently live and has bids
               </span>
+            </div>
+          )}
+          {isListingOwner && !hasActiveJob && isLive && (
+            <div className="rounded-lg border border-sky-200/70 bg-sky-50/60 px-4 py-3 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/35">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700/90 dark:text-sky-400/90">
+                Status
+              </p>
+              <p className="mt-1 text-sm font-medium leading-snug text-sky-900 dark:text-sky-100">
+                Live &amp; Waiting for Cleaner Bids
+              </p>
             </div>
           )}
           {(localJobStatus === "cancelled" || jobStatus === "cancelled") && isJobCleaner && (
@@ -1024,13 +1082,60 @@ export function JobDetail({
             <p className="text-sm text-muted-foreground dark:text-gray-400">
               This listing is no longer accepting bids.
             </p>
+          ) : isListingOwner && !isCleaner ? (
+            <div className="space-y-4 rounded-xl border border-border bg-muted/25 p-4 dark:border-gray-700 dark:bg-gray-900/35 sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-x-6 sm:gap-y-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+                    Starting price
+                  </p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-xl">
+                    {formatCents(listing.starting_price_cents)}
+                  </p>
+                </div>
+                {listing.buy_now_cents != null && listing.buy_now_cents > 0 && (
+                  <div className="min-w-0 sm:text-right">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+                      Buy now
+                    </p>
+                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-xl">
+                      {formatCents(listing.buy_now_cents)}
+                    </p>
+                    {listing.current_lowest_bid_cents < listing.buy_now_cents && (
+                      <p className="mt-2 max-w-md rounded-md bg-amber-50 px-2.5 py-1.5 text-left text-xs leading-snug text-amber-900 dark:bg-amber-900/30 dark:text-amber-100 sm:ml-auto sm:text-right">
+                        Current bid is below the fixed price. Securing at this price may no longer be available.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-xl border-2 border-primary/25 bg-background/90 px-4 py-5 dark:border-primary/35 dark:bg-gray-950/70">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+                  Current lowest bid
+                </p>
+                <p className="mt-2 text-3xl font-bold tabular-nums leading-none tracking-tight text-primary sm:text-4xl md:text-5xl">
+                  {formatCents(listing.current_lowest_bid_cents)}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3 dark:border-gray-600 dark:bg-gray-800/70">
+                <span className="text-sm font-medium text-muted-foreground dark:text-gray-300">
+                  Platform fee ({feePercentage}%)
+                </span>
+                <span className="text-xl font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-2xl">
+                  {formatCents(platformFeeOnCurrentBidCents)}
+                </span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground dark:text-gray-500">
+                Fee is calculated on the current lowest bid and updates as bids change.
+              </p>
+            </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-xs font-medium text-muted-foreground dark:text-gray-400">
-                  Starting / Est.
+                  Starting price
                 </p>
-                <p className="text-lg font-semibold dark:text-gray-100">
+                <p className="text-base font-semibold tabular-nums dark:text-gray-100">
                   {formatCents(listing.starting_price_cents)}
                 </p>
               </div>
@@ -1038,35 +1143,25 @@ export function JobDetail({
                 <p className="text-xs font-medium text-muted-foreground dark:text-gray-400">
                   Current lowest bid
                 </p>
-                <p className="text-lg font-semibold text-accent dark:text-accent">
+                <p className="text-2xl font-bold tabular-nums text-primary dark:text-primary sm:text-3xl">
                   {formatCents(listing.current_lowest_bid_cents)}
                 </p>
               </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground dark:text-gray-400">
-                  Reserve
-                </p>
-                <p className="text-lg font-semibold dark:text-gray-100">
-                  {formatCents(listing.reserve_cents)}
-                </p>
-              </div>
-              {listing.buy_now_cents != null &&
-                listing.buy_now_cents > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground dark:text-gray-400">
-                      Fixed price
+              {listing.buy_now_cents != null && listing.buy_now_cents > 0 && (
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-medium text-muted-foreground dark:text-gray-400">
+                    Buy now
+                  </p>
+                  <p className="text-base font-semibold tabular-nums dark:text-gray-100">
+                    {formatCents(listing.buy_now_cents)}
+                  </p>
+                  {listing.current_lowest_bid_cents < listing.buy_now_cents && (
+                    <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                      Current bid is below the fixed price. Securing at this price may no longer be available.
                     </p>
-                    <p className="text-lg font-semibold dark:text-gray-100">
-                      {formatCents(listing.buy_now_cents)}
-                    </p>
-                    {listing.current_lowest_bid_cents <
-                      listing.buy_now_cents && (
-                      <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-                        Current bid is below the fixed price. Securing at this price may no longer be available.
-                      </p>
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1100,26 +1195,14 @@ export function JobDetail({
             </details>
           )}
 
-          {!(isCleaner && hideCleanerCancelledAuctionUi) && (
-          <details className="mt-3 border-t border-border pt-2 text-[11px] text-muted-foreground dark:border-gray-700 dark:text-gray-500">
-            <summary className="cursor-pointer select-none py-1 hover:text-foreground dark:hover:text-gray-300">
-              View bid history
-            </summary>
-            {bids.length > 0 ? (
-              <div className="mt-2">
-                <BidHistoryTable
-                  bids={bids}
-                  onAcceptBid={
-                    isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
-                  }
-                />
-              </div>
-            ) : (
-              <p className="mt-2 text-[11px] text-muted-foreground dark:text-gray-400">
-                No bids were placed on this listing.
-              </p>
-            )}
-          </details>
+          {!(isCleaner && hideCleanerCancelledAuctionUi) && !showAuctionActions && (
+            <BidHistorySection
+              bids={bids}
+              onAcceptBid={
+                isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
+              }
+              className="mt-3 border-t border-border pt-2 text-[11px] text-muted-foreground dark:border-gray-700 dark:text-gray-500"
+            />
           )}
 
           {/* Escrow flow: Pay & Start Job (Stripe) then optionally Start Job if webhook hasn't moved status yet */}
@@ -1227,6 +1310,70 @@ export function JobDetail({
                   }}
                 >
                   {cancellingJob ? "Cancelling…" : "Yes, cancel job"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={showCancelListingDialog}
+            onOpenChange={(open) => {
+              if (!cancellingListing) setShowCancelListingDialog(open);
+            }}
+          >
+            <DialogContent className="max-w-md dark:border-gray-700 dark:bg-gray-900">
+              <DialogHeader>
+                <DialogTitle>Cancel this listing?</DialogTitle>
+                <DialogDescription className="text-left">
+                  This will end the auction early. No new bids will be accepted, and cleaners who bid will see that the
+                  listing has ended. The listing stays in your history. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCancelListingDialog(false)}
+                  disabled={cancellingListing}
+                >
+                  Keep listing live
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={cancellingListing}
+                  onClick={async () => {
+                    if (isOffline) {
+                      toast({
+                        title: "Offline",
+                        description: "Reconnect to cancel this listing.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    setCancellingListing(true);
+                    try {
+                      const { cancelListing } = await import("@/lib/actions/listings");
+                      const res = await cancelListing(String(listingId));
+                      if (res.ok) {
+                        setListing((prev) => ({ ...prev, status: "ended" } as ListingRow));
+                        setShowCancelListingDialog(false);
+                        toast({
+                          title: "Listing cancelled",
+                          description: "The auction has ended early. You can view it under My Listings.",
+                        });
+                        router.refresh();
+                      } else {
+                        toast({
+                          variant: "destructive",
+                          title: "Could not cancel listing",
+                          description: res.error,
+                        });
+                      }
+                    } finally {
+                      setCancellingListing(false);
+                    }
+                  }}
+                >
+                  {cancellingListing ? "Cancelling…" : "Yes, end listing early"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -2456,36 +2603,58 @@ export function JobDetail({
       {showAuctionActions && (
         <Card
           id="place-bid"
-          className="scroll-mt-20 md:scroll-mt-8"
+          className="scroll-mt-20 overflow-hidden border-border shadow-sm md:scroll-mt-8 dark:border-gray-800 dark:bg-gray-950/40"
         >
-          <CardHeader>
-            <CardTitle>Place a lower bid</CardTitle>
+          <CardHeader className="space-y-1 pb-2 pt-6 sm:pb-3 sm:pt-6">
+            <CardTitle className="text-lg font-semibold tracking-tight sm:text-xl">
+              Place a lower bid
+            </CardTitle>
+            <CardDescription className="text-sm leading-snug">
+              Reverse auction: cleaners compete by bidding{" "}
+              <span className="font-medium text-foreground dark:text-gray-200">below</span> the current
+              lowest price.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="flex-1">
-                <PlaceBidForm
-                  listingId={listingId}
-                  listing={listing}
-                  isCleaner={isCleaner}
-                  currentUserId={currentUserId}
-                />
-              </div>
-              {isCleaner && (
-                <div className="flex flex-row flex-wrap gap-2 sm:ml-4">
-                  {listing.buy_now_cents != null &&
-                    listing.buy_now_cents > 0 &&
-                    listing.current_lowest_bid_cents >= listing.buy_now_cents && (
-                      <BuyNowButton
-                        listingId={listingId}
-                        buyNowCents={listing.buy_now_cents}
-                        disabled={!isLive}
-                        currentUserId={currentUserId}
-                      />
-                    )}
+          <CardContent className="space-y-5 pb-6 pt-0 sm:pb-6">
+            <PlaceBidForm
+              listingId={listingId}
+              listing={listing}
+              isCleaner={isCleaner}
+              currentUserId={currentUserId}
+            />
+
+            {isCleaner &&
+              listing.buy_now_cents != null &&
+              listing.buy_now_cents > 0 &&
+              listing.current_lowest_bid_cents >= listing.buy_now_cents && (
+                <div className="rounded-2xl border border-violet-200/80 bg-violet-50/50 px-4 py-4 dark:border-violet-900/40 dark:bg-violet-950/25">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-300">
+                    Or skip the auction
+                  </p>
+                  <p className="mt-1 text-xs text-violet-700/90 dark:text-violet-200/80">
+                    Secure this job at the buy-now price instead of waiting for the auction to end.
+                  </p>
+                  <div className="mt-3">
+                    <BuyNowButton
+                      listingId={listingId}
+                      buyNowCents={listing.buy_now_cents}
+                      disabled={!isLive}
+                      currentUserId={currentUserId}
+                      className="w-full min-h-12 justify-center px-4 text-sm font-semibold sm:flex-1"
+                    />
+                  </div>
                 </div>
               )}
-            </div>
+
+            {showAuctionActions && !(isCleaner && hideCleanerCancelledAuctionUi) && (
+              <BidHistorySection
+                bids={bids}
+                onAcceptBid={
+                  isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
+                }
+                className="border-t border-border pt-5 text-[11px] text-muted-foreground dark:border-gray-800 dark:text-gray-500"
+              />
+            )}
           </CardContent>
         </Card>
       )}
@@ -2519,6 +2688,33 @@ export function JobDetail({
         </div>
       )}
     </div>
+  );
+}
+
+function BidHistorySection({
+  bids,
+  onAcceptBid,
+  className,
+}: {
+  bids: BidWithBidder[];
+  onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
+  className?: string;
+}) {
+  return (
+    <details className={className}>
+      <summary className="flex min-h-11 cursor-pointer list-none select-none items-center rounded-lg py-2 text-sm font-medium text-foreground hover:bg-muted/50 dark:text-gray-200 dark:hover:bg-gray-800/60 [&::-webkit-details-marker]:hidden">
+        View bid history
+      </summary>
+      {bids.length > 0 ? (
+        <div className="mt-2">
+          <BidHistoryTable bids={bids} onAcceptBid={onAcceptBid} />
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px] text-muted-foreground dark:text-gray-400">
+          No bids were placed on this listing.
+        </p>
+      )}
+    </details>
   );
 }
 

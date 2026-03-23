@@ -53,6 +53,7 @@ export async function updateProfile(
   }
 
   revalidatePath("/profile");
+  revalidatePath("/settings");
   revalidatePath("/dashboard");
   revalidatePath("/jobs");
   revalidatePath("/my-listings");
@@ -137,6 +138,8 @@ export async function updateMaxTravelKm(
   if (error) return { ok: false, error: error.message };
   revalidatePath("/profile");
   revalidatePath("/dashboard");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/lister/dashboard");
   revalidatePath("/jobs");
   return { ok: true };
 }

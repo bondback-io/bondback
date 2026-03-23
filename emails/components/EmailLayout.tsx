@@ -28,7 +28,7 @@ export function EmailLayout({
   viewJobUrl,
   viewJobLabel = "View Job",
 }: EmailLayoutProps) {
-  const unsubscribeUrl = `${APP_URL}/settings?tab=notifications`;
+  const unsubscribeUrl = `${APP_URL}/profile?tab=notifications`;
 
   return (
     <Html lang="en">

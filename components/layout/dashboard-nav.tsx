@@ -23,7 +23,7 @@ export const DashboardNav = ({ dashboardLabel = "Dashboard" }: { dashboardLabel?
         </Button>
         <span className="text-border dark:text-gray-500">/</span>
         <Button variant="ghost" size="sm" asChild className="px-2 py-1 text-xs hover:bg-muted/60 dark:hover:bg-gray-700 dark:hover:text-gray-100">
-          <Link href="/profile">My Profile</Link>
+          <Link href="/profile">My Account</Link>
         </Button>
       </div>
       <div className="flex items-center">

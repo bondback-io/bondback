@@ -10,6 +10,7 @@ import { CountdownTimer } from "@/components/features/countdown-timer";
 import { formatCents } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { setActiveRole } from "@/lib/actions/profile";
+import { notifyActiveRoleChanged } from "@/lib/active-role-events";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -63,7 +64,8 @@ export function FeaturedJobsCarousel({
 
     if (canSwitchToCleaner) {
       startTransition(async () => {
-        await setActiveRole("cleaner");
+        const result = await setActiveRole("cleaner");
+        if (result.ok) notifyActiveRoleChanged();
         router.push(jobUrl);
         router.refresh();
       });

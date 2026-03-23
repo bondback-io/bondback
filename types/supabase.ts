@@ -51,6 +51,10 @@ export interface Database {
           high_dispute_opens_30d: number;
           last_dispute_abuse_alert_at: string | null;
           preferred_payout_schedule: string;
+          /** light | dark | system — UI theme preference */
+          theme_preference: string | null;
+          /** km | mi — display only; stored distances remain km */
+          distance_unit: string | null;
         };
         Insert: {
           id: string;
@@ -93,6 +97,8 @@ export interface Database {
           high_dispute_opens_30d?: number;
           last_dispute_abuse_alert_at?: string | null;
           preferred_payout_schedule?: string;
+          theme_preference?: string | null;
+          distance_unit?: string | null;
         };
         Update: {
           roles?: string[] | null;
@@ -133,6 +139,8 @@ export interface Database {
           high_dispute_opens_30d?: number;
           last_dispute_abuse_alert_at?: string | null;
           preferred_payout_schedule?: string;
+          theme_preference?: string | null;
+          distance_unit?: string | null;
         };
         Relationships: [
           {
@@ -166,9 +174,12 @@ export interface Database {
           starting_price_cents: number;
           current_lowest_bid_cents: number;
           duration_days: number;
+          /** live | ended | expired (no bids at close) | … */
           status: string;
           end_time: string;
           created_at: string;
+          /** Set when lister ends auction early (cancel listing); null for natural end. */
+          cancelled_early_at: string | null;
         };
         Insert: {
           id?: string;
@@ -194,6 +205,7 @@ export interface Database {
           status?: string;
           end_time: string;
           created_at?: string;
+          cancelled_early_at?: string | null;
         };
         Update: {
           title?: string;
@@ -216,6 +228,7 @@ export interface Database {
           duration_days?: number;
           status?: string;
           end_time?: string;
+          cancelled_early_at?: string | null;
         };
         Relationships: [
           {
@@ -754,7 +767,16 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      apply_listing_auction_outcomes: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+      listing_ids_with_jobs: {
+        Args: Record<string, never>;
+        Returns: { listing_id: string }[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

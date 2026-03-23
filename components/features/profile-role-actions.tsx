@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { setActiveRole } from "@/lib/actions/profile";
+import { notifyActiveRoleChanged } from "@/lib/active-role-events";
 import type { ProfileRole } from "@/lib/types";
 import { Brush, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,8 @@ export function ProfileRoleActions({
   const handleSwitch = (role: ProfileRole) => {
     if (!roles.includes(role) || activeRole === role) return;
     startTransition(async () => {
-      await setActiveRole(role);
+      const result = await setActiveRole(role);
+      if (result.ok) notifyActiveRoleChanged();
     });
   };
 
@@ -34,7 +36,7 @@ export function ProfileRoleActions({
       {hasLister && hasCleaner ? (
         <div className="space-y-3">
           <div className="space-y-0.5">
-            <p className="font-medium text-foreground">Active mode</p>
+            <p className="font-medium text-foreground dark:text-gray-100">Active mode</p>
             <p className="text-xs text-muted-foreground">
               Choose how you want to use Bond Back right now.
             </p>
@@ -50,9 +52,10 @@ export function ProfileRoleActions({
               onClick={() => handleSwitch("lister")}
               className={cn(
                 "flex min-h-[48px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2.5 text-sm font-semibold transition-all sm:min-h-12",
+                "disabled:opacity-100",
                 activeRole === "lister"
-                  ? "bg-background text-foreground shadow-md ring-1 ring-sky-500/40 dark:bg-gray-950 dark:ring-sky-500/50"
-                  : "text-muted-foreground hover:bg-background/80 hover:text-foreground dark:hover:bg-gray-900/70"
+                  ? "bg-background text-foreground shadow-md ring-1 ring-sky-500/40 dark:bg-gray-950 dark:text-gray-50 dark:ring-sky-500/50"
+                  : "text-muted-foreground hover:bg-background/80 hover:text-foreground dark:text-gray-200 dark:hover:bg-gray-900/70 dark:hover:text-gray-50"
               )}
             >
               <Home
@@ -60,11 +63,13 @@ export function ProfileRoleActions({
                   "h-5 w-5",
                   activeRole === "lister"
                     ? "text-sky-600 dark:text-sky-400"
-                    : "opacity-70"
+                    : "opacity-80 dark:opacity-90 dark:text-gray-300"
                 )}
                 aria-hidden
               />
-              Lister
+              <span className={activeRole === "lister" ? "text-foreground dark:text-gray-50" : "dark:text-gray-200"}>
+                Lister
+              </span>
             </button>
             <button
               type="button"
@@ -72,9 +77,10 @@ export function ProfileRoleActions({
               onClick={() => handleSwitch("cleaner")}
               className={cn(
                 "flex min-h-[48px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2.5 text-sm font-semibold transition-all sm:min-h-12",
+                "disabled:opacity-100",
                 activeRole === "cleaner"
-                  ? "bg-background text-foreground shadow-md ring-1 ring-emerald-500/40 dark:bg-gray-950 dark:ring-emerald-500/50"
-                  : "text-muted-foreground hover:bg-background/80 hover:text-foreground dark:hover:bg-gray-900/70"
+                  ? "bg-background text-foreground shadow-md ring-1 ring-emerald-500/40 dark:bg-gray-950 dark:text-gray-50 dark:ring-emerald-500/50"
+                  : "text-muted-foreground hover:bg-background/80 hover:text-foreground dark:text-gray-200 dark:hover:bg-gray-900/70 dark:hover:text-gray-50"
               )}
             >
               <Brush
@@ -82,11 +88,13 @@ export function ProfileRoleActions({
                   "h-5 w-5",
                   activeRole === "cleaner"
                     ? "text-emerald-600 dark:text-emerald-400"
-                    : "opacity-70"
+                    : "opacity-80 dark:opacity-90 dark:text-gray-300"
                 )}
                 aria-hidden
               />
-              Cleaner
+              <span className={activeRole === "cleaner" ? "text-foreground dark:text-gray-50" : "dark:text-gray-200"}>
+                Cleaner
+              </span>
             </button>
           </div>
         </div>

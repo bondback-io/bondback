@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PHOTO_LIMITS } from "@/lib/photo-validation";
 import type { Database } from "@/types/supabase";
 import { createNotification } from "@/lib/actions/notifications";
@@ -198,10 +199,11 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
   const supabase = await createServerSupabaseClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     return { ok: false, error: "You must be logged in." };
   }
 
@@ -217,11 +219,14 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
 
   const rowCancel = listing as Pick<ListingRow, "id" | "lister_id" | "status">;
 
-  if (rowCancel.lister_id !== session.user.id) {
+  if (rowCancel.lister_id !== user.id) {
     return { ok: false, error: "You are not allowed to cancel this listing." };
   }
 
-  if (rowCancel.status !== "live") {
+  const statusNorm = String(rowCancel.status ?? "")
+    .trim()
+    .toLowerCase();
+  if (statusNorm !== "live") {
     return { ok: false, error: "Only live listings can be cancelled." };
   }
 
@@ -240,13 +245,24 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
   >[];
 
   const nowIso = new Date().toISOString();
-  const { error: updateError } = await supabase
+  /** Require lister match on update so RLS / stale rows return a clear failure instead of silent no-op. */
+  const { data: updatedRow, error: updateError } = await supabase
     .from("listings")
-    .update({ status: "ended" } as ListingUpdate as never)
-    .eq("id", listingId);
+    .update({ status: "ended", cancelled_early_at: nowIso } as ListingUpdate as never)
+    .eq("id", listingId)
+    .eq("lister_id", user.id)
+    .select("id")
+    .maybeSingle();
 
   if (updateError) {
     return { ok: false, error: updateError.message };
+  }
+  if (!updatedRow) {
+    return {
+      ok: false,
+      error:
+        "Could not cancel this listing. It may no longer be live, or you may not have permission to update it.",
+    };
   }
 
   if ((linkedJobs ?? []).length > 0) {
@@ -274,6 +290,115 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
   revalidatePath("/my-listings");
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/jobs");
+
+  return { ok: true };
+}
+
+/**
+ * Sets `expired` (no bids) or `ended` (had bids) when `end_time` has passed.
+ * Call from server before loading marketplace / my-listings so status matches reality.
+ */
+export async function applyListingAuctionOutcomes(): Promise<void> {
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("apply_listing_auction_outcomes");
+  if (error) {
+    console.warn("[applyListingAuctionOutcomes]", error.message);
+  }
+}
+
+export type RelistExpiredListingResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Relist an expired auction: same duration and pricing fields, fresh timer, bids cleared.
+ */
+export async function relistExpiredListing(
+  listingId: string
+): Promise<RelistExpiredListingResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  const { data: listing, error: fetchError } = await supabase
+    .from("listings")
+    .select("*")
+    .eq("id", listingId)
+    .maybeSingle();
+
+  if (fetchError || !listing) {
+    return { ok: false, error: "Listing not found." };
+  }
+
+  const row = listing as ListingRow;
+  if (row.lister_id !== session.user.id) {
+    return { ok: false, error: "You are not allowed to relist this listing." };
+  }
+  if (String(row.status ?? "").toLowerCase() !== "expired") {
+    return { ok: false, error: "Only expired listings can be relisted." };
+  }
+
+  const durationDays = Number(row.duration_days) > 0 ? Number(row.duration_days) : 7;
+  const endTime = new Date(
+    Date.now() + durationDays * 24 * 60 * 60 * 1000
+  ).toISOString();
+  const starting = (row.starting_price_cents as number) ?? 0;
+
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    const { error: delErr } = await admin
+      .from("bids")
+      .delete()
+      .eq("listing_id", listingId);
+    if (delErr) {
+      return { ok: false, error: delErr.message };
+    }
+  } else {
+    const { error: bidDelErr } = await supabase
+      .from("bids")
+      .delete()
+      .eq("listing_id", listingId);
+    if (bidDelErr) {
+      return { ok: false, error: bidDelErr.message };
+    }
+  }
+
+  const patch: ListingUpdate = {
+    status: "live",
+    end_time: endTime,
+    current_lowest_bid_cents: starting,
+    cancelled_early_at: null,
+  };
+
+  const { data: updatedRow, error: updErr } = await supabase
+    .from("listings")
+    .update(patch as never)
+    .eq("id", listingId)
+    .eq("lister_id", session.user.id)
+    .eq("status", "expired")
+    .select("id")
+    .maybeSingle();
+
+  if (updErr) {
+    return { ok: false, error: updErr.message };
+  }
+  if (!updatedRow) {
+    return {
+      ok: false,
+      error: "Could not relist. The listing may no longer be expired.",
+    };
+  }
+
+  revalidatePath("/my-listings");
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${listingId}`);
+  revalidatePath("/lister/dashboard");
+
+  void triggerNewListingJobAlerts(listingId);
 
   return { ok: true };
 }

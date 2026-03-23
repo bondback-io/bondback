@@ -360,7 +360,7 @@ export function EarningsPageClient({
               <span>Next payout estimate: {nextPayoutFormatted}</span>
             )}
             <Link
-              href="/settings"
+              href="/profile?tab=payments"
               className="text-primary underline-offset-4 hover:underline"
             >
               Edit

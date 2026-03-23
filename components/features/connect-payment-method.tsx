@@ -64,7 +64,7 @@ export function ConnectPaymentMethod({
   };
 
   return (
-    <Card className="max-w-xl border-border dark:border-gray-800 dark:bg-gray-900/80">
+    <Card className="max-w-xl border-border dark:border-gray-800 dark:bg-gray-950/95 dark:text-gray-100">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base dark:text-gray-100">
           <CreditCard className="h-5 w-5 text-sky-600 dark:text-sky-400" />

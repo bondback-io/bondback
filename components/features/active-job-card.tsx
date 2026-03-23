@@ -131,7 +131,7 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/settings#support" className="flex cursor-pointer items-center gap-2">
+                  <Link href="/profile#support" className="flex cursor-pointer items-center gap-2">
                     <Flag className="h-4 w-4" />
                     Report Issue
                   </Link>
@@ -269,7 +269,7 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/settings#support" className="flex cursor-pointer items-center gap-2">
+                  <Link href="/profile#support" className="flex cursor-pointer items-center gap-2">
                     <Flag className="h-4 w-4" />
                     Report Issue
                   </Link>

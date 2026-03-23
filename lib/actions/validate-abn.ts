@@ -1,6 +1,6 @@
 "use server";
 
-import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getRequireAbnForValidation } from "@/lib/actions/global-settings";
 
 /**
  * Validate an ABN against the Australian Business Register (ABR) web service.
@@ -27,8 +27,7 @@ export async function validateAbnIfRequired(abn: string): Promise<ValidateAbnRes
     return { ok: false, error: "ABN must be 11 digits." };
   }
 
-  const settings = await getGlobalSettings();
-  const forceAbr = settings?.require_abn === true;
+  const forceAbr = await getRequireAbnForValidation();
 
   if (!forceAbr) {
     return { ok: true };

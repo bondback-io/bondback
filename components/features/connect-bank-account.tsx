@@ -96,7 +96,7 @@ export function ConnectBankAccount({
   };
 
   return (
-    <Card className="max-w-xl border-border dark:border-gray-800 dark:bg-gray-900/80">
+    <Card className="max-w-xl border-border dark:border-gray-800 dark:bg-gray-950/95 dark:text-gray-100">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base dark:text-gray-100">
           <Landmark className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -146,7 +146,7 @@ export function ConnectBankAccount({
                       Withdraw Now
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-xs text-xs">
+                  <TooltipContent side="top" className="max-w-xs text-xs dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                     Instant payout available – you pay Stripe&apos;s fee of 1% (min $1 AUD). Funds usually arrive in minutes.
                   </TooltipContent>
                 </Tooltip>

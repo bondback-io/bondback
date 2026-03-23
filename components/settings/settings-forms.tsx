@@ -1,7 +1,13 @@
 "use client";
 
 import { useTransition, useState, useMemo } from "react";
+import { useAbnAutoSaveOnValid } from "@/hooks/use-abn-auto-save-on-valid";
 import { Input } from "@/components/ui/input";
+import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
+import {
+  AbnValidationInputRow,
+  AbnLiveValidationMessages,
+} from "@/components/features/abn-validation-ui";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -33,10 +39,21 @@ type NotificationPrefs = Record<string, boolean> | null;
 export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const [abnValue, setAbnValue] = useState(() =>
+    (profile?.abn ?? "").replace(/\D/g, "").slice(0, 11)
+  );
+  const abnLiveValidation = useAbnLiveValidation(profile?.isCleaner ? abnValue : "");
+
+  useAbnAutoSaveOnValid({
+    enabled: !!profile?.isCleaner,
+    abnRaw: abnValue,
+    validation: abnLiveValidation,
+    storedAbn: profile?.abn,
+  });
 
   return (
     <form
-      className="space-y-4"
+      className="space-y-4 text-foreground dark:text-gray-100"
       onSubmit={(e) => {
         e.preventDefault();
         const form = e.currentTarget;
@@ -101,14 +118,22 @@ export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
           <Label htmlFor="abn" className="text-muted-foreground dark:text-gray-300">
             ABN (11 digits)
           </Label>
-          <Input
+          <AbnValidationInputRow
             id="abn"
             name="abn"
-            defaultValue={(profile?.abn ?? "").replace(/\D/g, "").slice(0, 11)}
+            value={abnValue}
+            onChange={(e) =>
+              setAbnValue(e.target.value.replace(/\D/g, "").slice(0, 11))
+            }
             placeholder="e.g. 12345678901"
             maxLength={11}
             inputMode="numeric"
             autoComplete="off"
+            validation={abnLiveValidation}
+          />
+          <AbnLiveValidationMessages
+            validation={abnLiveValidation}
+            detailsId="abn-validated-abn-details"
           />
           <p className="text-base text-muted-foreground dark:text-gray-500 md:text-[11px]">
             Same as in your profile. Required for professional cleaners.
@@ -207,7 +232,7 @@ function SendTestSmsButton() {
       type="button"
       size="lg"
       variant="outline"
-      className="h-12 min-h-[48px] w-full rounded-full md:h-8 md:min-h-0 md:w-auto"
+      className="h-12 min-h-[48px] w-full rounded-full border-border dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800/90 md:h-8 md:min-h-0 md:w-auto"
       disabled={testing}
       onClick={handleTest}
     >
@@ -253,7 +278,7 @@ export function SettingsNotificationsForm({
 
   return (
     <form
-      className="space-y-4"
+      className="space-y-4 text-foreground dark:text-gray-100"
       onSubmit={(e) => {
         e.preventDefault();
         const form = e.currentTarget;
@@ -289,9 +314,12 @@ export function SettingsNotificationsForm({
           <p>Notification preferences are locked by an administrator. Contact support to change them.</p>
         </div>
       )}
-      <div className="space-y-4">
+      <div className="space-y-1 rounded-xl border border-border/70 bg-muted/20 p-3 dark:border-gray-800 dark:bg-gray-900/40">
         {prefKeys.map((key) => (
-          <div key={key} className="flex min-h-[52px] items-center justify-between gap-4 py-1 md:min-h-0 md:py-0">
+          <div
+            key={key}
+            className="flex min-h-[52px] items-center justify-between gap-4 border-b border-border/50 py-2 last:border-b-0 dark:border-gray-800/80 md:min-h-0 md:py-2.5"
+          >
             <Label htmlFor={key} className="flex-1 cursor-pointer text-base dark:text-gray-200 md:text-sm">
               {NOTIFICATION_LABELS[key]}
             </Label>
@@ -312,18 +340,18 @@ export function SettingsNotificationsForm({
             />
           </div>
         ))}
-        {/* Preserve cleaner-only prefs when lister saves (fields not shown) */}
-        {ALL_PREF_KEYS.filter((k) => !prefKeys.includes(k)).map((key) => (
-          <input
-            key={`preserve-${key}`}
-            type="hidden"
-            name={key}
-            value={values[key] ? "on" : ""}
-            readOnly
-            aria-hidden
-          />
-        ))}
       </div>
+      {/* Preserve cleaner-only prefs when lister saves (fields not shown) */}
+      {ALL_PREF_KEYS.filter((k) => !prefKeys.includes(k)).map((key) => (
+        <input
+          key={`preserve-${key}`}
+          type="hidden"
+          name={key}
+          value={values[key] ? "on" : ""}
+          readOnly
+          aria-hidden
+        />
+      ))}
       <p className="text-base text-muted-foreground dark:text-gray-500 md:text-xs">
         &ldquo;Receive all non-critical emails&rdquo; overrides individual toggles for non-critical types when on.
       </p>
@@ -350,7 +378,7 @@ export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean 
 
   return (
     <form
-      className="space-y-4"
+      className="space-y-4 text-foreground dark:text-gray-100"
       onSubmit={(e) => {
         e.preventDefault();
         const form = e.currentTarget;
@@ -373,7 +401,7 @@ export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean 
       }}
     >
       <input type="hidden" name="profile_public" value={publicProfile ? "on" : ""} readOnly aria-hidden />
-      <div className="flex min-h-[52px] items-center justify-between gap-4">
+      <div className="flex min-h-[52px] items-center justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/40">
         <Label htmlFor="profile_public_switch" className="flex-1 cursor-pointer text-base dark:text-gray-200 md:text-sm">
           Show my profile publicly in search results
         </Label>
@@ -436,7 +464,7 @@ export function SettingsPasswordForm() {
   };
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
+    <form className="space-y-4 text-foreground dark:text-gray-100" onSubmit={handleSubmit}>
       <div className="space-y-2">
         <Label htmlFor="current_password" className="text-muted-foreground dark:text-gray-300">
           Current password

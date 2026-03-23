@@ -26,7 +26,7 @@ export function SettingsPaymentReturnHandler() {
       } else {
         toast({ variant: "destructive", title: "Could not save payment method", description: result.error });
       }
-      router.replace("/settings", { scroll: false });
+      router.replace("/profile", { scroll: false });
       router.refresh();
     })();
   }, [searchParams, router, toast]);

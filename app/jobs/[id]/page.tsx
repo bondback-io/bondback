@@ -297,7 +297,12 @@ export default async function JobDetailPage({
           session.user.id === job.lister_id &&
           isListerActive
         }
-        isListingOwner={!!session && listingRow.lister_id === session.user.id}
+        /** Same as lister-side job checks: owning the row is not enough — must be viewing as lister (hide cancel / lister tools in cleaner role). */
+        isListingOwner={
+          !!session &&
+          listingRow.lister_id === session.user.id &&
+          isListerActive
+        }
         isJobCleaner={
           !!session &&
           !!job &&

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -91,40 +91,47 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
   const [loading, setLoading] = useState(true);
   const toastRef = useRef(toast);
   toastRef.current = toast;
+  const routerRef = useRef(router);
+  routerRef.current = router;
+
+  const loadNotifications = useCallback(async () => {
+    const supabase = createBrowserSupabaseClient();
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(RECENT_LIMIT);
+    if (error) {
+      const isTableMissing =
+        error.message?.includes("schema cache") ||
+        error.message?.includes("could not find the table") ||
+        error.message?.includes("relation \"public.notifications\" does not exist");
+      if (!isTableMissing && process.env.NODE_ENV === "development") {
+        console.warn("[NotificationBell] load error:", error.message);
+      }
+      setNotifications([]);
+      setUnreadCount(0);
+      setLoading(false);
+      return;
+    }
+    if (data) {
+      setNotifications(data as NotificationRow[]);
+      setUnreadCount(data.filter((n) => !(n as NotificationRow).is_read).length);
+    }
+    setLoading(false);
+  }, [userId]);
 
   useEffect(() => {
     let cancelled = false;
     const supabase = createBrowserSupabaseClient();
 
-    const load = async () => {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(RECENT_LIMIT);
-      if (cancelled) return;
-      if (error) {
-        const isTableMissing =
-          error.message?.includes("schema cache") ||
-          error.message?.includes("could not find the table") ||
-          error.message?.includes("relation \"public.notifications\" does not exist");
-        if (!isTableMissing && process.env.NODE_ENV === "development") {
-          console.warn("[NotificationBell] load error:", error.message);
-        }
-        setNotifications([]);
-        setUnreadCount(0);
-        setLoading(false);
-        return;
-      }
-      if (data) {
-        setNotifications(data as NotificationRow[]);
-        setUnreadCount(data.filter((n) => !(n as NotificationRow).is_read).length);
-      }
-      setLoading(false);
-    };
+    void loadNotifications();
 
-    load();
+    // Poll while tab is visible — backup when Realtime publication is not enabled or channel errors.
+    const pollId = window.setInterval(() => {
+      if (document.visibilityState === "visible" && !cancelled) void loadNotifications();
+    }, 45_000);
 
     const channel = supabase
       .channel(`notifications-${userId}`)
@@ -140,6 +147,7 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
           const row = payload.new as NotificationRow;
           setNotifications((prev) => [row, ...prev].slice(0, RECENT_LIMIT));
           setUnreadCount((prev) => prev + (row.is_read ? 0 : 1));
+          routerRef.current.refresh();
           const isDisputeNotif = row.type === "dispute_opened" || row.type === "dispute_resolved";
           const title =
             row.type === "new_message" && row.job_id != null
@@ -149,9 +157,10 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
                 : row.type === "job_completed" && row.job_id != null
                   ? `Job #${row.job_id} marked complete`
                   : labelForType(row.type);
+          const msg = row.message_text ?? "";
           toastRef.current({
             title,
-            description: row.message_text.length > 80 ? `${row.message_text.slice(0, 77)}…` : row.message_text,
+            description: msg.length > 80 ? `${msg.slice(0, 77)}…` : msg || "You have a new notification.",
             action:
               row.job_id != null
                 ? { label: "View", href: isDisputeNotif ? `/jobs/${row.job_id}#dispute` : `/jobs/${row.job_id}` }
@@ -159,13 +168,24 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
           });
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (process.env.NODE_ENV === "development") {
+          if (status === "SUBSCRIBED") {
+            // eslint-disable-next-line no-console
+            console.debug("[NotificationBell] realtime subscribed");
+          }
+          if (status === "CHANNEL_ERROR" || err) {
+            console.warn("[NotificationBell] realtime channel error — polling will still refresh notifications", err);
+          }
+        }
+      });
 
     return () => {
       cancelled = true;
+      window.clearInterval(pollId);
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, loadNotifications]);
 
   const handleClickNotification = async (n: NotificationRow) => {
     if (!n.is_read) {
@@ -220,7 +240,8 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
           size={variant === "row" ? "default" : "icon"}
           className={cn(
             variant === "row" && "h-auto w-full justify-start p-0",
-            "relative cursor-pointer"
+            "relative shrink-0 cursor-pointer",
+            variant !== "row" && "mr-0.5 sm:mr-1"
           )}
           aria-label="Notifications"
           aria-haspopup="menu"

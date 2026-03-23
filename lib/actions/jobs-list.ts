@@ -1,9 +1,9 @@
 "use server";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { fetchTakenListingIds } from "@/lib/jobs-taken-listing-ids";
 import { buildLiveListingsQuery, type JobsListFilters } from "@/lib/jobs-query";
 import {
   buildListerCardDataByListingId,
@@ -38,9 +38,7 @@ export async function getJobsPage(
   }
 
   const admin = createSupabaseAdminClient();
-  const jobsClient = (admin ?? supabase) as SupabaseClient<Database>;
-  const { data: jobsData } = await jobsClient.from("jobs").select("listing_id");
-  const takenIds = (jobsData ?? []).map((j: { listing_id: string | number }) => j.listing_id);
+  const takenIds = await fetchTakenListingIds(supabase, admin);
 
   const offset = (page - 1) * JOBS_PAGE_SIZE;
   const query = buildLiveListingsQuery(supabase, filters, takenIds);

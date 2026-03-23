@@ -12,7 +12,6 @@ import {
   MapPin,
   List,
   Gavel,
-  Pencil,
   XCircle,
   Bed,
   Bath,
@@ -30,6 +29,11 @@ export type DashboardListingCardProps = {
   compact?: boolean;
   isUrgent?: boolean;
   feePercentage?: number;
+  /**
+   * When set (e.g. lister dashboard with swipe wrapper), Cancel uses a button + handler so taps work
+   * under touch-swipe. Otherwise links to /my-listings?cancel=…
+   */
+  onCancelClick?: () => void;
 };
 
 export function DashboardListingCard({
@@ -38,6 +42,7 @@ export function DashboardListingCard({
   compact,
   isUrgent = false,
   feePercentage = 12,
+  onCancelClick,
 }: DashboardListingCardProps) {
   const coverUrl = getListingCoverUrl(listing);
   const currentBid = (listing.current_lowest_bid_cents as number | null) ?? 0;
@@ -126,34 +131,44 @@ export function DashboardListingCard({
             <Button asChild size="lg" variant="default" className="min-h-12 w-full rounded-xl text-base font-semibold">
               <Link href={`/jobs/${listing.id}`} className="flex items-center justify-center gap-2">
                 <Eye className="h-5 w-5" aria-hidden />
-                View Details
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="secondary" className="min-h-12 w-full rounded-xl text-base font-semibold">
-              <Link href={`/jobs/${listing.id}`} className="flex items-center justify-center gap-2">
-                <Gavel className="h-5 w-5" aria-hidden />
-                View Bids
+                View Listing
               </Link>
             </Button>
             {!compact && (
               <>
-                <Button asChild size="lg" variant="outline" className="min-h-12 w-full rounded-xl border-2 text-base font-semibold dark:border-gray-600">
-                  <Link href={`/listings/${listing.id}/edit`} className="flex items-center justify-center gap-2">
-                    <Pencil className="h-5 w-5" aria-hidden />
-                    Edit Listing
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  size="lg"
-                  variant="outline"
-                  className="min-h-12 w-full rounded-xl border-2 border-destructive/40 text-base font-semibold text-destructive hover:bg-destructive/10"
-                >
-                  <Link href={`/my-listings?cancel=${listing.id}`} className="flex items-center justify-center gap-2">
-                    <XCircle className="h-5 w-5" aria-hidden />
+                {onCancelClick ? (
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="outline"
+                    className="relative z-20 min-h-12 w-full gap-2 rounded-xl border-2 border-destructive/40 text-base font-semibold text-destructive hover:bg-destructive/10"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCancelClick();
+                    }}
+                  >
+                    <XCircle className="h-5 w-5 shrink-0" aria-hidden />
                     Cancel
-                  </Link>
-                </Button>
+                  </Button>
+                ) : (
+                  <Button
+                    asChild
+                    size="lg"
+                    variant="outline"
+                    className="relative z-20 min-h-12 w-full rounded-xl border-2 border-destructive/40 text-base font-semibold text-destructive hover:bg-destructive/10"
+                  >
+                    <Link
+                      href={`/my-listings?cancel=${listing.id}`}
+                      className="flex items-center justify-center gap-2"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <XCircle className="h-5 w-5" aria-hidden />
+                      Cancel
+                    </Link>
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -242,27 +257,42 @@ export function DashboardListingCard({
           )}
           <div className="mt-auto flex flex-wrap gap-2 pt-1">
             <Button asChild size="sm" className="rounded-full" variant="default">
-              <Link href={`/jobs/${listing.id}`}>View Bids</Link>
+              <Link href={`/jobs/${listing.id}`}>View Listing</Link>
             </Button>
             {!compact && (
               <>
-                <Button asChild size="sm" variant="outline" className="rounded-full">
-                  <Link href={`/listings/${listing.id}/edit`}>
-                    <Pencil className="mr-1 h-3 w-3" />
-                    Edit
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className="rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Link href={`/my-listings?cancel=${listing.id}`}>
+                {onCancelClick ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="relative z-20 rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCancelClick();
+                    }}
+                  >
                     <XCircle className="mr-1 h-3 w-3" />
                     Cancel
-                  </Link>
-                </Button>
+                  </Button>
+                ) : (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="relative z-20 rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Link
+                      href={`/my-listings?cancel=${listing.id}`}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <XCircle className="mr-1 h-3 w-3" />
+                      Cancel
+                    </Link>
+                  </Button>
+                )}
               </>
             )}
           </div>

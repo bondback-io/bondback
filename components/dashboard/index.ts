@@ -19,9 +19,9 @@ export type { CollapsibleActivityFeedProps } from "./collapsible-activity-feed";
 export { DashboardEmptyState } from "./dashboard-empty-state";
 export type { DashboardEmptyStateProps } from "./dashboard-empty-state";
 export { ListerDashboardContent } from "./lister-dashboard-content";
-export type { ListerDashboardContentProps } from "./lister-dashboard-content";
+export type {
+  ListerDashboardContentProps,
+  CancelledDashboardRow,
+} from "./lister-dashboard-content";
 export { CleanerDashboardContent } from "./cleaner-dashboard-content";
 export type { CleanerDashboardContentProps } from "./cleaner-dashboard-content";
-export { DashboardPullToRefresh } from "./dashboard-pull-to-refresh";
-export type { DashboardPullToRefreshProps } from "./dashboard-pull-to-refresh";
-export { DashboardRefreshSkeleton } from "./dashboard-refresh-skeleton";

@@ -3,11 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { saveOnboardingProfile } from "@/lib/actions/onboarding";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
+import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
+import {
+  AbnValidationInputRow,
+  AbnLiveValidationMessages,
+} from "@/components/features/abn-validation-ui";
 import type { ProfileRole } from "@/lib/types";
 import {
   AU_STATES,
@@ -96,6 +101,9 @@ export const OnboardingForm = ({
   });
 
   const watchRole = form.watch("role");
+  const abnWatch = form.watch("abn");
+  const needsAbnField = watchRole === "cleaner" || watchRole === "both";
+  const abnLiveValidation = useAbnLiveValidation(needsAbnField ? (abnWatch ?? "") : "");
 
   const onSubmit = async (values: OnboardingValues) => {
     setSubmitError(null);
@@ -208,11 +216,28 @@ export const OnboardingForm = ({
             {(watchRole === "cleaner" || watchRole === "both") && (
               <div className="space-y-2">
                 <Label htmlFor="abn">ABN (11 digits)</Label>
-                <Input
-                  id="abn"
-                  inputMode="numeric"
-                  maxLength={11}
-                  {...form.register("abn")}
+                <Controller
+                  name="abn"
+                  control={form.control}
+                  render={({ field }) => (
+                    <AbnValidationInputRow
+                      id="abn"
+                      inputMode="numeric"
+                      maxLength={11}
+                      validation={abnLiveValidation}
+                      value={field.value ?? ""}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, "").slice(0, 11);
+                        field.onChange(digits);
+                      }}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
+                  )}
+                />
+                <AbnLiveValidationMessages
+                  validation={abnLiveValidation}
+                  detailsId="abn-validated-abn-details"
                 />
                 {form.formState.errors.abn && (
                   <p className="text-xs text-destructive">

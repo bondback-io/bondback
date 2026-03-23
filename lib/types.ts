@@ -1,5 +1,8 @@
 export type ProfileRole = "lister" | "cleaner";
 
+export type ThemePreference = "light" | "dark" | "system";
+export type DistanceUnitPref = "km" | "mi";
+
 /** Session + profile for header/nav (safe to pass to client). */
 export type SessionWithProfile = {
   user: { id: string; email?: string };
@@ -9,6 +12,8 @@ export type SessionWithProfile = {
         roles: ProfileRole[];
         activeRole: ProfileRole | null;
         profile_photo_url: string | null;
+        theme_preference: ThemePreference;
+        distance_unit: DistanceUnitPref;
       }
     | null;
   roles: ProfileRole[];

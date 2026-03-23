@@ -733,7 +733,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                 </Label>
                 <p className="text-[11px] text-muted-foreground dark:text-gray-400">
                   When off, no emails are sent (emergency kill switch). User-level toggles:{" "}
-                  <Link href="/settings" className="underline text-primary hover:opacity-90">
+                  <Link href="/profile" className="underline text-primary hover:opacity-90">
                     Settings → Notifications
                   </Link>
                 </p>

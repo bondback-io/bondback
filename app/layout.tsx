@@ -20,6 +20,7 @@ import { RegisterExpoPushToken } from "@/components/pwa/register-expo-push-token
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ContextualFab } from "@/components/contextual-fab";
 import { SessionSync } from "@/components/auth/session-sync";
+import { UserPreferencesHydration } from "@/components/providers/user-preferences-hydration";
 
 export const metadata: Metadata = {
   title: "Bond Back · Bond cleaning reverse-auction",
@@ -53,8 +54,10 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
 
   const showFirstJobNudge = await getFirstJobRewardsNudgeVisible(session?.user.id ?? null);
 
+  const serverTheme = session?.profile?.theme_preference ?? "";
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-bb-theme={serverTheme}>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <link rel="preload" href="/manifest.json" as="fetch" />
@@ -68,16 +71,20 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
   (function() {
     try {
       var stored = window.localStorage.getItem('theme');
+      var srv = document.documentElement.getAttribute('data-bb-theme') || '';
       var systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      var theme = (stored === 'light' || stored === 'dark') ? stored : (systemPrefersDark ? 'dark' : 'light');
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
+      var effective;
+      if (stored === 'light' || stored === 'dark' || stored === 'system') {
+        effective = stored;
+      } else if (srv === 'light' || srv === 'dark' || srv === 'system') {
+        effective = srv;
       } else {
-        document.documentElement.classList.remove('dark');
+        effective = 'system';
       }
-    } catch (e) {
-      // ignore
-    }
+      var isDark = effective === 'dark' || (effective === 'system' && systemPrefersDark);
+      if (isDark) document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+    } catch (e) {}
   })();
           `,
           }}
@@ -90,6 +97,9 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         <TestModeBanner stripeTestMode={stripeTestMode} />
         <PwaRegisterSw />
         <SessionSync />
+        {session?.profile ? (
+          <UserPreferencesHydration distanceUnit={session.profile.distance_unit} />
+        ) : null}
         <RegisterExpoPushToken />
         <Toaster>
           <ChatPanelProvider
@@ -111,7 +121,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
               <SiteFooter />
             </div>
             <LazyFloatingChatPanel enabled={!!floatingChatEnabled} />
-            <MobileBottomNav />
+            <MobileBottomNav initialActiveRole={session?.activeRole ?? null} />
             <ContextualFab activeRole={session?.activeRole ?? null} />
           </ChatPanelProvider>
         </Toaster>

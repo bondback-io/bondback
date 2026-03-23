@@ -54,10 +54,8 @@ export async function createNotification(
   options?: CreateNotificationOptions
 ): Promise<void> {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) return;
+  // Do not require a browser session: webhooks and background jobs call this with no auth cookie.
+  // Inserts use the service role client when configured (see below).
 
   const row: NotificationInsert = {
     user_id: userId,

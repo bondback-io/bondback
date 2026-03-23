@@ -17,6 +17,11 @@ import {
 import { AU_STATES } from "@/lib/au-suburbs";
 import { setOnboardingDetails, type OnboardingRole } from "./onboarding-storage";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
+import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
+import {
+  AbnValidationInputRow,
+  AbnLiveValidationMessages,
+} from "@/components/features/abn-validation-ui";
 import { ArrowLeft } from "lucide-react";
 
 type Props = {
@@ -39,6 +44,7 @@ export function DetailsFormClient({ role }: Props) {
   const [form, setForm] = useState(defaultDetails);
 
   const needsAbn = role === "cleaner" || role === "both";
+  const abnLiveValidation = useAbnLiveValidation(needsAbn ? form.abn : "");
 
   const validate = (): boolean => {
     if (!form.full_name.trim()) {
@@ -162,14 +168,24 @@ export function DetailsFormClient({ role }: Props) {
           {needsAbn && (
             <div className="space-y-2">
               <Label htmlFor="abn" className="dark:text-gray-200">ABN (11 digits)</Label>
-              <Input
+              <AbnValidationInputRow
                 id="abn"
                 inputMode="numeric"
                 maxLength={11}
                 value={form.abn}
-                onChange={(e) => setForm((p) => ({ ...p, abn: e.target.value.replace(/\D/g, "").slice(0, 11) }))}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    abn: e.target.value.replace(/\D/g, "").slice(0, 11),
+                  }))
+                }
                 placeholder="e.g. 12345678901"
                 className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+                validation={abnLiveValidation}
+              />
+              <AbnLiveValidationMessages
+                validation={abnLiveValidation}
+                detailsId="abn-validated-abn-details"
               />
               <p className="text-base text-muted-foreground dark:text-gray-400 md:text-xs">
                 Required for cleaners. Verified against the Australian Business Register.

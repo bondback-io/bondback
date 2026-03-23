@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { ListingCard } from "@/components/features/listing-card";
-import { JobCardSkeleton, JobCardSkeletonGrid } from "@/components/features/job-card-skeleton";
-import { PullToRefresh } from "@/components/features/pull-to-refresh";
 import { CardSwipeActions } from "@/components/features/card-swipe-actions";
 import { addSavedListingId, removeSavedListingId } from "@/lib/saved-listings-local";
 import {
@@ -31,6 +29,12 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { Gavel, HelpCircle, Loader2, MapPin, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useDistanceUnit } from "@/hooks/use-distance-unit";
+import { formatRadiusBannerLabel } from "@/lib/distance-format";
+import {
+  JOBS_RADIUS_CHANGED_EVENT,
+  useJobsSearchCountSetter,
+} from "@/components/mobile-job-search";
 
 function haversineKm(
   lat1: number,
@@ -53,12 +57,12 @@ const INITIAL_PAGE_SIZE = 20;
 const PRELOAD_IMAGE_COUNT = 4;
 /** Off until we fix gesture conflict with vertical scroll (react-swipeable preventScrollOnSwipe). */
 const ENABLE_JOB_CARD_SWIPE = true;
-/** Off until pull-to-refresh can coexist with scroll without fighting the browser. */
-const ENABLE_JOBS_PULL_TO_REFRESH = false;
 /** When list has more than this many cards, use @tanstack/react-virtual (window virtualizer) for performance. */
 const VIRTUALIZE_THRESHOLD = 30;
-/** Taller cards on mobile (stacked CTAs + thumb). */
+/** Default height estimate for virtualizer (desktop grid / tall mobile). */
 const ESTIMATED_CARD_HEIGHT = 540;
+/** Compact mobile row cards (/jobs). */
+const ESTIMATED_CARD_HEIGHT_MOBILE_COMPACT = 300;
 
 export type JobsListProps = {
   initialListings: ListingRow[];
@@ -77,6 +81,8 @@ export type JobsListProps = {
   showListerActions?: boolean;
   /** Filters used for this list; required for "Load more" to fetch next page. */
   filters?: JobsListFilters;
+  /** When false, hide the mobile-only radius strip (e.g. when using MobileJobSearchBar). Default true. */
+  showMobileRadiusStrip?: boolean;
 };
 
 export function JobsList({
@@ -90,6 +96,7 @@ export function JobsList({
   listerCardDataByListingId: initialListerCard = {},
   showListerActions,
   filters = {},
+  showMobileRadiusStrip = true,
 }: JobsListProps) {
   const showListerActionsResolved = showListerActions !== undefined ? showListerActions : !isCleaner;
   const [listings, setListings] = useState<ListingRow[]>(initialListings);
@@ -98,7 +105,6 @@ export function JobsList({
     useState<Record<string, ListerCardData>>(initialListerCard);
   const [page, setPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(initialListings.length >= INITIAL_PAGE_SIZE);
   /** Mobile-only radius (5–100 km); client filter when center lat/lon exist; persisted locally */
   const [mobileRadiusKm, setMobileRadiusKm] = useState(() =>
@@ -108,6 +114,8 @@ export function JobsList({
   const supabase = createBrowserSupabaseClient();
   const { toast } = useToast();
   const router = useRouter();
+  const distanceUnit = useDistanceUnit();
+  const setJobsSearchCount = useJobsSearchCountSetter();
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
@@ -121,27 +129,6 @@ export function JobsList({
     setMobileRadiusKm(getStoredRadiusKm(_radiusKm));
   }, [_radiusKm]);
 
-  const refresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      const result = await getJobsPage(1, filters);
-      if (result.ok) {
-        setListings((result.listings as ListingRow[]) ?? []);
-        setBidCountByListingId(result.bidCountByListingId ?? {});
-        setListerCardDataByListingId(result.listerCardDataByListingId ?? {});
-        setPage(1);
-        setHasMore((result.listings?.length ?? 0) >= INITIAL_PAGE_SIZE);
-        toast({ title: "Jobs refreshed", description: undefined });
-      } else {
-        toast({ title: "Refresh failed", description: result.error, variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "Refresh failed", description: "Could not load jobs.", variant: "destructive" });
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [filters, toast]);
-
   const loadMore = useCallback(
     async (opts?: { silent?: boolean }) => {
       if (loadingMore || !hasMore) return;
@@ -152,7 +139,16 @@ export function JobsList({
       const result = await getJobsPage(page + 1, filters);
       setLoadingMore(false);
       if (result.ok && result.listings.length > 0) {
-        setListings((prev) => [...prev, ...(result.listings as ListingRow[])]);
+        setListings((prev) => {
+          const merged = [...prev, ...(result.listings as ListingRow[])];
+          const seen = new Set<string>();
+          return merged.filter((l) => {
+            const id = String(l.id);
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          });
+        });
         setBidCountByListingId((prev) => ({ ...prev, ...result.bidCountByListingId }));
         setListerCardDataByListingId((prev) => ({
           ...prev,
@@ -201,15 +197,29 @@ export function JobsList({
         },
         (payload) => {
           if (payload.eventType === "INSERT") {
-            const row = payload.new as ListingRow;
-            if (parseUtcTimestamp(row.end_time) > Date.now()) {
-              setListings((prev) => [row, ...prev]);
+            const row = payload.new as ListingRow & { cancelled_early_at?: string | null };
+            const cancelledEarly =
+              row.cancelled_early_at != null && String(row.cancelled_early_at).trim() !== "";
+            if (!cancelledEarly && parseUtcTimestamp(row.end_time) > Date.now()) {
+              setListings((prev) => {
+                if (prev.some((l) => String(l.id) === String(row.id))) return prev;
+                return [row, ...prev];
+              });
             }
           } else if (payload.eventType === "UPDATE") {
-            const row = payload.new as ListingRow;
-            setListings((prev) =>
-              prev.map((l) => (l.id === row.id ? row : l))
-            );
+            const row = payload.new as ListingRow & { cancelled_early_at?: string | null };
+            const cancelledEarly =
+              row.cancelled_early_at != null && String(row.cancelled_early_at).trim() !== "";
+            const stillLive =
+              String(row.status ?? "").toLowerCase() === "live" &&
+              !cancelledEarly &&
+              parseUtcTimestamp(row.end_time) > Date.now();
+            setListings((prev) => {
+              if (!stillLive) {
+                return prev.filter((l) => String(l.id) !== String(row.id));
+              }
+              return prev.map((l) => (l.id === row.id ? row : l));
+            });
           } else if (payload.eventType === "DELETE") {
             setListings((prev) => prev.filter((l) => l.id !== payload.old.id));
           }
@@ -221,6 +231,17 @@ export function JobsList({
       supabase.removeChannel(channel);
     };
   }, [supabase]);
+
+  useEffect(() => {
+    const onRadius = (e: Event) => {
+      const ce = e as CustomEvent<number>;
+      if (typeof ce.detail === "number") {
+        setMobileRadiusKm(clampRadiusKm(ce.detail));
+      }
+    };
+    window.addEventListener(JOBS_RADIUS_CHANGED_EVENT, onRadius);
+    return () => window.removeEventListener(JOBS_RADIUS_CHANGED_EVENT, onRadius);
+  }, []);
 
   const nowMs = Date.now();
   const live = listings.filter(
@@ -236,6 +257,10 @@ export function JobsList({
     });
   }, [live, isMobile, centerLat, centerLon, mobileRadiusKm]);
 
+  useEffect(() => {
+    setJobsSearchCount?.(displayListings.length);
+  }, [displayListings.length, setJobsSearchCount]);
+
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMarginTop, setScrollMarginTop] = useState(0);
   useEffect(() => {
@@ -245,9 +270,13 @@ export function JobsList({
     }
   }, [displayListings.length]);
 
+  const estimatedCardHeight = isMobile
+    ? ESTIMATED_CARD_HEIGHT_MOBILE_COMPACT
+    : ESTIMATED_CARD_HEIGHT;
+
   const rowVirtualizer = useWindowVirtualizer({
     count: displayListings.length > VIRTUALIZE_THRESHOLD ? displayListings.length : 0,
-    estimateSize: () => ESTIMATED_CARD_HEIGHT,
+    estimateSize: () => estimatedCardHeight,
     getScrollElement: () => window,
     scrollMargin: scrollMarginTop,
     overscan: 5,
@@ -293,6 +322,7 @@ export function JobsList({
     const listerCard = listerCardDataByListingId[String(listing.id)];
     const card = (
       <ListingCard
+        key={listing.id}
         listing={listing}
         showPlaceBid
         isCleaner={isCleaner}
@@ -303,6 +333,7 @@ export function JobsList({
         priority={index < PRELOAD_IMAGE_COUNT}
         listerName={listerCard?.listerName ?? null}
         listerVerificationBadges={listerCard?.listerVerificationBadges ?? null}
+        compactMobileMarketplace={isMobile}
       />
     );
     const canSwipeBrowse = ENABLE_JOB_CARD_SWIPE && isCleaner && !isListerOwner;
@@ -367,17 +398,13 @@ export function JobsList({
     </div>
   );
 
-  const listContent = isRefreshing ? (
-    <JobCardSkeletonGrid count={6} />
-  ) : displayListings.length === 0 ? (
+  const listContent = displayListings.length === 0 ? (
     <p className="px-2 py-8 text-center text-base font-medium leading-relaxed text-muted-foreground md:text-sm">
       {live.length === 0 ? (
         <>No live jobs right now. Check back later or adjust your search filters.</>
       ) : (
         <>
-          No jobs within this radius on mobile.{" "}
-          <span className="font-semibold text-foreground">Increase the slider</span> (up to 100 km) or
-          broaden your search.
+          No jobs in this area yet — try increasing radius or broadening your suburb search.
         </>
       )}
     </p>
@@ -413,7 +440,7 @@ export function JobsList({
     </div>
   ) : (
     <div className="w-full">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-6">
         {displayListings.map((listing, index) => renderCard(listing, index))}
       </div>
       {infiniteScrollFooter}
@@ -421,7 +448,7 @@ export function JobsList({
   );
 
   const mobileRadiusStickyBar =
-    centerLat != null && centerLon != null ? (
+    showMobileRadiusStrip && centerLat != null && centerLon != null ? (
       <TooltipProvider delayDuration={200}>
         <div
           className="sticky top-0 z-40 -mx-4 mb-4 border-b border-border bg-background/95 px-4 pb-3 pt-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85 dark:border-gray-800 dark:bg-gray-950/95 md:hidden"
@@ -432,7 +459,7 @@ export function JobsList({
                 <MapPin className="h-6 w-6 shrink-0 text-primary" strokeWidth={2} aria-hidden />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold leading-tight text-foreground dark:text-gray-100">
-                    Jobs within {mobileRadiusKm} km
+                    Jobs within {formatRadiusBannerLabel(mobileRadiusKm, distanceUnit)}
                   </p>
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
                     Drag to filter · Saved on this device
@@ -441,7 +468,7 @@ export function JobsList({
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <Badge variant="secondary" className="tabular-nums text-sm font-bold">
-                  {mobileRadiusKm} km
+                  {formatRadiusBannerLabel(mobileRadiusKm, distanceUnit)}
                 </Badge>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -495,26 +522,13 @@ export function JobsList({
       </TooltipProvider>
     ) : null;
 
-  const listWrapper =
-    ENABLE_JOBS_PULL_TO_REFRESH ? (
-      <PullToRefresh
-        onRefresh={refresh}
-        disabled={isRefreshing}
-        releaseToRefreshLabel="Release to refresh"
-      >
-        {listContent}
-      </PullToRefresh>
-    ) : (
-      listContent
-    );
-
   return (
     <>
       {mobileRadiusStickyBar}
-      {listWrapper}
+      {listContent}
     </>
   );
 }
 
-/** Alias for JobsList: pull-to-refresh + infinite scroll job list. Use on /jobs and search results. */
+/** Alias for JobsList: infinite scroll job list. Use on /jobs and search results. */
 export const JobListWithRefreshAndInfinite = JobsList;

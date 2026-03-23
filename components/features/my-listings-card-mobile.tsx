@@ -35,6 +35,10 @@ export type MyListingsCardMobileProps = {
   secondaryLabel?: string;
   showCancel?: boolean;
   onCancel?: () => void;
+  /** Expired listing: run auction again with same settings */
+  showRelist?: boolean;
+  onRelist?: () => void;
+  relistLoading?: boolean;
   cardClassName?: string;
 };
 
@@ -62,6 +66,9 @@ export function MyListingsCardMobile({
   secondaryLabel,
   showCancel,
   onCancel,
+  showRelist,
+  onRelist,
+  relistLoading,
   cardClassName,
 }: MyListingsCardMobileProps) {
   const jid = String(listingId);
@@ -143,6 +150,17 @@ export function MyListingsCardMobile({
         {children}
 
         <div className="flex flex-col gap-3 pt-1">
+          {showRelist && onRelist && (
+            <Button
+              type="button"
+              size="lg"
+              className="min-h-12 w-full rounded-xl text-base font-semibold shadow-md"
+              disabled={relistLoading}
+              onClick={onRelist}
+            >
+              {relistLoading ? "Relisting…" : "Relist"}
+            </Button>
+          )}
           <Button asChild size="lg" className="min-h-12 w-full rounded-xl text-base font-semibold shadow-md">
             <Link href={primaryHref} className="flex items-center justify-center gap-2">
               <Eye className="h-5 w-5 shrink-0" aria-hidden />

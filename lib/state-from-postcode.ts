@@ -30,7 +30,8 @@ export function getStateFromPostcode(postcode: string | null | undefined): strin
 }
 
 /**
- * Format location for display: "Suburb Postcode State" (e.g. "Surry Hills 2010 NSW").
+ * Format location for display: "Suburb State Postcode" (e.g. "Surry Hills NSW 2010").
+ * State is shown immediately after the suburb when postcode can be mapped.
  * Use on job cards, job details, and listing overviews.
  */
 export function formatLocationWithState(
@@ -39,8 +40,10 @@ export function formatLocationWithState(
 ): string {
   const s = String(suburb ?? "").trim();
   const p = String(postcode ?? "").trim();
-  const parts = [s, p].filter(Boolean);
   const state = getStateFromPostcode(p || postcode);
+  const parts: string[] = [];
+  if (s) parts.push(s);
   if (state) parts.push(state);
-  return parts.join(" ") || "—";
+  if (p) parts.push(p);
+  return parts.length > 0 ? parts.join(" ") : "—";
 }

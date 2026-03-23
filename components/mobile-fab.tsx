@@ -4,11 +4,7 @@ import Link from "next/link";
 import { Plus, Search, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DashboardJobCardProps } from "@/components/dashboard/dashboard-job-card";
-import type { DashboardListingCardProps } from "@/components/dashboard/dashboard-listing-card";
-import {
-  DashboardJobCardWithSwipe,
-  DashboardListingCardWithSwipe,
-} from "@/components/dashboard/dashboard-cards-swipe";
+import { DashboardJobCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 
 /** Primary contextual FAB for lister/cleaner dashboards (mobile only). Sits above the tab bar; leaves room for the layout icon FAB on the right. */
 export function MobileDashboardFab({
@@ -83,41 +79,6 @@ export function ResponsiveCleanerJobCards({
             className="[&_.text-sm]:text-[15px] [&_h3]:text-base"
           >
             <DashboardJobCardWithSwipe {...props} />
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
-
-/** Lister: stacked live listing cards on small screens; grid from md up. */
-export function ResponsiveListerListingCards({
-  items,
-}: {
-  items: DashboardListingCardProps[];
-}) {
-  if (items.length === 0) return null;
-
-  return (
-    <>
-      <div className="flex flex-col gap-4 md:hidden">
-        {items.map((props) => (
-          <div
-            key={String((props.listing as { id: string }).id)}
-            className="[&_.text-sm]:text-base [&_.text-xs]:text-sm [&_h3]:text-lg [&_h3]:font-bold [&_button]:min-h-11 [&_button]:px-5 [&_button]:text-sm"
-          >
-            <DashboardListingCardWithSwipe {...props} />
-          </div>
-        ))}
-      </div>
-
-      <div className="hidden gap-6 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-3 lg:gap-8">
-        {items.map((props) => (
-          <div
-            key={String((props.listing as { id: string }).id)}
-            className="[&_.text-sm]:text-[15px] [&_h3]:text-base"
-          >
-            <DashboardListingCardWithSwipe {...props} />
           </div>
         ))}
       </div>

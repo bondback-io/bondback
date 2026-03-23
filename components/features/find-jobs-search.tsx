@@ -28,6 +28,8 @@ import { Label } from "@/components/ui/label";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
+import { useDistanceUnit } from "@/hooks/use-distance-unit";
+import { formatRadiusPresetLabel } from "@/lib/distance-format";
 
 const RADIUS_PRESETS = [5, 10, 20, 50, 100] as const;
 
@@ -93,6 +95,7 @@ export function FindJobsSearch({
   const formId = useId();
   const formHtmlId = `find-jobs-${formId.replace(/:/g, "")}`;
   const { toast } = useToast();
+  const distanceUnit = useDistanceUnit();
 
   const [suburb, setSuburb] = useState(initial?.suburb ?? "");
   const [postcode, setPostcode] = useState(initial?.postcode ?? "");
@@ -361,7 +364,9 @@ export function FindJobsSearch({
         <div
           className="-mx-1 flex gap-2 overflow-x-auto pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           role="radiogroup"
-          aria-label="Search radius in kilometres"
+          aria-label={
+            distanceUnit === "mi" ? "Search radius (miles shown; search uses km)" : "Search radius in kilometres"
+          }
         >
           {RADIUS_PRESETS.map((km) => {
             const active = Number(radiusKm) === km;
@@ -378,9 +383,9 @@ export function FindJobsSearch({
                     : "border-border bg-background text-foreground hover:border-emerald-500/50 hover:bg-emerald-50/80 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:hover:border-emerald-500/40 dark:hover:bg-gray-800/90"
                 )}
                 aria-pressed={active}
-                aria-label={`${km} kilometres`}
+                aria-label={`${formatRadiusPresetLabel(km, distanceUnit)} radius`}
               >
-                {km} km
+                {formatRadiusPresetLabel(km, distanceUnit)}
               </button>
             );
           })}

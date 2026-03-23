@@ -156,8 +156,8 @@ export async function createSetupIntentCheckoutSessionUrl(
   const session = await stripe.checkout.sessions.create({
     mode: "setup",
     payment_method_types: ["card"],
-    success_url: `${baseUrl}/settings?payments=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/settings?payments=cancelled`,
+    success_url: `${baseUrl}/profile?payments=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${baseUrl}/profile?payments=cancelled`,
     metadata: {
       setup_for_lister: userId,
       type: "setup_payment_method",

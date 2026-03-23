@@ -1,6 +1,11 @@
 /** Client-only jobs search radius (km). Synced with Jobs list slider on mobile. */
 const STORAGE_KEY = "bondback_jobs_radius_km";
 
+/**
+ * Set when profile max travel is saved; /jobs reads this to refresh radius in the search bar + URL.
+ */
+export const JOBS_RADIUS_SYNC_SESSION_KEY = "bondback_sync_jobs_radius";
+
 const MIN = 5;
 const MAX = 100;
 const STEP = 5;

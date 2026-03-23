@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 /** When to send the email. instant = immediately; 5m, 1h, 1d etc. = delayed (requires worker); on_dob = on user's date of birth (birthday template only). */
 export type SendAfterOption = "instant" | "5m" | "15m" | "30m" | "1h" | "2h" | "1d" | "2d" | "3d" | "5d" | "7d" | "10d" | "14d" | "21d" | "30d" | "60d" | "on_dob";
@@ -49,6 +50,38 @@ type GlobalSettingsRow = {
   max_push_per_user_per_day?: number | null;
 };
 
+/** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
+function normalizeRequireAbn(v: unknown): boolean {
+  return v === true || v === "true" || v === 1;
+}
+
+/**
+ * Whether ABR lookup is required for ABN validation. Prefers service role so this matches
+ * admin global_settings even when the caller has no session (anon cannot SELECT global_settings under RLS).
+ */
+export async function getRequireAbnForValidation(): Promise<boolean> {
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    const { data, error } = await admin
+      .from("global_settings")
+      .select("require_abn")
+      .eq("id", 1)
+      .maybeSingle();
+    if (!error && data != null) {
+      return normalizeRequireAbn((data as { require_abn?: unknown }).require_abn);
+    }
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.error("[getRequireAbnForValidation] admin read failed", error);
+    }
+  }
+  const settings = await getGlobalSettings();
+  if (settings != null) {
+    return normalizeRequireAbn(settings.require_abn);
+  }
+  return false;
+}
+
 async function requireAdmin() {
   const supabase = await createServerSupabaseClient();
   const {
@@ -73,6 +106,28 @@ async function requireAdmin() {
 }
 
 export async function getGlobalSettings(): Promise<GlobalSettingsRow | null> {
+  // RLS only allows SELECT for admins on global_settings; use service role for public reads (fees, flags).
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    const { data, error } = await admin
+      .from("global_settings")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle();
+    if (!error) {
+      return (data as GlobalSettingsRow | null) ?? null;
+    }
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[getGlobalSettings] admin read failed",
+        error.message,
+        error.code,
+        error.details ?? error.hint
+      );
+    }
+  }
+
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("global_settings")
@@ -82,14 +137,14 @@ export async function getGlobalSettings(): Promise<GlobalSettingsRow | null> {
   if (error) {
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
-      console.error("[getGlobalSettings] failed", error);
+      console.error(
+        "[getGlobalSettings] session read failed (expected for non-admins without service role)",
+        error.message,
+        error.code,
+        error.details ?? error.hint
+      );
     }
     return null;
-  }
-  // TEMP debug: surface what we see from global_settings
-  if (process.env.NODE_ENV !== "production") {
-    // eslint-disable-next-line no-console
-    console.log("[getGlobalSettings] data:", data);
   }
   return (data as GlobalSettingsRow | null) ?? null;
 }

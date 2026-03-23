@@ -1,7 +1,13 @@
 import { cache } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
-import type { ProfileRole, SessionWithProfile } from "@/lib/types";
+import type {
+  DistanceUnitPref,
+  ProfileRole,
+  SessionWithProfile,
+  ThemePreference,
+} from "@/lib/types";
+import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -43,35 +49,10 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
    * Roles: `[]` in DB = signed up but not yet chosen lister/cleaner (Airtasker-style flow).
    * `null` on legacy rows = treat as lister-only for backwards compatibility.
    */
-  let roles: ProfileRole[] = [];
-  if (row?.roles != null) {
-    if (Array.isArray(row.roles)) {
-      roles = (row.roles as unknown[]).filter(
-        (r): r is ProfileRole => r === "lister" || r === "cleaner"
-      );
-      if (roles.length === 0 && row.roles.length > 0) {
-        roles = ["lister"];
-      }
-    } else if (typeof row.roles === "string") {
-      try {
-        const parsed = JSON.parse(row.roles) as unknown;
-        if (Array.isArray(parsed)) {
-          roles = (parsed as unknown[]).filter(
-            (r): r is ProfileRole => r === "lister" || r === "cleaner"
-          );
-          if (roles.length === 0 && parsed.length > 0) {
-            roles = ["lister"];
-          }
-        } else {
-          roles = ["lister"];
-        }
-      } catch {
-        roles = ["lister"];
-      }
-    }
-  } else if (row) {
-    roles = ["lister"];
-  }
+  const roles: ProfileRole[] = normalizeProfileRolesFromDb(
+    row?.roles,
+    !!row
+  );
 
   let activeRole: ProfileRole | null =
     roles.length === 0
@@ -79,6 +60,10 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
       : (row?.active_role === "lister" || row?.active_role === "cleaner"
           ? row.active_role
           : null) ?? (roles[0] ?? null);
+
+  const parseThemePref = (v: unknown): ThemePreference =>
+    v === "light" || v === "dark" || v === "system" ? v : "system";
+  const parseDistanceUnit = (v: unknown): DistanceUnitPref => (v === "mi" ? "mi" : "km");
 
   if (process.env.NODE_ENV !== "production") {
     // Server-side debug log for admin/roles issues
@@ -99,6 +84,12 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
           roles,
           activeRole,
           profile_photo_url: row.profile_photo_url ?? null,
+          theme_preference: parseThemePref(
+            (row as { theme_preference?: string | null }).theme_preference
+          ),
+          distance_unit: parseDistanceUnit(
+            (row as { distance_unit?: string | null }).distance_unit
+          ),
         }
       : null,
     roles,

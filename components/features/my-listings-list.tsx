@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ImagePlus, MessageCircle, Gavel } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -22,7 +23,11 @@ import { formatCents, getListingCoverUrl } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { format } from "date-fns";
 import type { ListingRow } from "@/lib/listings";
-import { cancelListing, updateListingDetails } from "@/lib/actions/listings";
+import {
+  cancelListing,
+  relistExpiredListing,
+  updateListingDetails,
+} from "@/lib/actions/listings";
 import { useToast } from "@/components/ui/use-toast";
 import {
   validatePhotoFiles,
@@ -41,6 +46,14 @@ import { cn } from "@/lib/utils";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { formatAuctionTimeLeftShort } from "@/components/JobCard";
 import { MyListingsCardMobile } from "@/components/features/my-listings-card-mobile";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export type MyListingsListProps = {
   initialListings: ListingRow[];
@@ -49,6 +62,8 @@ export type MyListingsListProps = {
   listerVerificationBadges?: string[] | null;
   /** When set, open the edit panel for this listing id (e.g. from /listings/[id]/edit redirect). */
   initialEditListingId?: string | null;
+  /** From `?cancel=` (e.g. dashboard swipe) — open cancel-confirmation dialog for that listing if still live. */
+  initialOpenCancelListingId?: string | null;
   /** Platform fee % (lister pays on top of job price). Used for fee breakdown on job cards. */
   feePercentage?: number;
   /** Optional top-level view filter from My Listings tabs. */
@@ -78,6 +93,7 @@ export function MyListingsList({
   initialListings,
   listerId,
   initialEditListingId = null,
+  initialOpenCancelListingId = null,
   feePercentage = 12,
   viewTab = "active_listings",
   initialActiveJobsSnapshot,
@@ -132,9 +148,16 @@ export function MyListingsList({
   const [editError, setEditError] = useState<string | null>(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [cancelListingTarget, setCancelListingTarget] = useState<ListingRow | null>(null);
+  const [cancellingListing, setCancellingListing] = useState(false);
+  const [relistingId, setRelistingId] = useState<string | null>(null);
   const openedForEditIdRef = useRef<string | null>(null);
 
   const supabase = createBrowserSupabaseClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const cancelParamHandledRef = useRef(false);
 
   useEffect(() => {
     const channel = supabase
@@ -294,6 +317,76 @@ export function MyListingsList({
   };
 
   const { toast } = useToast();
+
+  const openCancelListingConfirm = (listing: ListingRow) => {
+    setCancelListingTarget(listing);
+  };
+
+  const handleConfirmCancelListing = async () => {
+    if (!cancelListingTarget) return;
+    setCancellingListing(true);
+    try {
+      const res = await cancelListing(String(cancelListingTarget.id));
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          title: "Could not cancel listing",
+          description: res.error,
+        });
+        return;
+      }
+      const id = cancelListingTarget.id;
+      setListings((prev) =>
+        prev.map((l) =>
+          l.id === id ? ({ ...l, status: "ended" } as ListingRow) : l
+        )
+      );
+      setCancelListingTarget(null);
+      toast({
+        title: "Listing cancelled",
+        description: "The auction has ended early. You can view it in your history.",
+      });
+      router.refresh();
+    } finally {
+      setCancellingListing(false);
+    }
+  };
+
+  /** Dashboard swipe → `/my-listings?cancel=id` opens the same confirmation dialog as the card button. */
+  useEffect(() => {
+    if (!initialOpenCancelListingId) {
+      cancelParamHandledRef.current = false;
+      return;
+    }
+    if (cancelParamHandledRef.current) return;
+    const targetId = String(initialOpenCancelListingId);
+    const listing = listings.find((l) => String(l.id) === targetId);
+    const stripCancelParam = () => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (!params.has("cancel")) return;
+      params.delete("cancel");
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    };
+    if (!listing) {
+      cancelParamHandledRef.current = true;
+      stripCancelParam();
+      return;
+    }
+    const stillLive =
+      listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
+    cancelParamHandledRef.current = true;
+    if (stillLive) {
+      setCancelListingTarget(listing);
+    }
+    stripCancelParam();
+  }, [
+    initialOpenCancelListingId,
+    listings,
+    pathname,
+    router,
+    searchParams,
+  ]);
 
   const handleListingPhotosChange = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -458,8 +551,14 @@ export function MyListingsList({
       parseUtcTimestamp(l.end_time) > nowMs &&
       !cancelledJobListingIds.has(l.id as unknown as string | number)
   );
-  const endedListings = otherListings.filter(
-    (l) => !(l.status === "live" && parseUtcTimestamp(l.end_time) > nowMs)
+  /** History on Active tab: excludes expired (those appear under Completed/Cancelled/Expired tab). */
+  const endedListingsForHistory = otherListings.filter(
+    (l) =>
+      !(l.status === "live" && parseUtcTimestamp(l.end_time) > nowMs) &&
+      String(l.status ?? "").toLowerCase() !== "expired"
+  );
+  const expiredListingsOnly = listings.filter(
+    (l) => String(l.status ?? "").toLowerCase() === "expired"
   );
 
   const noBidLiveListings = liveListings.filter(
@@ -493,6 +592,25 @@ export function MyListingsList({
     return DISPUTED_STATUSES.includes(status);
   });
 
+  const handleRelist = async (listingId: string) => {
+    setRelistingId(listingId);
+    const result = await relistExpiredListing(listingId);
+    setRelistingId(null);
+    if (!result.ok) {
+      toast({
+        variant: "destructive",
+        title: "Could not relist",
+        description: result.error,
+      });
+      return;
+    }
+    toast({
+      title: "Listing relisted",
+      description: "Your auction is live again with the same settings and duration.",
+    });
+    router.refresh();
+  };
+
   const renderCard = (
     listing: ListingRow,
     kind: "active" | "live" | "ended" | "completed"
@@ -500,8 +618,11 @@ export function MyListingsList({
     const isJobCard = kind === "active" || kind === "completed";
     const isActiveJob = kind === "active";
     const isLive = kind === "live";
+    const isExpiredListing =
+      String(listing.status ?? "").toLowerCase() === "expired";
     const isEndedNoBids =
       kind === "ended" &&
+      !isExpiredListing &&
       !bidIdSet.has(listing.id as unknown as string | number);
     const jobInfo =
       activeJobs[listing.id as unknown as string | number] ?? null;
@@ -578,6 +699,10 @@ export function MyListingsList({
             " bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200";
           break;
       }
+    } else if (isExpiredListing && !isJobCard) {
+      statusLabel = "Expired";
+      statusClass +=
+        " bg-slate-100 text-slate-800 dark:bg-slate-900/50 dark:text-slate-200";
     } else if (isEndedNoBids) {
       statusLabel = "Ended with no bids";
       statusClass += " bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200";
@@ -693,6 +818,12 @@ export function MyListingsList({
       mobileStatusPillClass = endingSoon
         ? "border-amber-400/80 bg-amber-500/20 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/50 dark:text-amber-100"
         : "border-emerald-300/80 bg-emerald-500/15 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/60 dark:text-emerald-100";
+    } else if (kind === "ended" && isExpiredListing) {
+      mobilePriceLabel = "Auction expired";
+      mobilePriceDisplay = "No bids";
+      mobileStatusPill = "Expired · no bids";
+      mobileStatusPillClass =
+        "border-slate-400/80 bg-slate-500/15 text-slate-900 dark:border-slate-600/50 dark:bg-slate-950/60 dark:text-slate-100";
     } else if (kind === "ended") {
       mobilePriceLabel = isEndedNoBids ? "Auction ended" : "Final bid";
       mobilePriceDisplay = formatCents(listing.current_lowest_bid_cents);
@@ -771,19 +902,17 @@ export function MyListingsList({
             onCancel={
               !isActiveJob && isLive && !isCancelledListing
                 ? () => {
-                    void (async () => {
-                      const confirmed = window.confirm(
-                        "Are you sure you want to cancel this listing? This will stop new bids but keep the listing in your history."
-                      );
-                      if (!confirmed) return;
-                      const res = await cancelListing(listing.id);
-                      if (!res.ok) {
-                        alert(res.error);
-                      }
-                    })();
+                    void openCancelListingConfirm(listing);
                   }
                 : undefined
             }
+            showRelist={kind === "ended" && isExpiredListing}
+            onRelist={
+              kind === "ended" && isExpiredListing
+                ? () => void handleRelist(String(listing.id))
+                : undefined
+            }
+            relistLoading={relistingId === String(listing.id)}
           >
             <>
               {(isJobCard || isCancelledListing) && (
@@ -1159,7 +1288,23 @@ export function MyListingsList({
           )}
         </CardContent>
         <CardFooter className="flex flex-wrap gap-2 pt-2">
-          {kind === "ended" ? (
+          {kind === "ended" && isExpiredListing ? (
+            <>
+              <Button
+                type="button"
+                variant="default"
+                className="flex-1"
+                size="sm"
+                disabled={relistingId === String(listing.id)}
+                onClick={() => void handleRelist(String(listing.id))}
+              >
+                {relistingId === String(listing.id) ? "Relisting…" : "Relist"}
+              </Button>
+              <Button asChild variant="outline" className="flex-1" size="sm">
+                <Link href={`/jobs/${listing.id}`}>View listing history</Link>
+              </Button>
+            </>
+          ) : kind === "ended" ? (
             <Button asChild variant="outline" className="flex-1" size="sm">
               <Link href={`/jobs/${listing.id}`}>View listing history</Link>
             </Button>
@@ -1182,16 +1327,7 @@ export function MyListingsList({
                   variant="outline"
                   size="sm"
                   className="mt-1 w-full border-amber-300 text-[11px] text-amber-800 hover:bg-amber-50"
-                  onClick={async () => {
-                    const confirmed = window.confirm(
-                      "Are you sure you want to cancel this listing? This will stop new bids but keep the listing in your history."
-                    );
-                    if (!confirmed) return;
-                    const res = await cancelListing(listing.id);
-                    if (!res.ok) {
-                      alert(res.error);
-                    }
-                  }}
+                  onClick={() => openCancelListingConfirm(listing)}
                 >
                   Cancel listing
                 </Button>
@@ -1263,14 +1399,14 @@ export function MyListingsList({
               </div>
             </div>
           )}
-          {viewTab === "active_listings" && endedListings.length > 0 && (
+          {viewTab === "active_listings" && endedListingsForHistory.length > 0 && (
             <div className="mt-6 space-y-2">
               <details className="space-y-2">
                 <summary className="cursor-pointer text-sm font-semibold text-muted-foreground">
-                  Ended/Cancelled listings (history)
+                  Completed/Cancelled/Expired (history)
                 </summary>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {endedListings.map((listing) =>
+                  {endedListingsForHistory.map((listing) =>
                     renderCard(listing, "ended")
                   )}
                 </div>
@@ -1330,15 +1466,20 @@ export function MyListingsList({
           )}
           {viewTab === "cancelled_listings" && (
             <div className="space-y-2">
-              {cancelledListings.length === 0 ? (
+              {cancelledListings.length === 0 && expiredListingsOnly.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border bg-muted/30 py-8 text-center dark:bg-gray-800/30">
                   <p className="text-sm font-medium text-foreground dark:text-gray-100">
-                    No cancelled listings yet.
+                    No completed, cancelled or expired listings yet.
                   </p>
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {cancelledListings.map((listing) => renderCard(listing, "ended"))}
+                  {expiredListingsOnly.map((listing) =>
+                    renderCard(listing, "ended")
+                  )}
+                  {cancelledListings.map((listing) =>
+                    renderCard(listing, "ended")
+                  )}
                 </div>
               )}
             </div>
@@ -1535,6 +1676,41 @@ export function MyListingsList({
           </div>
         </div>
       )}
+
+      <Dialog
+        open={cancelListingTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !cancellingListing) setCancelListingTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-md dark:border-gray-700 dark:bg-gray-900">
+          <DialogHeader>
+            <DialogTitle>Cancel this listing?</DialogTitle>
+            <DialogDescription className="text-left">
+              This will end the auction early. No new bids will be accepted, and cleaners who bid will see that the
+              listing has ended. The listing stays in your history. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCancelListingTarget(null)}
+              disabled={cancellingListing}
+            >
+              Keep listing live
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={cancellingListing}
+              onClick={() => void handleConfirmCancelListing()}
+            >
+              {cancellingListing ? "Cancelling…" : "Yes, end listing early"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

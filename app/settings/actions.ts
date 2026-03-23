@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import type { Database } from "@/types/supabase";
+import type { DistanceUnitPref, ThemePreference } from "@/lib/types";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
@@ -118,6 +119,71 @@ export async function savePayoutSchedule(
   revalidatePath("/settings");
   revalidatePath("/earnings");
   revalidatePath("/profile");
+  return { ok: true };
+}
+
+/** Persist theme from header toggle or settings (logged-in users). */
+export async function saveThemePreference(
+  theme: ThemePreference
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (theme !== "light" && theme !== "dark" && theme !== "system") {
+    return { ok: false, error: "Invalid theme." };
+  }
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "You must be logged in." };
+
+  const admin = createSupabaseAdminClient();
+  const db = (admin ?? supabase) as SupabaseClient<Database>;
+  const { error } = await db
+    .from("profiles")
+    .update({
+      theme_preference: theme,
+      updated_at: new Date().toISOString(),
+    } as ProfileUpdate as never)
+    .eq("id", session.user.id);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+/** Save theme + distance display unit from Settings → Preferences. */
+export async function saveUserPreferences(input: {
+  theme_preference: ThemePreference;
+  distance_unit: DistanceUnitPref;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { theme_preference, distance_unit } = input;
+  if (theme_preference !== "light" && theme_preference !== "dark" && theme_preference !== "system") {
+    return { ok: false, error: "Invalid theme." };
+  }
+  if (distance_unit !== "km" && distance_unit !== "mi") {
+    return { ok: false, error: "Invalid distance unit." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "You must be logged in." };
+
+  const admin = createSupabaseAdminClient();
+  const db = (admin ?? supabase) as SupabaseClient<Database>;
+  const { error } = await db
+    .from("profiles")
+    .update({
+      theme_preference,
+      distance_unit,
+      updated_at: new Date().toISOString(),
+    } as ProfileUpdate as never)
+    .eq("id", session.user.id);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/");
+  revalidatePath("/settings");
   return { ok: true };
 }
 

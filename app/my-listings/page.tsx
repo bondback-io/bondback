@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import { cn, parseUtcTimestamp } from "@/lib/utils";
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
 type MyListingsPageProps = {
-  searchParams?: Promise<{ edit?: string; tab?: string }>;
+  searchParams?: Promise<{ edit?: string; tab?: string; cancel?: string }>;
 };
 
 /** Fresh list after admin deletes listing or job status changes */
@@ -21,6 +22,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
   const supabase = await createServerSupabaseClient();
   const resolved = searchParams ? await searchParams : {};
   const editId = resolved?.edit ?? null;
+  const cancelListingIdParam = resolved?.cancel?.trim() || null;
   const tabParam = (resolved?.tab ?? "active_listings").toLowerCase();
   const tab =
     tabParam === "completed_jobs"
@@ -52,11 +54,13 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
     verification_badges?: string[] | null;
   } | null;
   const roles = (profile?.roles ?? []) as string[];
-  const activeRole = profile?.active_role ?? (roles[0] ?? null);
 
-  if (!roles.includes("lister") || activeRole !== "lister") {
+  /** Match lister dashboard: any user with lister role can manage listings (not only when active_role is lister). */
+  if (!roles.includes("lister")) {
     redirect("/dashboard");
   }
+
+  await applyListingAuctionOutcomes();
 
   const { data: listingsData, error: listingsError } = await supabase
     .from("listings")
@@ -74,6 +78,9 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
   }
 
   const initialListings = list as ListingRow[];
+  const expiredListingsCount = initialListings.filter(
+    (l) => String(l.status ?? "").toLowerCase() === "expired"
+  ).length;
   const listingIds = initialListings.map((l) => l.id);
   const settings = await getGlobalSettings();
   const feePercentage =
@@ -85,6 +92,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
   let completedCount = 0;
   let pendingPaymentsCount = 0;
   let cancelledListingsCount = 0;
+  let completedCancelledExpiredTabCount = expiredListingsCount;
   let disputesCount = 0;
   /** Seed client so cancelled jobs don’t briefly appear as “live” before useEffect loads jobs */
   let initialActiveJobsSnapshot:
@@ -197,6 +205,8 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
         j.cleaner_confirmed_complete === true
     ).length;
     cancelledListingsCount = jobs.filter((j) => j.status === "cancelled").length;
+    completedCancelledExpiredTabCount =
+      cancelledListingsCount + expiredListingsCount;
     disputesCount = jobs.filter((j) =>
       ["disputed", "in_review", "dispute_negotiating"].includes(String(j.status ?? ""))
     ).length;
@@ -267,7 +277,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
                   : "text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-200"
               )}
             >
-              Cancelled listings ({cancelledListingsCount})
+              Completed/Cancelled/Expired ({completedCancelledExpiredTabCount})
             </Link>
             <Link
               href="/my-listings?tab=disputes"
@@ -290,6 +300,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
                 : null
             }
             initialEditListingId={editId}
+            initialOpenCancelListingId={cancelListingIdParam}
             feePercentage={feePercentage}
             initialActiveJobsSnapshot={initialActiveJobsSnapshot}
             initialActiveListingIds={initialActiveListingIds}

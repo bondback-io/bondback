@@ -9,7 +9,6 @@ import {
   QuickActionsRow,
   CollapsibleActivityFeed,
   DashboardEmptyState,
-  DashboardPullToRefresh,
 } from "@/components/dashboard";
 import { ResponsiveCleanerJobCards } from "@/components/mobile-fab";
 import { cn } from "@/lib/utils";
@@ -23,6 +22,7 @@ import { getProfileCompletion } from "@/lib/profile-completion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -157,24 +157,25 @@ export default async function CleanerDashboardPage() {
     !showPhotoProgressNudge && completion.percent < 100;
 
   return (
-    <DashboardPullToRefresh>
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
-      {/* Sticky title row — role switcher lives in global header on mobile */}
-      <header className="sticky top-0 z-30 -mx-4 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <h1 className="truncate text-lg font-semibold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
-            Cleaner Dashboard
-          </h1>
-          <Badge
-            className={cn(
-              "shrink-0 text-xs font-medium",
-              "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200"
-            )}
-          >
-            Cleaner
-          </Badge>
-        </div>
-      </header>
+      {/* Mobile: title — sticky; desktop: title only (job search / radius lives on /jobs) */}
+      <div className="sticky top-0 z-30 -mx-4 space-y-2 border-b border-border bg-background/95 px-4 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 md:static md:mx-0 md:space-y-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+        <header className="flex items-center justify-between gap-3 py-1 sm:static sm:mx-0 sm:px-0 sm:py-0">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <h1 className="truncate text-lg font-semibold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
+              Cleaner Dashboard
+            </h1>
+            <Badge
+              className={cn(
+                "shrink-0 text-xs font-medium",
+                "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200"
+              )}
+            >
+              Cleaner
+            </Badge>
+          </div>
+        </header>
+      </div>
 
       {showWelcomeBanner && (
         <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-background shadow-sm dark:border-emerald-800/60 dark:from-emerald-950/40 dark:to-gray-950">
@@ -255,7 +256,11 @@ export default async function CleanerDashboardPage() {
       </div>
 
       {/* My Active Jobs — swipeable on mobile, grid on md+ */}
-      <div className="space-y-5 md:space-y-4">
+      <ScrollToHash anchorId="active-jobs" />
+      <div
+        id="active-jobs"
+        className="scroll-mt-[calc(6rem+env(safe-area-inset-top,0px))] space-y-5 md:scroll-mt-24 md:space-y-4"
+      >
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xl font-bold tracking-tight text-foreground dark:text-gray-100 md:text-base md:font-semibold">
             My Active Jobs
@@ -423,6 +428,5 @@ export default async function CleanerDashboardPage() {
       </details>
 
     </section>
-    </DashboardPullToRefresh>
   );
 }

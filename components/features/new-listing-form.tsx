@@ -31,6 +31,14 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -110,6 +118,9 @@ const BASE_PRICES: Record<PropertyType, Record<number, number>> = {
   studio: { 1: 260, 2: 320, 3: 380, 4: 440, 5: 500, 6: 560 },
 };
 
+/** Minimum starting price (AUD) for new listings — auction settings. */
+const MIN_LISTING_STARTING_PRICE_AUD = 100;
+
 const listingSchema = z
   .object({
     propertyType: z.enum(propertyTypes),
@@ -125,7 +136,10 @@ const listingSchema = z
     addons: z.array(z.enum(addonKeys)).default([]),
     instructions: z.string().max(2000).optional(),
     moveOutDate: z.date({ required_error: "Select your move-out date" }),
-    reservePrice: z.coerce.number().min(50, "Reserve must be at least $50 AUD"),
+    reservePrice: z.coerce.number().min(
+      MIN_LISTING_STARTING_PRICE_AUD,
+      `Starting price must be at least $${MIN_LISTING_STARTING_PRICE_AUD} AUD`
+    ),
     durationDays: z.coerce.number().int().min(1),
     buyNowPrice: z.string().optional(),
   })
@@ -142,7 +156,7 @@ const listingSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["buyNowPrice"],
-          message: "Buy-now price must be lower than reserve price",
+          message: "Buy-now price must be lower than starting price",
         });
     }
   });
@@ -236,6 +250,7 @@ export function NewListingForm({
   const [reserveTouched, setReserveTouched] = useState(false);
   const [created, setCreated] = useState(false);
   const [createdListingId, setCreatedListingId] = useState<string | null>(null);
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
 
   // Suburb autocomplete
   const [suburbQuery, setSuburbQuery] = useState("");
@@ -294,6 +309,12 @@ export function NewListingForm({
     () => calculateEstimatedPrice(watchedValues, addonCustomPrices),
     [watchedValues, addonCustomPrices]
   );
+  /** True when user set starting price below the live calculated estimate (property + add-ons). */
+  const startingPriceBelowSuggested =
+    typeof reservePriceWatched === "number" &&
+    Number.isFinite(reservePriceWatched) &&
+    reservePriceWatched > 0 &&
+    reservePriceWatched < estimatedPrice;
 
   // When special areas change in step 1, sync them into addons (auto-add/remove).
   useEffect(() => {
@@ -1208,7 +1229,7 @@ export function NewListingForm({
                   Auction settings
                 </CardTitle>
                 <CardDescription className="dark:text-gray-400">
-                  Set your reserve and how long cleaners can bid.
+                  Set your starting price and how long cleaners can bid.
                 </CardDescription>
                 {initialPhotoFiles.length < 1 && (
                   <p className="mt-2 text-base text-amber-600 dark:text-amber-400 md:text-sm">
@@ -1218,11 +1239,24 @@ export function NewListingForm({
               </CardHeader>
               <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
                 <div className="space-y-2">
-                  <Label htmlFor="reservePrice">Reserve price (AUD)</Label>
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <Label htmlFor="reservePrice" className="shrink-0">
+                      Starting price (AUD)
+                    </Label>
+                    {startingPriceBelowSuggested && (
+                      <p
+                        className="text-xs font-medium leading-snug text-destructive sm:max-w-[min(100%,20rem)] sm:text-right"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        Lower amount less than {formatAudFromCents(Math.round(estimatedPrice * 100))} AUD may receive less bids…
+                      </p>
+                    )}
+                  </div>
                   <Input
                     id="reservePrice"
                     type="number"
-                    min={50}
+                    min={MIN_LISTING_STARTING_PRICE_AUD}
                     inputMode="decimal"
                     className="dark:bg-gray-800 dark:border-gray-700"
                     {...form.register("reservePrice", {
@@ -1239,7 +1273,7 @@ export function NewListingForm({
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
-                    Cleaners bid down from the starting price. Your bond is most likely returned if the final price covers this reserve.
+                    Cleaners bid down from the starting price. Your bond is most likely returned if the final price covers this amount.
                   </p>
                   {typeof reservePriceWatched === "number" &&
                     reservePriceWatched > 0 &&
@@ -1250,12 +1284,12 @@ export function NewListingForm({
                         aria-live="polite"
                       >
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-                          Payment transparency (reserve)
+                          Payment breakdown
                         </p>
                         <dl className="mt-2 space-y-2 text-sm">
                           <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-                            <dt className="text-muted-foreground dark:text-gray-400">Job amount (reserve)</dt>
-                            <dd className="font-medium tabular-nums text-foreground dark:text-gray-100">
+                            <dt className="text-muted-foreground dark:text-gray-400">Starting bid amount</dt>
+                            <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                               {formatAudFromCents(Math.round(reservePriceWatched * 100))}
                             </dd>
                           </div>
@@ -1263,16 +1297,19 @@ export function NewListingForm({
                             <dt className="text-muted-foreground dark:text-gray-400">
                               Platform fee ({feePercentage}%)
                             </dt>
-                            <dd className="font-medium tabular-nums text-foreground dark:text-gray-100">
+                            <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                               {formatAudFromCents(reserveFeeCents)}
                             </dd>
                           </div>
                           <div className="border-t border-border pt-2 dark:border-gray-600">
                             <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-                              <dt className="font-semibold text-foreground dark:text-gray-100">
-                                Total you pay when securing
+                              <dt className="font-semibold text-foreground dark:text-gray-100 sm:max-w-[min(100%,20rem)]">
+                                Amount paid to cleaner + fee{" "}
+                                <span className="font-normal italic text-destructive">
+                                  - note this reduces with bids
+                                </span>
                               </dt>
-                              <dd className="text-base font-semibold tabular-nums text-primary dark:text-blue-300">
+                              <dd className="text-xl font-semibold tabular-nums text-primary dark:text-blue-300 sm:text-2xl">
                                 {formatAudFromCents(
                                   Math.round(reservePriceWatched * 100) + reserveFeeCents
                                 )}
@@ -1331,7 +1368,7 @@ export function NewListingForm({
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
-                    Cleaners can accept this price instantly. Must be lower than reserve.
+                    Cleaners can accept this price instantly. Must be lower than starting price.
                   </p>
                   {Number.isFinite(buyNowNum) && buyNowNum > 0 && buyNowFeeCents > 0 && (
                     <div
@@ -1345,7 +1382,7 @@ export function NewListingForm({
                       <dl className="mt-2 space-y-2 text-sm">
                         <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                           <dt className="text-muted-foreground dark:text-gray-400">Job amount (buy now)</dt>
-                          <dd className="font-medium tabular-nums text-foreground dark:text-gray-100">
+                          <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                             {formatAudFromCents(Math.round(buyNowNum * 100))}
                           </dd>
                         </div>
@@ -1353,16 +1390,19 @@ export function NewListingForm({
                           <dt className="text-muted-foreground dark:text-gray-400">
                             Platform fee ({feePercentage}%)
                           </dt>
-                          <dd className="font-medium tabular-nums text-foreground dark:text-gray-100">
+                          <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                             {formatAudFromCents(buyNowFeeCents)}
                           </dd>
                         </div>
                         <div className="border-t border-border pt-2 dark:border-gray-600">
                           <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-                            <dt className="font-semibold text-foreground dark:text-gray-100">
-                              Total you pay when securing
+                            <dt className="font-semibold text-foreground dark:text-gray-100 sm:max-w-[min(100%,20rem)]">
+                              Amount paid to cleaner + fee{" "}
+                              <span className="font-normal italic text-destructive">
+                                - note this reduces with bids
+                              </span>
                             </dt>
-                            <dd className="text-base font-semibold tabular-nums text-primary dark:text-blue-300">
+                            <dd className="text-xl font-semibold tabular-nums text-primary dark:text-blue-300 sm:text-2xl">
                               {formatAudFromCents(Math.round(buyNowNum * 100) + buyNowFeeCents)}
                             </dd>
                           </div>
@@ -1431,8 +1471,10 @@ export function NewListingForm({
                   initialPhotoFiles.length > PHOTO_LIMITS.LISTING_INITIAL
                 }
                 className="h-12 min-h-[48px] w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 md:h-10 md:min-h-0 md:w-auto"
-                onClick={() => {
-                  void form.handleSubmit(onSubmit)();
+                onClick={async () => {
+                  const ok = await form.trigger();
+                  if (!ok) return;
+                  setPublishConfirmOpen(true);
                 }}
               >
                 {isSubmitting || uploading
@@ -1441,6 +1483,40 @@ export function NewListingForm({
               </Button>
             )}
           </div>
+
+          <Dialog open={publishConfirmOpen} onOpenChange={setPublishConfirmOpen}>
+            <DialogContent className="max-w-md border-emerald-200 bg-emerald-50 text-emerald-950 shadow-xl dark:border-emerald-800 dark:bg-emerald-950/95 dark:text-emerald-50">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-semibold text-emerald-900 dark:text-emerald-100">
+                  Publish listing
+                </DialogTitle>
+                <DialogDescription className="text-left text-base text-emerald-800/95 dark:text-emerald-50/90">
+                  Are you sure you want to list? No payment required yet.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-100 dark:hover:bg-emerald-900"
+                  onClick={() => setPublishConfirmOpen(false)}
+                >
+                  Not now
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                  disabled={isSubmitting || uploading}
+                  onClick={() => {
+                    setPublishConfirmOpen(false);
+                    void form.handleSubmit(onSubmit)();
+                  }}
+                >
+                  Yes, list it
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </form>
       </section>
     </TooltipProvider>

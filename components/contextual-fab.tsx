@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CreateListingConfirmDialog } from "@/components/listing/create-listing-confirm-dialog";
 
 export type ProfileRole = "lister" | "cleaner";
 
@@ -84,63 +85,83 @@ export function ContextualFab({ activeRole, className }: ContextualFabProps) {
   const hideForContext = useHideFabContext();
   const prefersReducedMotion = useReducedMotion();
   const pulseCleaner = useCleanerJobsPulse(pathname ?? null, activeRole);
+  const [createListingOpen, setCreateListingOpen] = useState(false);
 
-  const show =
-    activeRole && isFabRoute(pathname ?? "", activeRole) && !hideForContext;
+  /**
+   * FAB route = show this widget at all. `hideForContext` hides only the floating
+   * button (keyboard / other dialogs) — it must NOT unmount the lister "create
+   * listing" dialog, or opening that dialog sets hide=true and the old
+   * `if (!show) return null` removed the whole tree including the Dialog → freeze.
+   */
+  const onFabRoute = !!activeRole && isFabRoute(pathname ?? "", activeRole);
+  const showFabButton = onFabRoute && !hideForContext;
 
-  if (!show) return null;
+  if (!onFabRoute) return null;
 
   const isLister = activeRole === "lister";
   const href = isLister ? "/listings/new" : "/jobs";
   const ariaLabel = isLister ? "Create new listing" : "Find jobs";
 
   return (
-    <motion.div
-      className={cn(
-        "fixed z-50 md:hidden",
-        "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4 max-w-[calc(100vw-2rem)]",
-        className
+    <>
+      {showFabButton && (
+        <motion.div
+          className={cn(
+            "fixed z-50 md:hidden",
+            "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4 max-w-[calc(100vw-2rem)]",
+            className
+          )}
+          initial={false}
+          animate={
+            !prefersReducedMotion && !isLister && pulseCleaner
+              ? {
+                  scale: [1, 1.06, 1],
+                  boxShadow: [
+                    "0 12px 40px -8px rgba(37, 99, 235, 0.45)",
+                    "0 16px 48px -6px rgba(37, 99, 235, 0.6)",
+                    "0 12px 40px -8px rgba(37, 99, 235, 0.45)",
+                  ],
+                }
+              : {}
+          }
+          transition={{
+            duration: 2.4,
+            repeat:
+              prefersReducedMotion || isLister || !pulseCleaner ? 0 : Infinity,
+            ease: "easeInOut",
+          }}
+        >
+          {isLister ? (
+            <button
+              type="button"
+              title={ariaLabel}
+              aria-label={ariaLabel}
+              onClick={() => setCreateListingOpen(true)}
+              className={cn(
+                "flex h-16 w-16 min-h-[4rem] min-w-[4rem] items-center justify-center rounded-full bg-emerald-600 text-white shadow-2xl ring-2 ring-emerald-400/50 transition hover:bg-emerald-500 active:scale-95 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+              )}
+            >
+              <Plus className="h-10 w-10 shrink-0" strokeWidth={2.75} aria-hidden />
+            </button>
+          ) : (
+            <Link
+              href={href}
+              title={ariaLabel}
+              className={cn(
+                "flex min-h-14 items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3.5 text-sm font-semibold text-white shadow-2xl ring-2 ring-blue-400/50 transition hover:bg-blue-500 active:scale-95 dark:bg-blue-600 dark:hover:bg-blue-500"
+              )}
+              aria-label={ariaLabel}
+            >
+              <Search className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
+              <span className="truncate">Find Jobs</span>
+            </Link>
+          )}
+        </motion.div>
       )}
-      initial={false}
-      animate={
-        !prefersReducedMotion && !isLister && pulseCleaner
-          ? {
-              scale: [1, 1.06, 1],
-              boxShadow: [
-                "0 12px 40px -8px rgba(37, 99, 235, 0.45)",
-                "0 16px 48px -6px rgba(37, 99, 235, 0.6)",
-                "0 12px 40px -8px rgba(37, 99, 235, 0.45)",
-              ],
-            }
-          : {}
-      }
-      transition={{
-        duration: 2.4,
-        repeat:
-          prefersReducedMotion || isLister || !pulseCleaner ? 0 : Infinity,
-        ease: "easeInOut",
-      }}
-    >
-      <Link
-        href={href}
-        title={ariaLabel}
-        className={cn(
-          "flex items-center justify-center text-white shadow-2xl ring-2 transition active:scale-95",
-          isLister
-            ? "h-16 w-16 min-h-[4rem] min-w-[4rem] rounded-full bg-emerald-600 ring-emerald-400/50 hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-            : "min-h-14 gap-2 rounded-full bg-blue-600 px-5 py-3.5 text-sm font-semibold ring-blue-400/50 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
-        )}
-        aria-label={ariaLabel}
-      >
-        {isLister ? (
-          <Plus className="h-10 w-10 shrink-0" strokeWidth={2.75} aria-hidden />
-        ) : (
-          <>
-            <Search className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
-            <span className="truncate">Find Jobs</span>
-          </>
-        )}
-      </Link>
-    </motion.div>
+
+      {isLister && (
+        <CreateListingConfirmDialog open={createListingOpen} onOpenChange={setCreateListingOpen} />
+      )}
+    </>
   );
 }

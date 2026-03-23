@@ -1,7 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PROTECTED_PATHS = ["/dashboard", "/listings/new", "/jobs", "/profile", "/my-listings", "/onboarding", "/admin"];
+const PROTECTED_PATHS = [
+  "/dashboard",
+  "/listings/new",
+  "/jobs",
+  "/profile",
+  "/settings",
+  "/my-listings",
+  "/onboarding",
+  "/admin",
+];
 
 /**
  * Public onboarding routes (no session). `/onboarding/role-choice` is auth-only

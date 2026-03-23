@@ -8,7 +8,7 @@ import { sendEmail } from "@/lib/notifications/email";
 import { markdownToHtml } from "@/lib/markdown";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
-const UNSUBSCRIBE_PATH = "/settings";
+const UNSUBSCRIBE_PATH = "/profile";
 
 function unsubscribeFooter(): string {
   return `

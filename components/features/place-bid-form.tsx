@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCents } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { ConnectRequiredModal } from "@/components/features/connect-required-modal";
 import {
   addPendingBid,
@@ -17,6 +17,7 @@ import {
   registerSyncPendingBids,
 } from "@/lib/offline-bids-db";
 import { useToast } from "@/components/ui/use-toast";
+import { Gavel, TrendingDown } from "lucide-react";
 
 export type PlaceBidFormProps = {
   listingId: string;
@@ -42,7 +43,8 @@ export function PlaceBidForm({
 
   const isLive = listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
   const currentLowest = listing.current_lowest_bid_cents;
-  const minBidDollars = (currentLowest - 1) / 100;
+  /** Highest allowed bid in dollars (1¢ below current lowest — reverse auction). */
+  const maxAllowedBidDollars = Math.max(0, (currentLowest - 1) / 100);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,18 +104,18 @@ export function PlaceBidForm({
 
   if (!isLive) {
     return (
-      <p className="text-sm text-muted-foreground">
-        This auction has ended.
-      </p>
+      <div className="rounded-2xl border border-border bg-muted/40 px-4 py-4 text-sm text-muted-foreground dark:border-gray-800 dark:bg-gray-900/50 dark:text-gray-400">
+        This auction has ended — bidding is closed.
+      </div>
     );
   }
 
   if (!isCleaner) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 px-4 py-4 text-sm leading-relaxed text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
         {currentUserId ? (
           <>
-            Switch to <strong>Cleaner</strong> mode in the header or Settings to place a bid.
+            Switch to <strong>Cleaner</strong> mode in the header or Settings to place a bid on this job.
           </>
         ) : (
           <>
@@ -123,44 +125,114 @@ export function PlaceBidForm({
             , then switch to Cleaner mode to place a bid.
           </>
         )}
-      </p>
+      </div>
     );
   }
 
   return (
     <>
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="min-w-[120px] space-y-1">
-          <Label htmlFor="bid-amount">Your bid (AUD)</Label>
-          <Input
-            id="bid-amount"
-            type="number"
-            step="1"
-            min={1}
-            max={minBidDollars}
-            placeholder={`Max ${minBidDollars}`}
-            value={amountDollars}
-            onChange={(e) => setAmountDollars(e.target.value)}
-          />
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div
+          className={cn(
+            "overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-muted/50 to-background dark:border-gray-800 dark:from-gray-900/80 dark:to-gray-950"
+          )}
+        >
+          <div className="flex items-start gap-3 border-b border-border/80 px-4 py-3.5 dark:border-gray-800">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-primary/15">
+              <TrendingDown className="h-5 w-5" aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+                Current lowest bid
+              </p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100">
+                {formatCents(currentLowest)}
+              </p>
+              <p className="mt-1 text-xs leading-snug text-muted-foreground dark:text-gray-500">
+                Your new bid must be{" "}
+                <span className="font-medium text-foreground dark:text-gray-300">lower</span> than this
+                {maxAllowedBidDollars > 0 ? (
+                  <>
+                    {" "}
+                    (max you can enter:{" "}
+                    <span className="tabular-nums font-medium text-foreground dark:text-gray-200">
+                      ${maxAllowedBidDollars.toFixed(2)}
+                    </span>
+                    )
+                  </>
+                ) : null}
+                .
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3 px-4 py-4">
+            <Label
+              htmlFor="bid-amount"
+              className="text-sm font-medium text-foreground dark:text-gray-100"
+            >
+              Your bid amount
+            </Label>
+            <div className="relative">
+              <span
+                className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-base font-semibold text-muted-foreground dark:text-gray-400"
+                aria-hidden
+              >
+                $
+              </span>
+              <Input
+                id="bid-amount"
+                name="bid-amount"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min={0.01}
+                max={maxAllowedBidDollars > 0 ? maxAllowedBidDollars : undefined}
+                placeholder={maxAllowedBidDollars > 0 ? maxAllowedBidDollars.toFixed(2) : "0.00"}
+                value={amountDollars}
+                onChange={(e) => setAmountDollars(e.target.value)}
+                className={cn(
+                  "h-12 min-h-[48px] border-2 pl-8 text-lg font-semibold tabular-nums",
+                  "focus-visible:ring-2 focus-visible:ring-primary/30",
+                  "dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-100"
+                )}
+                autoComplete="off"
+                aria-describedby="bid-amount-hint"
+              />
+            </div>
+            <p id="bid-amount-hint" className="text-[11px] leading-relaxed text-muted-foreground dark:text-gray-500">
+              Enter dollars and cents. We&apos;ll validate against the live lowest bid when you submit.
+            </p>
+
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="h-12 min-h-[48px] w-full gap-2 text-base font-semibold shadow-sm sm:max-w-md"
+              size="lg"
+            >
+              <Gavel className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+              {isSubmitting ? "Placing bid…" : "Place lower bid"}
+            </Button>
+          </div>
         </div>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Placing…" : "Place lower bid"}
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Must be lower than current lowest: {formatCents(currentLowest)}.
-      </p>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </form>
-    {currentUserId && (
-      <ConnectRequiredModal
-        open={connectModalOpen}
-        onOpenChange={setConnectModalOpen}
-        userId={currentUserId}
-        startOnboarding={true}
-      />
-    )}
+
+        {error ? (
+          <div
+            role="alert"
+            className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-sm text-destructive dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+          >
+            {error}
+          </div>
+        ) : null}
+      </form>
+      {currentUserId && (
+        <ConnectRequiredModal
+          open={connectModalOpen}
+          onOpenChange={setConnectModalOpen}
+          userId={currentUserId}
+          startOnboarding={true}
+        />
+      )}
     </>
   );
 }

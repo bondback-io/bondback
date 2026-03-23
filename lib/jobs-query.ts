@@ -12,6 +12,12 @@ export type JobsListFilters = {
   sort?: string;
   min_price?: string;
   max_price?: string;
+  /** Min latest bid (AUD whole dollars), maps to `current_lowest_bid_cents` */
+  min_bid_price?: string;
+  /** Max latest bid (AUD whole dollars), maps to `current_lowest_bid_cents` */
+  max_bid_price?: string;
+  /** When truthy (e.g. `"1"`), only listings with buy-now set */
+  buy_now_only?: string;
   bedrooms?: string;
   bathrooms?: string;
   property_type?: string;
@@ -29,6 +35,9 @@ export function buildLiveListingsQuery(
   const sort = (filters.sort ?? "").trim();
   const minPriceFilter = (filters.min_price ?? "").trim();
   const maxPriceFilter = (filters.max_price ?? "").trim();
+  const minBidPriceFilter = (filters.min_bid_price ?? "").trim();
+  const maxBidPriceFilter = (filters.max_bid_price ?? "").trim();
+  const buyNowOnlyFilter = (filters.buy_now_only ?? "").trim();
   const bedroomsFilter = (filters.bedrooms ?? "").trim();
   const bathroomsFilter = (filters.bathrooms ?? "").trim();
   const propertyTypeFilter = (filters.property_type ?? "").trim();
@@ -37,6 +46,7 @@ export function buildLiveListingsQuery(
     .from("listings")
     .select("*")
     .eq("status", "live")
+    .is("cancelled_early_at", null)
     .gt("end_time", now);
 
   if (takenIds.length > 0) {
@@ -58,6 +68,17 @@ export function buildLiveListingsQuery(
   if (maxPriceFilter) {
     const maxCents = Number(maxPriceFilter) * 100;
     if (!Number.isNaN(maxCents)) query = query.lte("reserve_cents", maxCents);
+  }
+  if (minBidPriceFilter) {
+    const minCents = Number(minBidPriceFilter) * 100;
+    if (!Number.isNaN(minCents)) query = query.gte("current_lowest_bid_cents", minCents);
+  }
+  if (maxBidPriceFilter) {
+    const maxCents = Number(maxBidPriceFilter) * 100;
+    if (!Number.isNaN(maxCents)) query = query.lte("current_lowest_bid_cents", maxCents);
+  }
+  if (buyNowOnlyFilter && buyNowOnlyFilter !== "0" && buyNowOnlyFilter.toLowerCase() !== "false") {
+    query = query.gt("buy_now_cents", 0);
   }
   if (bedroomsFilter) {
     const beds = Number(bedroomsFilter);

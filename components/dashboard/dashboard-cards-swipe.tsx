@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, Gavel, MessageCircle, XCircle } from "lucide-react";
+import { CheckCircle, Eye, Gavel, MessageCircle, XCircle } from "lucide-react";
 import { CardSwipeActions } from "@/components/features/card-swipe-actions";
 import { DashboardJobCard } from "@/components/dashboard/dashboard-job-card";
 import type { DashboardJobCardProps } from "@/components/dashboard/dashboard-job-card";
@@ -71,87 +71,93 @@ export function DashboardJobCardWithSwipe(props: DashboardJobCardProps) {
   );
 }
 
-/** Lister live listing: swipe right → view bids; swipe left → cancel (confirm + undo toast) */
+/** Lister live listing: swipe right → view listing; swipe left → cancel confirmation; footer Cancel uses same dialog. */
 export function DashboardListingCardWithSwipe(props: DashboardListingCardProps) {
   const router = useRouter();
-  const { toast, dismiss } = useToast();
+  const { toast } = useToast();
   const { listing, compact } = props;
-  const [cancelOpen, setCancelOpen] = React.useState(false);
-  const pendingRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
+  const [cancellingListing, setCancellingListing] = React.useState(false);
 
   const listingId = String(listing.id);
 
-  const clearPending = React.useCallback(() => {
-    if (pendingRef.current != null) {
-      clearTimeout(pendingRef.current);
-      pendingRef.current = null;
-    }
+  const openCancelDialog = React.useCallback(() => {
+    setCancelDialogOpen(true);
   }, []);
 
-  React.useEffect(() => () => clearPending(), [clearPending]);
-
-  const scheduleCancelFlow = React.useCallback(() => {
-    clearPending();
-    const toastId = `cancel-listing-${listingId}-${Date.now()}`;
-    pendingRef.current = setTimeout(() => {
-      pendingRef.current = null;
-      router.push(`/my-listings?cancel=${listingId}`);
-      dismiss(toastId);
-    }, 2800);
-    toast({
-      id: toastId,
-      title: "Opening cancellation",
-      description: "Confirm on the next screen. Undo to stay here.",
-      actionButton: {
-        label: "Undo",
-        onClick: () => {
-          clearPending();
-        },
-      },
-    });
-  }, [clearPending, dismiss, listingId, router, toast]);
+  const runCancelListing = React.useCallback(async () => {
+    setCancellingListing(true);
+    try {
+      const { cancelListing } = await import("@/lib/actions/listings");
+      const res = await cancelListing(listingId);
+      if (res.ok) {
+        setCancelDialogOpen(false);
+        toast({
+          title: "Listing cancelled",
+          description: "The auction has ended early. Your dashboard will update shortly.",
+        });
+        router.refresh();
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Could not cancel listing",
+          description: res.error,
+        });
+      }
+    } finally {
+      setCancellingListing(false);
+    }
+  }, [listingId, router, toast]);
 
   return (
     <>
       <CardSwipeActions
-        rightIcon={Gavel}
+        rightIcon={Eye}
         leftIcon={XCircle}
-        rightActionLabel="View bids"
+        rightActionLabel="View Listing"
         leftActionLabel="Cancel"
         onSwipeRight={() => router.push(`/jobs/${listingId}`)}
         onSwipeLeft={
           compact
             ? undefined
             : () => {
-                setCancelOpen(true);
+                openCancelDialog();
               }
         }
       >
-        <DashboardListingCard {...props} />
+        <DashboardListingCard {...props} onCancelClick={openCancelDialog} />
       </CardSwipeActions>
 
-      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-        <DialogContent className="max-w-sm dark:border-gray-800 dark:bg-gray-900">
+      <Dialog
+        open={cancelDialogOpen}
+        onOpenChange={(open) => {
+          if (!cancellingListing) setCancelDialogOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-md dark:border-gray-800 dark:bg-gray-900">
           <DialogHeader>
             <DialogTitle className="dark:text-gray-100">Cancel this listing?</DialogTitle>
-            <DialogDescription>
-              You will be taken to My Listings to confirm cancellation. This cannot be undone from
-              here alone.
+            <DialogDescription className="text-left">
+              This will end the auction early. No new bids will be accepted, and cleaners who bid will see that the
+              listing has ended. The listing stays in your history. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => setCancelOpen(false)}>
-              Keep listing
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCancelDialogOpen(false)}
+              disabled={cancellingListing}
+            >
+              Keep listing live
             </Button>
             <Button
               type="button"
               variant="destructive"
-              onClick={() => {
-                setCancelOpen(false);
-                scheduleCancelFlow();
-              }}
+              disabled={cancellingListing}
+              onClick={() => void runCancelListing()}
             >
-              Continue
+              {cancellingListing ? "Cancelling…" : "Yes, end listing early"}
             </Button>
           </DialogFooter>
         </DialogContent>

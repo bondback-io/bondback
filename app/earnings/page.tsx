@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { EarningsPageClient } from "@/components/features/earnings-page-client";
 import { getEffectivePayoutSchedule, getNextPayoutEstimate, formatPayoutScheduleLabel } from "@/lib/payout-schedule";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import type { Database } from "@/types/supabase";
 
 const PLATFORM_FEE_RATE = 0.12;
@@ -42,15 +43,14 @@ export default async function EarningsPage() {
   const nextPayoutEstimate = getNextPayoutEstimate(effectiveSchedule);
 
   const profile = profileData as (ProfileRow & { full_name?: string | null }) | null;
-  const roles = (profile?.roles as string[] | null) ?? [];
-  const activeRole = profile?.active_role ?? roles[0] ?? "lister";
-  const isCleaner = roles.includes("cleaner") && activeRole === "cleaner";
+  /** Same rule as `/cleaner/dashboard`: any profile with the cleaner role can view earnings. */
+  const roles = normalizeProfileRolesFromDb(profile?.roles, !!profile);
   const userName =
     (profile?.full_name ?? session.user.email?.split("@")[0] ?? "User")
       .replace(/[^a-zA-Z0-9-_]/g, "_")
       .slice(0, 50) || "User";
 
-  if (!isCleaner) {
+  if (!roles.includes("cleaner")) {
     redirect("/dashboard");
   }
 

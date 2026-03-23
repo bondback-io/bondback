@@ -3,11 +3,17 @@
 import * as React from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { applyThemeToDocument } from "@/lib/theme-client";
+import { saveThemePreference } from "@/app/settings/actions";
+import type { ThemePreference } from "@/lib/types";
 
-type Theme = "light" | "dark";
+export type ThemeToggleProps = {
+  /** When true (logged-in), persist header toggles to profiles.theme_preference. */
+  persistToServer?: boolean;
+};
 
-export function ThemeToggle() {
-  const [theme, setTheme] = React.useState<Theme | "system">("system");
+export function ThemeToggle({ persistToServer = false }: ThemeToggleProps) {
+  const [theme, setTheme] = React.useState<ThemePreference>("system");
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -15,35 +21,21 @@ export function ThemeToggle() {
 
     if (typeof window === "undefined") return;
 
-    const stored = window.localStorage.getItem("theme") as Theme | "system" | null;
-    const media = window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)");
-    const systemPrefersDark = media && media.matches;
-
-    const nextTheme: Theme | "system" = stored ?? "system";
+    const raw = window.localStorage.getItem("theme");
+    const nextTheme: ThemePreference =
+      raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
     setTheme(nextTheme);
+    applyThemeToDocument(nextTheme);
 
-    const effectiveTheme: Theme =
-      nextTheme === "system" ? (systemPrefersDark ? "dark" : "light") : nextTheme;
-
-    const root = window.document.documentElement;
-    if (effectiveTheme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-
-    const shouldFollowSystem = !stored || stored === "system";
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const shouldFollowSystem = !raw || raw === "system";
     if (media && typeof media.addEventListener === "function" && shouldFollowSystem) {
       const listener = (event: MediaQueryListEvent) => {
         const explicit = window.localStorage.getItem("theme");
         if (explicit === "light" || explicit === "dark") return;
-        const isDark = event.matches;
-        if (isDark) {
-          root.classList.add("dark");
-        } else {
-          root.classList.remove("dark");
-        }
+        const root = window.document.documentElement;
+        if (event.matches) root.classList.add("dark");
+        else root.classList.remove("dark");
       };
       media.addEventListener("change", listener);
       return () => {
@@ -55,29 +47,23 @@ export function ThemeToggle() {
   const toggleTheme = () => {
     if (typeof window === "undefined") return;
 
-    const root = window.document.documentElement;
     const systemPrefersDark =
       window.matchMedia &&
       window.matchMedia("(prefers-color-scheme: dark)").matches;
 
-    let nextTheme: Theme | "system";
+    let nextTheme: ThemePreference;
     if (theme === "dark") {
       nextTheme = "light";
     } else if (theme === "light") {
       nextTheme = "dark";
     } else {
-      // system -> flip based on system and persist explicit choice
       nextTheme = systemPrefersDark ? "light" : "dark";
     }
 
     setTheme(nextTheme);
-    window.localStorage.setItem("theme", nextTheme);
-
-    const effectiveTheme: Theme = nextTheme;
-    if (effectiveTheme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
+    applyThemeToDocument(nextTheme);
+    if (persistToServer) {
+      void saveThemePreference(nextTheme);
     }
   };
 
@@ -111,9 +97,8 @@ export function ThemeToggle() {
       {isDark ? (
         <Sun className="h-4 w-4 text-amber-400" />
       ) : (
-        <Moon className="h-4 w-4 text-slate-700" />
+        <Moon className="h-4 w-4 text-slate-700 dark:text-gray-300" />
       )}
     </Button>
   );
 }
-

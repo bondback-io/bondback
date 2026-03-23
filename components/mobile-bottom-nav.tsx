@@ -7,8 +7,12 @@ import { House, Briefcase, MessageCircle, User, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatPanel } from "@/components/chat/chat-panel-context";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
 
 type Role = "lister" | "cleaner" | null;
+
+/** Persist last known role so neutral routes (e.g. /profile) show Listings vs Jobs before fetch completes. */
+const MOBILE_NAV_ROLE_KEY = "bb_mobile_nav_active_role";
 
 const BOTTOM_NAV_ROUTES = [
   "/dashboard",
@@ -40,12 +44,42 @@ function isItemActive(pathname: string, href: string): boolean {
   return pathname === href || (href !== "/" && pathname.startsWith(href));
 }
 
+/**
+ * While profile `active_role` is still loading, infer lister vs cleaner from URL so the
+ * second tab doesn’t flash “Jobs” on /lister/dashboard etc.
+ */
+function inferSecondaryTabFromPath(pathname: string): {
+  href: string;
+  label: "Listings" | "Jobs";
+} | null {
+  const p = pathname.replace(/\/$/, "") || "/";
+  if (
+    p.startsWith("/my-listings") ||
+    p.startsWith("/lister/") ||
+    p === "/listings/new" ||
+    /\/listings\/[^/]+\/edit$/.test(p)
+  ) {
+    return { href: "/my-listings", label: "Listings" };
+  }
+  if (p.startsWith("/cleaner/") || p.startsWith("/earnings")) {
+    return { href: "/jobs", label: "Jobs" };
+  }
+  return null;
+}
+
 /** Second tab: lister → Listings (/my-listings); cleaner → Jobs (/jobs). */
 function isJobsTabActive(pathname: string, activeRole: Role): boolean {
   if (activeRole === "lister") {
     return pathname === "/my-listings" || pathname.startsWith("/my-listings/");
   }
   if (activeRole === "cleaner") {
+    return pathname === "/jobs" || pathname.startsWith("/jobs/");
+  }
+  // Still loading active_role: align highlight with inferred routes
+  if (pathname === "/my-listings" || pathname.startsWith("/my-listings/")) {
+    return true;
+  }
+  if (pathname.startsWith("/cleaner/") || pathname.startsWith("/earnings")) {
     return pathname === "/jobs" || pathname.startsWith("/jobs/");
   }
   return pathname === "/jobs" || pathname.startsWith("/jobs/");
@@ -94,13 +128,36 @@ function MessagesTabLink({ active }: { active: boolean }) {
   );
 }
 
+export type MobileBottomNavProps = {
+  /** From server session — avoids “Jobs” flash on /profile before client profile fetch. */
+  initialActiveRole?: Role | null;
+};
+
 /**
  * Fixed bottom tab bar (mobile &lt;768px): 4 large tabs, unread badge on Messages.
  */
-export function MobileBottomNav() {
+function readStoredMobileNavRole(): Role {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = sessionStorage.getItem(MOBILE_NAV_ROLE_KEY);
+    if (v === "lister" || v === "cleaner") return v;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+export function MobileBottomNav({
+  initialActiveRole = null,
+}: MobileBottomNavProps = {}) {
   const pathname = usePathname();
   const currentPath = pathname ?? "";
   const [activeRole, setActiveRole] = useState<Role>(null);
+  const [storedRoleFallback, setStoredRoleFallback] = useState<Role>(null);
+
+  useEffect(() => {
+    setStoredRoleFallback(readStoredMobileNavRole());
+  }, []);
 
   const refreshActiveRole = useCallback(async () => {
     const supabase = createBrowserSupabaseClient();
@@ -109,6 +166,12 @@ export function MobileBottomNav() {
     } = await supabase.auth.getUser();
     if (!user) {
       setActiveRole(null);
+      try {
+        sessionStorage.removeItem(MOBILE_NAV_ROLE_KEY);
+      } catch {
+        /* ignore */
+      }
+      setStoredRoleFallback(null);
       return;
     }
     const { data: row } = await supabase
@@ -117,7 +180,15 @@ export function MobileBottomNav() {
       .eq("id", user.id)
       .maybeSingle();
     const pr = row as { active_role?: string | null; roles?: string[] | null } | null;
-    const ar = pr?.active_role;
+    const arRaw = pr?.active_role;
+    const ar =
+      typeof arRaw === "string"
+        ? arRaw.trim().toLowerCase() === "lister"
+          ? "lister"
+          : arRaw.trim().toLowerCase() === "cleaner"
+            ? "cleaner"
+            : null
+        : null;
     const raw = Array.isArray(pr?.roles) ? pr.roles : [];
     const roles: Role[] = [];
     for (const x of raw) {
@@ -132,6 +203,14 @@ export function MobileBottomNav() {
       next = roles[0]!;
     }
     setActiveRole(next);
+    if (next !== null) {
+      try {
+        sessionStorage.setItem(MOBILE_NAV_ROLE_KEY, next);
+      } catch {
+        /* ignore */
+      }
+      setStoredRoleFallback(next);
+    }
   }, []);
 
   useEffect(() => {
@@ -148,21 +227,31 @@ export function MobileBottomNav() {
     return () => subscription.unsubscribe();
   }, [refreshActiveRole]);
 
+  useEffect(() => {
+    const onRoleEvent = () => refreshActiveRole();
+    window.addEventListener(ACTIVE_ROLE_CHANGED_EVENT, onRoleEvent);
+    return () => window.removeEventListener(ACTIVE_ROLE_CHANGED_EVENT, onRoleEvent);
+  }, [refreshActiveRole]);
+
   if (!isBottomNavRoute(currentPath)) return null;
 
+  const effectiveRole =
+    activeRole ?? storedRoleFallback ?? initialActiveRole ?? null;
+  const inferred = inferSecondaryTabFromPath(currentPath);
   const jobsTabHref =
-    activeRole === "lister"
+    effectiveRole === "lister"
       ? "/my-listings"
-      : activeRole === "cleaner"
+      : effectiveRole === "cleaner"
         ? "/jobs"
-        : "/jobs";
+        : (inferred?.href ?? "/jobs");
   const jobsTabLabel =
-    activeRole === "lister"
+    effectiveRole === "lister"
       ? "Listings"
-      : activeRole === "cleaner"
+      : effectiveRole === "cleaner"
         ? "Jobs"
-        : "Jobs";
-  const JobsIcon = activeRole === "lister" ? List : Briefcase;
+        : (inferred?.label ?? "Jobs");
+  const JobsIcon =
+    effectiveRole === "lister" || inferred?.label === "Listings" ? List : Briefcase;
 
   return (
     <nav
@@ -209,15 +298,15 @@ export function MobileBottomNav() {
             href={jobsTabHref}
             className={cn(
               "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
-              isJobsTabActive(currentPath, activeRole)
+              isJobsTabActive(currentPath, effectiveRole)
                 ? "text-primary"
                 : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
             )}
-            aria-current={isJobsTabActive(currentPath, activeRole) ? "page" : undefined}
+            aria-current={isJobsTabActive(currentPath, effectiveRole) ? "page" : undefined}
             aria-label={
-              activeRole === "cleaner"
+              effectiveRole === "cleaner"
                 ? "Jobs — browse and manage jobs"
-                : activeRole === "lister"
+                : effectiveRole === "lister"
                   ? "Listings"
                   : "Jobs"
             }
@@ -225,7 +314,7 @@ export function MobileBottomNav() {
             <JobsIcon
               className={cn(
                 "h-7 w-7 shrink-0",
-                isJobsTabActive(currentPath, activeRole) ? "stroke-[2.5]" : "stroke-[2]"
+                isJobsTabActive(currentPath, effectiveRole) ? "stroke-[2.5]" : "stroke-[2]"
               )}
               aria-hidden
             />
@@ -235,7 +324,7 @@ export function MobileBottomNav() {
             <span
               className={cn(
                 "h-0.5 w-7 rounded-full",
-                isJobsTabActive(currentPath, activeRole) ? "bg-primary" : "bg-transparent"
+                isJobsTabActive(currentPath, effectiveRole) ? "bg-primary" : "bg-transparent"
               )}
               aria-hidden
             />
@@ -263,7 +352,7 @@ export function MobileBottomNav() {
               aria-hidden
             />
             <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
-              Profile
+              Account
             </span>
             <span
               className={cn(

@@ -6,12 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Menu,
   Home,
-  Briefcase,
+  Search,
   LayoutDashboard,
   PlusCircle,
   User,
   DollarSign,
-  Settings,
   HelpCircle,
   LogOut,
 } from "lucide-react";
@@ -20,12 +19,15 @@ import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/s
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/layout/notification-bell";
+import { CreateListingConfirmDialog } from "@/components/listing/create-listing-confirm-dialog";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { SessionWithProfile } from "@/lib/types";
 export type MainNavProps = {
   isLoggedIn: boolean;
+  /** User has cleaner on their profile — used for /earnings link (same gate as earnings page). */
+  hasCleanerRole?: boolean;
   isCleaner: boolean;
   isLister: boolean;
   /** When provided (logged in), mobile sheet shows full menu including profile section. */
@@ -35,9 +37,16 @@ export type MainNavProps = {
 };
 
 const desktopLinkBase =
-  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition-all duration-150";
+  "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium transition-all duration-150 md:px-3 md:py-2 lg:px-3.5";
 
-function DesktopNavLinks({ isLoggedIn, isCleaner, isLister }: Omit<MainNavProps, "session" | "unreadMessageCount">) {
+function DesktopNavLinks({
+  isLoggedIn,
+  isCleaner,
+  isLister,
+  onRequestCreateListing,
+}: Omit<MainNavProps, "session" | "unreadMessageCount"> & {
+  onRequestCreateListing?: () => void;
+}) {
   const pathname = usePathname();
 
   const isActive = (href: string) =>
@@ -54,7 +63,10 @@ function DesktopNavLinks({ isLoggedIn, isCleaner, isLister }: Omit<MainNavProps,
   const dashboardHref = "/dashboard";
 
   return (
-    <nav className="hidden items-center gap-1 md:flex md:gap-2" aria-label="Main navigation">
+    <nav
+      className="hidden min-w-0 flex-nowrap items-center gap-1 md:flex md:gap-1.5 lg:gap-2"
+      aria-label="Main navigation"
+    >
       {!isLoggedIn && (
         <Link href="/" className={linkClass("/")}>
           Home
@@ -62,11 +74,18 @@ function DesktopNavLinks({ isLoggedIn, isCleaner, isLister }: Omit<MainNavProps,
       )}
       {isLoggedIn && (
         <>
-          <Link href="/jobs" className={linkClass("/jobs")}>
-            Find Jobs
+          <Link
+            href="/jobs"
+            className={linkClass("/jobs")}
+            title="Find jobs"
+            aria-label="Find jobs"
+          >
+            <Search className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+            <span>Find Jobs</span>
           </Link>
           <Link
             href={dashboardHref}
+            title="Dashboard"
             className={cn(
               desktopLinkBase,
               "font-semibold text-foreground dark:text-gray-100",
@@ -76,20 +95,38 @@ function DesktopNavLinks({ isLoggedIn, isCleaner, isLister }: Omit<MainNavProps,
             )}
           >
             <LayoutDashboard className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            Dashboard
+            <span className="max-2xl:sr-only">Dashboard</span>
           </Link>
-          {isLister && (
-            <Button
-              asChild
-              size="sm"
-              className="ml-0.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-900/25 dark:bg-emerald-600 dark:shadow-none dark:hover:bg-emerald-500 dark:hover:shadow-md dark:hover:shadow-emerald-950/50"
-            >
-              <Link href="/listings/new" className="inline-flex items-center gap-1.5">
+          {isLister &&
+            (onRequestCreateListing ? (
+              <Button
+                type="button"
+                size="sm"
+                className="ml-0 shrink-0 rounded-full bg-emerald-600 px-2.5 py-1.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-900/25 md:px-3 md:py-2 lg:px-4 dark:bg-emerald-600 dark:shadow-none dark:hover:bg-emerald-500 dark:hover:shadow-md dark:hover:shadow-emerald-950/50"
+                title="Create listing"
+                aria-label="Create listing"
+                onClick={onRequestCreateListing}
+              >
                 <PlusCircle className="h-4 w-4 shrink-0" aria-hidden />
-                Create Listing
-              </Link>
-            </Button>
-          )}
+                <span className="max-2xl:sr-only">Create Listing</span>
+              </Button>
+            ) : (
+              <Button
+                asChild
+                size="sm"
+                className="ml-0 shrink-0 rounded-full bg-emerald-600 px-2.5 py-1.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-900/25 md:px-3 md:py-2 lg:px-4 dark:bg-emerald-600 dark:shadow-none dark:hover:bg-emerald-500 dark:hover:shadow-md dark:hover:shadow-emerald-950/50"
+              >
+                <Link
+                  href="/listings/new"
+                  className="inline-flex items-center gap-1.5 whitespace-nowrap"
+                  title="Create listing"
+                  aria-label="Create listing"
+                >
+                  <PlusCircle className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="max-2xl:sr-only">Create Listing</span>
+                </Link>
+              </Button>
+            ))}
         </>
       )}
     </nav>
@@ -101,12 +138,14 @@ const MOBILE_ROW =
 
 function MobileNavContent({
   isLoggedIn,
+  hasCleanerRole = false,
   isCleaner,
   isLister,
   session,
   unreadMessageCount = 0,
   onNavigate,
-}: MainNavProps & { onNavigate?: () => void }) {
+  onRequestCreateListing,
+}: MainNavProps & { onNavigate?: () => void; onRequestCreateListing?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const isActive = (href: string) =>
@@ -182,8 +221,14 @@ function MobileNavContent({
         {isLoggedIn && (
           <>
         <SheetClose asChild>
-          <Link href="/jobs" className={linkClass("/jobs")} onClick={onNavigate}>
-            <Briefcase className="h-5 w-5 shrink-0" aria-hidden />
+          <Link
+            href="/jobs"
+            className={linkClass("/jobs")}
+            onClick={onNavigate}
+            title="Find jobs"
+            aria-label="Find jobs"
+          >
+            <Search className="h-5 w-5 shrink-0" aria-hidden />
             <span>Find Jobs</span>
           </Link>
         </SheetClose>
@@ -202,21 +247,37 @@ function MobileNavContent({
             <span>Dashboard</span>
           </Link>
         </SheetClose>
-        {isLister && (
-          <SheetClose asChild>
-            <Link
-              href="/listings/new"
+        {isLister &&
+          (onRequestCreateListing ? (
+            <button
+              type="button"
               className={cn(
                 MOBILE_ROW,
                 "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
               )}
-              onClick={onNavigate}
+              onClick={() => {
+                onNavigate?.();
+                onRequestCreateListing();
+              }}
             >
               <PlusCircle className="h-5 w-5 shrink-0" aria-hidden />
               <span>Create Listing</span>
-            </Link>
-          </SheetClose>
-        )}
+            </button>
+          ) : (
+            <SheetClose asChild>
+              <Link
+                href="/listings/new"
+                className={cn(
+                  MOBILE_ROW,
+                  "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                )}
+                onClick={onNavigate}
+              >
+                <PlusCircle className="h-5 w-5 shrink-0" aria-hidden />
+                <span>Create Listing</span>
+              </Link>
+            </SheetClose>
+          ))}
         {session && (
           <div className="min-h-12 w-full">
             <NotificationBell userId={session.user.id} variant="row" />
@@ -245,10 +306,10 @@ function MobileNavContent({
                 onClick={onNavigate}
               >
                 <User className="h-5 w-5 shrink-0" aria-hidden />
-                <span>My Profile</span>
+                <span>My Account</span>
               </Link>
             </SheetClose>
-            {isCleaner && (
+            {hasCleanerRole && (
               <SheetClose asChild>
                 <Link
                   href="/earnings"
@@ -260,16 +321,6 @@ function MobileNavContent({
                 </Link>
               </SheetClose>
             )}
-            <SheetClose asChild>
-              <Link
-                href="/settings"
-                className={cn(MOBILE_ROW, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100")}
-                onClick={onNavigate}
-              >
-                <Settings className="h-5 w-5 shrink-0" aria-hidden />
-                <span>Settings</span>
-              </Link>
-            </SheetClose>
             <SheetClose asChild>
               <Link
                 href="/help"
@@ -299,14 +350,28 @@ function MobileNavContent({
   );
 }
 
-export function MainNav({ isLoggedIn, isCleaner, isLister, session, unreadMessageCount }: MainNavProps) {
+export function MainNav({
+  isLoggedIn,
+  hasCleanerRole = false,
+  isCleaner,
+  isLister,
+  session,
+  unreadMessageCount,
+}: MainNavProps) {
   const [open, setOpen] = React.useState(false);
+  const [createListingOpen, setCreateListingOpen] = React.useState(false);
+  const openCreateListingDialog = React.useCallback(() => setCreateListingOpen(true), []);
   useBodyScrollLock(open);
   const swipeHandlers = useSwipeToClose(() => setOpen(false), "right");
 
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-end gap-2 md:min-w-0 md:flex-1 md:justify-start md:gap-2">
-      <DesktopNavLinks isLoggedIn={isLoggedIn} isCleaner={isCleaner} isLister={isLister} />
+    <div className="flex min-w-0 flex-1 items-center justify-end gap-2 md:min-w-0 md:flex-1 md:flex-nowrap md:justify-start md:gap-2">
+      <DesktopNavLinks
+        isLoggedIn={isLoggedIn}
+        isCleaner={isCleaner}
+        isLister={isLister}
+        onRequestCreateListing={isLister ? openCreateListingDialog : undefined}
+      />
 
       {/* Mobile: hamburger — 44px touch target, slide-in sheet from right */}
       <Sheet open={open} onOpenChange={setOpen}>
@@ -341,15 +406,21 @@ export function MainNav({ isLoggedIn, isCleaner, isLister, session, unreadMessag
           <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-8 pt-1">
             <MobileNavContent
               isLoggedIn={isLoggedIn}
+              hasCleanerRole={hasCleanerRole}
               isCleaner={isCleaner}
               isLister={isLister}
               session={session ?? null}
               unreadMessageCount={unreadMessageCount}
               onNavigate={() => setOpen(false)}
+              onRequestCreateListing={isLister ? openCreateListingDialog : undefined}
             />
           </div>
         </SheetContent>
       </Sheet>
+
+      {isLister && (
+        <CreateListingConfirmDialog open={createListingOpen} onOpenChange={setCreateListingOpen} />
+      )}
     </div>
   );
 }

@@ -70,7 +70,7 @@ const NewListingPage = async () => {
               </Button>
               {hasListerRole && (
                 <Button asChild variant="outline" className="w-full sm:w-auto">
-                  <Link href="/settings">Account &amp; role settings</Link>
+                  <Link href="/profile">Account &amp; role settings</Link>
                 </Button>
               )}
             </div>

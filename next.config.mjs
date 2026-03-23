@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // Reduces lucide-react barrel / HMR issues (e.g. stale icon chunks after removing imports)
+    optimizePackageImports: ["lucide-react"],
+  },
   images: {
     remotePatterns: [
       {

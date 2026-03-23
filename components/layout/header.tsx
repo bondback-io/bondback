@@ -41,7 +41,8 @@ export const Header = async ({
   const isLoggedIn = !!session;
   const roles = session?.roles ?? [];
   const activeRole = session?.activeRole ?? null;
-  const isCleaner = roles.includes("cleaner") && activeRole === "cleaner";
+  const hasCleanerRole = roles.includes("cleaner");
+  const isCleaner = hasCleanerRole && activeRole === "cleaner";
   const isLister = roles.includes("lister") && activeRole === "lister";
 
   return (
@@ -63,21 +64,22 @@ export const Header = async ({
               <LogoMark />
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <ThemeToggle />
+              <ThemeToggle persistToServer={!!session} />
               <RoleSwitcher session={session} variant="compact" />
               <UserMenu session={session} />
             </div>
           </div>
 
-          {/* Desktop */}
-          <div className="container hidden min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-2 px-3 py-2 sm:min-h-14 sm:gap-4 sm:px-4 md:flex md:px-6">
-            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4 md:gap-8">
+          {/* Desktop — single row; inner nav uses flex-nowrap so Create Listing stays aligned with Find Jobs / Dashboard */}
+          <div className="container hidden min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-x-2 gap-y-0 px-3 py-2 sm:min-h-14 sm:gap-x-3 sm:px-4 md:flex md:px-6">
+            <div className="flex min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] sm:min-h-0 sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
               <LogoMark />
-              <span className="hidden truncate text-xs text-muted-foreground sm:inline lg:text-[13px]">
+              <span className="hidden shrink-0 truncate text-xs text-muted-foreground xl:inline xl:max-w-[11rem] xl:text-[13px]">
                 Bond clean marketplace
               </span>
               <MainNav
                 isLoggedIn={isLoggedIn}
+                hasCleanerRole={hasCleanerRole}
                 isCleaner={isCleaner}
                 isLister={isLister}
                 session={session ?? null}
@@ -85,10 +87,10 @@ export const Header = async ({
             </div>
 
             <nav
-              className="flex shrink-0 items-center justify-end gap-1 sm:gap-2"
+              className="flex min-w-0 shrink-0 flex-nowrap items-center justify-end gap-x-1 sm:gap-x-1.5 lg:gap-x-2"
               aria-label="Account and tools"
             >
-              <div className="flex items-center gap-1.5">
+              <div className="flex min-w-0 flex-nowrap items-center justify-end gap-x-1 sm:gap-x-1.5 lg:gap-x-2">
                 <NotificationBell userId={session.user.id} />
                 <PendingBidsBadge isCleaner={isCleaner} />
                 {floatingChatEnabled && <ChatPanelToggle />}
@@ -107,7 +109,7 @@ export const Header = async ({
                 className="mx-0.5 hidden h-5 w-px shrink-0 bg-border dark:bg-gray-700 sm:block md:mx-1"
                 aria-hidden
               />
-              <ThemeToggle />
+              <ThemeToggle persistToServer={!!session} />
             </nav>
           </div>
         </>
@@ -128,9 +130,10 @@ export const Header = async ({
             </Link>
             <MainNav
               isLoggedIn={isLoggedIn}
-              isCleaner={isCleaner}
-              isLister={isLister}
-              session={session ?? null}
+              hasCleanerRole={false}
+              isCleaner={false}
+              isLister={false}
+              session={null}
             />
           </div>
 

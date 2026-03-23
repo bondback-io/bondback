@@ -58,7 +58,7 @@ export function PayoutScheduleForm({ initial }: PayoutScheduleFormProps) {
         onValueChange={handleChange}
         disabled={isPending}
       >
-        <SelectTrigger className="w-full max-w-full md:max-w-[220px] dark:bg-gray-900 dark:border-gray-700">
+        <SelectTrigger className="w-full max-w-full md:max-w-[220px] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

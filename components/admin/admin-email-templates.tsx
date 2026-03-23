@@ -84,7 +84,7 @@ const APP_URL = typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_APP_URL
 const UNSUBSCRIBE_FOOTER_HTML = `
 <div style="margin-top:2em;padding-top:1em;border-top:1px solid #eee;font-size:12px;color:#666;">
   <p>You received this email because of your Bond Back notification settings.</p>
-  <p><a href="${APP_URL}/settings">Manage notification preferences or unsubscribe</a></p>
+  <p><a href="${APP_URL}/profile?tab=notifications">Manage notification preferences or unsubscribe</a></p>
 </div>`;
 
 function replacePlaceholdersClient(text: string, data: TestDataInput): string {
