@@ -1417,21 +1417,6 @@ export function JobDetail({
             </details>
           )}
 
-          {!(isCleaner && hideCleanerCancelledAuctionUi) && !showAuctionActions && (
-            <BidHistorySection
-              bids={bids}
-              onAcceptBid={
-                isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
-              }
-              largeTouch={detailUiBoost}
-              defaultOpen={false}
-              className={cn(
-                "mt-3 border-t border-border pt-2 text-muted-foreground dark:border-gray-700 dark:text-gray-500",
-                detailUiBoost ? "text-sm" : "text-[11px]"
-              )}
-            />
-          )}
-
           {/* Escrow flow: Pay & Start Job (Stripe) then optionally Start Job if webhook hasn't moved status yet */}
           {hasActiveJob && localJobStatus === "accepted" && (
             <div className="mt-2 space-y-2 rounded-md border bg-background/60 px-3 py-2 text-xs sm:text-sm dark:border-gray-700 dark:bg-gray-800/50">
@@ -3005,6 +2990,21 @@ export function JobDetail({
               </div>
             );
           })()}
+
+          {!(isCleaner && hideCleanerCancelledAuctionUi) && (
+            <BidHistorySection
+              bids={bids}
+              onAcceptBid={
+                isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
+              }
+              largeTouch={detailUiBoost}
+              defaultOpen={Boolean(showAuctionActions && isListingOwner && !isCleaner)}
+              className={cn(
+                "mt-4 border-t border-border pt-4 text-muted-foreground dark:border-gray-700 dark:text-gray-500",
+                detailUiBoost ? "text-sm" : "text-[11px]"
+              )}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -3071,21 +3071,6 @@ export function JobDetail({
                   </div>
                 </div>
               )}
-
-            {showAuctionActions && !(isCleaner && hideCleanerCancelledAuctionUi) && (
-              <BidHistorySection
-                bids={bids}
-                onAcceptBid={
-                  isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
-                }
-                largeTouch={detailUiBoost}
-                defaultOpen={Boolean(isListingOwner && !isCleaner)}
-                className={cn(
-                  "border-t border-border pt-5 text-muted-foreground dark:border-gray-800 dark:text-gray-500",
-                  detailUiBoost ? "text-sm" : "text-[11px]"
-                )}
-              />
-            )}
           </CardContent>
         </Card>
       )}
