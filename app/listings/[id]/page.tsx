@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { buildJobListingMetadata } from "@/app/jobs/[id]/page";
+import { buildJobListingMetadata } from "@/lib/seo/jobs-listings-seo";
 
 export const dynamic = "force-dynamic";
 
