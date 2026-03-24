@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ImagePlus, MessageCircle, Gavel } from "lucide-react";
+import { Briefcase, ImagePlus, MessageCircle, Gavel } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
   Card,
@@ -1383,15 +1383,54 @@ export function MyListingsList({
             </div>
           )}
           {viewTab === "active_listings" && activeNonCompletedListings.length > 0 && (
-            <div className={liveListingsWithBids.length > 0 ? "mt-6 space-y-2" : "space-y-2"}>
-              <h2 className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
-                Active jobs (purchased / won)
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {activeNonCompletedListings.map((listing) =>
-                  renderCard(listing, "active")
-                )}
-              </div>
+            <div
+              className={cn(
+                liveListingsWithBids.length > 0 ? "mt-6" : "",
+                "space-y-3"
+              )}
+            >
+              <section
+                id="lister-active-jobs"
+                aria-labelledby="lister-active-jobs-heading"
+                className="overflow-hidden rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/95 via-white to-sky-50/55 shadow-md ring-1 ring-emerald-500/15 dark:border-emerald-800/70 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25"
+              >
+                <header className="border-b border-emerald-200/70 bg-emerald-600/[0.07] px-4 py-3.5 sm:px-5 sm:py-4 dark:border-emerald-800/55 dark:bg-emerald-500/10">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <div className="flex min-w-0 gap-3">
+                      <div
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm dark:bg-emerald-500"
+                        aria-hidden
+                      >
+                        <Briefcase className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <h2
+                            id="lister-active-jobs-heading"
+                            className="text-base font-bold tracking-tight text-emerald-950 dark:text-emerald-50 sm:text-lg"
+                          >
+                            Active jobs
+                          </h2>
+                          <span className="inline-flex items-center rounded-full bg-emerald-700/12 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-emerald-900 dark:bg-emerald-400/15 dark:text-emerald-100">
+                            {activeNonCompletedListings.length}{" "}
+                            {activeNonCompletedListings.length === 1 ? "job" : "jobs"}
+                          </span>
+                        </div>
+                        <p className="text-sm leading-relaxed text-emerald-900/85 dark:text-emerald-200/90">
+                          Purchased or won — track progress, message your cleaner, and finish any payment steps.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </header>
+                <div className="p-3 sm:p-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+                    {activeNonCompletedListings.map((listing) =>
+                      renderCard(listing, "active")
+                    )}
+                  </div>
+                </div>
+              </section>
             </div>
           )}
           {viewTab === "active_listings" && noBidLiveListings.length > 0 && (

@@ -1,0 +1,218 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getSuburbLatLon } from "@/lib/geo/suburb-lat-lon";
+import { haversineKm } from "@/lib/geo/haversine-km";
+import {
+  computeCleanerBrowseTier,
+  tierSortRank,
+  type CleanerBrowseTier,
+} from "@/lib/cleaner-browse-tier";
+
+export type BrowseCleanerRow = {
+  id: string;
+  fullName: string | null;
+  businessName: string | null;
+  profilePhotoUrl: string | null;
+  suburb: string | null;
+  postcode: string | null;
+  state: string | null;
+  bio: string | null;
+  yearsExperience: number | null;
+  verificationBadges: string[];
+  hasAbn: boolean;
+  hasInsurance: boolean;
+  portfolioPhotoUrls: string[];
+  avgRating: number | null;
+  reviewCount: number;
+  completedJobs: number;
+  tier: CleanerBrowseTier;
+  distanceKm: number | null;
+};
+
+type RawProfile = {
+  id: string;
+  full_name: string | null;
+  business_name: string | null;
+  profile_photo_url: string | null;
+  suburb: string | null;
+  postcode: string | null;
+  state: string | null;
+  bio: string | null;
+  years_experience: number | null;
+  verification_badges: string[] | null;
+  abn: string | null;
+  insurance_policy_number: string | null;
+  portfolio_photo_urls: string[] | null;
+  roles: string[] | null;
+  is_deleted: boolean | null;
+  cleaner_avg_rating?: number | string | null;
+  cleaner_total_reviews?: number | string | null;
+};
+
+function numOrNull(v: unknown): number | null {
+  if (v == null) return null;
+  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+function numOrZero(v: unknown): number {
+  const n = numOrNull(v);
+  return n ?? 0;
+}
+
+export async function loadBrowseCleaners(params: {
+  viewerUserId: string;
+  /** Lister/cleaner “search near me” radius (km) */
+  radiusKm: number;
+  centerLat: number | null;
+  centerLon: number | null;
+}): Promise<{
+  cleaners: BrowseCleanerRow[];
+  centerResolved: boolean;
+}> {
+  const supabase = await createServerSupabaseClient();
+  const admin = createSupabaseAdminClient();
+  const client = (admin ?? supabase) as SupabaseClient<any>;
+
+  const { data: profileRows, error } = await client
+    .from("profiles")
+    .select(
+      "id, full_name, business_name, profile_photo_url, suburb, postcode, state, bio, years_experience, verification_badges, abn, insurance_policy_number, portfolio_photo_urls, roles, is_deleted, cleaner_avg_rating, cleaner_total_reviews"
+    )
+    .contains("roles", ["cleaner"]);
+
+  if (error) {
+    console.error("browse-cleaners profiles", error.message);
+    return { cleaners: [], centerResolved: false };
+  }
+
+  const raw = (profileRows ?? []) as RawProfile[];
+  const cleanersOnly = raw.filter(
+    (p) =>
+      p.is_deleted !== true &&
+      p.id !== params.viewerUserId &&
+      Array.isArray(p.roles) &&
+      p.roles.includes("cleaner")
+  );
+
+  const winnerIds = cleanersOnly.map((p) => p.id);
+  const completedCountByWinner = new Map<string, number>();
+
+  if (winnerIds.length > 0) {
+    const { data: jobRows } = await client
+      .from("jobs")
+      .select("winner_id")
+      .eq("status", "completed")
+      .in("winner_id", winnerIds);
+    for (const row of jobRows ?? []) {
+      const w = (row as { winner_id?: string | null }).winner_id;
+      if (!w) continue;
+      completedCountByWinner.set(w, (completedCountByWinner.get(w) ?? 0) + 1);
+    }
+  }
+
+  const postcodeCache = new Map<string, { lat: number; lon: number } | null>();
+
+  async function latLonForPostcode(postcode: string | null): Promise<{
+    lat: number;
+    lon: number;
+  } | null> {
+    const key = (postcode ?? "").replace(/\D/g, "").slice(0, 4);
+    if (!key) return null;
+    if (postcodeCache.has(key)) return postcodeCache.get(key) ?? null;
+    const ll = await getSuburbLatLon(client, key);
+    postcodeCache.set(key, ll);
+    return ll;
+  }
+
+  const viewerLat = params.centerLat;
+  const viewerLon = params.centerLon;
+
+  const hasCenter =
+    viewerLat != null &&
+    viewerLon != null &&
+    Number.isFinite(viewerLat) &&
+    Number.isFinite(viewerLon);
+
+  const centerResolved = hasCenter;
+
+  const radius = Math.min(200, Math.max(5, params.radiusKm));
+
+  const mapped: BrowseCleanerRow[] = [];
+
+  for (const p of cleanersOnly) {
+    const portfolioUrls = Array.isArray(p.portfolio_photo_urls)
+      ? p.portfolio_photo_urls.filter((u): u is string => typeof u === "string" && u.length > 0)
+      : [];
+    const abnDigits = (p.abn ?? "").replace(/\D/g, "");
+    const hasAbn = abnDigits.length === 11;
+    const hasInsurance = ((p.insurance_policy_number ?? "").trim().length ?? 0) > 0;
+
+    const completedJobs = completedCountByWinner.get(p.id) ?? 0;
+    const avgRating = numOrNull(p.cleaner_avg_rating);
+    const reviewCount = Math.round(numOrZero(p.cleaner_total_reviews));
+
+    const tier = computeCleanerBrowseTier({
+      completedJobs,
+      avgRating,
+      reviewCount,
+      badges: p.verification_badges,
+      hasAbn,
+      hasInsurance,
+      portfolioPhotoCount: portfolioUrls.length,
+    });
+
+    let distanceKm: number | null = null;
+    if (hasCenter && viewerLat != null && viewerLon != null) {
+      const c = await latLonForPostcode(p.postcode);
+      if (c) {
+        distanceKm = haversineKm(viewerLat, viewerLon, c.lat, c.lon);
+      }
+    }
+
+    mapped.push({
+      id: p.id,
+      fullName: p.full_name,
+      businessName: p.business_name,
+      profilePhotoUrl: p.profile_photo_url,
+      suburb: p.suburb,
+      postcode: p.postcode,
+      state: p.state,
+      bio: p.bio,
+      yearsExperience: p.years_experience,
+      verificationBadges: Array.isArray(p.verification_badges) ? p.verification_badges : [],
+      hasAbn,
+      hasInsurance,
+      portfolioPhotoUrls: portfolioUrls.slice(0, 6),
+      avgRating,
+      reviewCount,
+      completedJobs,
+      tier,
+      distanceKm,
+    });
+  }
+
+  const filtered = hasCenter
+    ? mapped.filter((m) => {
+        if (m.distanceKm == null) return true;
+        return m.distanceKm <= radius;
+      })
+    : mapped;
+
+  filtered.sort((a, b) => {
+    const t = tierSortRank(a.tier) - tierSortRank(b.tier);
+    if (t !== 0) return t;
+    const da = a.distanceKm;
+    const db = b.distanceKm;
+    if (da != null && db != null && da !== db) return da - db;
+    if (da != null && db == null) return -1;
+    if (da == null && db != null) return 1;
+    const ra = a.avgRating ?? -1;
+    const rb = b.avgRating ?? -1;
+    if (rb !== ra) return rb - ra;
+    return b.completedJobs - a.completedJobs;
+  });
+
+  return { cleaners: filtered, centerResolved };
+}

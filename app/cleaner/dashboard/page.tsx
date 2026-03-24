@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { fetchTakenListingIds } from "@/lib/jobs-taken-listing-ids";
 import type { Database } from "@/types/supabase";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,7 +15,12 @@ import {
 } from "@/components/dashboard";
 import { ResponsiveCleanerJobCards } from "@/components/mobile-fab";
 import { cn } from "@/lib/utils";
-import { formatCents } from "@/lib/listings";
+import { formatCents, getListingCoverUrl, isListingLive } from "@/lib/listings";
+import { parseUtcTimestamp } from "@/lib/utils";
+import {
+  CleanerLiveBidsSection,
+  type CleanerLiveBidItem,
+} from "@/components/dashboard/cleaner-live-bids-section";
 import {
   XCircle,
   ChevronDown,
@@ -132,7 +139,13 @@ export default async function CleanerDashboardPage() {
       primary: true,
       icon: "search" as const,
     },
-    { label: "My Active Jobs", href: "/cleaner/dashboard", icon: "briefcase" as const },
+    {
+      label: "Live bids",
+      href: "/cleaner/dashboard#live-bids",
+      icon: "gavel" as const,
+    },
+    { label: "Browse cleaners", href: "/cleaners", icon: "list" as const },
+    { label: "My Active Jobs", href: "/cleaner/dashboard#active-jobs", icon: "briefcase" as const },
     { label: "My Earnings", href: "/earnings", icon: "dollar-sign" as const },
   ];
 
@@ -149,6 +162,66 @@ export default async function CleanerDashboardPage() {
   const welcomeWithinMs = 7 * 24 * 60 * 60 * 1000;
   const showWelcomeBanner =
     createdAtMs > 0 && nowMs - createdAtMs < welcomeWithinMs;
+
+  /** Live listings the cleaner has bid on (auction still open, no job assigned yet). */
+  const { data: bidsRaw } = await supabase
+    .from("bids")
+    .select("listing_id, amount_cents")
+    .eq("cleaner_id", session.user.id)
+    .eq("status", "active");
+
+  const bidRows = (bidsRaw ?? []) as {
+    listing_id: string | number;
+    amount_cents: number;
+  }[];
+
+  const bestBidByListing = new Map<string, number>();
+  for (const b of bidRows) {
+    const lid = String(b.listing_id);
+    const prev = bestBidByListing.get(lid);
+    if (prev === undefined || b.amount_cents < prev) {
+      bestBidByListing.set(lid, b.amount_cents);
+    }
+  }
+
+  let liveBidItems: CleanerLiveBidItem[] = [];
+  if (bestBidByListing.size > 0) {
+    const admin = createSupabaseAdminClient();
+    const takenIds = new Set(
+      (await fetchTakenListingIds(supabase, admin)).map((id) => String(id))
+    );
+
+    const bidListingIds = [...bestBidByListing.keys()];
+    const { data: listingsForBids } = await supabase
+      .from("listings")
+      .select("*")
+      .in("id", bidListingIds);
+
+    const listingsForBidList = (listingsForBids ?? []) as ListingRow[];
+
+    liveBidItems = listingsForBidList
+      .filter((l) => isListingLive(l) && !takenIds.has(String(l.id)))
+      .map((l) => {
+        const myBid = bestBidByListing.get(String(l.id)) ?? 0;
+        const currentLow = l.current_lowest_bid_cents ?? 0;
+        return {
+          listingId: String(l.id),
+          title: l.title,
+          suburb: l.suburb,
+          postcode: l.postcode,
+          coverUrl: getListingCoverUrl(l),
+          myBidCents: myBid,
+          currentLowestCents: currentLow,
+          endTimeIso: String(l.end_time ?? ""),
+          isLeading: myBid === currentLow,
+        };
+      })
+      .sort(
+        (a, b) =>
+          parseUtcTimestamp(a.endTimeIso) - parseUtcTimestamp(b.endTimeIso)
+      )
+      .slice(0, 24);
+  }
 
   return (
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
@@ -194,6 +267,37 @@ export default async function CleanerDashboardPage() {
       {/* Quick actions — sm+ only (mobile: tab bar + main nav for jobs) */}
       <div className="hidden sm:block">
         <QuickActionsRow actions={actions} />
+      </div>
+
+      {/* Live reverse-auction listings this cleaner has bid on (still open, not assigned) */}
+      <ScrollToHash anchorId="live-bids" />
+      <div
+        id="live-bids"
+        className="scroll-mt-[calc(6rem+env(safe-area-inset-top,0px))] space-y-4 md:scroll-mt-24"
+      >
+        <div className="rounded-2xl border-2 border-amber-200/70 bg-gradient-to-br from-amber-50/50 via-card to-background shadow-sm dark:border-amber-900/50 dark:from-amber-950/30 dark:via-gray-950 dark:to-gray-950 md:rounded-xl md:border">
+          <div className="flex flex-col gap-2 border-b border-amber-200/60 px-5 py-4 dark:border-amber-900/40 sm:flex-row sm:items-center sm:justify-between md:px-4 md:py-3">
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold tracking-tight text-foreground dark:text-gray-100 md:text-base md:font-semibold">
+                Live auctions you&apos;ve bid on
+              </h2>
+              <p className="mt-1 text-sm leading-snug text-muted-foreground dark:text-gray-400 md:text-xs">
+                Open listings where your bid is still active — tap to open the job and update your offer.
+              </p>
+            </div>
+            {liveBidItems.length > 0 && (
+              <Badge
+                variant="secondary"
+                className="w-fit shrink-0 px-2.5 py-1 text-sm md:text-xs"
+              >
+                {liveBidItems.length} live
+              </Badge>
+            )}
+          </div>
+          <div className="p-4 md:p-3">
+            <CleanerLiveBidsSection items={liveBidItems} />
+          </div>
+        </div>
       </div>
 
       {/* My Active Jobs — swipeable on mobile, grid on md+ */}

@@ -28,6 +28,8 @@ function isProtected(pathname: string): boolean {
   if (pathname.startsWith("/auth/")) return false;
   if (pathname.startsWith("/api/")) return false;
   if (PUBLIC_ONBOARDING.some((p) => pathname === p)) return false;
+  /** Logged-in browse directory; `/cleaners/[id]` stays public for shared profile links. */
+  if (pathname === "/cleaners") return true;
   return PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 

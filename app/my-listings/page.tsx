@@ -6,9 +6,17 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { MyListingsList } from "@/components/features/my-listings-list";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { ArrowLeft } from "lucide-react";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -63,11 +71,30 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
     verification_badges?: string[] | null;
   } | null;
   const roles = (profile?.roles ?? []) as string[];
+  const activeRole =
+    profile?.active_role === "lister" || profile?.active_role === "cleaner"
+      ? profile.active_role
+      : null;
 
-  /** Match lister dashboard: any user with lister role can manage listings (not only when active_role is lister). */
-  if (!roles.includes("lister")) {
+  /**
+   * Listers must reach this route even if `roles` is briefly out of sync.
+   * Allow: lister in roles OR active_role lister. Cleaner-only → cleaner dashboard.
+   */
+  const canAccessMyListings =
+    roles.includes("lister") || activeRole === "lister";
+  if (!canAccessMyListings) {
+    if (roles.includes("cleaner")) redirect("/cleaner/dashboard");
     redirect("/dashboard");
   }
+
+  const dashboardHref =
+    activeRole === "cleaner"
+      ? "/cleaner/dashboard"
+      : activeRole === "lister"
+        ? "/lister/dashboard"
+        : roles.includes("lister")
+          ? "/lister/dashboard"
+          : "/dashboard";
 
   await applyListingAuctionOutcomes();
 
@@ -221,110 +248,132 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
     ).length;
   }
 
+  const tabPill = (isActive: boolean) =>
+    cn(
+      "inline-flex min-h-[44px] shrink-0 snap-start items-center justify-center whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-[0.98] sm:min-h-0 sm:px-3.5 sm:py-2 sm:text-sm",
+      isActive
+        ? "bg-background text-foreground shadow-md ring-1 ring-emerald-500/25 dark:bg-gray-800 dark:text-gray-100 dark:ring-emerald-500/20"
+        : "border border-transparent bg-muted/80 text-muted-foreground hover:border-emerald-500/30 hover:bg-emerald-50/90 hover:text-foreground dark:bg-gray-800/80 dark:text-gray-400 dark:hover:border-emerald-500/25 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+    );
+
   return (
-    <section className="page-inner space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl dark:text-gray-100">
-            My Listings
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your bond clean auctions, active jobs and history.
-          </p>
+    <section className="page-inner space-y-6 pb-28 sm:pb-8 md:space-y-6">
+      {/* Mobile: sticky title row + thumb-sized primary action; aligns with lister dashboard / browse-cleaners */}
+      <div className="sticky top-0 z-30 -mx-4 space-y-3 border-b border-border bg-background/95 px-4 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+        <Link
+          href={dashboardHref}
+          className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-100"
+        >
+          <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+          Back to dashboard
+        </Link>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-balance text-xl font-bold tracking-tight text-foreground dark:text-gray-50 sm:text-2xl md:text-3xl">
+                My listings
+              </h1>
+              <Badge
+                className={cn(
+                  "shrink-0 text-xs font-medium",
+                  "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200"
+                )}
+              >
+                Lister
+              </Badge>
+            </div>
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground dark:text-gray-400 sm:text-base">
+              Manage bond clean auctions, active jobs, payments and history in one place.
+            </p>
+          </div>
+          <Button
+            asChild
+            size="lg"
+            className="h-12 min-h-[48px] w-full shrink-0 rounded-2xl text-base font-semibold shadow-md sm:h-11 sm:w-auto sm:rounded-lg"
+          >
+            <Link href="/listings/new">New listing</Link>
+          </Button>
         </div>
-        <Button asChild>
-          <Link href="/listings/new">New listing</Link>
-        </Button>
       </div>
 
-      {/* Pill tabs — match Cleaner > Jobs style (TabsList + TabsTrigger) */}
-      <Card className="border-border bg-card shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
-        <CardContent className="pt-6">
+      <Card className="overflow-hidden border-emerald-200/60 bg-gradient-to-br from-emerald-50/90 via-white to-sky-50/50 shadow-md dark:border-gray-800 dark:from-emerald-950/30 dark:via-gray-950 dark:to-sky-950/20">
+        <CardHeader className="space-y-1 pb-2 pt-5 sm:pt-4">
+          <CardTitle className="text-lg font-bold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
+            Listings &amp; jobs
+          </CardTitle>
+          <CardDescription className="text-base leading-relaxed dark:text-gray-400 sm:text-sm">
+            Choose a tab — swipe sideways on your phone to see every filter.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5 pt-0 sm:space-y-6">
           <nav
-            className="mb-4 flex w-full flex-wrap gap-1 rounded-full bg-muted p-1 text-xs dark:bg-gray-800 dark:text-gray-300 sm:text-sm"
+            className="-mx-1 flex gap-2 overflow-x-auto scroll-pl-3 pb-1 pt-0.5 [scrollbar-width:none] snap-x snap-mandatory sm:snap-none [&::-webkit-scrollbar]:hidden"
             aria-label="Listings and jobs"
           >
             <Link
               href="/my-listings?tab=active_listings"
-              className={cn(
-                "inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 sm:text-sm",
-                tab === "active_listings"
-                  ? "bg-background text-foreground shadow-sm dark:bg-gray-700 dark:text-gray-100"
-                  : "text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-200"
-              )}
+              className={tabPill(tab === "active_listings")}
+              scroll={false}
             >
-              Active Listings ({activeCount})
+              Active ({activeCount})
             </Link>
             <Link
               href="/my-listings?tab=completed_jobs"
-              className={cn(
-                "inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 sm:text-sm",
-                tab === "completed_jobs"
-                  ? "bg-background text-foreground shadow-sm dark:bg-gray-700 dark:text-gray-100"
-                  : "text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-200"
-              )}
+              className={tabPill(tab === "completed_jobs")}
+              scroll={false}
             >
-              Completed jobs ({completedCount})
+              Completed ({completedCount})
             </Link>
             <Link
               href="/my-listings?tab=pending_payments"
-              className={cn(
-                "inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 sm:text-sm",
-                tab === "pending_payments"
-                  ? "bg-background text-foreground shadow-sm dark:bg-gray-700 dark:text-gray-100"
-                  : "text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-200"
-              )}
+              className={tabPill(tab === "pending_payments")}
+              scroll={false}
             >
-              Pending payments ({pendingPaymentsCount})
+              Pending pay ({pendingPaymentsCount})
             </Link>
             <Link
               href="/my-listings?tab=cancelled_listings"
-              className={cn(
-                "inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 sm:text-sm",
-                tab === "cancelled_listings"
-                  ? "bg-background text-foreground shadow-sm dark:bg-gray-700 dark:text-gray-100"
-                  : "text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-200"
-              )}
+              className={tabPill(tab === "cancelled_listings")}
+              scroll={false}
             >
-              Completed/Cancelled/Expired ({completedCancelledExpiredTabCount})
+              History ({completedCancelledExpiredTabCount})
             </Link>
             <Link
               href="/my-listings?tab=disputes"
-              className={cn(
-                "inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 sm:text-sm",
-                tab === "disputes"
-                  ? "bg-background text-foreground shadow-sm dark:bg-gray-700 dark:text-gray-100"
-                  : "text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-200"
-              )}
+              className={tabPill(tab === "disputes")}
+              scroll={false}
             >
               Disputes ({disputesCount})
             </Link>
           </nav>
-          <MyListingsList
-            initialListings={initialListings}
-            listerId={session.user.id}
-            listerVerificationBadges={
-              Array.isArray(profile?.verification_badges)
-                ? profile.verification_badges
-                : null
-            }
-            initialEditListingId={editId}
-            initialOpenCancelListingId={cancelListingIdParam}
-            feePercentage={feePercentage}
-            initialActiveJobsSnapshot={initialActiveJobsSnapshot}
-            initialActiveListingIds={initialActiveListingIds}
-            viewTab={
-              tab === "cancelled_listings"
-                ? "cancelled_listings"
-                : tab === "completed_jobs"
-                  ? "completed_jobs"
-                  : tab === "pending_payments"
-                    ? "pending_payments"
-                    : tab === "disputes"
-                      ? "disputes"
-                      : "active_listings"
-            }
-          />
+
+          <div className="rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm dark:border-gray-800 dark:bg-gray-950/60 sm:p-4 md:p-5">
+            <MyListingsList
+              initialListings={initialListings}
+              listerId={session.user.id}
+              listerVerificationBadges={
+                Array.isArray(profile?.verification_badges)
+                  ? profile.verification_badges
+                  : null
+              }
+              initialEditListingId={editId}
+              initialOpenCancelListingId={cancelListingIdParam}
+              feePercentage={feePercentage}
+              initialActiveJobsSnapshot={initialActiveJobsSnapshot}
+              initialActiveListingIds={initialActiveListingIds}
+              viewTab={
+                tab === "cancelled_listings"
+                  ? "cancelled_listings"
+                  : tab === "completed_jobs"
+                    ? "completed_jobs"
+                    : tab === "pending_payments"
+                      ? "pending_payments"
+                      : tab === "disputes"
+                        ? "disputes"
+                        : "active_listings"
+              }
+            />
+          </div>
         </CardContent>
       </Card>
     </section>

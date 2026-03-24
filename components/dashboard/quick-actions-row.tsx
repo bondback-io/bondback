@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   DollarSign,
   List,
+  Gavel,
   type LucideIcon,
 } from "lucide-react";
 
@@ -20,7 +21,8 @@ export type ActionIconName =
   | "briefcase"
   | "check-circle"
   | "dollar-sign"
-  | "list";
+  | "list"
+  | "gavel";
 
 const ICON_MAP: Record<ActionIconName, LucideIcon> = {
   plus: Plus,
@@ -29,6 +31,7 @@ const ICON_MAP: Record<ActionIconName, LucideIcon> = {
   "check-circle": CheckCircle2,
   "dollar-sign": DollarSign,
   list: List,
+  gavel: Gavel,
 };
 
 export type ActionItem = {
@@ -48,7 +51,7 @@ export function QuickActionsRow({ actions, className }: QuickActionsRowProps) {
   return (
     <div
       className={cn(
-        "flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4",
+        "flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-3 xl:grid-cols-4",
         className
       )}
       style={{ scrollbarWidth: "none" }}
