@@ -101,6 +101,7 @@ export async function placeBid(
       cleaner_id: session.user.id,
       amount: bidAmount,
       amount_cents: amountCents,
+      status: "active",
     } as never
   );
 
@@ -130,6 +131,7 @@ export async function placeBid(
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/my-listings");
+  revalidatePath("/cleaner/dashboard");
   return { ok: true };
 }
 
@@ -169,7 +171,7 @@ export async function cancelLastBid(
     return { ok: false, error: "Only cleaners can cancel bids." };
   }
 
-  // Find latest bid for this cleaner on the listing (no status column – treat all as active)
+  // Find latest bid for this cleaner on the listing
   const { data: bids, error: fetchError } = await supabase
     .from("bids")
     .select("*")
@@ -230,5 +232,6 @@ export async function cancelLastBid(
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/my-listings");
+  revalidatePath("/cleaner/dashboard");
   return { ok: true };
 }

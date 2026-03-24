@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { checkBanAfterLogin } from "@/lib/actions/admin-users";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -90,16 +91,17 @@ function LoginForm() {
           if (banCheck.banned) {
             await supabase.auth.signOut();
             const reason = banCheck.reason ? encodeURIComponent(banCheck.reason) : "";
-            router.replace(`/login?banned=1${reason ? `&reason=${reason}` : ""}`);
+            scheduleRouterAction(() =>
+              router.replace(`/login?banned=1${reason ? `&reason=${reason}` : ""}`)
+            );
             setBannedMessage(
               `Account banned. ${banCheck.reason ? `Reason: ${banCheck.reason}. ` : ""}Contact support@bondback.com.`
             );
             return;
           }
           const next = safeNextDestination(searchParams.get("next"));
-          // Revalidate RSC + cookies so header/layout see the new session immediately
-          router.refresh();
-          router.replace(next);
+          // Defer navigation so App Router is initialized (avoids double dispatch with refresh+replace).
+          scheduleRouterAction(() => router.replace(next));
           return;
         }
       }

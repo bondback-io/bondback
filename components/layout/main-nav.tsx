@@ -23,6 +23,7 @@ import { CreateListingConfirmDialog } from "@/components/listing/create-listing-
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 import type { SessionWithProfile } from "@/lib/types";
 import { useUnreadNewMessageCount } from "@/hooks/use-unread-new-message-count";
 import type { ActiveRole } from "@/lib/notifications/notification-role-filter";
@@ -174,8 +175,7 @@ function MobileNavContent({
   const handleLogout = async () => {
     const supabase = createBrowserSupabaseClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    scheduleRouterAction(() => router.push("/"));
   };
 
   return (

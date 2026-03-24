@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 import { Button } from "@/components/ui/button";
 
 export function SignOutButton() {
@@ -10,8 +11,7 @@ export function SignOutButton() {
   const handleSignOut = async () => {
     const supabase = createBrowserSupabaseClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    scheduleRouterAction(() => router.push("/"));
   };
 
   return (

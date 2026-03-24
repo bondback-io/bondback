@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -168,8 +169,7 @@ export function UserMenu({ session }: UserMenuProps) {
     await supabase.auth.signOut();
     setIsLoggingOut(false);
     setLogoutDialogOpen(false);
-    router.push("/login");
-    router.refresh();
+    scheduleRouterAction(() => router.push("/login"));
     toast({
       title: "You have been logged out",
       description: "See you next time.",

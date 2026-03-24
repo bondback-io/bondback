@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { handleConnectSuccess } from "@/lib/actions/stripe-connect";
 import { useToast } from "@/components/ui/use-toast";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
 export default function StripeConnectSuccessPage() {
@@ -21,7 +22,7 @@ export default function StripeConnectSuccessPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session?.user?.id) {
-        router.replace("/login");
+        scheduleRouterAction(() => router.replace("/login"));
         return;
       }
 
@@ -34,7 +35,7 @@ export default function StripeConnectSuccessPage() {
           title: "Bank account connected successfully!",
           description: "You can now receive payouts when listers release payment.",
         });
-        router.replace("/cleaner/dashboard");
+        scheduleRouterAction(() => router.replace("/cleaner/dashboard"));
       } else {
         setStatus("error");
         toast({
@@ -42,7 +43,7 @@ export default function StripeConnectSuccessPage() {
           title: "Something went wrong",
           description: result.error,
         });
-        router.replace("/profile");
+        scheduleRouterAction(() => router.replace("/profile"));
       }
     }
 

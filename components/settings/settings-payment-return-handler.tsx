@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { fulfillListerSetupFromSession } from "@/app/settings/actions";
 import { useToast } from "@/components/ui/use-toast";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 
 /** When user returns from Stripe Checkout (setup), fulfill the session and save payment method so it works without webhook (e.g. local dev). */
 export function SettingsPaymentReturnHandler() {
@@ -26,8 +27,7 @@ export function SettingsPaymentReturnHandler() {
       } else {
         toast({ variant: "destructive", title: "Could not save payment method", description: result.error });
       }
-      router.replace("/profile", { scroll: false });
-      router.refresh();
+      scheduleRouterAction(() => router.replace("/profile", { scroll: false }));
     })();
   }, [searchParams, router, toast]);
 

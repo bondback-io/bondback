@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 
 /** Cold-open from a notification: only handle once per tab load. */
 let lastColdOpenHandled = false;
@@ -23,11 +24,13 @@ export function ExpoPushDeepLinkHandler() {
           const jobId = typeof data?.jobId === "string" ? data.jobId : null;
           const type = typeof data?.type === "string" ? data.type : "";
           if (!jobId) return;
-          if (type === "new_message") {
-            router.push(`/messages?job=${encodeURIComponent(jobId)}`);
-          } else {
-            router.push(`/jobs/${jobId}`);
-          }
+          scheduleRouterAction(() => {
+            if (type === "new_message") {
+              router.push(`/messages?job=${encodeURIComponent(jobId)}`);
+            } else {
+              router.push(`/jobs/${jobId}`);
+            }
+          });
         };
 
         const last = await Notifications.getLastNotificationResponseAsync();

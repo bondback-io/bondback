@@ -164,11 +164,12 @@ export default async function CleanerDashboardPage() {
     createdAtMs > 0 && nowMs - createdAtMs < welcomeWithinMs;
 
   /** Live listings the cleaner has bid on (auction still open, no job assigned yet). */
+  /** Include legacy rows where status was never set (null). Exclude cancelled only. */
   const { data: bidsRaw } = await supabase
     .from("bids")
     .select("listing_id, amount_cents")
     .eq("cleaner_id", session.user.id)
-    .eq("status", "active");
+    .or("status.eq.active,status.is.null");
 
   const bidRows = (bidsRaw ?? []) as {
     listing_id: string | number;

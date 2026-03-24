@@ -17,6 +17,7 @@ import { notifyActiveRoleChanged } from "@/lib/active-role-events";
 import type { ProfileRole, SessionWithProfile } from "@/lib/types";
 import { Brush, ChevronDown, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 
 /**
  * Cleaner icon: lucide-react in this project has no `Broom`; `Brush` is used as the
@@ -77,10 +78,9 @@ export function RoleSwitcher({
       setToast({ message: `Switched to ${label}`, visible: true });
       const target = role === "lister" ? "/lister/dashboard" : "/cleaner/dashboard";
       if (pathname && isPathAllowedForRole(pathname, role)) {
-        router.refresh();
+        scheduleRouterAction(() => router.refresh());
       } else {
-        router.replace(target);
-        router.refresh();
+        scheduleRouterAction(() => router.replace(target));
       }
     });
   };

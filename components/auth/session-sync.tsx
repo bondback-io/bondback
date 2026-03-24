@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 
 /**
  * Keeps Next.js Server Components in sync with Supabase auth in the browser.
@@ -23,7 +24,7 @@ export function SessionSync() {
         event === "USER_UPDATED" ||
         event === "PASSWORD_RECOVERY"
       ) {
-        router.refresh();
+        scheduleRouterAction(() => router.refresh());
       }
     });
     return () => subscription.unsubscribe();

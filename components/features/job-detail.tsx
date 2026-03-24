@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition, useCallback, useMemo, type ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 import { format } from "date-fns";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -244,7 +245,7 @@ export function JobDetail({
       const result = await acceptBid(listingId, bid.cleaner_id, bid.amount_cents);
       if (result.ok) {
         toast({ title: "Bid accepted", description: "Job created. Pay & Start Job to hold funds in escrow and start the job." });
-        router.refresh();
+        scheduleRouterAction(() => router.refresh());
       } else {
         toast({ variant: "destructive", title: "Could not accept bid", description: result.error });
       }
@@ -367,7 +368,9 @@ export function JobDetail({
     const params = new URLSearchParams(searchParams.toString());
     params.delete("cancel");
     const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    scheduleRouterAction(() =>
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    );
   }, [
     searchParams,
     pathname,
@@ -391,7 +394,9 @@ export function JobDetail({
     const params = new URLSearchParams(searchParams.toString());
     params.delete("quickBid");
     const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    scheduleRouterAction(() =>
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    );
     return () => window.clearTimeout(t);
   }, [searchParams, pathname, router]);
 
@@ -414,7 +419,7 @@ export function JobDetail({
             title: isStripeTestMode ? "Payment held in escrow (test mode)" : "Payment held in escrow",
             description: "Job started. The cleaner can begin work.",
           });
-          router.refresh();
+          scheduleRouterAction(() => router.refresh());
         } else {
           toast({
             variant: "destructive",
@@ -451,7 +456,7 @@ export function JobDetail({
           title: isStripeTestMode ? "Payment held in escrow (test mode)" : "Payment held in escrow",
           description: "Job started. The cleaner can begin work.",
         });
-        router.refresh();
+        scheduleRouterAction(() => router.refresh());
         return;
       }
       if (res.ok && "url" in res && res.url) {
@@ -778,7 +783,7 @@ export function JobDetail({
           title: "Lister notified",
           description: "They can review your work and release payment. The review timer has started.",
         });
-        router.refresh();
+        scheduleRouterAction(() => router.refresh());
       } finally {
         setRequestingPayment(false);
       }
@@ -1500,7 +1505,7 @@ export function JobDetail({
                         setLocalJobStatus("cancelled");
                         setShowCancelJobDialog(false);
                         toast({ title: "Job cancelled", description: "The cleaner has been notified." });
-                        router.refresh();
+                        scheduleRouterAction(() => router.refresh());
                       } else {
                         toast({ variant: "destructive", title: "Could not cancel job", description: res.error });
                       }
@@ -1560,7 +1565,7 @@ export function JobDetail({
                           title: "Listing cancelled",
                           description: "The auction has ended early. You can view it under My Listings.",
                         });
-                        router.refresh();
+                        scheduleRouterAction(() => router.refresh());
                       } else {
                         toast({
                           variant: "destructive",
@@ -2194,7 +2199,7 @@ export function JobDetail({
                                   title: "Review extended",
                                   description: "24 hours were added to the auto-release timer.",
                                 });
-                                router.refresh();
+                                scheduleRouterAction(() => router.refresh());
                               });
                             }}
                           >

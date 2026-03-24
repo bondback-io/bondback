@@ -26,6 +26,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,8 +114,7 @@ function SignupForm() {
           setSubmitting(false);
           return;
         }
-        router.refresh();
-        router.replace("/onboarding/role-choice");
+        scheduleRouterAction(() => router.replace("/onboarding/role-choice"));
         return;
       }
 

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { scheduleRouterAction } from "@/lib/deferred-router";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 
@@ -11,8 +12,7 @@ export function LogoutButton() {
   const handleLogout = async () => {
     const supabase = createBrowserSupabaseClient();
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    scheduleRouterAction(() => router.push("/"));
   };
 
   return (
