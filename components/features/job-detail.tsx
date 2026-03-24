@@ -196,7 +196,7 @@ export function JobDetail({
   const [afterPhotosUploading, setAfterPhotosUploading] = useState(false);
   const [initialPhotoEntries, setInitialPhotoEntries] = useState<InitialPhotoEntry[]>([]);
   const [initialPhotosLoading, setInitialPhotosLoading] = useState(false);
-  const [fundsReadyNotified, setFundsReadyNotified] = useState(false);
+  const [requestingPayment, setRequestingPayment] = useState(false);
   const [reviewEndsAt, setReviewEndsAt] = useState<string | null>(null);
   const [initialPhotosUploading, setInitialPhotosUploading] = useState(false);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
@@ -733,24 +733,39 @@ export function JobDetail({
     });
   };
 
-  // Notify lister when funds are ready (checklist complete + photos uploaded)
-  useEffect(() => {
+  const handleCleanCompleteRequestPayment = () => {
     if (!jobId || !isJobCleaner) return;
-    if (!hasAfterPhotos) return;
-    if (fundsReadyNotified) return;
-
-    const run = async () => {
+    if (isOffline) {
+      toast({ title: "Offline", description: "Reconnect to perform this action.", variant: "destructive" });
+      return;
+    }
+    if (!allCompleted || !hasAfterPhotos) return;
+    setRequestingPayment(true);
+    void (async () => {
       try {
-        const { notifyFundsReady } = await import("@/lib/actions/jobs");
-        await notifyFundsReady(jobId);
-        setFundsReadyNotified(true);
-      } catch {
-        // Best-effort only; ignore errors in the UI.
+        const { markJobChecklistFinished } = await import("@/lib/actions/jobs");
+        const res = await markJobChecklistFinished(jobId);
+        if (!res.ok) {
+          toast({
+            variant: "destructive",
+            title: "Could not request payment",
+            description: res.error ?? "Please try again.",
+          });
+          return;
+        }
+        setLocalJobStatus("completed_pending_approval");
+        setCleanerConfirmed(true);
+        setConfirmedAt(new Date().toISOString());
+        toast({
+          title: "Lister notified",
+          description: "They can review your work and release payment. The review timer has started.",
+        });
+        router.refresh();
+      } finally {
+        setRequestingPayment(false);
       }
-    };
-
-    run();
-  }, [jobId, isJobCleaner, hasAfterPhotos, fundsReadyNotified]);
+    })();
+  };
 
   const bondGuideline =
     hasActiveJob &&
@@ -1852,9 +1867,7 @@ export function JobDetail({
                     </p>
                   ) : afterPhotoEntries.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {afterPhotoEntries.map((entry) => {
-                        const canRemove = afterPhotoEntries.length > 3;
-                        return (
+                      {afterPhotoEntries.map((entry) => (
                           <div
                             key={entry.name}
                             className="relative h-20 w-24 overflow-hidden rounded-md border border-border bg-muted/40 dark:border-gray-700 dark:bg-gray-800/60 cursor-pointer group"
@@ -1871,29 +1884,36 @@ export function JobDetail({
                               blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
                               className="object-cover transition-transform duration-200 group-hover:scale-105"
                             />
-                            {canRemove && (
-                              <button
-                                type="button"
-                                aria-label="Remove photo"
-                                className="absolute right-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const path = `jobs/${numericJobId}/after/${entry.name}`;
-                                  supabase.storage.from("condition-photos").remove([path]).then(({ error }) => {
+                            <button
+                              type="button"
+                              aria-label="Remove photo"
+                              className="absolute right-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const folder = `jobs/${numericJobId}/after`;
+                                const mainPath = `${folder}/${entry.name}`;
+                                const thumbPath = `${folder}/thumb_${entry.name}`;
+                                void supabase.storage
+                                  .from("condition-photos")
+                                  .remove([mainPath])
+                                  .then(({ error }) => {
                                     if (error) {
-                                      toast({ variant: "destructive", title: "Remove failed", description: error.message });
-                                    } else {
-                                      setAfterPhotoEntries((prev) => prev.filter((p) => p.name !== entry.name));
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Remove failed",
+                                        description: error.message,
+                                      });
+                                      return;
                                     }
+                                    void supabase.storage.from("condition-photos").remove([thumbPath]);
+                                    setAfterPhotoEntries((prev) => prev.filter((p) => p.name !== entry.name));
                                   });
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            )}
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
                           </div>
-                        );
-                      })}
+                        ))}
                     </div>
                   ) : null}
                   <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -2009,6 +2029,29 @@ export function JobDetail({
                       {afterPhotoEntries.length}/{PHOTO_LIMITS.JOB_AFTER} photos
                     </span>
                   </div>
+                  {localJobStatus === "in_progress" && (
+                    <div className="space-y-2 border-t border-violet-500/10 pt-4 dark:border-violet-900/30">
+                      <Button
+                        type="button"
+                        size="lg"
+                        className="min-h-14 w-full rounded-xl bg-emerald-600 text-base font-semibold hover:bg-emerald-700 disabled:opacity-60 dark:bg-emerald-600"
+                        disabled={!allCompleted || !hasAfterPhotos || requestingPayment}
+                        onClick={handleCleanCompleteRequestPayment}
+                      >
+                        {requestingPayment ? "Submitting…" : "Clean Complete — Request Payment"}
+                      </Button>
+                      {(!allCompleted || !hasAfterPhotos) && (
+                        <p className="text-center text-[11px] text-muted-foreground dark:text-gray-500">
+                          Tick every checklist item and upload at least 3 after-photos to continue.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {localJobStatus === "completed_pending_approval" && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2.5 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
+                      You&apos;ve requested payment. Waiting for the property lister to review and release funds.
+                    </p>
+                  )}
                 </div>
               )}
             </>
@@ -2016,8 +2059,7 @@ export function JobDetail({
           {hasActiveJob &&
             isJobLister &&
             (localJobStatus === "in_progress" ||
-              localJobStatus === "completed_pending_approval") &&
-            !cleanerConfirmed && (
+              localJobStatus === "completed_pending_approval") && (
               <div className="space-y-2 rounded-md border bg-background/80 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium dark:text-gray-100">Approve &amp; Release Funds</p>
@@ -2054,61 +2096,9 @@ export function JobDetail({
                     <Progress value={autoReleaseProgressValue} className="h-2" />
                   )}
                 <p className="text-xs text-muted-foreground dark:text-gray-400">
-                  Once the checklist and after-photos are done, you can release funds from escrow. After the cleaner marks complete, you&apos;ll have {autoReleaseHours} hours to approve or open a dispute.
-                </p>
-                {!hasAfterPhotos && (
-                  <p className="text-[11px] text-amber-700 dark:text-amber-300">Waiting for after photos…</p>
-                )}
-                {hasAfterPhotos && allCompleted && (
-                  <Button type="button" size="sm" className="mt-2" disabled={isFinalizing} onClick={handleFinalizePayment}>
-                    {isFinalizing ? "Releasing…" : "Approve & Release Funds"}
-                  </Button>
-                )}
-              </div>
-            )}
-
-          {hasActiveJob &&
-            isJobLister &&
-            (localJobStatus === "in_progress" ||
-              localJobStatus === "completed_pending_approval") &&
-            cleanerConfirmed && (
-              <div className="space-y-2 rounded-md border bg-background/80 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium dark:text-gray-100">Approve &amp; Release Funds</p>
-                  {localJobStatus === "completed_pending_approval" &&
-                    (autoReleaseAt && autoReleaseMsLeft != null ? (
-                      <Badge
-                        className={cn(
-                          "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums",
-                          autoReleaseBadgeClass
-                        )}
-                      >
-                        {autoReleaseMsLeft <= 0
-                          ? "Auto-release now"
-                          : `Auto-release in ${formatAutoReleaseCountdown(autoReleaseMsLeft)}`}
-                      </Badge>
-                    ) : (
-                      <Badge className="shrink-0 rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
-                        Auto-release paused
-                      </Badge>
-                    ))}
-                </div>
-                {agreedAmountCents > 0 && (
-                  <JobPaymentBreakdown
-                    agreedAmountCents={agreedAmountCents}
-                    feePercentage={feePercentage}
-                    isStripeTestMode={isStripeTestMode}
-                    variant="release"
-                  />
-                )}
-                {localJobStatus === "completed_pending_approval" &&
-                  autoReleaseAt &&
-                  autoReleaseMsLeft != null &&
-                  autoReleaseMsLeft > 0 && (
-                    <Progress value={autoReleaseProgressValue} className="h-2" />
-                  )}
-                <p className="text-xs text-muted-foreground dark:text-gray-400">
-                  The cleaner has marked the job complete. Review photos, then approve and release funds from escrow, or raise a dispute with evidence. Auto-release stays paused while a dispute is open.
+                  {localJobStatus === "completed_pending_approval"
+                    ? "The cleaner has requested payment. Review after-photos, then release funds from escrow or raise a dispute with evidence. Opening a dispute pauses the auto-release timer until the dispute is resolved."
+                    : `Once the checklist and after-photos are done, you can release funds from escrow. After the cleaner taps “Clean Complete — Request Payment”, you&apos;ll have ${autoReleaseHours} hours to approve or open a dispute.`}
                 </p>
                 {showListerFinalizeNotice && (
                   <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
@@ -2122,7 +2112,7 @@ export function JobDetail({
                   <>
                     {!hasAfterPhotos && localJobStatus === "completed_pending_approval" && (
                       <p className="text-[11px] text-muted-foreground dark:text-gray-400">
-                        Waiting for after photos to release funds. You can still open a dispute within {autoReleaseHours} hours.
+                        Waiting for after photos to release funds. You can still open a dispute; that pauses auto-release.
                       </p>
                     )}
                     {!hasAfterPhotos && localJobStatus === "in_progress" && (
