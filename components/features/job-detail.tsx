@@ -831,6 +831,10 @@ export function JobDetail({
     cleanerConfirmed &&
     localJobStatus === "completed_pending_approval";
 
+  /** Lister is on Approve & Release Funds (review after cleaner requested payment). */
+  const listerReleaseFundsStep =
+    isJobLister && localJobStatus === "completed_pending_approval";
+
   return (
     <div className={cn("space-y-6", detailUiBoost && "pb-24 md:pb-10")}>
       {paymentTimeline && (
@@ -892,10 +896,23 @@ export function JobDetail({
               className={cn("shrink-0", detailUiBoost ? "h-5 w-5" : "h-4 w-4")}
               aria-hidden
             />
-            <span>
-              {isJobCleaner && propertyAddress?.trim()
-                ? propertyAddress.trim()
-                : formatLocationWithState(listing.suburb, listing.postcode)}
+            <span
+              className={cn(
+                listerReleaseFundsStep && propertyAddress?.trim() && "flex flex-col gap-0.5"
+              )}
+            >
+              {listerReleaseFundsStep && propertyAddress?.trim() ? (
+                <>
+                  <span className="text-foreground dark:text-gray-100">
+                    {propertyAddress.trim()}
+                  </span>
+                  <span>{formatLocationWithState(listing.suburb, listing.postcode)}</span>
+                </>
+              ) : isJobCleaner && propertyAddress?.trim() ? (
+                propertyAddress.trim()
+              ) : (
+                formatLocationWithState(listing.suburb, listing.postcode)
+              )}
             </span>
           </p>
         </CardHeader>
@@ -1240,7 +1257,8 @@ export function JobDetail({
                   )}
                 </>
               ) : (
-                !cleanerReviewPendingMinimal && (
+                !cleanerReviewPendingMinimal &&
+                !listerReleaseFundsStep && (
                 <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
                   <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">
                     Won for
@@ -1386,7 +1404,9 @@ export function JobDetail({
             </div>
           )}
 
-          {bondGuideline && !cleanerReviewPendingMinimal && (
+          {bondGuideline &&
+            !cleanerReviewPendingMinimal &&
+            !listerReleaseFundsStep && (
             <details
               className={cn(
                 "mt-2 text-muted-foreground dark:text-gray-400",
@@ -1609,6 +1629,7 @@ export function JobDetail({
           {isStripeTestMode &&
             isJobLister &&
             hasActiveJob &&
+            !listerReleaseFundsStep &&
             (localJobStatus === "accepted" ||
               localJobStatus === "in_progress" ||
               localJobStatus === "completed_pending_approval") && (
@@ -1779,6 +1800,7 @@ export function JobDetail({
                 <>
                   {!(isJobCleaner && cleanerReviewPendingMinimal) && (
                     <>
+                  {!(isJobLister && listerReleaseFundsStep) && (
                   <details
                     className={cn(
                       "rounded-xl border bg-background/60 px-4 py-3 text-muted-foreground dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400",
@@ -1819,16 +1841,28 @@ export function JobDetail({
                         ))}
                     </div>
                   </details>
+                  )}
+                  {localJobStatus === "completed" ? (
                   <p
                     className={cn(
                       "mt-1 rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
                       detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
                     )}
                   >
-                    {localJobStatus === "completed"
-                      ? "Payment has been released. Thanks for completing this bond clean through Bond Back."
-                      : "Waiting on final approval and payment release…"}
+                    Payment has been released. Thanks for completing this bond clean through Bond Back.
                   </p>
+                  ) : (
+                    !(isJobLister && listerReleaseFundsStep) && (
+                  <p
+                    className={cn(
+                      "mt-1 rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+                      detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
+                    )}
+                  >
+                    Waiting on final approval and payment release…
+                  </p>
+                    )
+                  )}
                     </>
                   )}
                   {isJobLister && afterPhotoEntries.length > 0 && (
@@ -2678,7 +2712,7 @@ export function JobDetail({
               </details>
             )}
 
-          {!cleanerReviewPendingMinimal && (
+          {!cleanerReviewPendingMinimal && !listerReleaseFundsStep && (
             <>
           {listing.special_instructions && (
             <div
@@ -3013,7 +3047,9 @@ export function JobDetail({
             </>
           )}
 
-          {!(isCleaner && hideCleanerCancelledAuctionUi) && !cleanerReviewPendingMinimal && (
+          {!(isCleaner && hideCleanerCancelledAuctionUi) &&
+            !cleanerReviewPendingMinimal &&
+            !listerReleaseFundsStep && (
             <BidHistorySection
               bids={bids}
               onAcceptBid={
