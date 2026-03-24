@@ -70,7 +70,6 @@ export const Header = async ({
                 userId={session.user.id}
                 activeRole={session.activeRole}
               />
-              <ThemeToggle persistToServer={!!session} />
               <RoleSwitcher session={session} variant="compact" />
               <UserMenu session={session} />
             </div>
@@ -114,11 +113,6 @@ export const Header = async ({
                 )}
                 <UserMenu session={session} />
               </div>
-              <span
-                className="mx-0.5 hidden h-5 w-px shrink-0 bg-border dark:bg-gray-700 sm:block md:mx-1"
-                aria-hidden
-              />
-              <ThemeToggle persistToServer={!!session} />
             </nav>
           </div>
         </>

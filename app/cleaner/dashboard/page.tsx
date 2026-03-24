@@ -191,7 +191,7 @@ export default async function CleanerDashboardPage() {
         className="[&_.CardContent]:p-5 md:[&_.CardContent]:p-4 [&_p.text-xl]:text-2xl md:[&_p.text-xl]:text-xl [&_p:first-child]:text-xs md:[&_p:first-child]:text-[11px]"
       />
 
-      {/* Quick actions — hidden on mobile when FAB is shown */}
+      {/* Quick actions — sm+ only (mobile: tab bar + main nav for jobs) */}
       <div className="hidden sm:block">
         <QuickActionsRow actions={actions} />
       </div>

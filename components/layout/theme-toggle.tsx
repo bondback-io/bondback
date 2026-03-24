@@ -12,7 +12,7 @@ export type ThemeToggleProps = {
   persistToServer?: boolean;
 };
 
-export function ThemeToggle({ persistToServer = false }: ThemeToggleProps) {
+export function useThemeToggle(persistToServer = false) {
   const [theme, setTheme] = React.useState<ThemePreference>("system");
   const [mounted, setMounted] = React.useState(false);
 
@@ -44,12 +44,11 @@ export function ThemeToggle({ persistToServer = false }: ThemeToggleProps) {
     }
   }, []);
 
-  const toggleTheme = () => {
+  const toggleTheme = React.useCallback(() => {
     if (typeof window === "undefined") return;
 
     const systemPrefersDark =
-      window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches;
+      window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
 
     let nextTheme: ThemePreference;
     if (theme === "dark") {
@@ -65,7 +64,19 @@ export function ThemeToggle({ persistToServer = false }: ThemeToggleProps) {
     if (persistToServer) {
       void saveThemePreference(nextTheme);
     }
-  };
+  }, [persistToServer, theme]);
+
+  const isDark =
+    theme === "dark" ||
+    (theme === "system" &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+  return { theme, mounted, isDark, toggleTheme };
+}
+
+export function ThemeToggle({ persistToServer = false }: ThemeToggleProps) {
+  const { mounted, isDark, toggleTheme } = useThemeToggle(persistToServer);
 
   if (!mounted) {
     return (
@@ -79,12 +90,6 @@ export function ThemeToggle({ persistToServer = false }: ThemeToggleProps) {
       </Button>
     );
   }
-
-  const isDark =
-    theme === "dark" ||
-    (theme === "system" &&
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   return (
     <Button

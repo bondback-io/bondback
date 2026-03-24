@@ -35,7 +35,11 @@ import {
   List,
   ShieldAlert,
   MessageSquare,
+  Moon,
+  Sun,
+  Search,
 } from "lucide-react";
+import { useThemeToggle } from "@/components/layout/theme-toggle";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import type { SessionWithProfile } from "@/lib/types";
@@ -62,6 +66,53 @@ function useIsMobile() {
 
 const MOBILE_ROW_CLASS =
   "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
+function UserMenuThemeToggleSheetRow({ persistToServer }: { persistToServer: boolean }) {
+  const { mounted, isDark, toggleTheme } = useThemeToggle(persistToServer);
+  const label = isDark ? "Light mode" : "Dark mode";
+  const ariaLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+      aria-label={ariaLabel}
+    >
+      {!mounted ? (
+        <Moon className="h-5 w-5 shrink-0 opacity-50" aria-hidden />
+      ) : isDark ? (
+        <Sun className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
+      ) : (
+        <Moon className="h-5 w-5 shrink-0 text-slate-700 dark:text-gray-300" aria-hidden />
+      )}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function UserMenuThemeToggleDropdownItem({ persistToServer }: { persistToServer: boolean }) {
+  const { mounted, isDark, toggleTheme } = useThemeToggle(persistToServer);
+  const label = isDark ? "Light mode" : "Dark mode";
+  const ariaLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
+  return (
+    <DropdownMenuItem
+      onSelect={() => {
+        toggleTheme();
+      }}
+      className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+      aria-label={ariaLabel}
+    >
+      {!mounted ? (
+        <Moon className="h-4 w-4 shrink-0 text-muted-foreground opacity-50" aria-hidden />
+      ) : isDark ? (
+        <Sun className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
+      ) : (
+        <Moon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      )}
+      <span>{label}</span>
+    </DropdownMenuItem>
+  );
+}
 
 /** Cleaner "My Jobs" — opens dashboard scrolled to Active jobs (matches `#active-jobs` on page). */
 const CLEANER_JOBS_DASHBOARD_HREF = "/cleaner/dashboard#active-jobs";
@@ -309,6 +360,18 @@ export function UserMenu({ session }: UserMenuProps) {
                     <span>{isLister ? "My Listings" : "My Jobs"}</span>
                   </Link>
                 </SheetClose>
+                {isCleaner && (
+                  <SheetClose asChild>
+                    <Link
+                      href="/jobs"
+                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                      aria-label="Browse jobs near me"
+                    >
+                      <Search className="h-5 w-5 shrink-0" aria-hidden />
+                      <span>Browse Jobs Near Me</span>
+                    </Link>
+                  </SheetClose>
+                )}
                 <SheetClose asChild>
                   <Link
                     href="/messages"
@@ -329,6 +392,17 @@ export function UserMenu({ session }: UserMenuProps) {
                     <span>Help &amp; Support</span>
                   </Link>
                 </SheetClose>
+
+                <div
+                  role="separator"
+                  className="my-1 h-px w-full shrink-0 bg-border dark:bg-gray-800"
+                  aria-hidden
+                />
+                <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                  Appearance
+                </p>
+                <UserMenuThemeToggleSheetRow persistToServer />
+
                 {isAdmin && (
                   <>
                     <div
@@ -427,6 +501,18 @@ export function UserMenu({ session }: UserMenuProps) {
               <span>{isLister ? "My Listings" : "My Jobs"}</span>
             </Link>
           </DropdownMenuItem>
+          {isCleaner && (
+            <DropdownMenuItem asChild>
+              <Link
+                href="/jobs"
+                className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+                aria-label="Browse jobs near me"
+              >
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span>Browse Jobs Near Me</span>
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem asChild>
             <Link href="/messages" className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800">
               <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -453,6 +539,13 @@ export function UserMenu({ session }: UserMenuProps) {
               <span>Help &amp; Support</span>
             </Link>
           </DropdownMenuItem>
+
+          <DropdownMenuSeparator className="my-1" />
+          <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+            Appearance
+          </div>
+          <UserMenuThemeToggleDropdownItem persistToServer />
+
           {isAdmin && (
             <>
               <DropdownMenuSeparator className="my-1" />
