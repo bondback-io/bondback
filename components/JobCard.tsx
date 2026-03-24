@@ -14,9 +14,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { addSavedListingId } from "@/lib/saved-listings-local";
 import { cn } from "@/lib/utils";
 import { Home, Flame, Eye, Gavel, MessageCircle, Bookmark } from "lucide-react";
+import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { BuyNowButton } from "@/components/features/buy-now-button";
 import { VerificationBadges } from "@/components/shared/verification-badges";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 
 const HERO_H = "min-h-[200px] max-h-[240px] h-[220px]";
 
@@ -66,7 +67,7 @@ export type JobCardMarketplaceMobileProps = {
   layout?: "default" | "compact";
 };
 
-export function JobCardMarketplaceMobile({
+function JobCardMarketplaceMobileInner({
   jobHref,
   listingId,
   title,
@@ -141,11 +142,12 @@ export function JobCardMarketplaceMobile({
                 src={thumb}
                 alt={thumbAlt}
                 fill
-                sizes="96px"
-                quality={75}
+                sizes="(max-width: 767px) 112px, 96px"
+                quality={65}
                 className="object-cover"
-                loading={priority ? "eager" : "lazy"}
                 priority={priority}
+                placeholder="blur"
+                blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-muted-foreground" aria-hidden>
@@ -359,11 +361,12 @@ export function JobCardMarketplaceMobile({
               src={thumb}
               alt={thumbAlt}
               fill
-              sizes="100vw"
-              quality={80}
+              sizes="(max-width: 767px) 100vw, 50vw"
+              quality={75}
               className="object-cover"
-              loading={priority ? "eager" : "lazy"}
               priority={priority}
+              placeholder="blur"
+              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground" aria-hidden>
@@ -561,3 +564,6 @@ export function JobCardMarketplaceMobile({
     </div>
   );
 }
+
+export const JobCardMarketplaceMobile = memo(JobCardMarketplaceMobileInner);
+JobCardMarketplaceMobile.displayName = "JobCardMarketplaceMobile";

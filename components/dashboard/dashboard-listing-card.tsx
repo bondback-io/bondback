@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +37,7 @@ export type DashboardListingCardProps = {
   onCancelClick?: () => void;
 };
 
-export function DashboardListingCard({
+function DashboardListingCardInner({
   listing,
   bidCount = 0,
   compact,
@@ -301,3 +302,6 @@ export function DashboardListingCard({
     </Card>
   );
 }
+
+export const DashboardListingCard = memo(DashboardListingCardInner);
+DashboardListingCard.displayName = "DashboardListingCard";

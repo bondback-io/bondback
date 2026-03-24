@@ -47,6 +47,7 @@ function DesktopNavLinks({
   onRequestCreateListing?: () => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const isActive = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(href));
@@ -74,9 +75,11 @@ function DesktopNavLinks({
           {isCleaner && (
             <Link
               href="/jobs"
+              prefetch
               className={linkClass("/jobs")}
               title="Find jobs"
               aria-label="Find jobs"
+              onMouseEnter={() => router.prefetch("/jobs")}
             >
               <Search className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
               <span>Find Jobs</span>
@@ -209,7 +212,9 @@ function MobileNavContent({
           <SheetClose asChild>
             <Link
               href="/jobs"
+              prefetch
               className={linkClass("/jobs")}
+              onPointerDown={() => router.prefetch("/jobs")}
               onClick={onNavigate}
               title="Find jobs"
               aria-label="Find jobs"

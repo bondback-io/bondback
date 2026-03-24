@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
-import { NewListingForm } from "@/components/features/new-listing-form";
+import { NewListingFormLazy } from "./new-listing-form-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { Database } from "@/types/supabase";
@@ -100,7 +100,7 @@ const NewListingPage = async () => {
     12;
 
   return (
-    <NewListingForm
+    <NewListingFormLazy
       listerId={session.user.id}
       listerSuburb={profile.suburb ?? undefined}
       listerPostcode={profile.postcode ?? ""}

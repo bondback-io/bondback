@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ImagePlus, Info } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import {
   validatePhotoFile,
   validatePhotoFiles,
@@ -442,12 +443,16 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
+                <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/50">
                   {profilePhotoUrl ? (
-                    <img
+                    <OptimizedImage
                       src={profilePhotoUrl}
                       alt="Profile"
-                      className="h-20 w-20 rounded-full object-cover ring-2 ring-emerald-500/80 dark:ring-emerald-500/60"
+                      width={80}
+                      height={80}
+                      sizes="80px"
+                      quality={70}
+                      className="rounded-full object-cover ring-2 ring-emerald-500/80 dark:ring-emerald-500/60"
                     />
                   ) : (
                     <span className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
@@ -858,11 +863,15 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
               </div>
               <div className="flex flex-wrap gap-2">
                 {(Array.isArray(portfolioUrls) ? portfolioUrls : []).map((url) => (
-                  <div key={url} className="relative">
-                    <img
+                  <div key={url} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md ring-1 ring-sky-400/70">
+                    <OptimizedImage
                       src={url}
                       alt="Portfolio"
-                      className="h-20 w-20 rounded-md object-cover ring-1 ring-sky-400/70"
+                      width={80}
+                      height={80}
+                      sizes="80px"
+                      quality={65}
+                      className="h-full w-full rounded-md object-cover"
                     />
                     <button
                       type="button"
@@ -985,13 +994,16 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
+              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/50">
                 {profilePhotoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <OptimizedImage
                     src={profilePhotoUrl}
                     alt="Profile"
-                    className="h-20 w-20 rounded-full object-cover ring-2 ring-emerald-500/80 dark:ring-emerald-500/60"
+                    width={80}
+                    height={80}
+                    sizes="80px"
+                    quality={70}
+                    className="rounded-full object-cover ring-2 ring-emerald-500/80 dark:ring-emerald-500/60"
                   />
                 ) : (
                   <span className="text-xs font-medium text-emerald-900 dark:text-emerald-100">

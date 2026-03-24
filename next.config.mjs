@@ -6,6 +6,8 @@ const nextConfig = {
     optimizePackageImports: ["lucide-react"],
   },
   images: {
+    /** Cache optimized proxy responses longer (Supabase origin still sends its own Cache-Control). */
+    minimumCacheTTL: 60 * 60 * 24 * 7,
     remotePatterns: [
       {
         protocol: "https",

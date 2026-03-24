@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { House, Briefcase, MessageCircle, User, List, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -167,6 +167,7 @@ export function MobileBottomNav({
   userId = null,
 }: MobileBottomNavProps = {}) {
   const pathname = usePathname();
+  const router = useRouter();
   const currentPath = pathname ?? "";
   const [activeRole, setActiveRole] = useState<Role>(null);
   const [storedRoleFallback, setStoredRoleFallback] = useState<Role>(null);
@@ -248,6 +249,25 @@ export function MobileBottomNav({
     window.addEventListener(ACTIVE_ROLE_CHANGED_EVENT, onRoleEvent);
     return () => window.removeEventListener(ACTIVE_ROLE_CHANGED_EVENT, onRoleEvent);
   }, [refreshActiveRole]);
+
+  /** Idle prefetch of common tab targets — cheap wins for tap navigation on slow networks. */
+  useEffect(() => {
+    if (!isBottomNavRoute(currentPath)) return;
+    const run = () => {
+      router.prefetch("/jobs");
+      router.prefetch("/messages");
+      router.prefetch("/dashboard");
+      router.prefetch("/profile");
+    };
+    const w = typeof window !== "undefined" ? window : undefined;
+    if (!w) return;
+    if (typeof w.requestIdleCallback === "function") {
+      const idleId = w.requestIdleCallback(run, { timeout: 2500 });
+      return () => w.cancelIdleCallback(idleId);
+    }
+    const tid = window.setTimeout(run, 2000);
+    return () => clearTimeout(tid);
+  }, [currentPath, router]);
 
   if (!isBottomNavRoute(currentPath)) return null;
 

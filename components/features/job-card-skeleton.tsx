@@ -18,19 +18,19 @@ export function JobCardSkeleton({ className }: { className?: string }) {
         className
       )}
     >
-      {/* Mobile: matches JobCard hero + stacked body */}
+      {/* Mobile: matches JobCard hero + stacked body — larger type/CTA placeholders for small screens */}
       <div className="md:hidden">
         <div className="relative h-[200px] w-full min-h-[180px] max-h-[220px] overflow-hidden bg-muted dark:bg-gray-900">
           <Skeleton className={cn("absolute inset-0 rounded-none animate-shimmer", sk)} aria-hidden />
         </div>
-        <div className="space-y-3 border-t border-border bg-card px-4 pb-5 pt-4 dark:border-gray-800 dark:bg-gray-950">
-          <Skeleton className={cn("h-3 w-24 animate-shimmer", sk)} />
-          <Skeleton className={cn("h-10 w-36 animate-shimmer", sk)} />
-          <Skeleton className={cn("h-12 w-full max-w-xs rounded-xl animate-shimmer", sk)} />
+        <div className="space-y-4 border-t border-border bg-card px-4 pb-6 pt-5 dark:border-gray-800 dark:bg-gray-950">
+          <Skeleton className={cn("h-3.5 w-28 animate-shimmer", sk)} />
+          <Skeleton className={cn("h-11 w-40 animate-shimmer", sk)} />
+          <Skeleton className={cn("h-14 w-full max-w-xs rounded-xl animate-shimmer", sk)} />
           <Skeleton className={cn("h-5 w-full animate-shimmer", sk)} />
           <Skeleton className={cn("h-5 w-2/3 animate-shimmer", sk)} />
-          <Skeleton className={cn("h-12 w-full rounded-xl animate-shimmer", sk)} />
-          <Skeleton className={cn("h-12 w-full rounded-xl animate-shimmer", sk)} />
+          <Skeleton className={cn("h-12 min-h-[48px] w-full rounded-xl animate-shimmer", sk)} />
+          <Skeleton className={cn("h-12 min-h-[48px] w-full rounded-xl animate-shimmer", sk)} />
         </div>
       </div>
       {/* Desktop */}
@@ -70,8 +70,7 @@ export function JobCardSkeletonGrid({
   return (
     <div
       className={cn(
-        "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3",
-        "min-h-0 w-full",
+        "grid min-h-0 w-full grid-cols-1 gap-4 sm:gap-3 md:grid-cols-2 lg:grid-cols-3",
         className
       )}
     >

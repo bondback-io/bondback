@@ -57,9 +57,12 @@ const INITIAL_PAGE_SIZE = 20;
 const PRELOAD_IMAGE_COUNT = 4;
 /** Off until we fix gesture conflict with vertical scroll (react-swipeable preventScrollOnSwipe). */
 const ENABLE_JOB_CARD_SWIPE = true;
-/** When list has more than this many cards, use @tanstack/react-virtual (window virtualizer) for performance. */
-const VIRTUALIZE_THRESHOLD = 30;
-/** Default height estimate for virtualizer (desktop grid / tall mobile). */
+/**
+ * Mobile-only: window virtualizer when list is long (keeps scroll smooth on phones).
+ * Desktop always uses the CSS grid below — no change to md+ layout.
+ */
+const MOBILE_VIRTUALIZE_MIN = 10;
+/** Default height estimate if virtualizer ever used on large viewports (unused on desktop path). */
 const ESTIMATED_CARD_HEIGHT = 600;
 /** Compact mobile row cards (/jobs) — tuned for cleaner card layout + title/price blocks. */
 const ESTIMATED_CARD_HEIGHT_MOBILE_COMPACT = 340;
@@ -263,19 +266,22 @@ export function JobsList({
 
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMarginTop, setScrollMarginTop] = useState(0);
+  const useVirtualList =
+    isMobile && displayListings.length > MOBILE_VIRTUALIZE_MIN;
+
   useEffect(() => {
-    if (listRef.current && displayListings.length > VIRTUALIZE_THRESHOLD) {
+    if (listRef.current && useVirtualList) {
       const top = listRef.current.getBoundingClientRect().top + window.scrollY;
       setScrollMarginTop(top);
     }
-  }, [displayListings.length]);
+  }, [displayListings.length, useVirtualList]);
 
   const estimatedCardHeight = isMobile
     ? ESTIMATED_CARD_HEIGHT_MOBILE_COMPACT
     : ESTIMATED_CARD_HEIGHT;
 
   const rowVirtualizer = useWindowVirtualizer({
-    count: displayListings.length > VIRTUALIZE_THRESHOLD ? displayListings.length : 0,
+    count: useVirtualList ? displayListings.length : 0,
     estimateSize: () => estimatedCardHeight,
     getScrollElement: () => window,
     scrollMargin: scrollMarginTop,
@@ -283,7 +289,6 @@ export function JobsList({
     gap: 12,
   });
 
-  const useVirtualList = displayListings.length > VIRTUALIZE_THRESHOLD;
   const virtualItems = useVirtualList ? rowVirtualizer.getVirtualItems() : [];
 
   // Preload first 3–4 thumbnails for LCP (run when initial list identity changes)

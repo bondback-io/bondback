@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useState, useMemo } from "react";
+import { useTransition, useState, useMemo, useEffect } from "react";
 import { useAbnAutoSaveOnValid } from "@/hooks/use-abn-auto-save-on-valid";
 import { Input } from "@/components/ui/input";
 import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
@@ -20,6 +20,11 @@ import {
   changePassword,
 } from "@/app/settings/actions";
 import { AlertTriangle } from "lucide-react";
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  NOTIFICATION_LABELS,
+  type NotificationPreferenceKey,
+} from "@/lib/notification-preferences";
 
 type ProfileSnapshot = {
   full_name: string | null;
@@ -183,12 +188,6 @@ export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
   );
 }
 
-import {
-  DEFAULT_NOTIFICATION_PREFERENCES,
-  NOTIFICATION_LABELS,
-  type NotificationPreferenceKey,
-} from "@/lib/notification-preferences";
-
 const ALL_PREF_KEYS: NotificationPreferenceKey[] = [
   "new_bid",
   "new_message",
@@ -209,6 +208,14 @@ const ALL_PREF_KEYS: NotificationPreferenceKey[] = [
 
 /** Cleaners only: new-job radius alerts (SMS + push). */
 const CLEANER_NEW_JOB_KEYS = new Set<NotificationPreferenceKey>(["sms_new_job", "push_new_job"]);
+
+function buildNotificationFormData(values: Record<string, boolean>): FormData {
+  const fd = new FormData();
+  for (const key of ALL_PREF_KEYS) {
+    if (values[key]) fd.set(key, "on");
+  }
+  return fd;
+}
 
 function SendTestSmsButton() {
   const [testing, setTesting] = useState(false);
@@ -276,35 +283,40 @@ export function SettingsNotificationsForm({
   );
   const [values, setValues] = useState<Record<string, boolean>>(initialValues);
 
-  return (
-    <form
-      className="space-y-4 text-foreground dark:text-gray-100"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const form = e.currentTarget;
-        const formData = new FormData(form);
-        startTransition(async () => {
-          const result = await saveNotificationSettings(formData);
-          if (result.ok) {
-            const smsOn = formData.get("sms_new_job") === "on";
-            const pushJobOn = formData.get("push_new_job") === "on";
-            toast({
-              title: "Notification preferences updated",
-              description:
-                smsOn || pushJobOn
-                  ? "New job alert preferences updated (cleaners in your radius may be notified when listings go live)."
-                  : "Your notification settings have been saved.",
-            });
-          } else {
-            toast({
-              title: "Error",
-              description: result.error,
-              variant: "destructive",
-            });
-          }
+  useEffect(() => {
+    setValues(initialValues);
+  }, [initialValues]);
+
+  const persistNotificationToggle = (key: NotificationPreferenceKey, checked: boolean) => {
+    if (locked) return;
+    const prev = { ...values };
+    const next = { ...values, [key]: checked };
+    setValues(next);
+    startTransition(async () => {
+      const result = await saveNotificationSettings(buildNotificationFormData(next));
+      if (result.ok) {
+        const smsOn = next.sms_new_job;
+        const pushJobOn = next.push_new_job;
+        toast({
+          title: "Notification preferences updated",
+          description:
+            smsOn || pushJobOn
+              ? "New job alert preferences updated (cleaners in your radius may be notified when listings go live)."
+              : "Your notification settings have been saved.",
         });
-      }}
-    >
+        return;
+      }
+      setValues(prev);
+      toast({
+        title: "Couldn’t save",
+        description: result.error,
+        variant: "destructive",
+      });
+    });
+  };
+
+  return (
+    <div className="space-y-4 text-foreground dark:text-gray-100">
       <p className="text-base text-muted-foreground dark:text-gray-400 md:text-sm">
         Choose which emails you receive. Critical (payment, dispute) are on by default.
       </p>
@@ -333,10 +345,8 @@ export function SettingsNotificationsForm({
             <Switch
               id={key}
               checked={values[key]}
-              onCheckedChange={(checked) =>
-                setValues((prev) => ({ ...prev, [key]: checked }))
-              }
-              disabled={locked}
+              onCheckedChange={(checked) => persistNotificationToggle(key, checked)}
+              disabled={locked || isPending}
             />
           </div>
         ))}
@@ -362,12 +372,9 @@ export function SettingsNotificationsForm({
         Push notifications require the Bond Back mobile app. Turn on the toggle here, then register your device in the app to receive alerts (max 5 per day).
       </p>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-8 md:min-h-0 md:w-auto" disabled={isPending || locked}>
-          {isPending ? "Saving…" : "Save notification settings"}
-        </Button>
         <SendTestSmsButton />
       </div>
-    </form>
+    </div>
   );
 }
 
@@ -376,31 +383,35 @@ export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean 
   const { toast } = useToast();
   const [publicProfile, setPublicProfile] = useState(profilePublic);
 
-  return (
-    <form
-      className="space-y-4 text-foreground dark:text-gray-100"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const form = e.currentTarget;
-        const formData = new FormData(form);
-        startTransition(async () => {
-          const result = await savePrivacySettings(formData);
-          if (result.ok) {
-            toast({
-              title: "Settings saved successfully",
-              description: "Privacy preferences updated.",
-            });
-          } else {
-            toast({
-              title: "Error",
-              description: result.error,
-              variant: "destructive",
-            });
-          }
+  useEffect(() => {
+    setPublicProfile(profilePublic);
+  }, [profilePublic]);
+
+  const onPublicChange = (checked: boolean) => {
+    const prev = publicProfile;
+    setPublicProfile(checked);
+    startTransition(async () => {
+      const fd = new FormData();
+      if (checked) fd.set("profile_public", "on");
+      const result = await savePrivacySettings(fd);
+      if (result.ok) {
+        toast({
+          title: "Privacy updated",
+          description: "Your visibility preference is saved.",
         });
-      }}
-    >
-      <input type="hidden" name="profile_public" value={publicProfile ? "on" : ""} readOnly aria-hidden />
+        return;
+      }
+      setPublicProfile(prev);
+      toast({
+        title: "Couldn’t save",
+        description: result.error,
+        variant: "destructive",
+      });
+    });
+  };
+
+  return (
+    <div className="space-y-4 text-foreground dark:text-gray-100">
       <div className="flex min-h-[52px] items-center justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/40">
         <Label htmlFor="profile_public_switch" className="flex-1 cursor-pointer text-base dark:text-gray-200 md:text-sm">
           Show my profile publicly in search results
@@ -408,13 +419,11 @@ export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean 
         <Switch
           id="profile_public_switch"
           checked={publicProfile}
-          onCheckedChange={setPublicProfile}
+          onCheckedChange={onPublicChange}
+          disabled={isPending}
         />
       </div>
-      <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-8 md:min-h-0 md:w-auto" disabled={isPending}>
-        {isPending ? "Saving…" : "Save privacy settings"}
-      </Button>
-    </form>
+    </div>
   );
 }
 

@@ -16,6 +16,7 @@ import { formatCents, getListingCoverUrl } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { cn } from "@/lib/utils";
+import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import {
   Briefcase,
   MapPin,
@@ -96,6 +97,9 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
                 quality={75}
                 className="object-cover"
                 sizes="100vw"
+                loading="lazy"
+                placeholder="blur"
+                blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-400" aria-hidden>
@@ -235,6 +239,9 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
               quality={75}
               className="object-cover transition-all duration-200 [@media(hover:hover)]:group-hover:scale-[1.02]"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              loading="lazy"
+              placeholder="blur"
+              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-400" aria-hidden>

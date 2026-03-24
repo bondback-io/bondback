@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -18,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { MyAccountSections } from "@/components/account/my-account-sections";
 import { SettingsPaymentReturnHandler } from "@/components/settings/settings-payment-return-handler";
 import type { DistanceUnitPref, ThemePreference } from "@/lib/types";
+import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -209,10 +211,19 @@ const ProfilePage = async ({
         <div className="flex flex-col gap-5 md:gap-4">
           <Card className="overflow-hidden border-border bg-card/90 shadow-sm dark:border-gray-800 dark:bg-gray-950/90">
             <CardContent className="flex flex-col gap-4 px-3 py-4 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
-              <Avatar className="h-20 w-20 shrink-0 border-2 border-border dark:border-gray-700">
+              <Avatar className="relative h-20 w-20 shrink-0 overflow-hidden border-2 border-border dark:border-gray-700">
                 {avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                  <Image
+                    src={avatarUrl}
+                    alt=""
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                    priority
+                    quality={75}
+                    placeholder="blur"
+                    blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                  />
                 ) : (
                   <AvatarFallback className="text-lg font-semibold tracking-tight">{initials}</AvatarFallback>
                 )}
@@ -456,13 +467,18 @@ const ProfilePage = async ({
                         {r.review_photos.slice(0, 3).map((path, idx) => (
                           <div
                             key={`${r.id}-${idx}`}
-                            className="h-14 w-16 overflow-hidden rounded-md border border-border dark:border-gray-700"
+                            className="relative h-14 w-16 overflow-hidden rounded-md border border-border dark:border-gray-700"
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <Image
                               src={makePhotoUrl(path)}
                               alt="Review photo"
-                              className="h-full w-full object-cover"
+                              fill
+                              sizes="64px"
+                              className="object-cover"
+                              loading="lazy"
+                              quality={65}
+                              placeholder="blur"
+                              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
                             />
                           </div>
                         ))}

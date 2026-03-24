@@ -3,18 +3,8 @@
 import React from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-
-const SUPABASE_STORAGE_HOST = "olidrzdufyewiocquhtb.supabase.co";
-
-function isOptimizable(src: string | null | undefined): boolean {
-  if (!src || typeof src !== "string") return false;
-  try {
-    const u = new URL(src);
-    return u.hostname === SUPABASE_STORAGE_HOST;
-  } catch {
-    return false;
-  }
-}
+import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
+import { isSupabasePublicImageUrl } from "@/lib/supabase-image-url";
 
 export type OptimizedImageProps = {
   src: string | null | undefined;
@@ -24,13 +14,17 @@ export type OptimizedImageProps = {
   height?: number;
   sizes?: string;
   priority?: boolean;
+  /** Thumbnails: 65–75; lightbox/hero can pass higher. Default 75. */
+  quality?: number;
+  /** Blur-up for Supabase URLs (default true). */
+  blur?: boolean;
   className?: string;
   /** Aspect ratio container (e.g. aspect-[16/10]) when fill */
   containerClassName?: string;
 };
 
 /**
- * Uses next/image (lazy, quality 75, WebP) for Supabase URLs; falls back to <img> for others.
+ * Uses next/image (lazy, WebP/AVIF) for Supabase public URLs; falls back to <img> for others.
  * Reduces CLS by reserving space; use fill + containerClassName for aspect-ratio containers.
  */
 export function OptimizedImage({
@@ -41,6 +35,8 @@ export function OptimizedImage({
   height,
   sizes = "(max-width: 768px) 100vw, 50vw",
   priority = false,
+  quality = 75,
+  blur = true,
   className,
   containerClassName,
 }: OptimizedImageProps) {
@@ -48,7 +44,7 @@ export function OptimizedImage({
     return null;
   }
 
-  const optimizable = isOptimizable(src);
+  const optimizable = isSupabasePublicImageUrl(src);
 
   if (optimizable && (fill || (width && height))) {
     const content = (
@@ -59,9 +55,11 @@ export function OptimizedImage({
         width={!fill ? width : undefined}
         height={!fill ? height : undefined}
         sizes={sizes}
-        quality={75}
+        quality={quality}
         loading={priority ? "eager" : "lazy"}
         priority={priority}
+        placeholder={blur ? "blur" : "empty"}
+        blurDataURL={blur ? REMOTE_IMAGE_BLUR_DATA_URL : undefined}
         className={cn("object-cover", className)}
         unoptimized={false}
       />

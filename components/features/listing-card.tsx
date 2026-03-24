@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,6 +46,7 @@ import {
 } from "lucide-react";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { JobCardMarketplaceMobile, formatAuctionTimeLeftShort } from "@/components/JobCard";
+import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { useDistanceUnit } from "@/hooks/use-distance-unit";
 import { formatDistanceKmLabel } from "@/lib/distance-format";
 
@@ -250,7 +252,7 @@ function ListingCardOverflowMenu({
  *   (Lister: View Bids, Edit Listing, Cancel Job, Message Cleaner)
  *   (Common: Report Issue, Share Listing)
  */
-export function ListingCard({
+function ListingCardInner({
   listing,
   showPlaceBid = true,
   isCleaner = false,
@@ -435,8 +437,9 @@ export function ListingCard({
               sizes="(max-width: 768px) 100vw, 50vw"
               quality={75}
               className="object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-              loading={priority ? "eager" : "lazy"}
               priority={priority}
+              placeholder="blur"
+              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-400" aria-hidden>
@@ -713,3 +716,6 @@ export function ListingCard({
     </TooltipProvider>
   );
 }
+
+export const ListingCard = memo(ListingCardInner);
+ListingCard.displayName = "ListingCard";

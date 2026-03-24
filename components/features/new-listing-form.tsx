@@ -38,13 +38,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Calendar } from "@/components/ui/calendar";
+import { FieldHelp } from "@/components/ui/field-help";
 import {
   Popover,
   PopoverContent,
@@ -58,11 +53,12 @@ import {
   Hash,
   ChevronRight,
   ChevronLeft,
-  HelpCircle,
   X,
   Sparkles,
 } from "lucide-react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { useToast } from "@/components/ui/use-toast";
 import {
   validatePhotoFiles,
@@ -631,8 +627,7 @@ export function NewListingForm({
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <section className="page-inner space-y-6 pb-12 md:space-y-6">
+    <section className="page-inner space-y-6 pb-12 md:space-y-6">
         <header className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-sky-50/40 px-4 py-5 shadow-sm ring-1 ring-emerald-500/10 dark:border-emerald-800/60 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25 dark:ring-emerald-400/10 sm:px-6 sm:py-6">
           <div
             className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl dark:bg-emerald-500/15"
@@ -711,14 +706,9 @@ export function NewListingForm({
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label htmlFor="propertyType">Property type</Label>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Property type affects base pricing. Apartments and studios typically cost less than houses.
-                      </TooltipContent>
-                    </Tooltip>
+                    <FieldHelp label="Property type help">
+                      Property type affects base pricing. Apartments and studios typically cost less than houses.
+                    </FieldHelp>
                   </div>
                   <Controller
                     control={form.control}
@@ -751,14 +741,9 @@ export function NewListingForm({
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="bedrooms">Bedrooms</Label>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          More bedrooms usually mean a higher base price for the bond clean.
-                        </TooltipContent>
-                      </Tooltip>
+                      <FieldHelp label="Bedrooms help">
+                        More bedrooms usually mean a higher base price for the bond clean.
+                      </FieldHelp>
                     </div>
                     <Input
                       id="bedrooms"
@@ -777,14 +762,9 @@ export function NewListingForm({
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="bathrooms">Bathrooms</Label>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          Bathroom count is used in our pricing calculator.
-                        </TooltipContent>
-                      </Tooltip>
+                      <FieldHelp label="Bathrooms help">
+                        Bathroom count is used in our pricing calculator.
+                      </FieldHelp>
                     </div>
                     <Input
                       id="bathrooms"
@@ -805,14 +785,9 @@ export function NewListingForm({
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label>Special areas</Label>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Tick areas that apply. Selected areas are automatically added to Add-ons in step 4 where you can set a price for each.
-                      </TooltipContent>
-                    </Tooltip>
+                    <FieldHelp label="Special areas help">
+                      Tick areas that apply. Selected areas are automatically added to Add-ons in step 4 where you can set a price for each.
+                    </FieldHelp>
                   </div>
                   <div className="flex flex-wrap gap-3">
                     {specialAreaKeys.map((key) => (
@@ -853,14 +828,9 @@ export function NewListingForm({
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label htmlFor="suburb">Suburb</Label>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Start typing to search Australian suburbs. Postcode will auto-fill when you select one.
-                      </TooltipContent>
-                    </Tooltip>
+                    <FieldHelp label="Suburb help">
+                      Start typing to search Australian suburbs. Postcode will auto-fill when you select one.
+                    </FieldHelp>
                   </div>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
@@ -1000,12 +970,29 @@ export function NewListingForm({
                               {fs.status === "success" && (fs.thumbUrl ?? fs.url) ? (
                                 <div className="relative h-full w-full">
                                   <CheckCircle2 className="absolute right-0.5 top-0.5 z-10 h-4 w-4 text-green-600" />
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={fs.thumbUrl ?? fs.url}
-                                    alt={`Uploaded ${index + 1}`}
-                                    className="h-full w-full object-cover"
-                                  />
+                                  {(() => {
+                                    const thumbSrc = fs.thumbUrl ?? fs.url!;
+                                    const isBlob =
+                                      thumbSrc.startsWith("blob:") ||
+                                      thumbSrc.startsWith("data:");
+                                    return (
+                                      <Image
+                                        src={thumbSrc}
+                                        alt={`Uploaded ${index + 1}`}
+                                        fill
+                                        className="object-cover"
+                                        sizes="64px"
+                                        unoptimized={isBlob}
+                                        quality={65}
+                                        {...(isBlob
+                                          ? {}
+                                          : {
+                                              placeholder: "blur" as const,
+                                              blurDataURL: REMOTE_IMAGE_BLUR_DATA_URL,
+                                            })}
+                                      />
+                                    );
+                                  })()}
                                 </div>
                               ) : fs.status === "error" ? (
                                 <div className="flex flex-col items-center gap-0.5 p-1 text-center">
@@ -1063,11 +1050,13 @@ export function NewListingForm({
                                 : `Set photo ${index + 1} as cover`
                             }
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <Image
                               src={url}
                               alt={`Preview ${index + 1}`}
-                              className="h-full w-full object-cover"
+                              fill
+                              className="object-cover"
+                              sizes="96px"
+                              unoptimized
                             />
                             {coverPhotoIndex === index && (
                               <span className="absolute bottom-0 left-0 right-0 bg-primary/90 px-1 py-0.5 text-center text-[10px] font-medium text-primary-foreground">
@@ -1196,14 +1185,9 @@ export function NewListingForm({
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label>Move-out date</Label>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        When do you need the bond clean completed? Cleaners will use this to plan.
-                      </TooltipContent>
-                    </Tooltip>
+                    <FieldHelp label="Move-out date help">
+                      When do you need the bond clean completed? Cleaners will use this to plan.
+                    </FieldHelp>
                   </div>
                   <Controller
                     control={form.control}
@@ -1544,6 +1528,5 @@ export function NewListingForm({
           </Dialog>
         </form>
       </section>
-    </TooltipProvider>
   );
 }

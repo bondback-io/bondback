@@ -28,7 +28,9 @@ import {
 import type { ListingRow } from "@/lib/listings";
 import type { BidRow } from "@/lib/listings";
 import { Checkbox } from "@/components/ui/checkbox";
+import Image from "next/image";
 import { ImagePlus, CheckCircle2, Star, MapPin, X, ImageIcon } from "lucide-react";
+import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { ReviewForm } from "@/components/features/review-form";
 import { GuidedDisputeForm } from "@/components/features/guided-dispute-form";
 import { useToast } from "@/components/ui/use-toast";
@@ -1810,14 +1812,19 @@ export function JobDetail({
                         {afterPhotoEntries.map((entry) => (
                           <div
                             key={entry.name}
-                            className="h-20 w-24 overflow-hidden rounded-md border bg-muted/40 cursor-pointer dark:border-gray-700 dark:bg-gray-800/60 group"
+                            className="relative h-20 w-24 overflow-hidden rounded-md border bg-muted/40 cursor-pointer dark:border-gray-700 dark:bg-gray-800/60 group"
                             onClick={() => setLightboxUrl(entry.url)}
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <Image
                               src={entry.url}
                               alt="After clean"
-                              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                              fill
+                              sizes="96px"
+                              quality={65}
+                              loading="lazy"
+                              placeholder="blur"
+                              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                              className="object-cover transition-transform duration-200 group-hover:scale-105"
                             />
                           </div>
                         ))}
@@ -1852,11 +1859,16 @@ export function JobDetail({
                             className="relative h-20 w-24 overflow-hidden rounded-md border border-border bg-muted/40 dark:border-gray-700 dark:bg-gray-800/60 cursor-pointer group"
                             onClick={() => setLightboxUrl(entry.url)}
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <Image
                               src={entry.url}
                               alt="After clean"
-                              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                              fill
+                              sizes="96px"
+                              quality={65}
+                              loading="lazy"
+                              placeholder="blur"
+                              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                              className="object-cover transition-transform duration-200 group-hover:scale-105"
                             />
                             {canRemove && (
                               <button
@@ -2785,11 +2797,16 @@ export function JobDetail({
                             className="relative h-20 w-24 overflow-hidden rounded-md border border-border bg-muted/40 dark:border-gray-700 dark:bg-gray-800/60 cursor-pointer group"
                             onClick={() => setLightboxUrl(entry.url)}
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <Image
                               src={entry.url}
                               alt="Property"
-                              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                              fill
+                              sizes="96px"
+                              quality={65}
+                              loading="lazy"
+                              placeholder="blur"
+                              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                              className="object-cover transition-transform duration-200 group-hover:scale-105"
                             />
                             {isDefault && (
                               <span className="absolute left-0.5 top-0.5 z-10 rounded px-1 py-0.5 text-[9px] font-medium bg-emerald-600 text-white">
@@ -3082,11 +3099,17 @@ export function JobDetail({
             >
               Close
             </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={lightboxUrl}
               alt="Photo full size"
-              className="max-h-[90vh] max-w-[90vw] rounded-md object-contain shadow-lg"
+              width={1600}
+              height={1200}
+              sizes="100vw"
+              quality={85}
+              placeholder="blur"
+              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+              className="max-h-[90vh] max-w-[90vw] h-auto w-auto rounded-md object-contain shadow-lg"
+              priority
             />
           </div>
         </div>
