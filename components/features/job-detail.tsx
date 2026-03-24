@@ -68,6 +68,19 @@ import { JobPaymentBreakdown } from "@/components/features/job-payment-breakdown
 import { VerificationBadges } from "@/components/shared/verification-badges";
 export type BidWithBidder = BidRow & { bidder_email?: string | null };
 
+/** Some mobile/gallery pickers repeat files in a multi-select; dedupe by stable identity. */
+function dedupeImageFiles(files: File[]): File[] {
+  const seen = new Set<string>();
+  const out: File[] = [];
+  for (const f of files) {
+    const k = `${f.name}\0${f.size}\0${f.lastModified}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(f);
+  }
+  return out;
+}
+
 export type JobDetailProps = {
   listingId: string;
   initialListing: ListingRow;
@@ -1004,17 +1017,16 @@ export function JobDetail({
                     Payment held in escrow
                   </span>
                 )}
-                {localJobStatus === "in_progress" && !cleanerConfirmed && (
+                {localJobStatus === "in_progress" && (
                   <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
-                    Awaiting cleaner completion
+                    Awaiting cleaner completion and request payment
                   </span>
                 )}
-                {(localJobStatus === "in_progress" && cleanerConfirmed) ||
-                  localJobStatus === "completed_pending_approval" ? (
+                {localJobStatus === "completed_pending_approval" && (
                   <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                     Awaiting property lister completion
                   </span>
-                ) : null}
+                )}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 {[
@@ -1935,16 +1947,22 @@ export function JobDetail({
                             : "Upload / add photos"}
                         </span>
                         <input
+                          key={`after-upload-${afterPhotoEntries.map((e) => e.name).sort().join("|")}`}
                           type="file"
                           accept={PHOTO_VALIDATION.ACCEPT}
-                          multiple
+                          multiple={afterPhotoEntries.length === 0}
                           className="hidden"
                           onChange={async (event: ChangeEvent<HTMLInputElement>) => {
                             if (!numericJobId) return;
                             const files = event.target.files;
                             if (!files || files.length === 0) return;
+                            const picked = dedupeImageFiles(Array.from(files));
+                            if (picked.length === 0) {
+                              event.target.value = "";
+                              return;
+                            }
                             const existingCount = afterPhotoEntries.length;
-                            const { validFiles, errors } = validatePhotoFiles(Array.from(files), {
+                            const { validFiles, errors } = validatePhotoFiles(picked, {
                               maxFiles: PHOTO_LIMITS.JOB_AFTER,
                               existingCount,
                             });

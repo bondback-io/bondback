@@ -985,18 +985,25 @@ export async function markJobChecklistFinished(
     return { ok: false, error: "You must be logged in." };
   }
 
-  const { data: job, error } = await supabase
+  // Load by numeric job id only. Do NOT use `.or(..., listing_id.eq.jobId)` — listing_id is
+  // uuid; comparing it to a numeric id string makes Postgres error ("invalid input syntax for type uuid").
+  const raw = String(jobId).trim();
+  const numericId = Number(raw);
+  let jobQuery = supabase
     .from("jobs")
     .select(
       "id, lister_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, auto_release_at, auto_release_at_original"
-    )
-    .or(
-      `id.eq.${jobId.toString()},listing_id.eq.${jobId.toString()}`
-    )
-    .maybeSingle();
+    );
+  if (Number.isFinite(numericId) && numericId > 0 && /^\d+$/.test(raw)) {
+    jobQuery = jobQuery.eq("id", numericId);
+  } else {
+    jobQuery = jobQuery.eq("listing_id", raw);
+  }
+
+  const { data: job, error } = await jobQuery.maybeSingle();
 
   if (error || !job) {
-    console.error("DEBUG: markJobChecklistFinished job lookup failed", {
+    console.error("markJobChecklistFinished job lookup failed", {
       jobId,
       error,
       job,
@@ -1066,13 +1073,20 @@ export async function markJobChecklistFinished(
         status: "completed_pending_approval",
         auto_release_at: autoReleaseAtIso,
         auto_release_at_original: autoReleaseAtIso,
-        completed_at: nowIso,
+        // completed_at is set when payment is released (status completed), not at review-pending.
       } as Partial<JobRow> as never
     )
     .eq("id", row.id as never);
 
   if (updateError) {
-    return { ok: false, error: updateError.message };
+    return {
+      ok: false,
+      error:
+        updateError.message +
+        (updateError.message.includes("jobs_status_check") || updateError.message.includes("check constraint")
+          ? " If you recently added a DB status check, ensure it allows status `completed_pending_approval`."
+          : ""),
+    };
   }
 
   if (row.lister_id) {
