@@ -825,6 +825,12 @@ export function JobDetail({
   /** Checklist is used by both parties during in-progress — match touch targets for both. */
   const checklistParty = isJobCleaner || isJobLister;
 
+  /** Cleaner has submitted "Clean Complete — Request Payment"; simplify job card until lister acts. */
+  const cleanerReviewPendingMinimal =
+    isJobCleaner &&
+    cleanerConfirmed &&
+    localJobStatus === "completed_pending_approval";
+
   return (
     <div className={cn("space-y-6", detailUiBoost && "pb-24 md:pb-10")}>
       {paymentTimeline && (
@@ -886,7 +892,11 @@ export function JobDetail({
               className={cn("shrink-0", detailUiBoost ? "h-5 w-5" : "h-4 w-4")}
               aria-hidden
             />
-            <span>{formatLocationWithState(listing.suburb, listing.postcode)}</span>
+            <span>
+              {isJobCleaner && propertyAddress?.trim()
+                ? propertyAddress.trim()
+                : formatLocationWithState(listing.suburb, listing.postcode)}
+            </span>
           </p>
         </CardHeader>
         <CardContent
@@ -1092,7 +1102,8 @@ export function JobDetail({
           {hasActiveJob &&
             (localJobStatus === "in_progress" ||
               localJobStatus === "completed_pending_approval") &&
-            isJobCleaner && (
+            isJobCleaner &&
+            !cleanerReviewPendingMinimal && (
               <div className="space-y-2 rounded-2xl border-2 border-sky-400/50 bg-gradient-to-br from-sky-50 to-transparent px-4 py-4 dark:border-sky-700 dark:from-sky-950/50 sm:px-5">
                 <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-sky-900 dark:text-sky-100">
                   <MapPin className="h-5 w-5 shrink-0" />
@@ -1112,7 +1123,8 @@ export function JobDetail({
 
           {hasActiveJob &&
             isJobCleaner &&
-            localJobStatus === "completed_pending_approval" && (
+            localJobStatus === "completed_pending_approval" &&
+            !cleanerReviewPendingMinimal && (
               <div className="rounded-2xl border border-amber-400/70 bg-gradient-to-br from-amber-50 to-amber-100/40 px-4 py-4 dark:border-amber-800/60 dark:from-amber-950/50 dark:to-amber-900/20 sm:px-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -1228,6 +1240,7 @@ export function JobDetail({
                   )}
                 </>
               ) : (
+                !cleanerReviewPendingMinimal && (
                 <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
                   <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">
                     Won for
@@ -1241,6 +1254,7 @@ export function JobDetail({
                     </p>
                   )}
                 </div>
+                )
               )}
               {/* Platform fee breakdown handled above; avoid duplicating copy here. */}
             </>
@@ -1372,7 +1386,7 @@ export function JobDetail({
             </div>
           )}
 
-          {bondGuideline && (
+          {bondGuideline && !cleanerReviewPendingMinimal && (
             <details
               className={cn(
                 "mt-2 text-muted-foreground dark:text-gray-400",
@@ -1763,6 +1777,8 @@ export function JobDetail({
               {(localJobStatus === "completed" ||
                 localJobStatus === "completed_pending_approval") && (
                 <>
+                  {!(isJobCleaner && cleanerReviewPendingMinimal) && (
+                    <>
                   <details
                     className={cn(
                       "rounded-xl border bg-background/60 px-4 py-3 text-muted-foreground dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400",
@@ -1813,6 +1829,8 @@ export function JobDetail({
                       ? "Payment has been released. Thanks for completing this bond clean through Bond Back."
                       : "Waiting on final approval and payment release…"}
                   </p>
+                    </>
+                  )}
                   {isJobLister && afterPhotoEntries.length > 0 && (
                     <div className="mt-3 rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-50/90 to-transparent px-4 py-4 dark:border-emerald-800 dark:from-emerald-950/40 sm:px-5">
                       <p className="text-base font-bold text-emerald-900 dark:text-emerald-200">
@@ -2660,6 +2678,8 @@ export function JobDetail({
               </details>
             )}
 
+          {!cleanerReviewPendingMinimal && (
+            <>
           {listing.special_instructions && (
             <div
               className={cn(
@@ -2990,8 +3010,10 @@ export function JobDetail({
               </div>
             );
           })()}
+            </>
+          )}
 
-          {!(isCleaner && hideCleanerCancelledAuctionUi) && (
+          {!(isCleaner && hideCleanerCancelledAuctionUi) && !cleanerReviewPendingMinimal && (
             <BidHistorySection
               bids={bids}
               onAcceptBid={
