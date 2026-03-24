@@ -41,7 +41,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 const sectionClass =
-  "rounded-lg border border-border bg-card/80 p-4 text-card-foreground transition-colors sm:p-5 md:p-4 dark:border-gray-800 dark:bg-gray-950/90 dark:text-gray-100";
+  "rounded-lg border border-border bg-card/80 p-3 text-card-foreground transition-colors sm:p-5 md:p-4 dark:border-gray-800 dark:bg-gray-950/90 dark:text-gray-100";
 
 const settingsOutlineBtn =
   "rounded-full border-border dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800/90 dark:hover:text-white";
@@ -159,14 +159,14 @@ export function MyAccountSections({
         className="w-full space-y-2"
       >
         {/* 1. Personal info */}
-        <AccordionItem value="personal" id="section-personal" className="scroll-mt-24 rounded-xl border border-border bg-card/40 px-1 dark:border-gray-800 dark:bg-gray-950/40">
-          <AccordionTrigger className="min-h-[52px] px-3 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
+        <AccordionItem value="personal" id="section-personal" className="scroll-mt-24 rounded-xl border border-border bg-card/40 dark:border-gray-800 dark:bg-gray-950/40">
+          <AccordionTrigger className="min-h-[52px] px-2 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
             <span className="flex items-center gap-3">
               <User className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-400" />
               Personal info
             </span>
           </AccordionTrigger>
-          <AccordionContent className="px-2 pb-4 pt-0 sm:px-3">
+          <AccordionContent className="px-0 pb-4 pt-0 sm:px-2">
             <div className={cn(sectionClass, "space-y-4")}>
               <p className="text-sm text-muted-foreground dark:text-gray-400">
                 Update your details, bio, photos, and travel preferences. Changes save from the forms below.
@@ -177,14 +177,14 @@ export function MyAccountSections({
         </AccordionItem>
 
         {/* 2. Roles */}
-        <AccordionItem value="roles" className="rounded-xl border border-border bg-card/40 px-1 dark:border-gray-800 dark:bg-gray-950/40">
-          <AccordionTrigger className="min-h-[52px] px-3 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
+        <AccordionItem value="roles" className="rounded-xl border border-border bg-card/40 dark:border-gray-800 dark:bg-gray-950/40">
+          <AccordionTrigger className="min-h-[52px] px-2 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
             <span className="flex items-center gap-3">
               <Users className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-400" />
               Roles &amp; switching
             </span>
           </AccordionTrigger>
-          <AccordionContent className="px-2 pb-4 pt-0 sm:px-3">
+          <AccordionContent className="px-0 pb-4 pt-0 sm:px-2">
             <div className={cn(sectionClass, "space-y-4")}>
               <SettingsRolesSection roles={roles} activeRole={activeRole} />
             </div>
@@ -192,14 +192,14 @@ export function MyAccountSections({
         </AccordionItem>
 
         {/* 3. Notifications & preferences */}
-        <AccordionItem value="notifications" className="rounded-xl border border-border bg-card/40 px-1 dark:border-gray-800 dark:bg-gray-950/40">
-          <AccordionTrigger className="min-h-[52px] px-3 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
+        <AccordionItem value="notifications" className="rounded-xl border border-border bg-card/40 dark:border-gray-800 dark:bg-gray-950/40">
+          <AccordionTrigger className="min-h-[52px] px-2 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
             <span className="flex items-center gap-3">
               <Bell className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-400" />
               Notifications &amp; preferences
             </span>
           </AccordionTrigger>
-          <AccordionContent className="space-y-6 px-2 pb-4 pt-0 sm:px-3">
+          <AccordionContent className="space-y-6 px-0 pb-4 pt-0 sm:px-2">
             <div className={sectionClass}>
               <SectionHeader icon={Bell} title="Notifications" />
               <SettingsNotificationsForm
@@ -222,14 +222,14 @@ export function MyAccountSections({
 
         {/* 4. Payments */}
         {showPaymentsTab && (
-          <AccordionItem value="payments" className="rounded-xl border border-border bg-card/40 px-1 dark:border-gray-800 dark:bg-gray-950/40">
-            <AccordionTrigger className="min-h-[52px] px-3 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
+          <AccordionItem value="payments" className="rounded-xl border border-border bg-card/40 dark:border-gray-800 dark:bg-gray-950/40">
+            <AccordionTrigger className="min-h-[52px] px-2 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
               <span className="flex items-center gap-3">
                 <CreditCard className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-400" />
                 Payments &amp; payouts
               </span>
             </AccordionTrigger>
-            <AccordionContent className="px-2 pb-4 pt-0 sm:px-3">
+            <AccordionContent className="px-0 pb-4 pt-0 sm:px-2">
               <div className={sectionClass}>
                 {isListerActive && (
                   <>
@@ -285,14 +285,14 @@ export function MyAccountSections({
         )}
 
         {/* 5. Security */}
-        <AccordionItem value="security" className="rounded-xl border border-border bg-card/40 px-1 dark:border-gray-800 dark:bg-gray-950/40">
-          <AccordionTrigger className="min-h-[52px] px-3 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
+        <AccordionItem value="security" className="rounded-xl border border-border bg-card/40 dark:border-gray-800 dark:bg-gray-950/40">
+          <AccordionTrigger className="min-h-[52px] px-2 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
             <span className="flex items-center gap-3">
               <Shield className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-400" />
               Security
             </span>
           </AccordionTrigger>
-          <AccordionContent className="px-2 pb-4 pt-0 sm:px-3">
+          <AccordionContent className="px-0 pb-4 pt-0 sm:px-2">
             <div className={sectionClass}>
               <SectionHeader icon={Shield} title="Password &amp; session" />
               <p className="mb-4 text-sm text-muted-foreground dark:text-gray-400">
@@ -304,14 +304,14 @@ export function MyAccountSections({
         </AccordionItem>
 
         {/* 6. Help & legal */}
-        <AccordionItem value="help" className="rounded-xl border border-border bg-card/40 px-1 dark:border-gray-800 dark:bg-gray-950/40">
-          <AccordionTrigger className="min-h-[52px] px-3 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
+        <AccordionItem value="help" className="rounded-xl border border-border bg-card/40 dark:border-gray-800 dark:bg-gray-950/40">
+          <AccordionTrigger className="min-h-[52px] px-2 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
             <span className="flex items-center gap-3">
               <HelpCircle className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-400" />
               Help &amp; legal
             </span>
           </AccordionTrigger>
-          <AccordionContent className="space-y-6 px-2 pb-4 pt-0 sm:px-3">
+          <AccordionContent className="space-y-6 px-0 pb-4 pt-0 sm:px-2">
             <div className={sectionClass} id="privacy-settings">
               <SectionHeader icon={Lock} title="Privacy &amp; data" />
               <SettingsPrivacyForm profilePublic={profilePublic} />

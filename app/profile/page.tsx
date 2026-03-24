@@ -202,13 +202,13 @@ const ProfilePage = async ({
   const avatarUrl = profile.profile_photo_url?.trim() || null;
 
   return (
-    <section className="page-inner space-y-8 text-foreground md:space-y-6 dark:text-gray-100">
+    <section className="page-inner !px-3 sm:!px-6 space-y-8 text-foreground md:space-y-6 dark:text-gray-100">
       <SettingsPaymentReturnHandler />
 
       <div className="space-y-4">
         <div className="flex flex-col gap-5 md:gap-4">
           <Card className="overflow-hidden border-border bg-card/90 shadow-sm dark:border-gray-800 dark:bg-gray-950/90">
-            <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
+            <CardContent className="flex flex-col gap-4 px-3 py-4 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
               <Avatar className="h-20 w-20 shrink-0 border-2 border-border dark:border-gray-700">
                 {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -259,7 +259,7 @@ const ProfilePage = async ({
 
           {showCompleteProfileCard && (
             <Card className="max-w-2xl border-2 border-primary/25 bg-primary/5 shadow-sm dark:border-primary/30 dark:bg-primary/10">
-              <CardHeader className="space-y-2 pb-2">
+              <CardHeader className="space-y-2 !p-0 px-3 pb-2 pt-6 sm:px-6">
                 <CardTitle className="text-2xl font-bold tracking-tight md:text-xl">
                   Complete your profile
                 </CardTitle>
@@ -267,7 +267,7 @@ const ProfilePage = async ({
                   One-tap shortcuts — finish these to rank higher and win more work.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 pb-6">
+              <CardContent className="space-y-3 px-3 pb-6 sm:px-6">
                 <Progress
                   value={percent}
                   className="h-3"
@@ -361,13 +361,13 @@ const ProfilePage = async ({
       )}
 
       <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100">
-        <CardHeader className="space-y-1 pb-2">
+        <CardHeader className="space-y-1 !p-0 px-3 pt-6 pb-2 sm:px-6">
           <CardTitle className="text-xl dark:text-gray-100">Account settings</CardTitle>
           <CardDescription className="text-base dark:text-gray-400">
             Personal details, roles, notifications, payments, security, and help — all in one place.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 pt-0 sm:p-6">
+        <CardContent className="px-3 pb-4 pt-0 sm:p-6">
           <MyAccountSections
             initialAccordion={initialAccordion}
             profile={profile}
@@ -390,7 +390,7 @@ const ProfilePage = async ({
 
       {roles.includes("cleaner") && (
         <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
-          <CardContent className="space-y-4 pt-4">
+          <CardContent className="space-y-4 px-3 pt-4 sm:px-6">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <span className="text-3xl font-semibold text-foreground dark:text-gray-100">
