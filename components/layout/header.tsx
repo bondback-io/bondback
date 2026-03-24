@@ -5,7 +5,6 @@ import { getSessionWithProfile } from "@/lib/supabase/session";
 import { UserMenu } from "@/components/layout/user-menu";
 import { RoleSwitcher } from "@/components/layout/RoleSwitcher";
 import { NotificationBell } from "@/components/layout/notification-bell";
-import { ChatPanelToggle } from "@/components/layout/chat-panel-toggle";
 import { MainNav } from "@/components/layout/main-nav";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PendingBidsBadge } from "@/components/pwa/pending-bids-badge";
@@ -13,8 +12,6 @@ import { ListerMobileCreateListingHeaderButton } from "@/components/layout/liste
 
 export type HeaderProps = {
   className?: string;
-  /** When false, hide the chat icon in the nav. Default true when not passed. */
-  floatingChatEnabled?: boolean;
   /** When true, show TEST MODE badge in the nav (Stripe test mode from Admin). */
   stripeTestMode?: boolean;
 };
@@ -35,7 +32,6 @@ function LogoMark() {
 
 export const Header = async ({
   className,
-  floatingChatEnabled = true,
   stripeTestMode = false,
 }: HeaderProps) => {
   const session = await getSessionWithProfile();
@@ -101,7 +97,6 @@ export const Header = async ({
                   activeRole={session.activeRole}
                 />
                 <PendingBidsBadge isCleaner={isCleaner} />
-                {floatingChatEnabled && <ChatPanelToggle />}
                 <RoleSwitcher session={session} />
                 {stripeTestMode && (
                   <span

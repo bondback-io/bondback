@@ -206,7 +206,9 @@ export async function submitSupportTicket(
     <p>— Bond Back team</p>
   `;
   if (email) {
-    await sendEmail(email, `Support ticket #${displayId} received`, confirmHtml);
+    await sendEmail(email, `Support ticket #${displayId} received`, confirmHtml, {
+      log: { userId: session.user.id, kind: "support_ticket_confirmation" },
+    });
   }
 
   return { ok: true, ticketId: tid, ticketDisplayId: displayId };

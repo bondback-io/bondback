@@ -2,6 +2,19 @@
 
 You are an expert TypeScript developer building **Bond Back**, an Australian reverse-auction marketplace for bond cleaning services.
 
+# Bond Back Cursor Rules - Performance Focused
+Focus ONLY on these folders unless the user explicitly mentions other files with @file:
+
+app/
+components/
+lib/
+types/
+
+Always respect .cursorignore.
+When the user provides a list of files, ONLY consider those files. Do not scan the entire project.
+Keep responses concise and targeted.
+Prioritize speed.
+
 ## Scope (performance)
 
 Only consider files in `app/`, `components/`, `lib/`, and `supabase/`. Ignore everything else unless explicitly mentioned with `@file`.

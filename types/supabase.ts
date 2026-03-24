@@ -411,6 +411,8 @@ export interface Database {
           sender_id: string;
           message_text: string;
           created_at: string;
+          image_url: string | null;
+          read_at: string | null;
         };
         Insert: {
           id?: number;
@@ -418,6 +420,8 @@ export interface Database {
           sender_id: string;
           message_text: string;
           created_at?: string;
+          image_url?: string | null;
+          read_at?: string | null;
         };
         Update: {
           id?: number;
@@ -425,6 +429,8 @@ export interface Database {
           sender_id?: string;
           message_text?: string;
           created_at?: string;
+          image_url?: string | null;
+          read_at?: string | null;
         };
         Relationships: [
           {
@@ -455,6 +461,12 @@ export interface Database {
             | "referral_reward";
           job_id: number | null;
           message_text: string;
+          /** Short label for lists (e.g. New bid · Job #12). */
+          title: string | null;
+          /** Body text; mirrors message_text when set. */
+          body: string | null;
+          /** Structured payload (job_id, listing_id, etc.). */
+          data: Record<string, unknown> | null;
           is_read: boolean;
           created_at: string;
         };
@@ -476,6 +488,9 @@ export interface Database {
             | "referral_reward";
           job_id?: number | null;
           message_text: string;
+          title?: string | null;
+          body?: string | null;
+          data?: Record<string, unknown>;
           is_read?: boolean;
           created_at?: string;
         };
@@ -497,6 +512,9 @@ export interface Database {
             | "referral_reward";
           job_id?: number | null;
           message_text?: string;
+          title?: string | null;
+          body?: string | null;
+          data?: Record<string, unknown>;
           is_read?: boolean;
           created_at?: string;
         };
@@ -620,6 +638,9 @@ export interface Database {
           type: string;
           sent_at: string;
           subject: string | null;
+          status?: string | null;
+          error_message?: string | null;
+          recipient_email?: string | null;
         };
         Insert: {
           id?: string;
@@ -627,6 +648,9 @@ export interface Database {
           type: string;
           sent_at?: string;
           subject?: string | null;
+          status?: string | null;
+          error_message?: string | null;
+          recipient_email?: string | null;
         };
         Update: {
           id?: string;
@@ -634,6 +658,9 @@ export interface Database {
           type?: string;
           sent_at?: string;
           subject?: string | null;
+          status?: string | null;
+          error_message?: string | null;
+          recipient_email?: string | null;
         };
         Relationships: [
           {

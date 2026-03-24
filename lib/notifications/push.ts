@@ -189,11 +189,15 @@ export async function sendPushToUser(
   }
 }
 
+/** Alias for `sendPushToUser` (server-side Expo push). */
+export const sendPush = sendPushToUser;
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
 
 /** Event types we send as push (same as SMS: critical / high-value only). */
 export const PUSH_NOTIFICATION_TYPES = new Set<string>([
   "new_bid",
+  "new_message",
   "job_accepted",
   "job_created",
   "job_approved_to_start",
@@ -216,6 +220,7 @@ export function buildPushPayload(
     postcode?: string | null;
     minPriceCents?: number;
     maxPriceCents?: number;
+    senderName?: string | null;
   }
 ): PushPayload {
   const id = jobId != null ? String(jobId) : "";
@@ -228,6 +233,14 @@ export function buildPushPayload(
         body: "New bid on your listing. Tap to view.",
         data: { jobId: listingIdStr, listingId: listingIdStr, type: "new_bid" },
       };
+    case "new_message": {
+      const who = (options?.senderName ?? "").trim() || "Someone";
+      return {
+        title: "New message",
+        body: `${who} messaged you in Job #${id || "?"}. Tap to open chat.`,
+        data: { jobId: id, type: "new_message" },
+      };
+    }
     case "job_accepted":
     case "job_created":
       return {

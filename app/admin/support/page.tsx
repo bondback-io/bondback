@@ -20,16 +20,17 @@ type SupportTicketRow = Database["public"]["Tables"]["support_tickets"]["Row"];
 export const dynamic = "force-dynamic";
 
 interface AdminSupportPageProps {
-  searchParams?: {
+  searchParams?: Promise<{
     suggested?: string;
     category?: string;
     status?: string;
-  };
+  }>;
 }
 
 export default async function AdminSupportPage({
   searchParams,
 }: AdminSupportPageProps) {
+  const sp = (await searchParams) ?? {};
   const supabase = await createServerSupabaseClient();
   const {
     data: { session },
@@ -47,9 +48,9 @@ export default async function AdminSupportPage({
     redirect("/dashboard");
   }
 
-  const suggestedFilter = searchParams?.suggested ?? "all";
-  const categoryFilter = searchParams?.category ?? "all";
-  const statusFilter = searchParams?.status ?? "all";
+  const suggestedFilter = sp.suggested ?? "all";
+  const categoryFilter = sp.category ?? "all";
+  const statusFilter = sp.status ?? "all";
 
   let q = supabase
     .from("support_tickets")

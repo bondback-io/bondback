@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/supabase";
+import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -33,9 +34,14 @@ type Conversation = {
   cleanerAvatarUrl: string | null;
   lastMessageText: string | null;
   lastMessageAt: string | null;
+  agreedAmountCents: number | null;
+  autoReleaseAt: string | null;
+  cleanerConfirmedComplete: boolean;
+  hasPaymentHold: boolean;
 };
 
 type ChatPanelState = {
+  currentUserId: string | null;
   isOpen: boolean;
   isCollapsed: boolean;
   selectedJobId: number | null;
@@ -86,7 +92,7 @@ export function ChatPanelProvider({
         .or(
           `lister_id.eq.${currentUserId},winner_id.eq.${currentUserId}` as never
         )
-        .in("status", ["in_progress", "completed"] as never[]);
+        .in("status", [...CHAT_UNLOCK_STATUSES] as never[]);
 
       const jobs = (jobsData ?? []) as JobRow[];
       if (cancelled) return;
@@ -157,6 +163,12 @@ export function ChatPanelProvider({
           ? profileById.get(job.winner_id as string)
           : null;
 
+        const jr = job as JobRow & {
+          agreed_amount_cents?: number | null;
+          auto_release_at?: string | null;
+          cleaner_confirmed_complete?: boolean | null;
+          payment_intent_id?: string | null;
+        };
         return {
           jobId: job.id as number,
           status: job.status ?? null,
@@ -178,6 +190,13 @@ export function ChatPanelProvider({
             (cleanerProfile as any)?.profile_photo_url ?? null,
           lastMessageText: latest?.message_text ?? null,
           lastMessageAt: latest?.created_at ?? null,
+          agreedAmountCents:
+            jr.agreed_amount_cents != null && jr.agreed_amount_cents > 0
+              ? jr.agreed_amount_cents
+              : null,
+          autoReleaseAt: jr.auto_release_at ?? null,
+          cleanerConfirmedComplete: jr.cleaner_confirmed_complete === true,
+          hasPaymentHold: !!jr.payment_intent_id?.trim(),
         };
       });
 
@@ -320,6 +339,7 @@ export function ChatPanelProvider({
   }, []);
 
   const value: ChatPanelContextValue = {
+    currentUserId,
     isOpen,
     isCollapsed,
     selectedJobId,

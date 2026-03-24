@@ -5,8 +5,6 @@ import { getSiteUrl } from "@/lib/site";
 import "./globals.css";
 import { Header } from "@/components/layout/header";
 import { SiteFooter } from "@/components/layout/site-footer";
-import { ChatPanelProvider } from "@/components/chat/chat-panel-context";
-import { LazyFloatingChatPanel } from "@/components/chat/lazy-floating-chat-panel";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { Toaster } from "@/components/ui/toaster";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
@@ -18,14 +16,18 @@ import { GlobalOfflineBanner } from "@/components/layout/global-offline-banner";
 import { FirstJobRewardsNudge } from "@/components/banners/first-job-rewards-nudge";
 import { getFirstJobRewardsNudgeVisible } from "@/lib/beta-banners";
 import { RegisterExpoPushToken } from "@/components/pwa/register-expo-push-token";
+import { PushPermissionBanner } from "@/components/pwa/push-permission-banner";
+import { ExpoPushDeepLinkHandler } from "@/components/pwa/expo-push-deep-link";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ContextualFab } from "@/components/contextual-fab";
 import { SessionSync } from "@/components/auth/session-sync";
 import { UserPreferencesHydration } from "@/components/providers/user-preferences-hydration";
+import { QueryClientProviderWrapper } from "@/components/providers/query-client-provider";
+import { NotificationsRealtimeSync } from "@/components/notifications/notifications-realtime-sync";
 
 const site = getSiteUrl();
 
-/** Header + floating chat read global_settings; avoid caching a stale shell. */
+/** Header reads global_settings; avoid caching a stale shell. */
 export const dynamic = "force-dynamic";
 
 export const viewport: Viewport = {
@@ -104,15 +106,6 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
   // When settings row is missing (error), default on. When row exists: off only if explicitly false.
   // Use !== false (not === true) so undefined/null column and legacy rows default to "on", and
   // strict boolean from PostgREST still works.
-  const rawFloating = (settings as { floating_chat_enabled?: unknown } | null)?.floating_chat_enabled;
-  const floatingChatEnabled =
-    settings == null
-      ? true
-      : !(
-          rawFloating === false ||
-          rawFloating === "false" ||
-          rawFloating === 0
-        );
   const stripeTestMode = (settings as { stripe_test_mode?: boolean } | null)?.stripe_test_mode === true;
 
   const showFirstJobNudge = await getFirstJobRewardsNudgeVisible(session?.user.id ?? null);
@@ -152,6 +145,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         />
       </head>
       <body>
+        <QueryClientProviderWrapper>
         {showAnnouncement && settings?.announcement_text?.trim() ? (
           <SiteAnnouncementBanner text={settings.announcement_text} />
         ) : null}
@@ -161,35 +155,30 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         {session?.profile ? (
           <UserPreferencesHydration distanceUnit={session.profile.distance_unit} />
         ) : null}
-        <RegisterExpoPushToken />
+        {session?.user?.id ? <NotificationsRealtimeSync userId={session.user.id} /> : null}
+        <RegisterExpoPushToken userId={session?.user.id ?? null} />
+        <ExpoPushDeepLinkHandler />
         <Toaster>
-          <ChatPanelProvider
-            currentUserId={session?.user.id ?? null}
-            autoOpenOnNewMessage={true}
-          >
-            <div className="page-shell">
-              <Header
-                floatingChatEnabled={floatingChatEnabled}
-                stripeTestMode={stripeTestMode}
-              />
-              <GlobalOfflineBanner />
-              <main className="page-main pt-4 pb-[max(4.75rem,env(safe-area-inset-bottom))] md:pb-4">
-                <div className="container mx-auto px-4 pt-2">
-                  <FirstJobRewardsNudge visible={showFirstJobNudge} />
-                </div>
-                {children}
-              </main>
-              <SiteFooter />
-            </div>
-            <LazyFloatingChatPanel enabled={!!floatingChatEnabled} />
-            <MobileBottomNav
-              initialActiveRole={session?.activeRole ?? null}
-              userId={session?.user.id ?? null}
-            />
-            <ContextualFab activeRole={session?.activeRole ?? null} />
-          </ChatPanelProvider>
+          <div className="page-shell">
+            {session?.user?.id ? <PushPermissionBanner userId={session.user.id} /> : null}
+            <Header stripeTestMode={stripeTestMode} />
+            <GlobalOfflineBanner />
+            <main className="page-main pt-4 pb-[max(4.75rem,env(safe-area-inset-bottom))] md:pb-4">
+              <div className="container mx-auto px-4 pt-2">
+                <FirstJobRewardsNudge visible={showFirstJobNudge} />
+              </div>
+              {children}
+            </main>
+            <SiteFooter />
+          </div>
+          <MobileBottomNav
+            initialActiveRole={session?.activeRole ?? null}
+            userId={session?.user.id ?? null}
+          />
+          <ContextualFab activeRole={session?.activeRole ?? null} />
         </Toaster>
         <PwaInstallPrompt />
+        </QueryClientProviderWrapper>
       </body>
     </html>
   );

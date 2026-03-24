@@ -87,7 +87,9 @@ export async function sendBirthdayEmailsForToday(): Promise<{
     const bodyHtml = markdownToHtml(replaceName(bodyRaw, fullName));
     const html = bodyHtml + unsubscribeFooter();
 
-    const result = await sendEmail(toEmail, subj, html);
+    const result = await sendEmail(toEmail, subj, html, {
+      log: { userId, kind: "birthday" },
+    });
     if (result.ok) sent++;
     else skipped++;
   }

@@ -2,26 +2,39 @@
 
 import { useEffect, useRef } from "react";
 import { saveExpoPushToken } from "@/lib/actions/push-token";
+import { getExpoProjectId, registerExpoPushTokenAsync } from "@/lib/pwa/expo-push-register";
 
 export type RegisterExpoPushTokenProps = {
+  /** When set, registers push after login / session restore (mobile web + PWA). */
+  userId?: string | null;
   /**
-   * When provided (e.g. in Expo Go or standalone), called on mount to get the Expo push token.
-   * Example: getToken={async () => (await getExpoPushTokenAsync()).data}
+   * Optional override (e.g. Expo Go native). When omitted, web uses expo-notifications + project id.
    */
   getToken?: () => Promise<string | null>;
 };
 
 /**
- * On app load, requests push permission and saves the Expo push token to profiles.expo_push_token.
- * Use with getToken when running in Expo (Expo Go or standalone); on web without getToken this is a no-op.
+ * After login, requests notification permission once and saves Expo push token to profiles.expo_push_token.
  */
-export function RegisterExpoPushToken({ getToken }: RegisterExpoPushTokenProps) {
-  const done = useRef(false);
+export function RegisterExpoPushToken({ userId, getToken }: RegisterExpoPushTokenProps) {
+  /** One registration attempt per logged-in user id (resets on logout). */
+  const lastRegisteredUserId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!getToken || done.current) return;
-    done.current = true;
-    getToken()
+    if (!userId) {
+      lastRegisteredUserId.current = null;
+      return;
+    }
+    if (lastRegisteredUserId.current === userId) return;
+    if (!getToken && !getExpoProjectId()) return;
+
+    lastRegisteredUserId.current = userId;
+
+    const run = getToken
+      ? () => getToken()
+      : () => registerExpoPushTokenAsync();
+
+    run()
       .then(async (token) => {
         if (!token?.trim()) return;
         const result = await saveExpoPushToken(token.trim());
@@ -30,7 +43,7 @@ export function RegisterExpoPushToken({ getToken }: RegisterExpoPushTokenProps) 
         }
       })
       .catch(() => {});
-  }, [getToken]);
+  }, [userId, getToken]);
 
   return null;
 }

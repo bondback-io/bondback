@@ -79,7 +79,9 @@ export async function sendScheduledTutorialEmails(): Promise<{
 
     try {
       const { subject, html } = await buildTutorialEmail(role, firstName);
-      const result = await sendEmail(email, subject, html);
+      const result = await sendEmail(email, subject, html, {
+        log: { userId: row.id, kind: `tutorial_${role}` },
+      });
       if (!result.ok) {
         errors.push(`${row.id}: ${result.error}`);
         continue;

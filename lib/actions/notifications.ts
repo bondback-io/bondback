@@ -9,7 +9,6 @@ import {
   getNotificationPrefs,
   checkAndRecordEmailRateLimit,
   recipientViewedJobRecently,
-  logEmailSent,
 } from "@/lib/supabase/admin";
 import {
   getNotificationEmailContent,
@@ -18,6 +17,7 @@ import {
   type NotificationType as EmailNotificationType,
 } from "@/lib/notifications/email";
 import { getGlobalSettings, getEmailTemplateOverrides } from "@/lib/actions/global-settings";
+import { buildNotificationPersistFields } from "@/lib/notifications/notification-display-fields";
 
 type NotificationInsert =
   Database["public"]["Tables"]["notifications"]["Insert"];
@@ -57,12 +57,16 @@ export async function createNotification(
   // Do not require a browser session: webhooks and background jobs call this with no auth cookie.
   // Inserts use the service role client when configured (see below).
 
-  const row: NotificationInsert = {
+  const persist = buildNotificationPersistFields(type, jobId, messageText, options);
+  const row = {
     user_id: userId,
     type,
     job_id: jobId ?? null,
     message_text: messageText,
-  };
+    title: persist.title,
+    body: persist.body,
+    data: persist.data,
+  } as NotificationInsert;
 
   // Use admin client so we can insert for any user_id (RLS only allows auth.uid() = user_id for anon)
   const admin = createSupabaseAdminClient();
@@ -79,6 +83,7 @@ export async function createNotification(
 
   revalidatePath("/dashboard");
   revalidatePath("/profile");
+  revalidatePath("/notifications");
 
   const globalSettings = await getGlobalSettings();
   const prefs = await getNotificationPrefs(userId);
@@ -96,8 +101,8 @@ export async function createNotification(
     const viewing = await recipientViewedJobRecently(userId, numericJobId);
     if (viewing) sendEmailThisTime = false;
   }
-  if (sendEmailThisTime && numericJobId != null) {
-    const allowed = await checkAndRecordEmailRateLimit(numericJobId);
+  if (sendEmailThisTime && numericJobId != null && type === "new_message") {
+    const allowed = await checkAndRecordEmailRateLimit(numericJobId, userId);
     if (!allowed) sendEmailThisTime = false;
   }
   if (sendEmailThisTime) {
@@ -110,9 +115,10 @@ export async function createNotification(
       { senderName: options?.senderName, listingId: options?.listingId },
       adminOverride
     );
-    const result = await sendEmail(prefs.email!, subject, html);
-    if (result.ok) await logEmailSent(userId, type, subject);
-    else console.error("[notifications] email send failed", { userId, type, error: result.error });
+    const result = await sendEmail(prefs.email!, subject, html, {
+      log: { userId, kind: `notification:${type}` },
+    });
+    if (!result.ok) console.error("[notifications] email send failed", { userId, type, error: result.error });
   }
 
   // SMS: critical, high-value events only; max 5 per user per day (via sendSmsToUser)
@@ -143,12 +149,18 @@ export async function createNotification(
   }
 
   // Push (Expo): critical/high-value events; max 5 per user per day
-  if (prefs.expoPushToken && prefs.shouldSendPush(type)) {
+  let sendPushThisTime = Boolean(prefs.expoPushToken && prefs.shouldSendPush(type));
+  if (sendPushThisTime && type === "new_message" && numericJobId != null) {
+    const viewing = await recipientViewedJobRecently(userId, numericJobId);
+    if (viewing) sendPushThisTime = false;
+  }
+  if (sendPushThisTime && prefs.expoPushToken) {
     const { sendPushToUser, buildPushPayload } = await import("@/lib/notifications/push");
     const payload = buildPushPayload(type, numericJobId ?? null, {
       listingId: options?.listingId ?? undefined,
       listingTitle: options?.listingTitle ?? undefined,
       amountCents: options?.amountCents ?? undefined,
+      senderName: options?.senderName ?? undefined,
     });
     const result = await sendPushToUser(userId, prefs.expoPushToken, payload);
     if (!result.ok) console.error("[notifications] push send failed", { userId, type, error: result.error });
@@ -183,7 +195,9 @@ export async function sendPaymentReceiptEmails(params: {
       dateIso: params.dateIso,
       platformAbn,
     });
-    const result = await sendEmail(prefsLister.email, subject, html);
+    const result = await sendEmail(prefsLister.email, subject, html, {
+      log: { userId: params.listerId, kind: "payment_receipt" },
+    });
     if (!result.ok) console.error("[notifications] receipt email to lister failed", { jobId: params.jobId, error: result.error });
   }
   if (params.cleanerId && prefsCleaner?.email && prefsCleaner.shouldSendEmail("payment_receipt")) {
@@ -197,7 +211,9 @@ export async function sendPaymentReceiptEmails(params: {
       dateIso: params.dateIso,
       platformAbn,
     });
-    const result = await sendEmail(prefsCleaner.email, subject, html);
+    const result = await sendEmail(prefsCleaner.email, subject, html, {
+      log: { userId: params.cleanerId, kind: "payment_receipt" },
+    });
     if (!result.ok) console.error("[notifications] receipt email to cleaner failed", { jobId: params.jobId, error: result.error });
   }
 }
@@ -224,7 +240,9 @@ export async function sendRefundReceiptEmail(params: {
     dateIso: params.dateIso,
     platformAbn,
   });
-  const result = await sendEmail(prefs.email, subject, html);
+  const result = await sendEmail(prefs.email, subject, html, {
+    log: { userId: params.listerId, kind: "payment_receipt_refund" },
+  });
   if (!result.ok) console.error("[notifications] refund receipt email failed", { jobId: params.jobId, error: result.error });
 }
 
@@ -251,6 +269,7 @@ export async function markNotificationRead(
     return { ok: false, error: error.message };
   }
 
+  revalidatePath("/notifications");
   return { ok: true };
 }
 
@@ -278,6 +297,7 @@ export async function markAllNotificationsRead(): Promise<{
     return { ok: false, error: error.message };
   }
 
+  revalidatePath("/notifications");
   return { ok: true };
 }
 

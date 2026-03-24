@@ -1,12 +1,13 @@
 ﻿# Bond Back – Cursor index exclusions (faster indexing on large repos)
-
 node_modules/
 .next/
 dist/
 build/
 public/
-*.log
+.log
 coverage/
-.env*.local
+.env.local
+.env
 .git/
 .cursor/
+supabase/migrations/

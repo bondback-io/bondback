@@ -62,8 +62,9 @@ export function notificationTypeToPreferenceKey(
     case "dispute_opened":
     case "dispute_resolved":
       return "dispute";
-    case "payment_released":
     case "funds_ready":
+      return "job_completed";
+    case "payment_released":
     case "referral_reward":
       return "payment_released";
     case "payment_receipt":
@@ -120,6 +121,6 @@ export const NOTIFICATION_LABELS: Record<NotificationPreferenceKey, string> = {
   email_tutorial: "Quick start guide email (24h after signup)",
   sms_enabled: "Receive SMS notifications (bids, payments, etc.)",
   sms_new_job: "SMS for new jobs",
-  push_enabled: "Push notifications (bids, payments, etc.)",
+  push_enabled: "Receive push notifications",
   push_new_job: "Push for new jobs",
 };

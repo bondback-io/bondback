@@ -415,7 +415,9 @@ export async function sendTestEmail(
     html = built.html + getUnsubscribeFooterHtml();
   }
 
-  const result = await sendEmail(recipient, subject, html);
+  const result = await sendEmail(recipient, subject, html, {
+    log: { userId: adminId, kind: `admin_test:${type}` },
+  });
   if (!result.ok) return { ok: false, error: result.error ?? "Failed to send" };
 
   await supabase.from("admin_email_test_sends").insert({
@@ -505,7 +507,9 @@ export async function sendTestEmailWithContent(
   const substitutedSubject = substituteTestData(subj, testData);
   const html = substitutedBody + getUnsubscribeFooterHtml();
 
-  const result = await sendEmail(recipient, substitutedSubject, html);
+  const result = await sendEmail(recipient, substitutedSubject, html, {
+    log: { userId: adminId, kind: `admin_test_custom:${type}` },
+  });
   if (!result.ok) return { ok: false, error: result.error ?? "Failed to send" };
 
   await supabase.from("admin_email_test_sends").insert({
@@ -513,5 +517,29 @@ export async function sendTestEmailWithContent(
     sent_at: new Date().toISOString(),
   } as never);
   revalidatePath("/admin/emails");
+  return { ok: true };
+}
+
+export type SendGlobalSettingsTestEmailResult = SendTestEmailResult;
+
+/** Admin: send a simple connectivity test from Global settings (Resend FROM / REPLY_TO). */
+export async function sendGlobalSettingsTestEmail(
+  toEmail: string | null
+): Promise<SendGlobalSettingsTestEmailResult> {
+  const { adminId } = await requireAdmin();
+  const recipient = toEmail?.trim() || (await getEmailForUserId(adminId));
+  if (!recipient) {
+    return { ok: false, error: "Enter an email address or add one to your admin account." };
+  }
+  const fromDisplay = process.env.RESEND_FROM ?? "Bond Back <onboarding@resend.dev>";
+  const replyHint = process.env.RESEND_REPLY_TO?.trim()
+    ? `<p>Reply-To: <code>${process.env.RESEND_REPLY_TO}</code></p>`
+    : "<p><em>No RESEND_REPLY_TO set.</em></p>";
+  const html = `<p>This is a <strong>connectivity test</strong> from <strong>Admin → Global settings</strong>.</p>${replyHint}<p>From: <code>${fromDisplay}</code></p><p>Sent at ${new Date().toISOString()}</p>`;
+  const { sendEmail } = await import("@/lib/notifications/email");
+  const result = await sendEmail(recipient, "Bond Back – Resend test (global settings)", html, {
+    log: { userId: adminId, kind: "admin_test_global_settings" },
+  });
+  if (!result.ok) return { ok: false, error: result.error ?? "Send failed" };
   return { ok: true };
 }

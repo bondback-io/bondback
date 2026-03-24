@@ -53,9 +53,9 @@ const TAB_TO_ACCORDION: Record<string, string> = {
 const ProfilePage = async ({
   searchParams,
 }: {
-  searchParams?: Promise<ProfileSearchParams> | ProfileSearchParams;
+  searchParams?: Promise<ProfileSearchParams>;
 }) => {
-  const sp = await Promise.resolve(searchParams ?? {});
+  const sp = (await searchParams) ?? {};
   const supabase = await createServerSupabaseClient();
   await syncCurrentUserEmailVerification();
 

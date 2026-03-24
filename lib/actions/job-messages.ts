@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { createNotification } from "@/lib/actions/notifications";
+import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
 
 type JobMessageInsert =
   Database["public"]["Tables"]["job_messages"]["Insert"];
@@ -133,7 +134,8 @@ function violatesModerationRules(text: string): boolean {
 
 export async function sendJobMessage(
   jobId: number,
-  messageText: string
+  messageText: string,
+  options?: { imageUrl?: string | null }
 ): Promise<SendJobMessageResult> {
   const supabase = await createServerSupabaseClient();
 
@@ -145,9 +147,17 @@ export async function sendJobMessage(
     return { ok: false, error: "You must be logged in to send messages." };
   }
 
-  const text = (messageText ?? "").trim();
-  if (!text || text.length === 0) {
+  const imageUrl =
+    typeof options?.imageUrl === "string" && options.imageUrl.trim().length > 0
+      ? options.imageUrl.trim()
+      : null;
+
+  let text = (messageText ?? "").trim();
+  if (!text && !imageUrl) {
     return { ok: false, error: "Message cannot be empty." };
+  }
+  if (!text && imageUrl) {
+    text = "Photo";
   }
   if (text.length > 500) {
     return { ok: false, error: "Message must be 500 characters or less." };
@@ -189,22 +199,14 @@ export async function sendJobMessage(
     };
   }
 
-  // Only allow chat once funds are held or the job is active:
-  // - in_progress / completed (funds in escrow and work underway or done)
-  // - accepted with a payment_intent_id (Pay & Start Job clicked, escrow hold created)
-  const hasPaymentHold =
-    typeof j.payment_intent_id === "string" && !!j.payment_intent_id?.trim();
-
+  // Chat unlocks only after lister has paid into escrow and work is underway or later
+  // (in_progress or higher — not while job is merely accepted).
   const status = j.status ?? "";
-  const chatAllowed =
-    status === "in_progress" ||
-    status === "completed" ||
-    (status === "accepted" && hasPaymentHold);
-
-  if (!chatAllowed) {
+  if (!isChatUnlockedForJobStatus(status)) {
     return {
       ok: false,
-      error: "Chat will open once the lister has started the job (after Pay & Start Job).",
+      error:
+        "Chat unlocks once the job is in progress (after Pay & Start Job and funds are held in escrow).",
     };
   }
 
@@ -212,6 +214,7 @@ export async function sendJobMessage(
     job_id: jobId,
     sender_id: session.user.id,
     message_text: text,
+    ...(imageUrl ? { image_url: imageUrl } : {}),
   };
 
   const { error } = await supabase
@@ -242,6 +245,52 @@ export async function sendJobMessage(
     );
   }
 
+  return { ok: true };
+}
+
+export type MarkJobMessagesReadResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Mark messages from the other party as read (best-effort read receipts).
+ */
+export async function markJobMessagesRead(
+  jobId: number
+): Promise<MarkJobMessagesReadResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    return { ok: false, error: "Not signed in." };
+  }
+
+  const { data: job } = await supabase
+    .from("jobs")
+    .select("id, lister_id, winner_id")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (!job) {
+    return { ok: false, error: "Job not found." };
+  }
+
+  const j = job as { lister_id: string; winner_id: string | null };
+  if (![j.lister_id, j.winner_id].includes(session.user.id)) {
+    return { ok: false, error: "Not a participant." };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("job_messages")
+    .update({ read_at: nowIso } as never)
+    .eq("job_id", jobId)
+    .neq("sender_id", session.user.id)
+    .is("read_at", null as never);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
   return { ok: true };
 }
 

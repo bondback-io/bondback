@@ -67,6 +67,37 @@
   @apply container mx-auto py-8;
 }
 
+/* Messenger-style typing dots (ChatWindow) */
+@keyframes chat-typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+.chat-typing-dot {
+  animation: chat-typing-bounce 1.2s ease-in-out infinite;
+}
+.chat-typing-dot-d1 {
+  animation-delay: 0.15s;
+}
+.chat-typing-dot-d2 {
+  animation-delay: 0.3s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-typing-dot,
+  .chat-typing-dot-d1,
+  .chat-typing-dot-d2 {
+    animation: none;
+    opacity: 0.75;
+  }
+}
+
 /* Empty states and dashed borders */
 .dark .border-dashed {
   @apply border-gray-700;

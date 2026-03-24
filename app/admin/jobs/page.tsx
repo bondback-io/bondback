@@ -18,12 +18,13 @@ import { adminForceCompleteJob, adminRefundJob, adminResetAllJobs, adminReinstat
 import { AdminJobsPendingReviewTable } from "@/components/admin/admin-jobs-pending-review-table";
 
 interface AdminJobsPageProps {
-  searchParams: {
+  searchParams: Promise<{
     status?: string;
-  };
+  }>;
 }
 
 export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps) {
+  const sp = await searchParams;
   const supabase = await createServerSupabaseClient();
 
   const {
@@ -82,7 +83,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
     });
   }
 
-  const selectedStatus = (searchParams.status ?? "").toLowerCase();
+  const selectedStatus = (sp.status ?? "").toLowerCase();
 
   const nowMs = Date.now();
   const pendingReviewJobs = jobs

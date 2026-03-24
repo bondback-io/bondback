@@ -2,9 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { Database } from "@/types/supabase";
 import { JobChat } from "@/components/features/job-chat";
+import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
+import { formatCents } from "@/lib/listings";
+import { buildChatStatusPill } from "@/lib/chat-messenger-display";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -27,6 +30,10 @@ export type Conversation = {
   cleanerAvatarUrl: string | null;
   lastMessageText: string | null;
   lastMessageAt: string | null;
+  agreedAmountCents: number | null;
+  autoReleaseAt: string | null;
+  cleanerConfirmedComplete: boolean;
+  hasPaymentHold: boolean;
 };
 
 type MessagesPageClientProps = {
@@ -86,6 +93,12 @@ export function MessagesPageClient({
           ? profileById.get(job.winner_id as string)
           : null;
 
+        const jr = job as JobRow & {
+          agreed_amount_cents?: number | null;
+          auto_release_at?: string | null;
+          cleaner_confirmed_complete?: boolean | null;
+          payment_intent_id?: string | null;
+        };
         return {
           jobId: job.id as number,
           jobStatus: job.status ?? null,
@@ -107,13 +120,21 @@ export function MessagesPageClient({
             (cleanerProfile as any)?.profile_photo_url ?? null,
           lastMessageText: latest?.message_text ?? null,
           lastMessageAt: latest?.created_at ?? null,
+          agreedAmountCents:
+            jr.agreed_amount_cents != null && jr.agreed_amount_cents > 0
+              ? jr.agreed_amount_cents
+              : null,
+          autoReleaseAt: jr.auto_release_at ?? null,
+          cleanerConfirmedComplete: jr.cleaner_confirmed_complete === true,
+          hasPaymentHold: !!jr.payment_intent_id?.trim(),
         };
       }),
     [jobs, listingById, latestByJob, profileById, currentUserId]
   );
 
   const activeConvos = conversations.filter(
-    (c) => c.jobStatus === "in_progress"
+    (c) =>
+      isChatUnlockedForJobStatus(c.jobStatus) && c.jobStatus !== "completed"
   );
   const completedConvos = conversations.filter(
     (c) => c.jobStatus === "completed"
@@ -122,159 +143,184 @@ export function MessagesPageClient({
   const selected = conversations.find((c) => c.jobId === selectedJobId) ?? null;
 
   return (
-    <div className="flex flex-col gap-4 md:flex-row md:gap-6">
-      {/* Left: conversation list */}
-      <div className="w-full md:w-1/3 lg:w-2/5 space-y-3">
-        <div className="rounded-md border border-border bg-background/70 p-3 dark:border-gray-700 dark:bg-gray-800/50">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-300">
-            Conversations
+    <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+      {/* Conversation list — compact, mobile-first */}
+      <div className="flex w-full max-h-[min(42vh,320px)] flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-gradient-to-b from-slate-50/95 to-white shadow-sm dark:border-slate-800 dark:from-slate-950 dark:to-slate-900/95 lg:max-h-none lg:w-[min(100%,20rem)] lg:shrink-0 xl:w-[22rem]">
+        <div className="shrink-0 border-b border-slate-200/80 px-3 py-2 dark:border-slate-800">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Chats
           </p>
-          <p className="mt-1 text-[11px] text-muted-foreground dark:text-gray-400">
-            Select a job to view your messages. Completed jobs are shown below
-            for history only.
+          <p className="hidden text-[10px] leading-snug text-slate-500 dark:text-slate-500 sm:block">
+            Tap a job to open messages. Completed jobs are in the section below.
           </p>
         </div>
 
-        {activeConvos.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-              Active chats
-            </p>
-            {activeConvos.map((c) => {
-              const isSelected = c.jobId === selectedJobId;
-              const isCurrentUserLister = currentUserId === c.listerId;
-              const isCurrentUserCleaner = currentUserId === c.cleanerId;
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2 py-2">
+          {activeConvos.length > 0 && (
+            <div className="space-y-1">
+              <p className="px-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-400/90">
+                Active
+              </p>
+              {activeConvos.map((c) => {
+                const isSelected = c.jobId === selectedJobId;
+                const isCurrentUserLister = currentUserId === c.listerId;
+                const isCurrentUserCleaner = currentUserId === c.cleanerId;
 
-              // Title line: counterparty full name + role label
-              let titleLine: string;
-              if (isCurrentUserCleaner) {
-                // You are the cleaner → show lister as Owner
-                const name = c.listerName ?? c.otherPartyName ?? "Owner";
-                titleLine = `${name} (Owner)`;
-              } else if (isCurrentUserLister) {
-                // You are the lister/owner → show cleaner
-                const name = c.cleanerName ?? c.otherPartyName ?? "Cleaner";
-                titleLine = `${name} (Cleaner)`;
-              } else {
-                // Fallback (shouldn't normally happen)
-                titleLine = c.listingTitle ?? "Bond clean job";
-              }
-
-              // Subtitle 1: compact job summary (e.g. 2 Bedrooms + 1 Bathroom House), no suburb/postcode
-              const baseTitle = c.listingTitle ?? "Bond clean job";
-              const secondLine = baseTitle.split(" in ")[0] ?? baseTitle;
-
-              // Subtitle 2: suburb + postcode on its own line
-              const thirdLine =
-                c.listingSuburb || c.listingPostcode
-                  ? `${c.listingSuburb ?? ""} ${c.listingPostcode ?? ""}`.trim()
-                  : null;
-
-              let relativeLabel: string | null = null;
-              if (c.lastMessageAt) {
-                const d = new Date(c.lastMessageAt);
-                const diffMs = Date.now() - d.getTime();
-                const diffMin = Math.floor(diffMs / 60000);
-                if (diffMin < 1) {
-                  relativeLabel = "Just now";
-                } else if (diffMin < 60) {
-                  relativeLabel = `${diffMin} min ago`;
-                } else if (diffMin < 60 * 24) {
-                  const h = Math.floor(diffMin / 60);
-                  relativeLabel = `${h} hr${h === 1 ? "" : "s"} ago`;
+                let titleLine: string;
+                if (isCurrentUserCleaner) {
+                  const name = c.listerName ?? c.otherPartyName ?? "Owner";
+                  titleLine = `${name}`;
+                } else if (isCurrentUserLister) {
+                  const name = c.cleanerName ?? c.otherPartyName ?? "Cleaner";
+                  titleLine = `${name}`;
                 } else {
-                  const days = Math.floor(diffMin / (60 * 24));
-                  relativeLabel = `${days} day${days === 1 ? "" : "s"} ago`;
+                  titleLine = c.listingTitle ?? "Bond clean job";
                 }
-              }
 
-              // Simple progress: 1/5 accepted, 2/5 in progress, 5/5 completed
-              let progressLabel: string | null = null;
-              if (c.jobStatus === "accepted") {
-                progressLabel = "1/5";
-              } else if (c.jobStatus === "in_progress") {
-                progressLabel = "2/5";
-              } else if (c.jobStatus === "completed") {
-                progressLabel = "5/5";
-              }
+                const roleLabel =
+                  isCurrentUserCleaner ? "Owner" : isCurrentUserLister ? "Cleaner" : "";
 
-              return (
-                <button
-                  key={c.jobId}
-                  type="button"
-                  onClick={() => setSelectedJobId(c.jobId)}
-                  className={`w-full rounded-md border px-3 py-2 text-left text-xs transition ${
-                    isSelected
-                      ? "border-emerald-400 bg-emerald-50/80 dark:border-emerald-500 dark:bg-emerald-900/40 dark:text-gray-100"
-                      : "border-border bg-background/80 hover:bg-muted/70 dark:border-gray-600 dark:bg-gray-800/90 dark:hover:bg-gray-700/90 dark:text-gray-100"
-                  }`}
-                >
-                  <p className="line-clamp-1 text-[13px] font-semibold text-foreground dark:text-gray-100">
-                    {titleLine}
-                  </p>
-                  {secondLine && (
-                    <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground dark:text-gray-300">
-                      {secondLine}
-                    </p>
-                  )}
-                  {thirdLine && (
-                    <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground dark:text-gray-300">
-                      {thirdLine}
-                    </p>
-                  )}
-                  {progressLabel && (
-                    <p className="mt-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-600 dark:text-emerald-300">
-                      Job progress: {progressLabel}
-                    </p>
-                  )}
-                  {relativeLabel && (
-                    <p className="mt-0.5 text-[10px] font-medium italic text-emerald-700 dark:text-emerald-600 dark:text-emerald-300">
-                      Last message · {relativeLabel}
-                    </p>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+                const baseTitle = c.listingTitle ?? "Bond clean job";
+                const jobLine = baseTitle.split(" in ")[0] ?? baseTitle;
+                const loc =
+                  c.listingSuburb || c.listingPostcode
+                    ? `${c.listingSuburb ?? ""} ${c.listingPostcode ?? ""}`.trim()
+                    : null;
 
-        {completedConvos.length > 0 && (
-          <div className="pt-3">
-            <details className="space-y-1">
-              <summary className="cursor-pointer text-xs font-semibold text-slate-700 dark:text-gray-300">
-                Completed chats ({completedConvos.length})
-              </summary>
-              <div className="mt-1 space-y-1">
-                {completedConvos.map((c) => {
-                  const isSelected = c.jobId === selectedJobId;
-                  return (
-                    <button
-                      key={c.jobId}
-                      type="button"
-                      onClick={() => setSelectedJobId(c.jobId)}
-                      className={`w-full rounded-md border px-3 py-2 text-left text-[11px] transition ${
+                let relativeLabel: string | null = null;
+                if (c.lastMessageAt) {
+                  const d = new Date(c.lastMessageAt);
+                  const diffMs = Date.now() - d.getTime();
+                  const diffMin = Math.floor(diffMs / 60000);
+                  if (diffMin < 1) relativeLabel = "now";
+                  else if (diffMin < 60) relativeLabel = `${diffMin}m`;
+                  else if (diffMin < 60 * 24) {
+                    const h = Math.floor(diffMin / 60);
+                    relativeLabel = `${h}h`;
+                  } else {
+                    const days = Math.floor(diffMin / (60 * 24));
+                    relativeLabel = `${days}d`;
+                  }
+                }
+
+                let progressLabel: string | null = null;
+                if (c.jobStatus === "accepted") progressLabel = "1/5";
+                else if (c.jobStatus === "in_progress") progressLabel = "2/5";
+                else if (c.jobStatus === "completed") progressLabel = "5/5";
+
+                const initial = (titleLine.trim().charAt(0) || "?").toUpperCase();
+
+                return (
+                  <button
+                    key={c.jobId}
+                    type="button"
+                    onClick={() => setSelectedJobId(c.jobId)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition",
+                      isSelected
+                        ? "border-sky-400/80 bg-sky-50 dark:border-sky-500/50 dark:bg-sky-950/50"
+                        : "border-transparent bg-white/50 hover:bg-slate-100/90 dark:bg-transparent dark:hover:bg-slate-800/70"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white shadow-sm",
                         isSelected
-                          ? "border-slate-400 bg-slate-50 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-100"
-                          : "border-border bg-background/60 hover:bg-muted/70 dark:border-gray-700 dark:bg-gray-800/60 dark:hover:bg-gray-700/70 dark:text-gray-200"
-                      }`}
+                          ? "bg-gradient-to-br from-sky-500 to-blue-600"
+                          : "bg-gradient-to-br from-slate-400 to-slate-600 dark:from-slate-500 dark:to-slate-700"
+                      )}
+                      aria-hidden
                     >
-                      <p className="line-clamp-1 font-medium text-slate-900 dark:text-gray-100">
-                        {c.listingTitle ?? "Bond clean job"}
-                      </p>
-                      <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground dark:text-gray-400">
-                        Completed · {c.listingSuburb} {c.listingPostcode}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </details>
-          </div>
-        )}
+                      {initial}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-1">
+                        <p className="truncate text-[13px] font-semibold leading-tight text-slate-900 dark:text-slate-100">
+                          {titleLine}
+                          {roleLabel ? (
+                            <span className="font-normal text-slate-500 dark:text-slate-400">
+                              {" "}
+                              · {roleLabel}
+                            </span>
+                          ) : null}
+                        </p>
+                        {relativeLabel && (
+                          <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
+                            {relativeLabel}
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate text-[11px] text-slate-600 dark:text-slate-400">{jobLine}</p>
+                      {loc && (
+                        <p className="truncate text-[10px] text-slate-400 dark:text-slate-500">{loc}</p>
+                      )}
+                      {(progressLabel || c.lastMessageText) && (
+                        <p className="mt-0.5 line-clamp-1 text-[10px] text-sky-600 dark:text-sky-400/90">
+                          {progressLabel && <span>Progress {progressLabel}</span>}
+                          {progressLabel && c.lastMessageText && " · "}
+                          {c.lastMessageText && (
+                            <span className="italic text-slate-500 dark:text-slate-400">{c.lastMessageText}</span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {completedConvos.length > 0 && (
+            <div className={cn("mt-2", activeConvos.length > 0 && "border-t border-slate-200/80 pt-2 dark:border-slate-800")}>
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-1 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 [&::-webkit-details-marker]:hidden">
+                  <span>History</span>
+                  <span className="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    {completedConvos.length}
+                  </span>
+                </summary>
+                <div className="mt-1 space-y-1">
+                  {completedConvos.map((c) => {
+                    const isSelected = c.jobId === selectedJobId;
+                    const initial = (c.listingTitle ?? "J").trim().charAt(0).toUpperCase();
+                    return (
+                      <button
+                        key={c.jobId}
+                        type="button"
+                        onClick={() => setSelectedJobId(c.jobId)}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition",
+                          isSelected
+                            ? "border-violet-400/60 bg-violet-50/90 dark:border-violet-500/40 dark:bg-violet-950/20"
+                            : "border-transparent hover:bg-slate-100/80 dark:hover:bg-slate-800/60"
+                        )}
+                      >
+                        <div
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-300 to-slate-500 text-[10px] font-bold text-white dark:from-slate-600 dark:to-slate-800"
+                          aria-hidden
+                        >
+                          {initial}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12px] font-medium text-slate-800 dark:text-slate-100">
+                            {c.listingTitle ?? "Bond clean job"}
+                          </p>
+                          <p className="truncate text-[10px] text-slate-500 dark:text-slate-500">
+                            Done · {c.listingSuburb} {c.listingPostcode}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Right: chat window */}
-      <div className="w-full md:w-2/3 lg:w-3/5">
+      <div className="min-w-0 flex-1">
         {!selected ? (
           <Card className="flex h-[360px] items-center justify-center text-xs text-muted-foreground sm:h-[400px]">
             <p>Select a job from the left to view messages.</p>
@@ -283,7 +329,7 @@ export function MessagesPageClient({
           <JobChat
             jobId={selected.jobId}
             currentUserId={currentUserId}
-            canChat={selected.jobStatus === "in_progress" || selected.jobStatus === "completed"}
+            canChat={isChatUnlockedForJobStatus(selected.jobStatus)}
             currentUserRole={
               currentUserId === selected.listerId
                 ? "lister"
@@ -297,6 +343,18 @@ export function MessagesPageClient({
             cleanerName={selected.cleanerName}
             listerAvatarUrl={selected.listerAvatarUrl}
             cleanerAvatarUrl={selected.cleanerAvatarUrl}
+            messenger={{
+              jobTitle: selected.listingTitle ?? "Bond clean job",
+              agreedPriceLabel:
+                selected.agreedAmountCents != null && selected.agreedAmountCents > 0
+                  ? formatCents(selected.agreedAmountCents)
+                  : "—",
+              statusPillLabel: buildChatStatusPill({
+                status: selected.jobStatus,
+                hasPaymentHold: selected.hasPaymentHold,
+                autoReleaseAt: selected.autoReleaseAt,
+              }),
+            }}
           />
         )}
       </div>

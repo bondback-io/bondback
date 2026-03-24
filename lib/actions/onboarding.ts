@@ -497,7 +497,9 @@ export async function completeOnboardingFromSignup(
         const firstName = details.full_name?.trim()?.split(" ")[0];
         const signupRole = role === "both" ? "both" : role === "lister" ? "lister" : "cleaner";
         const { subject, html } = await buildWelcomeEmail(firstName, signupRole);
-        await sendEmail(email, subject, html);
+        await sendEmail(email, subject, html, {
+          log: { userId: session.user.id, kind: "welcome" },
+        });
       }
     }
   }

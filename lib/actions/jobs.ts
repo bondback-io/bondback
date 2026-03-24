@@ -13,6 +13,7 @@ import {
 } from "@/lib/platform-fee";
 import { getStripeServer, createJobCheckoutSessionUrl, createJobPaymentIntentWithSavedMethod } from "@/lib/stripe";
 import { isStripeTestMode } from "@/lib/stripe/config";
+import { ensureConnectAccountCanReceiveTransfers } from "@/lib/actions/stripe-connect";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
@@ -1176,7 +1177,7 @@ export async function markJobChecklistFinished(
   if (row.lister_id) {
     await createNotification(
       row.lister_id,
-      "job_completed",
+      "funds_ready",
       typeof row.id === "number" ? row.id : Number(row.id),
       "Job complete – review photos and approve within 48 hours or funds auto-release."
     );
@@ -1325,6 +1326,14 @@ export async function releaseJobFunds(
     };
     if (chargeId) transferParams.source_transaction = chargeId;
 
+    const connectReady = await ensureConnectAccountCanReceiveTransfers(
+      stripe,
+      stripeConnectId
+    );
+    if (!connectReady.ok) {
+      return { ok: false, error: connectReady.error };
+    }
+
     const transfer = await stripe.transfers.create(transferParams);
 
     const nowIso = new Date().toISOString();
@@ -1351,8 +1360,15 @@ export async function releaseJobFunds(
     };
   } catch (e) {
     const err = e as Error & { type?: string; code?: string; raw?: { message?: string } };
-    const message =
+    let message =
       err.raw?.message ?? err.message ?? "Failed to capture or transfer.";
+    if (
+      typeof message === "string" &&
+      message.includes("destination account needs to have at least one of the following capabilities")
+    ) {
+      message =
+        "The cleaner's Stripe account is not ready to receive this payout. They should complete Connect onboarding under Profile / Settings → Payouts and wait until Stripe finishes verification, then try again.";
+    }
     if (process.env.NODE_ENV !== "production") {
       console.error("[releaseJobFunds] Stripe error:", err.type, err.code, message);
     }
@@ -1729,32 +1745,23 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
         .eq("id", job.listing_id);
     }
 
-    const notificationRows: {
-      user_id: string;
-      type: string;
-      job_id: number;
-      message_text: string;
-    }[] = [];
     if (job.winner_id) {
-      notificationRows.push({
-        user_id: job.winner_id,
-        type: "payment_released",
-        job_id: job.id,
-        message_text:
-          "Funds auto-released (review window elapsed). Payment is on the way to your connected account.",
-      });
+      await createNotification(
+        job.winner_id,
+        "payment_released",
+        job.id,
+        "Funds auto-released (review window elapsed). Payment is on the way to your connected account.",
+        { amountCents: job.agreed_amount_cents ?? undefined }
+      );
     }
     if (job.lister_id) {
-      notificationRows.push({
-        user_id: job.lister_id,
-        type: "payment_released",
-        job_id: job.id,
-        message_text:
-          "Funds were automatically released from escrow (review window elapsed).",
-      });
-    }
-    if (notificationRows.length) {
-      await admin.from("notifications").insert(notificationRows as never);
+      await createNotification(
+        job.lister_id,
+        "payment_released",
+        job.id,
+        "Funds were automatically released from escrow (review window elapsed).",
+        { amountCents: job.agreed_amount_cents ?? undefined }
+      );
     }
 
     const agreedCents = job.agreed_amount_cents ?? 0;

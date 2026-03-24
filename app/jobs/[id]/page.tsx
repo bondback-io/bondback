@@ -6,13 +6,12 @@ import type { Database } from "@/types/supabase";
 import { getSiteUrl } from "@/lib/site";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Lock, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { ensureJobChecklistIfEmpty, fulfillStripeCheckoutReturn } from "@/lib/actions/jobs";
 import { JobDetail } from "@/components/features/job-detail";
 import type { BidWithBidder } from "@/components/features/job-detail";
-import { JobChat } from "@/components/features/job-chat";
 import { ScrollToDispute } from "@/components/features/scroll-to-dispute";
 import { RecordJobView } from "@/components/features/record-job-view";
 import { OfflineJobsPrimer } from "@/components/offline/offline-jobs-primer";
@@ -415,11 +414,6 @@ export default async function JobDetailPage({
 
   const isJobCancelled = job?.status === "cancelled";
   const hasActiveJob = !!job && !isJobCancelled;
-  const listingCancelled =
-    String(listingRow.status ?? "")
-      .toLowerCase() === "cancelled";
-  const hideCleanerJobMessaging =
-    isCleaner && (listingCancelled || isJobCancelled);
 
   if (
     job &&
@@ -429,20 +423,6 @@ export default async function JobDetailPage({
   ) {
     await ensureJobChecklistIfEmpty(job.id);
   }
-  const canChat =
-    !!job &&
-    (job.status === "in_progress" ||
-      job.status === "completed_pending_approval" ||
-      job.status === "completed" ||
-      (job.status === "accepted" && hasPaymentHold));
-  const currentUserRole =
-    !session || !job
-      ? null
-      : session.user.id === job.lister_id
-        ? ("lister" as const)
-        : session.user.id === job.winner_id
-          ? ("cleaner" as const)
-          : null;
 
   let listerName: string | null = null;
   let cleanerName: string | null = null;
@@ -625,36 +605,6 @@ export default async function JobDetailPage({
         hasReviewedLister={hasReviewedLister}
         canLeaveReview={canLeaveReview}
       />
-      {session && jobId && !hideCleanerJobMessaging && (
-        canChat ? (
-          <JobChat
-            jobId={Number(jobId)}
-            currentUserId={session.user.id}
-            canChat={true}
-            currentUserRole={currentUserRole}
-            listerId={job?.lister_id ?? null}
-            cleanerId={job?.winner_id ?? null}
-            listerName={listerName}
-            cleanerName={cleanerName}
-            listerAvatarUrl={listerAvatarUrl}
-            cleanerAvatarUrl={cleanerAvatarUrl}
-          />
-        ) : (
-          <div className="flex items-start gap-3 rounded-md border border-sky-200 bg-sky-50/70 px-4 py-3 text-xs sm:text-sm dark:border-gray-700 dark:bg-gray-800/60">
-            <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-gray-700 dark:text-gray-300">
-              <Lock className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-sky-900 dark:text-gray-100">
-                Chat unavailable
-              </p>
-              <p className="mt-1 text-[11px] text-sky-800 dark:text-gray-400">
-                Messenger communication is locked between Property Lister &amp; Cleaner until the job is set to &quot;In Progress&quot; status.
-              </p>
-            </div>
-          </div>
-        )
-      )}
     </section>
     </OfflineJobsPrimer>
   );

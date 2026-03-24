@@ -4,7 +4,8 @@
  * Each record: { id?, jobId, amount, timestamp, status: 'pending' }
  */
 
-import { openDB } from "idb";
+import type { IDBPDatabase } from "idb";
+import { openDBWithRetry } from "@/lib/idb-safe-open";
 
 const DB_NAME = "bondback_offline";
 const DB_VERSION = 1;
@@ -34,14 +35,28 @@ export function onPendingBidsChanged(callback: () => void): () => void {
   return () => window.removeEventListener(PENDING_BIDS_CHANGED, callback);
 }
 
-async function getDB() {
-  return openDB<{ [STORE]: { key: number; value: PendingBid } }>(DB_NAME, DB_VERSION, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+type BidsDB = IDBPDatabase<{ [STORE]: { key: number; value: PendingBid } }>;
+
+let dbPromise: Promise<BidsDB> | null = null;
+
+async function getDB(): Promise<BidsDB> {
+  if (!dbPromise) {
+    dbPromise = openDBWithRetry<{ [STORE]: { key: number; value: PendingBid } }>(
+      DB_NAME,
+      DB_VERSION,
+      {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains(STORE)) {
+            db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+          }
+        },
       }
-    },
-  });
+    ).catch((e) => {
+      dbPromise = null;
+      throw e;
+    });
+  }
+  return dbPromise;
 }
 
 /** Add a bid to the queue. Call notifyPendingBidsChanged() after if you need UI to update. */

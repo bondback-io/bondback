@@ -184,14 +184,16 @@ export async function applyReferralRewardsForCompletedJob(jobId: number): Promis
     await sendEmail(
       prefsReferred.email,
       `You earned $${referredDollars.toFixed(2)} referral credit – Bond Back`,
-      referredEmailHtml
+      referredEmailHtml,
+      { log: { userId: referredUserId, kind: "referral_reward" } }
     );
   }
   if (prefsReferrer.email && prefsReferrer.shouldSendEmail("referral_reward")) {
     await sendEmail(
       prefsReferrer.email,
       `You earned $${referrerDollars.toFixed(2)} referral credit – Bond Back`,
-      referrerEmailHtml
+      referrerEmailHtml,
+      { log: { userId: referrerId, kind: "referral_reward" } }
     );
   }
 }

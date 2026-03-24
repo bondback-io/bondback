@@ -8,6 +8,65 @@ import { getStripeServer } from "@/lib/stripe";
 import { getAppBaseUrl } from "@/lib/site";
 
 /**
+ * Ensure a Connect account can receive Transfers from the platform balance (separate charge + transfer flow).
+ * Requests `transfers` if missing (legacy accounts), and returns a clear error if still pending or blocked.
+ */
+export async function ensureConnectAccountCanReceiveTransfers(
+  stripe: Stripe,
+  connectAccountId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let account = await stripe.accounts.retrieve(connectAccountId);
+  let transfers = account.capabilities?.transfers;
+
+  if (transfers === "active") {
+    return { ok: true };
+  }
+
+  if (transfers === "pending") {
+    return {
+      ok: false,
+      error:
+        "The cleaner's payout account is still being verified by Stripe. They should open Settings → Payouts and complete any remaining steps, then try again after verification finishes (often within a few minutes).",
+    };
+  }
+
+  // `inactive` usually means capability was never requested; request it for older accounts.
+  try {
+    await stripe.accounts.update(connectAccountId, {
+      capabilities: {
+        transfers: { requested: true },
+      },
+    });
+    account = await stripe.accounts.retrieve(connectAccountId);
+    transfers = account.capabilities?.transfers;
+  } catch (e) {
+    const err = e as Error;
+    return {
+      ok: false,
+      error: `Could not enable transfers on the cleaner's payout account: ${err.message ?? "Unknown error"}`,
+    };
+  }
+
+  if (transfers === "active") {
+    return { ok: true };
+  }
+
+  if (transfers === "pending") {
+    return {
+      ok: false,
+      error:
+        "Transfers were just requested on the cleaner's Stripe account. Wait a few minutes for Stripe to finish verification, then try releasing funds again.",
+    };
+  }
+
+  return {
+    ok: false,
+    error:
+      "The cleaner's Stripe account cannot receive payouts yet. They must complete Connect onboarding (Profile / Settings → Payouts). If they already did, they should reopen the Stripe link and finish any missing identity or bank details.",
+  };
+}
+
+/**
  * Set payout schedule on a Stripe Connect Express account.
  * Uses Accounts API v1 settings.payouts.schedule (interval, weekly_anchor, monthly_anchor).
  */

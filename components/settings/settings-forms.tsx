@@ -295,6 +295,16 @@ export function SettingsNotificationsForm({
     startTransition(async () => {
       const result = await saveNotificationSettings(buildNotificationFormData(next));
       if (result.ok) {
+        if (key === "push_enabled" && checked) {
+          try {
+            const { registerExpoPushTokenAsync } = await import("@/lib/pwa/expo-push-register");
+            const { saveExpoPushToken } = await import("@/lib/actions/push-token");
+            const token = await registerExpoPushTokenAsync();
+            if (token?.trim()) await saveExpoPushToken(token.trim());
+          } catch {
+            // permission denied or Expo not configured
+          }
+        }
         const smsOn = next.sms_new_job;
         const pushJobOn = next.push_new_job;
         toast({
@@ -369,7 +379,7 @@ export function SettingsNotificationsForm({
         SMS notifications use your profile phone number and are limited to 5 per day. Critical events only (new job near you, bid accepted, job approved to start, payment released, dispute opened).
       </p>
       <p className="text-base text-muted-foreground dark:text-gray-500 md:text-xs">
-        Push notifications require the Bond Back mobile app. Turn on the toggle here, then register your device in the app to receive alerts (max 5 per day).
+        Push notifications work on mobile web and in the app. Turn on &ldquo;Receive push notifications&rdquo; and allow alerts when prompted (max 5 per day).
       </p>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <SendTestSmsButton />

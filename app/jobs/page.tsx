@@ -58,8 +58,9 @@ type JobsPageSearchParams = {
 export default async function JobsPage({
   searchParams,
 }: {
-  searchParams?: JobsPageSearchParams;
+  searchParams?: Promise<JobsPageSearchParams>;
 }) {
+  const sp = (await searchParams) ?? {};
   const supabase = await createServerSupabaseClient();
 
   const {
@@ -100,18 +101,18 @@ export default async function JobsPage({
       ? profile.max_travel_km
       : 30;
 
-  const suburbFilter = (searchParams?.suburb ?? "").trim();
-  const postcodeFilter = (searchParams?.postcode ?? "").trim();
-  const radiusFilter = (searchParams?.radius_km ?? "").trim();
-  const sort = (searchParams?.sort ?? "").trim();
-  const minPriceFilter = (searchParams?.min_price ?? "").trim();
-  const maxPriceFilter = (searchParams?.max_price ?? "").trim();
-  const minBidPriceFilter = (searchParams?.min_bid_price ?? "").trim();
-  const maxBidPriceFilter = (searchParams?.max_bid_price ?? "").trim();
-  const buyNowOnlyFilter = (searchParams?.buy_now_only ?? "").trim();
-  const bedroomsFilter = (searchParams?.bedrooms ?? "").trim();
-  const bathroomsFilter = (searchParams?.bathrooms ?? "").trim();
-  const propertyTypeFilter = (searchParams?.property_type ?? "").trim();
+  const suburbFilter = (sp.suburb ?? "").trim();
+  const postcodeFilter = (sp.postcode ?? "").trim();
+  const radiusFilter = (sp.radius_km ?? "").trim();
+  const sort = (sp.sort ?? "").trim();
+  const minPriceFilter = (sp.min_price ?? "").trim();
+  const maxPriceFilter = (sp.max_price ?? "").trim();
+  const minBidPriceFilter = (sp.min_bid_price ?? "").trim();
+  const maxBidPriceFilter = (sp.max_bid_price ?? "").trim();
+  const buyNowOnlyFilter = (sp.buy_now_only ?? "").trim();
+  const bedroomsFilter = (sp.bedrooms ?? "").trim();
+  const bathroomsFilter = (sp.bathrooms ?? "").trim();
+  const propertyTypeFilter = (sp.property_type ?? "").trim();
 
   // Exclude listings that already have an associated job (assigned/approved).
   // Use admin client when set; otherwise RPC listing_ids_with_jobs (see migration).
@@ -157,8 +158,8 @@ export default async function JobsPage({
   const activeRadiusKm = Number(radiusFilter || defaultRadiusKm) || defaultRadiusKm;
 
   // Optional client-side radius filter if listings have lat/lon and center is provided.
-  const centerLat = searchParams?.center_lat ? Number(searchParams.center_lat) : null;
-  const centerLon = searchParams?.center_lon ? Number(searchParams.center_lon) : null;
+  const centerLat = sp.center_lat ? Number(sp.center_lat) : null;
+  const centerLon = sp.center_lon ? Number(sp.center_lon) : null;
 
   if (!Number.isNaN(centerLat ?? NaN) && !Number.isNaN(centerLon ?? NaN) && centerLat !== null && centerLon !== null) {
     const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -199,8 +200,8 @@ export default async function JobsPage({
   if (suburbFilter) baseParams.set("suburb", suburbFilter);
   if (postcodeFilter) baseParams.set("postcode", postcodeFilter);
   if (radiusFilter) baseParams.set("radius_km", radiusFilter);
-  if (searchParams?.center_lat) baseParams.set("center_lat", searchParams.center_lat);
-  if (searchParams?.center_lon) baseParams.set("center_lon", searchParams.center_lon);
+  if (sp.center_lat) baseParams.set("center_lat", sp.center_lat);
+  if (sp.center_lon) baseParams.set("center_lon", sp.center_lon);
   if (minPriceFilter) baseParams.set("min_price", minPriceFilter);
   if (maxPriceFilter) baseParams.set("max_price", maxPriceFilter);
   if (minBidPriceFilter) baseParams.set("min_bid_price", minBidPriceFilter);

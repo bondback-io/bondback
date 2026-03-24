@@ -56,23 +56,52 @@ function normalizeRequireAbn(v: unknown): boolean {
 }
 
 /**
+ * PostgREST schema-cache / warm-up failures (PGRST002).
+ * `code` is sometimes missing on the client; match message too.
+ */
+function isPostgrestSchemaCacheError(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  if (error.code === "PGRST002") return true;
+  const m = (error.message ?? "").toLowerCase();
+  return m.includes("schema cache") || m.includes("pgrst002");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
  * Whether ABR lookup is required for ABN validation. Prefers service role so this matches
  * admin global_settings even when the caller has no session (anon cannot SELECT global_settings under RLS).
  */
 export async function getRequireAbnForValidation(): Promise<boolean> {
   const admin = createSupabaseAdminClient();
   if (admin) {
-    const { data, error } = await admin
-      .from("global_settings")
-      .select("require_abn")
-      .eq("id", 1)
-      .maybeSingle();
-    if (!error && data != null) {
-      return normalizeRequireAbn((data as { require_abn?: unknown }).require_abn);
+    let lastError: { message: string; code?: string } | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await delay(400);
+      const { data, error } = await admin
+        .from("global_settings")
+        .select("require_abn")
+        .eq("id", 1)
+        .maybeSingle();
+      if (!error && data != null) {
+        return normalizeRequireAbn((data as { require_abn?: unknown }).require_abn);
+      }
+      if (error) {
+        lastError = error;
+        if (!isPostgrestSchemaCacheError(error) || attempt === 1) break;
+      }
     }
-    if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
-      console.error("[getRequireAbnForValidation] admin read failed", error);
+    if (lastError && process.env.NODE_ENV !== "production") {
+      if (!isPostgrestSchemaCacheError(lastError)) {
+        // eslint-disable-next-line no-console
+        console.error("[getRequireAbnForValidation] admin read failed", lastError);
+      }
     }
   }
   const settings = await getGlobalSettings();
@@ -108,8 +137,54 @@ async function requireAdmin() {
 export async function getGlobalSettings(): Promise<GlobalSettingsRow | null> {
   // RLS only allows SELECT for admins on global_settings; use service role for public reads (fees, flags).
   const admin = createSupabaseAdminClient();
+  let loggedSchemaCacheHint = false;
   if (admin) {
-    const { data, error } = await admin
+    let lastError: { message: string; code?: string; details?: string; hint?: string } | null =
+      null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) {
+        await delay(400);
+      }
+      const { data, error } = await admin
+        .from("global_settings")
+        .select("*")
+        .eq("id", 1)
+        .maybeSingle();
+      if (!error) {
+        return (data as GlobalSettingsRow | null) ?? null;
+      }
+      lastError = error;
+      if (!isPostgrestSchemaCacheError(error) || attempt === 1) {
+        break;
+      }
+    }
+    if (lastError && process.env.NODE_ENV !== "production") {
+      if (isPostgrestSchemaCacheError(lastError)) {
+        loggedSchemaCacheHint = true;
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[getGlobalSettings] Supabase schema cache not ready (PGRST002); using fallbacks. Retry or check project is active."
+        );
+      } else {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[getGlobalSettings] admin read failed",
+          lastError.message,
+          lastError.code,
+          lastError.details ?? lastError.hint
+        );
+      }
+    }
+  }
+
+  const supabase = await createServerSupabaseClient();
+  let sessionError: { message: string; code?: string; details?: string; hint?: string } | null =
+    null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) {
+      await delay(400);
+    }
+    const { data, error } = await supabase
       .from("global_settings")
       .select("*")
       .eq("id", 1)
@@ -117,36 +192,30 @@ export async function getGlobalSettings(): Promise<GlobalSettingsRow | null> {
     if (!error) {
       return (data as GlobalSettingsRow | null) ?? null;
     }
-    if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
-      console.error(
-        "[getGlobalSettings] admin read failed",
-        error.message,
-        error.code,
-        error.details ?? error.hint
-      );
+    sessionError = error;
+    if (!isPostgrestSchemaCacheError(error) || attempt === 1) {
+      break;
     }
   }
-
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("global_settings")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle();
-  if (error) {
-    if (process.env.NODE_ENV !== "production") {
+  if (sessionError && process.env.NODE_ENV !== "production") {
+    if (isPostgrestSchemaCacheError(sessionError)) {
+      if (!loggedSchemaCacheHint) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[getGlobalSettings] Supabase schema cache not ready (PGRST002); using fallbacks."
+        );
+      }
+    } else {
       // eslint-disable-next-line no-console
       console.error(
         "[getGlobalSettings] session read failed (expected for non-admins without service role)",
-        error.message,
-        error.code,
-        error.details ?? error.hint
+        sessionError.message,
+        sessionError.code,
+        sessionError.details ?? sessionError.hint
       );
     }
-    return null;
   }
-  return (data as GlobalSettingsRow | null) ?? null;
+  return null;
 }
 
 /** Email template overrides and per-type enabled flags from email_template_overrides table (no global_settings columns). */
@@ -154,10 +223,19 @@ export async function getEmailTemplateOverrides(): Promise<{
   email_templates: Record<string, { subject: string; body: string; active: boolean }>;
   email_type_enabled: Record<string, boolean>;
 }> {
-  const supabase = await createServerSupabaseClient();
-  const { data: rows } = await supabase
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[getEmailTemplateOverrides] service role missing; returning empty overrides.");
+    }
+    return { email_templates: {}, email_type_enabled: {} };
+  }
+  const { data: rows, error } = await admin
     .from("email_template_overrides")
     .select("template_key, subject, body, active, type_enabled");
+  if (error && process.env.NODE_ENV !== "production") {
+    console.warn("[getEmailTemplateOverrides]", error.message);
+  }
   const email_templates: Record<string, { subject: string; body: string; active: boolean }> = {};
   const email_type_enabled: Record<string, boolean> = {};
   (rows ?? []).forEach((r: { template_key: string; subject: string; body: string; active: boolean; type_enabled: boolean }) => {

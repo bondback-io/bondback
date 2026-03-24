@@ -22,7 +22,14 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 const FROM = process.env.RESEND_FROM ?? "Bond Back <onboarding@resend.dev>";
+const REPLY_TO = process.env.RESEND_REPLY_TO?.trim() || undefined;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+
+function maskEmailForLog(to: string): string {
+  const at = to.indexOf("@");
+  if (at < 1) return "***";
+  return `${to.slice(0, Math.min(2, at))}***${to.slice(at)}`;
+}
 
 export type NotificationType =
   | "job_accepted"
@@ -36,32 +43,109 @@ export type NotificationType =
   | "new_bid"
   | "job_cancelled_by_lister";
 
+export type SendEmailOptions = {
+  /** When set, logs to email_logs (and always logs a masked line to console). */
+  log?: { userId: string; kind: string };
+};
+
 /**
  * Send a single email via Resend.
- * Skips sending (returns ok: true) if global_settings.emails_enabled is false (emergency kill switch).
- * No-op if RESEND_API_KEY is not set.
+ * Skips sending (returns ok: true, skipped) if global_settings.emails_enabled is false.
+ * No-op if RESEND_API_KEY is not set (returns ok: false).
+ * Uses RESEND_FROM and optional RESEND_REPLY_TO.
  */
 export async function sendEmail(
   to: string,
   subject: string,
-  htmlContent: string
-): Promise<{ ok: boolean; error?: string }> {
-  if (!resend) return { ok: false, error: "Resend not configured" };
+  htmlContent: string,
+  options?: SendEmailOptions
+): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
+  const { logEmailDelivery } = await import("@/lib/supabase/admin");
+
+  if (!resend) {
+    const err = "Resend not configured (missing RESEND_API_KEY)";
+    console.error("[email]", err, { to: maskEmailForLog(to), subject: subject.slice(0, 60) });
+    if (options?.log) {
+      await logEmailDelivery({
+        userId: options.log.userId,
+        kind: options.log.kind,
+        subject,
+        to,
+        status: "failed",
+        errorMessage: err,
+      });
+    }
+    return { ok: false, error: err };
+  }
 
   const { getGlobalSettings } = await import("@/lib/actions/global-settings");
   const globalSettings = await getGlobalSettings();
   if (globalSettings?.emails_enabled === false) {
-    return { ok: true }; // skip send; don't treat as failure
+    console.info("[email] skipped (emails_enabled=false)", {
+      to: maskEmailForLog(to),
+      kind: options?.log?.kind,
+    });
+    return { ok: true, skipped: true };
   }
 
-  const { error } = await resend.emails.send({
-    from: FROM,
-    to: [to],
-    subject,
-    html: htmlContent,
-  });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  try {
+    const payload: {
+      from: string;
+      to: string[];
+      subject: string;
+      html: string;
+      reply_to?: string;
+    } = {
+      from: FROM,
+      to: [to],
+      subject,
+      html: htmlContent,
+    };
+    if (REPLY_TO) payload.reply_to = REPLY_TO;
+
+    const { data, error } = await resend.emails.send(payload);
+    if (error) {
+      console.error("[email] Resend error", error.message, { to: maskEmailForLog(to) });
+      if (options?.log) {
+        await logEmailDelivery({
+          userId: options.log.userId,
+          kind: options.log.kind,
+          subject,
+          to,
+          status: "failed",
+          errorMessage: error.message,
+        });
+      }
+      return { ok: false, error: error.message };
+    }
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[email] sent", { id: (data as { id?: string } | undefined)?.id, to: maskEmailForLog(to) });
+    }
+    if (options?.log) {
+      await logEmailDelivery({
+        userId: options.log.userId,
+        kind: options.log.kind,
+        subject,
+        to,
+        status: "sent",
+      });
+    }
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[email] send threw", msg, { to: maskEmailForLog(to) });
+    if (options?.log) {
+      await logEmailDelivery({
+        userId: options.log.userId,
+        kind: options.log.kind,
+        subject,
+        to,
+        status: "failed",
+        errorMessage: msg,
+      });
+    }
+    return { ok: false, error: msg };
+  }
 }
 
 /** Extract $X from message for Payment Released subject/display if present */

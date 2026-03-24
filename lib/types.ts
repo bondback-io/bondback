@@ -1,3 +1,5 @@
+import type { NotificationPreferences } from "@/lib/notification-preferences";
+
 export type ProfileRole = "lister" | "cleaner";
 
 export type ThemePreference = "light" | "dark" | "system";
@@ -14,6 +16,8 @@ export type SessionWithProfile = {
         profile_photo_url: string | null;
         theme_preference: ThemePreference;
         distance_unit: DistanceUnitPref;
+        /** For push banner / prefs; optional when profile row missing fields. */
+        notification_preferences?: NotificationPreferences | null;
       }
     | null;
   roles: ProfileRole[];

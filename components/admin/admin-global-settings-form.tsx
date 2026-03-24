@@ -26,6 +26,7 @@ import {
   setStripeTestMode,
   setFloatingChatEnabled as persistFloatingChatEnabled,
 } from "@/lib/actions/global-settings";
+import { sendGlobalSettingsTestEmail } from "@/lib/actions/admin-email-templates";
 
 export type AdminGlobalSettingsFormProps = {
   initial: Partial<SaveGlobalSettingsInput> | null;
@@ -114,6 +115,8 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
 
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [testEmailTo, setTestEmailTo] = React.useState("");
+  const [testEmailPending, setTestEmailPending] = React.useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -799,6 +802,46 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                 </AlertDescription>
               </Alert>
             )}
+            <div className="flex flex-col gap-2 pt-2 border-t border-border mt-2">
+              <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                Send a test message via Resend (uses <code className="rounded bg-muted px-0.5">RESEND_FROM</code> and{" "}
+                <code className="rounded bg-muted px-0.5">RESEND_REPLY_TO</code>). Logged in <code className="rounded bg-muted px-0.5">email_logs</code>.
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[180px]">
+                  <Label htmlFor="global-test-email" className="text-xs text-muted-foreground">
+                    Optional recipient (defaults to your account email)
+                  </Label>
+                  <Input
+                    id="global-test-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={testEmailTo}
+                    onChange={(e) => setTestEmailTo(e.target.value)}
+                    className="h-8 text-xs mt-1 dark:bg-gray-900 dark:border-gray-700"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={testEmailPending}
+                  onClick={() => {
+                    setTestEmailPending(true);
+                    void sendGlobalSettingsTestEmail(testEmailTo.trim() || null).then((r) => {
+                      setTestEmailPending(false);
+                      if (r.ok) {
+                        toast({ title: "Test email sent", description: "Check the inbox and server logs." });
+                      } else {
+                        toast({ variant: "destructive", title: "Test email failed", description: r.error });
+                      }
+                    });
+                  }}
+                >
+                  {testEmailPending ? "Sending…" : "Send test email"}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

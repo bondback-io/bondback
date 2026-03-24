@@ -4,7 +4,8 @@
  * Keys: "list" (jobs list), "job_{id}" (job detail), "last_sync" (timestamp).
  */
 
-import { openDB } from "idb";
+import type { IDBPDatabase } from "idb";
+import { openDBWithRetry } from "@/lib/idb-safe-open";
 
 const DB_NAME = "bondback_jobs_cache";
 const DB_VERSION = 1;
@@ -19,18 +20,25 @@ function jobKey(id: string): string {
 
 type CacheEntry<T = unknown> = { data: T; fetchedAt: number };
 
-async function getDB() {
-  return openDB<{ [STORE]: { key: string; value: CacheEntry | number } }>(
-    DB_NAME,
-    DB_VERSION,
-    {
+type JobsCacheSchema = { [STORE]: { key: string; value: CacheEntry | number } };
+type JobsDB = IDBPDatabase<JobsCacheSchema>;
+
+let dbPromise: Promise<JobsDB> | null = null;
+
+async function getDB(): Promise<JobsDB> {
+  if (!dbPromise) {
+    dbPromise = openDBWithRetry<JobsCacheSchema>(DB_NAME, DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains(STORE)) {
           db.createObjectStore(STORE);
         }
       },
-    }
-  );
+    }).catch((e) => {
+      dbPromise = null;
+      throw e;
+    });
+  }
+  return dbPromise;
 }
 
 /** Save jobs list to cache and update last_sync. */

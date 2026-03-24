@@ -23,10 +23,10 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
 interface AdminListingsPageProps {
-  searchParams?: {
+  searchParams?: Promise<{
     q?: string;
     status?: string;
-  };
+  }>;
 }
 
 async function requireAdmin() {
@@ -56,8 +56,9 @@ async function requireAdmin() {
 export default async function AdminListingsPage({ searchParams }: AdminListingsPageProps) {
   const { profile, supabase } = await requireAdmin();
 
-  const q = (searchParams?.q ?? "").trim().toLowerCase();
-  const statusFilter = (searchParams?.status ?? "all").toLowerCase();
+  const sp = (await searchParams) ?? {};
+  const q = (sp.q ?? "").trim().toLowerCase();
+  const statusFilter = (sp.status ?? "all").toLowerCase();
 
   const { data: listingsData } = await supabase
     .from("listings")
@@ -147,13 +148,13 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
               <Input
                 type="search"
                 name="q"
-                defaultValue={searchParams?.q ?? ""}
+                defaultValue={sp.q ?? ""}
                 placeholder="Search by ID, title or suburb"
                 className="h-9 text-sm dark:bg-gray-800 dark:border-gray-700"
               />
               <select
                 name="status"
-                defaultValue={searchParams?.status ?? "all"}
+                defaultValue={sp.status ?? "all"}
                 className="h-9 rounded-md border border-border bg-background px-2 text-xs dark:border-gray-700 dark:bg-gray-900"
               >
                 <option value="all">All statuses</option>

@@ -8,6 +8,7 @@ import type {
   ThemePreference,
 } from "@/lib/types";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
+import type { NotificationPreferences } from "@/lib/notification-preferences";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -90,6 +91,8 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
           distance_unit: parseDistanceUnit(
             (row as { distance_unit?: string | null }).distance_unit
           ),
+          notification_preferences:
+            (row as { notification_preferences?: NotificationPreferences | null }).notification_preferences ?? null,
         }
       : null,
     roles,

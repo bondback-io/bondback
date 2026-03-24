@@ -32,8 +32,9 @@ type SearchParams = { status?: string; range?: string; q?: string };
 export default async function AdminDisputesPage({
   searchParams,
 }: {
-  searchParams?: SearchParams;
+  searchParams?: Promise<SearchParams>;
 }) {
+  const sp = (await searchParams) ?? {};
   const supabase = await createServerSupabaseClient();
 
   const {
@@ -75,9 +76,9 @@ export default async function AdminDisputesPage({
   const resolvedThisMonth = 0; // Stub: would need dispute resolution log
   const avgResolutionDays = "—"; // Stub: would need resolution timestamps
 
-  const statusFilter = (searchParams?.status ?? "all").toLowerCase();
-  const rangeFilter = searchParams?.range ?? "all";
-  const query = (searchParams?.q ?? "").trim().toLowerCase();
+  const statusFilter = (sp.status ?? "all").toLowerCase();
+  const rangeFilter = sp.range ?? "all";
+  const query = (sp.q ?? "").trim().toLowerCase();
 
   let filtered = allJobs;
   if (statusFilter === "resolved" || statusFilter === "rejected") {
@@ -130,9 +131,9 @@ export default async function AdminDisputesPage({
   }
 
   const baseSearchParams = new URLSearchParams();
-  if (searchParams?.status) baseSearchParams.set("status", searchParams.status);
-  if (searchParams?.range) baseSearchParams.set("range", searchParams.range);
-  if (searchParams?.q) baseSearchParams.set("q", searchParams.q);
+  if (sp.status) baseSearchParams.set("status", sp.status);
+  if (sp.range) baseSearchParams.set("range", sp.range);
+  if (sp.q) baseSearchParams.set("q", sp.q);
 
   return (
     <AdminShell activeHref="/admin/disputes">
@@ -210,7 +211,7 @@ export default async function AdminDisputesPage({
               <Input
                 id="q"
                 name="q"
-                defaultValue={searchParams?.q ?? ""}
+                defaultValue={sp.q ?? ""}
                 placeholder="Search..."
                 className="max-w-xs"
               />
@@ -219,7 +220,7 @@ export default async function AdminDisputesPage({
               <label htmlFor="status" className="text-xs font-medium text-muted-foreground">
                 Status
               </label>
-              <Select name="status" defaultValue={searchParams?.status ?? "all"}>
+              <Select name="status" defaultValue={sp.status ?? "all"}>
                 <SelectTrigger id="status" className="w-[140px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -235,7 +236,7 @@ export default async function AdminDisputesPage({
               <label htmlFor="range" className="text-xs font-medium text-muted-foreground">
                 Date range
               </label>
-              <Select name="range" defaultValue={searchParams?.range ?? "all"}>
+              <Select name="range" defaultValue={sp.range ?? "all"}>
                 <SelectTrigger id="range" className="w-[140px]">
                   <SelectValue />
                 </SelectTrigger>

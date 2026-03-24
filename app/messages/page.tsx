@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { MessagesPageClient } from "@/components/features/messages-page-client";
+import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -28,15 +29,14 @@ const MessagesPage = async () => {
     redirect("/login");
   }
 
-  // Only show chat for jobs approved to start (in_progress) or completed.
-  // Jobs in "accepted" (waiting for lister to approve) are hidden until approved.
+  // Jobs where messenger is allowed (matches server `sendJobMessage` + RLS).
   const { data: jobsData } = await supabase
     .from("jobs")
     .select("*")
     .or(
       `lister_id.eq.${session.user.id},winner_id.eq.${session.user.id}`,
     )
-    .in("status", ["in_progress", "completed", "completed_pending_approval"])
+    .in("status", [...CHAT_UNLOCK_STATUSES])
     .order("created_at", { ascending: false });
 
   const jobs = (jobsData ?? []) as JobRow[];
@@ -96,13 +96,12 @@ const MessagesPage = async () => {
 
   return (
     <section className="page-inner space-y-6">
-      <div className="space-y-3">
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl dark:text-gray-100">
+      <div className="space-y-2">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl md:text-3xl dark:text-gray-100">
           Messages
         </h1>
-        <p className="text-sm text-muted-foreground">
-          All your job conversations live here. Pick a job on the left to chat,
-          share photos and keep everything inside Bond Back.
+        <p className="text-xs text-muted-foreground sm:text-sm">
+          Job chats stay on Bond Back for escrow and disputes. Choose a conversation, then message below.
         </p>
       </div>
 

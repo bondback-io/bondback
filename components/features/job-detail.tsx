@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition, useCallback, useMemo, type ChangeEvent } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { format } from "date-fns";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -64,6 +65,7 @@ import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
 import { getStateFromPostcode, formatLocationWithState } from "@/lib/state-from-postcode";
 import { getBondGuidelineForState } from "@/lib/bond-cleaning-guidelines";
 import { JobPaymentTimeline, type JobPaymentTimelineProps } from "@/components/features/job-payment-timeline";
+import { JobProgressTimeline } from "@/components/features/job-progress-timeline";
 import { JobPaymentBreakdown } from "@/components/features/job-payment-breakdown";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 export type BidWithBidder = BidRow & { bidder_email?: string | null };
@@ -1024,96 +1026,16 @@ export function JobDetail({
             </div>
           )}
           {hasActiveJob && (
-            <div
-              className={cn(
-                "space-y-2 rounded-xl border border-border bg-muted/40 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50",
-                detailUiBoost && "text-sm ring-1 ring-border/60 dark:ring-gray-700/80"
-              )}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p
-                  className={cn(
-                    "font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-300",
-                    detailUiBoost && "text-xs sm:text-sm"
-                  )}
-                >
-                  Job progress
-                </p>
-                {localJobStatus === "accepted" && hasPaymentHold && (
-                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
-                    Payment held in escrow
-                  </span>
-                )}
-                {localJobStatus === "in_progress" && (
-                  <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
-                    Awaiting cleaner completion and request payment
-                  </span>
-                )}
-                {localJobStatus === "completed_pending_approval" && (
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
-                    Awaiting property lister completion
-                  </span>
-                )}
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                {[
-                  {
-                    label: "Accepted",
-                    done: !!hasActiveJob,
-                  },
-                  {
-                    label: "In progress",
-                    done:
-                      localJobStatus === "in_progress" ||
-                      localJobStatus === "completed_pending_approval" ||
-                      localJobStatus === "completed",
-                  },
-                  {
-                    label: "Checklist complete",
-                    done: allCompleted,
-                  },
-                  {
-                    label: "Photos uploaded",
-                    done: hasAfterPhotos,
-                  },
-                  {
-                    label: "Funds released",
-                    done: localJobStatus === "completed",
-                  },
-                ].map((step, index) => (
-                  <div
-                    key={step.label}
-                    className={cn(
-                      "flex items-center gap-1.5",
-                      detailUiBoost ? "text-xs sm:text-sm" : "text-[11px]"
-                    )}
-                  >
-                    {step.done ? (
-                      <CheckCircle2
-                        className={cn(
-                          "text-emerald-600",
-                          detailUiBoost ? "h-4 w-4" : "h-3 w-3"
-                        )}
-                      />
-                    ) : (
-                      <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40 dark:bg-gray-500/60" />
-                    )}
-                    <span
-                      className={
-                        step.done
-                          ? "font-medium text-foreground dark:text-gray-100"
-                          : "text-muted-foreground dark:text-gray-400"
-                      }
-                    >
-                      {step.label}
-                    </span>
-                    {index < 4 && (
-                      <span className="mx-1 h-px w-3 bg-border dark:bg-gray-600" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <JobProgressTimeline
+              detailUiBoost={detailUiBoost}
+              localJobStatus={localJobStatus}
+              hasActiveJob={!!hasActiveJob}
+              hasPaymentHold={!!hasPaymentHold}
+              allCompleted={!!allCompleted}
+              hasAfterPhotos={!!hasAfterPhotos}
+              isJobLister={!!isJobLister}
+              isJobCleaner={!!isJobCleaner}
+            />
           )}
 
           {hasActiveJob &&
@@ -1476,7 +1398,18 @@ export function JobDetail({
                       ? hasPaymentHold
                         ? "Funds are held in escrow. Start the job so the cleaner can see the checklist and begin."
                         : "Pay the job price plus the platform fee to place funds into escrow and unlock the checklist for your cleaner."
-                      : "The lister is reviewing and confirming the job. You can message them below in the meantime."}
+                      : (
+                        <>
+                          The lister is reviewing and confirming the job. When chat is available, use{" "}
+                          <Link
+                            href={jobId ? `/messages?job=${encodeURIComponent(jobId)}` : "/messages"}
+                            className="font-medium text-primary underline underline-offset-2"
+                          >
+                            Messages
+                          </Link>{" "}
+                          to coordinate.
+                        </>
+                      )}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1866,7 +1799,10 @@ export function JobDetail({
                     </>
                   )}
                   {isJobLister && afterPhotoEntries.length > 0 && (
-                    <div className="mt-3 rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-50/90 to-transparent px-4 py-4 dark:border-emerald-800 dark:from-emerald-950/40 sm:px-5">
+                    <div
+                      id="job-after-photos"
+                      className="mt-3 scroll-mt-24 rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-50/90 to-transparent px-4 py-4 dark:border-emerald-800 dark:from-emerald-950/40 sm:px-5"
+                    >
                       <p className="text-base font-bold text-emerald-900 dark:text-emerald-200">
                         After photos from your cleaner
                       </p>
@@ -1900,7 +1836,10 @@ export function JobDetail({
               )}
 
               {isJobCleaner && (
-                <div className="mt-4 space-y-3 rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.06] to-transparent px-4 py-4 dark:border-violet-900/40 dark:from-violet-950/30 sm:px-5">
+                <div
+                  id="job-after-photos"
+                  className="mt-4 scroll-mt-24 space-y-3 rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.06] to-transparent px-4 py-4 dark:border-violet-900/40 dark:from-violet-950/30 sm:px-5"
+                >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <div>
                       <p className="text-lg font-bold dark:text-gray-100">After photos</p>
@@ -2085,7 +2024,10 @@ export function JobDetail({
                     </span>
                   </div>
                   {localJobStatus === "in_progress" && (
-                    <div className="space-y-2 border-t border-violet-500/10 pt-4 dark:border-violet-900/30">
+                    <div
+                      id="job-mark-complete"
+                      className="scroll-mt-24 space-y-2 border-t border-violet-500/10 pt-4 dark:border-violet-900/30"
+                    >
                       <Button
                         type="button"
                         size="lg"
@@ -2115,7 +2057,10 @@ export function JobDetail({
             isJobLister &&
             (localJobStatus === "in_progress" ||
               localJobStatus === "completed_pending_approval") && (
-              <div className="space-y-2 rounded-md border bg-background/80 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+              <div
+                id="job-approve-release"
+                className="scroll-mt-24 space-y-2 rounded-md border bg-background/80 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium dark:text-gray-100">Approve &amp; Release Funds</p>
                   {localJobStatus === "completed_pending_approval" &&
@@ -2165,15 +2110,21 @@ export function JobDetail({
                 )}
                 {!showListerFinalizeNotice && (
                   <>
-                    {!hasAfterPhotos && localJobStatus === "completed_pending_approval" && (
-                      <p className="text-[11px] text-muted-foreground dark:text-gray-400">
-                        Waiting for after photos to release funds. You can still open a dispute; that pauses auto-release.
-                      </p>
-                    )}
-                    {!hasAfterPhotos && localJobStatus === "in_progress" && (
-                      <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                        Waiting for after photos to be uploaded…
-                      </p>
+                    {!hasAfterPhotos &&
+                      (localJobStatus === "completed_pending_approval" ||
+                        localJobStatus === "in_progress") && (
+                      <div id="job-after-photos" className="scroll-mt-24 space-y-2">
+                        {localJobStatus === "completed_pending_approval" && (
+                          <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                            Waiting for after photos to release funds. You can still open a dispute; that pauses auto-release.
+                          </p>
+                        )}
+                        {localJobStatus === "in_progress" && (
+                          <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                            Waiting for after photos to be uploaded…
+                          </p>
+                        )}
+                      </div>
                     )}
                     <div className="mt-3 space-y-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">

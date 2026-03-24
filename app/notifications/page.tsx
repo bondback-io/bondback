@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { NotificationsList } from "@/components/features/notifications-list";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
@@ -41,7 +41,7 @@ export default async function NotificationsPage() {
     .select("*")
     .eq("user_id", session.user.id)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(25);
 
   const notifications = (rows ?? []) as NotificationRow[];
 
@@ -66,7 +66,7 @@ export default async function NotificationsPage() {
           <CardTitle className="text-base dark:text-gray-100">All notifications</CardTitle>
         </CardHeader>
         <CardContent>
-          <NotificationsList
+          <NotificationCenter
             initialNotifications={notifications}
             currentUserId={session.user.id}
             activeRole={activeRole}

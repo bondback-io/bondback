@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -33,16 +33,16 @@ import { cn } from "@/lib/utils";
 import type { ActiveRole } from "@/lib/notifications/notification-role-filter";
 import {
   filterNotificationsForActiveRole,
-  prependNotificationDeduped,
 } from "@/lib/notifications/notification-role-filter";
+import { useNotificationsInfinite } from "@/hooks/use-notifications-infinite";
+import { getNotificationBody, getNotificationTitle } from "@/lib/notifications/display";
 
-const RECENT_LIMIT = 15;
+const PEEK = 15;
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
 export type NotificationBellProps = {
   userId: string;
-  /** When set, hide notifications that belong to the other role (dual lister/cleaner accounts). */
   activeRole?: ActiveRole;
   variant?: "icon" | "row";
 };
@@ -97,65 +97,36 @@ export function NotificationBell({
 }: NotificationBellProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+
+  const {
+    flat,
+    isPending,
+    optimisticMarkRead,
+    optimisticMarkAllRead,
+    refetch,
+  } = useNotificationsInfinite(userId);
 
   const displayedNotifications = useMemo(
-    () => filterNotificationsForActiveRole(notifications, activeRole ?? null),
-    [notifications, activeRole]
+    () => filterNotificationsForActiveRole(flat, activeRole ?? null),
+    [flat, activeRole]
   );
+
+  const peekList = useMemo(
+    () => displayedNotifications.slice(0, PEEK),
+    [displayedNotifications]
+  );
+
   const unreadCount = useMemo(
     () => displayedNotifications.filter((n) => !n.is_read).length,
     [displayedNotifications]
   );
-  const toastRef = useRef(toast);
-  toastRef.current = toast;
-  const loadNotifications = useCallback(async () => {
-    const supabase = createBrowserSupabaseClient();
-    const { data, error } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(RECENT_LIMIT);
-    if (error) {
-      const isTableMissing =
-        error.message?.includes("schema cache") ||
-        error.message?.includes("could not find the table") ||
-        error.message?.includes("relation \"public.notifications\" does not exist");
-      if (!isTableMissing && process.env.NODE_ENV === "development") {
-        console.warn("[NotificationBell] load error:", error.message);
-      }
-      setNotifications([]);
-      setLoading(false);
-      return;
-    }
-    if (data) {
-      const rows = data as NotificationRow[];
-      const seen = new Set<string>();
-      const deduped = rows.filter((n) => {
-        if (seen.has(n.id)) return false;
-        seen.add(n.id);
-        return true;
-      });
-      setNotifications(deduped);
-    }
-    setLoading(false);
-  }, [userId]);
 
   useEffect(() => {
-    let cancelled = false;
     const supabase = createBrowserSupabaseClient();
-
-    void loadNotifications();
-
-    // Poll while tab is visible — backup when Realtime publication is not enabled or channel errors.
-    const pollId = window.setInterval(() => {
-      if (document.visibilityState === "visible" && !cancelled) void loadNotifications();
-    }, 45_000);
-
     const channel = supabase
-      .channel(`notifications-${userId}`)
+      .channel(`notifications-toast-${userId}`)
       .on(
         "postgres_changes",
         {
@@ -166,57 +137,45 @@ export function NotificationBell({
         },
         (payload) => {
           const row = payload.new as NotificationRow;
-          setNotifications((prev) =>
-            prependNotificationDeduped(prev, row, RECENT_LIMIT)
-          );
           const visibleForRole =
             filterNotificationsForActiveRole([row], activeRole ?? null).length > 0;
           if (!visibleForRole) return;
           const isDisputeNotif = row.type === "dispute_opened" || row.type === "dispute_resolved";
           const title =
-            row.type === "new_message" && row.job_id != null
+            getNotificationTitle(row) ||
+            (row.type === "new_message" && row.job_id != null
               ? `New message in Job #${row.job_id}`
               : isDisputeNotif && row.job_id != null
                 ? `Dispute update on Job #${row.job_id}`
                 : row.type === "job_completed" && row.job_id != null
                   ? `Job #${row.job_id} marked complete`
-                  : labelForType(row.type);
-          const msg = row.message_text ?? "";
+                  : labelForType(row.type));
+          const msg = getNotificationBody(row);
           toastRef.current({
             title,
             description: msg.length > 80 ? `${msg.slice(0, 77)}…` : msg || "You have a new notification.",
             action:
               row.job_id != null
-                ? { label: "View", href: isDisputeNotif ? `/jobs/${row.job_id}#dispute` : `/jobs/${row.job_id}` }
+                ? {
+                    label: "View",
+                    href: isDisputeNotif ? `/jobs/${row.job_id}#dispute` : `/jobs/${row.job_id}`,
+                  }
                 : undefined,
           });
         }
       )
-      .subscribe((status, err) => {
-        if (process.env.NODE_ENV === "development") {
-          if (status === "SUBSCRIBED") {
-            // eslint-disable-next-line no-console
-            console.debug("[NotificationBell] realtime subscribed");
-          }
-          if (status === "CHANNEL_ERROR" || err) {
-            console.warn("[NotificationBell] realtime channel error — polling will still refresh notifications", err);
-          }
-        }
-      });
+      .subscribe();
 
     return () => {
-      cancelled = true;
-      window.clearInterval(pollId);
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [userId, loadNotifications, activeRole]);
+  }, [userId, activeRole]);
 
   const handleClickNotification = async (n: NotificationRow) => {
     if (!n.is_read) {
-      await markNotificationRead(n.id);
-      setNotifications((prev) =>
-        prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x))
-      );
+      optimisticMarkRead(n.id);
+      const res = await markNotificationRead(n.id);
+      if (!res.ok) void refetch();
     }
     if (n.job_id) {
       const isDispute = n.type === "dispute_opened" || n.type === "dispute_resolved";
@@ -227,8 +186,8 @@ export function NotificationBell({
   };
 
   const handleMarkAll = async () => {
+    optimisticMarkAllRead();
     await markAllNotificationsRead();
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
   };
 
   const triggerContent =
@@ -284,28 +243,28 @@ export function NotificationBell({
               variant="ghost"
               size="sm"
               className="h-auto text-xs text-primary hover:underline"
-              onClick={handleMarkAll}
+              onClick={() => void handleMarkAll()}
             >
               Mark all read
             </Button>
           )}
         </div>
         <DropdownSep />
-        {loading ? (
+        {isPending && flat.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             Loading…
           </div>
-        ) : displayedNotifications.length === 0 ? (
+        ) : peekList.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             No new notifications
           </div>
         ) : (
           <ScrollArea className="h-[min(60vh,320px)]">
             <div className="p-1">
-              {displayedNotifications.map((n) => (
+              {peekList.map((n) => (
                 <DropdownMenuItem
                   key={n.id}
-                  onClick={() => handleClickNotification(n)}
+                  onClick={() => void handleClickNotification(n)}
                   className={cn(
                     "flex cursor-pointer flex-col items-start gap-1 rounded-md px-3 py-2.5 text-left focus:bg-muted",
                     !n.is_read && "bg-muted/60 dark:bg-gray-800/60"
@@ -316,15 +275,14 @@ export function NotificationBell({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-medium text-muted-foreground">
-                          {labelForType(n.type)}
-                          {n.job_id != null && ` · Job #${n.job_id}`}
+                          {getNotificationTitle(n)}
                         </span>
                         <span className="shrink-0 text-[10px] text-muted-foreground">
                           {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
                         </span>
                       </div>
                       <p className="mt-0.5 line-clamp-2 text-xs text-foreground dark:text-gray-100">
-                        {n.message_text}
+                        {getNotificationBody(n)}
                       </p>
                     </div>
                   </div>

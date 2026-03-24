@@ -76,6 +76,7 @@ const SMS_NOTIFICATION_TYPES = new Set([
 /** Push-enabled notification types (same critical/high-value events + new job near you). */
 const PUSH_NOTIFICATION_TYPES = new Set([
   "new_bid",
+  "new_message",
   "job_accepted",
   "job_created",
   "job_approved_to_start",
@@ -160,26 +161,34 @@ const RATE_LIMIT_HOURS = 1;
 const VIEWED_WITHIN_MINUTES = 5;
 
 /**
- * Check if we may send a notification email for this job (max 1 per job per hour).
- * If true, records the send time. Call this only when you are about to send; it updates the table.
- * Uses service role; requires notification_email_rate_limit table.
+ * Throttle noisy job emails (e.g. new_message): max one per job per hour **per recipient**.
+ * If true, records the send time. Call only when about to send.
  */
-export async function checkAndRecordEmailRateLimit(jobId: number): Promise<boolean> {
+export async function checkAndRecordEmailRateLimit(
+  jobId: number,
+  recipientUserId: string
+): Promise<boolean> {
   const admin = createSupabaseAdminClient();
-  if (!admin) return true; // no admin client: allow send (no rate limit)
+  if (!admin) return true;
   const { data: row } = await (admin as any)
     .from("notification_email_rate_limit")
     .select("last_sent_at")
     .eq("job_id", jobId)
+    .eq("user_id", recipientUserId)
     .maybeSingle();
 
   const lastSent = row?.last_sent_at as string | undefined;
   const oneHourAgo = new Date(Date.now() - RATE_LIMIT_HOURS * 60 * 60 * 1000).toISOString();
   if (lastSent && lastSent > oneHourAgo) return false;
 
-  await (admin as any)
-    .from("notification_email_rate_limit")
-    .upsert({ job_id: jobId, last_sent_at: new Date().toISOString() }, { onConflict: "job_id" });
+  await (admin as any).from("notification_email_rate_limit").upsert(
+    {
+      job_id: jobId,
+      user_id: recipientUserId,
+      last_sent_at: new Date().toISOString(),
+    },
+    { onConflict: "job_id,user_id" }
+  );
   return true;
 }
 
@@ -203,15 +212,41 @@ export async function recipientViewedJobRecently(recipientUserId: string, jobId:
   return viewedAt > cutoff;
 }
 
-/** Log a sent email for admin visibility (email_logs table). */
-export async function logEmailSent(
-  userId: string,
-  type: string,
-  subject: string
-): Promise<void> {
+export type EmailLogStatus = "sent" | "failed" | "skipped";
+
+/**
+ * Log an email attempt for admin visibility (email_logs). Safe to call without blocking sends.
+ */
+export async function logEmailDelivery(params: {
+  userId: string | null;
+  kind: string;
+  subject: string;
+  to: string;
+  status: EmailLogStatus;
+  errorMessage?: string | null;
+}): Promise<void> {
+  const masked = params.to.replace(/^(.{0,2}).+(@.+)$/, (_, a: string, d: string) => `${a}***${d}`);
+  const line = `[email] ${params.status} kind=${params.kind} to=${masked} subject=${params.subject.slice(0, 80)}${params.subject.length > 80 ? "…" : ""}`;
+  if (params.status === "failed" && params.errorMessage) {
+    console.error(line, params.errorMessage);
+  } else {
+    console.info(line);
+  }
+
+  if (!params.userId) return;
   const admin = createSupabaseAdminClient();
   if (!admin) return;
-  await (admin as any)
-    .from("email_logs")
-    .insert({ user_id: userId, type, subject });
+  try {
+    await (admin as any).from("email_logs").insert({
+      user_id: params.userId,
+      type: params.kind,
+      subject: params.subject,
+      status: params.status,
+      error_message: params.errorMessage ?? null,
+      recipient_email: params.to,
+    });
+  } catch (e) {
+    console.warn("[logEmailDelivery] insert failed", e);
+  }
 }
+

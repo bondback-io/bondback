@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 export default async function SettingsRedirectPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const sp = (await Promise.resolve(searchParams ?? {})) as Record<string, string | string[] | undefined>;
+  const sp = ((await searchParams) ?? {}) as Record<string, string | string[] | undefined>;
   const qs = new URLSearchParams();
 
   const tab = typeof sp.tab === "string" ? sp.tab : undefined;
