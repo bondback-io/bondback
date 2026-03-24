@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { Star } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -7,6 +8,36 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createServerSupabaseClient();
+  const admin = createSupabaseAdminClient();
+  const client = (admin ?? supabase) as SupabaseClient<Database>;
+  const { data: profile } = await client
+    .from("profiles")
+    .select("full_name")
+    .eq("id", id)
+    .maybeSingle();
+  const name =
+    (profile as { full_name?: string | null } | null)?.full_name?.trim() ||
+    "Cleaner";
+  const description = `View ${name}'s cleaner profile on Bond Back — bond cleaning and end of lease cleaning in Australia.`;
+  return {
+    title: `${name}`,
+    description,
+    alternates: { canonical: `/cleaners/${id}` },
+    openGraph: {
+      title: `${name} · Bond Back cleaner`,
+      description,
+      url: `/cleaners/${id}`,
+    },
+  };
+}
 
 export default async function CleanerProfilePage({
   params,

@@ -60,9 +60,9 @@ const ENABLE_JOB_CARD_SWIPE = true;
 /** When list has more than this many cards, use @tanstack/react-virtual (window virtualizer) for performance. */
 const VIRTUALIZE_THRESHOLD = 30;
 /** Default height estimate for virtualizer (desktop grid / tall mobile). */
-const ESTIMATED_CARD_HEIGHT = 540;
-/** Compact mobile row cards (/jobs). */
-const ESTIMATED_CARD_HEIGHT_MOBILE_COMPACT = 300;
+const ESTIMATED_CARD_HEIGHT = 600;
+/** Compact mobile row cards (/jobs) — tuned for cleaner card layout + title/price blocks. */
+const ESTIMATED_CARD_HEIGHT_MOBILE_COMPACT = 340;
 
 export type JobsListProps = {
   initialListings: ListingRow[];

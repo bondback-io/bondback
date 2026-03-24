@@ -111,44 +111,50 @@ export function DashboardJobCard({
             </div>
           </div>
         </div>
-        <div className="space-y-4 border-t border-border bg-card px-4 pb-5 pt-4 dark:border-gray-800 dark:bg-gray-950">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+        <div className="space-y-5 border-t border-border bg-card px-4 pb-6 pt-5 dark:border-gray-800 dark:bg-gray-950 sm:px-5">
+          <h3 className="line-clamp-2 text-xl font-bold leading-tight tracking-tight text-foreground dark:text-gray-50">
+            {title}
+          </h3>
+
+          <div className="rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.12] to-transparent p-4 dark:border-emerald-800/50 dark:from-emerald-950/45">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800/90 dark:text-emerald-400/90">
               Job value
             </p>
-            <p className="text-4xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
+            <p className="text-5xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
               {formatCents(gross)}
             </p>
             {daysLine && (
               <div
                 className={cn(
-                  "mt-2 inline-flex rounded-xl border-2 px-3 py-2 text-base font-bold",
+                  "mt-3 inline-flex rounded-xl border-2 px-3 py-2.5 text-lg font-bold",
                   isUrgent
                     ? "border-amber-400/80 bg-amber-500/15 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100"
-                    : "border-border bg-muted/40 text-foreground dark:border-gray-600 dark:bg-gray-900/80 dark:text-gray-100"
+                    : "border-border bg-muted/50 text-foreground dark:border-gray-600 dark:bg-gray-900/80 dark:text-gray-100"
                 )}
               >
-                <Clock className="mr-2 h-5 w-5 shrink-0 opacity-80" aria-hidden />
+                <Clock className="mr-2 h-6 w-6 shrink-0 opacity-80" aria-hidden />
                 {daysLine}
               </div>
             )}
           </div>
-          <p className="text-base font-medium leading-snug text-foreground dark:text-gray-100">
-            {listing ? formatLocationWithState(listing.suburb, listing.postcode) : "—"}
-          </p>
-          {(bedrooms != null || bathrooms != null) && (
-            <p className="text-base text-muted-foreground dark:text-gray-400">
-              {bedrooms != null ? `${bedrooms} bed` : ""}
-              {bedrooms != null && bathrooms != null ? " · " : ""}
-              {bathrooms != null ? `${bathrooms} bath` : ""}
-            </p>
-          )}
-          <p className="line-clamp-2 text-sm font-semibold text-foreground/90 dark:text-gray-200">{title}</p>
 
-          <div className="flex flex-col gap-3 pt-1">
-            <Button asChild size="lg" variant="default" className="min-h-12 w-full rounded-xl text-base font-semibold">
+          <div className="space-y-1.5">
+            <p className="text-lg font-semibold leading-snug text-foreground dark:text-gray-100">
+              {listing ? formatLocationWithState(listing.suburb, listing.postcode) : "—"}
+            </p>
+            {(bedrooms != null || bathrooms != null) && (
+              <p className="text-base text-muted-foreground dark:text-gray-400">
+                {bedrooms != null ? `${bedrooms} bed` : ""}
+                {bedrooms != null && bathrooms != null ? " · " : ""}
+                {bathrooms != null ? `${bathrooms} bath` : ""}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3.5 pt-1">
+            <Button asChild size="lg" variant="default" className="min-h-14 w-full rounded-xl text-lg font-semibold">
               <Link href={`/jobs/${job.id}`} className="flex items-center justify-center gap-2">
-                <Eye className="h-5 w-5" aria-hidden />
+                <Eye className="h-6 w-6" aria-hidden />
                 View Details
               </Link>
             </Button>
@@ -156,10 +162,10 @@ export function DashboardJobCard({
               asChild
               size="lg"
               variant="outline"
-              className="min-h-12 w-full rounded-xl border-2 text-base font-semibold dark:border-gray-500 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
+              className="min-h-14 w-full rounded-xl border-2 text-lg font-semibold dark:border-gray-500 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
             >
               <Link href={`/messages?job=${job.id}`} className="flex items-center justify-center gap-2">
-                <MessageCircle className="h-5 w-5" aria-hidden />
+                <MessageCircle className="h-6 w-6" aria-hidden />
                 Message Lister
               </Link>
             </Button>
@@ -167,10 +173,10 @@ export function DashboardJobCard({
               <Button
                 asChild
                 size="lg"
-                className="min-h-12 w-full rounded-xl bg-emerald-600 text-base font-semibold hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                className="min-h-14 w-full rounded-xl bg-emerald-600 text-lg font-semibold hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
               >
                 <Link href={`/jobs/${job.id}?complete=1`} className="flex items-center justify-center gap-2">
-                  <CheckCircle className="h-5 w-5" aria-hidden />
+                  <CheckCircle className="h-6 w-6" aria-hidden />
                   Mark Complete
                 </Link>
               </Button>
@@ -205,63 +211,65 @@ export function DashboardJobCard({
           </div>
         </Link>
 
-        <CardContent className="flex flex-1 flex-col gap-3 p-4">
+        <CardContent className="flex flex-1 flex-col gap-4 p-5">
           <div>
-            <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-foreground dark:text-gray-100">
+            <h3 className="line-clamp-2 text-base font-bold leading-tight text-foreground dark:text-gray-100">
               {title}
             </h3>
-            <p className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3 shrink-0" />
+            <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPin className="h-4 w-4 shrink-0" />
               {listing ? formatLocationWithState(listing.suburb, listing.postcode) : "—"}
             </p>
           </div>
           {(bedrooms != null || bathrooms != null) && (
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
               {bedrooms != null && (
-                <span className="flex items-center gap-1.5">
-                  <Bed className="h-3.5 w-3.5" />
-                  {bedrooms}
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Bed className="h-4 w-4" />
+                  {bedrooms} bed
                 </span>
               )}
               {bathrooms != null && (
-                <span className="flex items-center gap-1.5">
-                  <Bath className="h-3.5 w-3.5" />
-                  {bathrooms}
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Bath className="h-4 w-4" />
+                  {bathrooms} bath
                 </span>
               )}
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="flex items-center gap-2 text-xs font-semibold tabular-nums text-foreground dark:text-gray-100">
-              <DollarSign className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              {formatCents(gross)}
-            </span>
-            {daysLeft != null && (
-              <span
-                className={cn(
-                  "flex items-center gap-1.5 text-xs",
-                  isUrgent ? "font-bold text-amber-600 dark:text-amber-400" : "text-muted-foreground"
-                )}
-              >
-                <Clock className="h-3.5 w-3.5 shrink-0" />
-                {daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-3 dark:border-emerald-800/40 dark:bg-emerald-950/35">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                <DollarSign className="h-5 w-5 shrink-0" />
+                {formatCents(gross)}
               </span>
-            )}
+              {daysLeft != null && (
+                <span
+                  className={cn(
+                    "flex items-center gap-1.5 text-sm font-semibold",
+                    isUrgent ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+                  )}
+                >
+                  <Clock className="h-4 w-4 shrink-0" />
+                  {daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="mt-auto flex flex-wrap gap-2 pt-1">
-            <Button asChild size="sm" className="rounded-full" variant="default">
+          <div className="mt-auto flex flex-wrap gap-2.5 pt-1">
+            <Button asChild className="min-h-11 rounded-full px-5 text-sm font-semibold" variant="default">
               <Link href={`/jobs/${job.id}`}>View Job</Link>
             </Button>
-            <Button asChild size="sm" variant="outline" className="rounded-full">
+            <Button asChild variant="outline" className="min-h-11 rounded-full px-5 text-sm font-semibold">
               <Link href={`/messages?job=${job.id}`}>
-                <MessageCircle className="mr-1 h-3 w-3" />
+                <MessageCircle className="mr-1.5 h-4 w-4" />
                 Message
               </Link>
             </Button>
             {job.status === "in_progress" && (
-              <Button asChild size="sm" className="rounded-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500">
+              <Button asChild className="min-h-11 rounded-full bg-emerald-600 px-5 text-sm font-semibold hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500">
                 <Link href={`/jobs/${job.id}?complete=1`}>
-                  <CheckCircle className="mr-1 h-3 w-3" />
+                  <CheckCircle className="mr-1.5 h-4 w-4" />
                   Mark Complete
                 </Link>
               </Button>

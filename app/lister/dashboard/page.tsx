@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
@@ -18,6 +19,7 @@ import { formatCents, isListingLive, listingIdsWithCancelledJobs } from "@/lib/l
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ChevronDown, XCircle } from "lucide-react";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { getProfileCompletion } from "@/lib/profile-completion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -29,6 +31,14 @@ type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
 /** Always fresh data after admin moderation / job cancel (avoid stale listing cards). */
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Lister dashboard",
+  description:
+    "Your Bond Back lister dashboard — manage bond cleaning listings, bids, and jobs across Australia.",
+  alternates: { canonical: "/lister/dashboard" },
+  robots: { index: false, follow: true },
+};
 
 export default async function ListerDashboardPage() {
   const supabase = await createServerSupabaseClient();
@@ -316,7 +326,10 @@ export default async function ListerDashboardPage() {
                 listing,
                 bidCount: bidCountByListingId[String(listing.id)] ?? 0,
                 isUrgent,
-                feePercentage,
+                feePercentage: resolvePlatformFeePercent(
+                  listing.platform_fee_percentage,
+                  feePercentage
+                ),
               };
             })}
           />

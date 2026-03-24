@@ -37,6 +37,7 @@ import {
   Receipt,
   RotateCcw,
   XCircle,
+  Clock,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -87,7 +88,9 @@ export function DisputeRow({
   const [resolveOpen, setResolveOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [refundAmountCents, setRefundAmountCents] = useState(0);
-  const [resolution, setResolution] = useState<"release_funds" | "partial_refund" | "full_refund" | "reject">("release_funds");
+  const [resolution, setResolution] = useState<
+    "release_funds" | "partial_refund" | "full_refund" | "reject" | "return_to_review"
+  >("release_funds");
 
   const agreedRefundCents = job.counter_proposal_amount ?? job.proposed_refund_amount ?? 0;
 
@@ -334,6 +337,12 @@ export function DisputeRow({
               { value: "partial_refund" as const, label: "Partial Refund", desc: "Agreed partial refund", icon: Receipt },
               { value: "full_refund" as const, label: "Full Refund", desc: "Refund lister (cancel job)", icon: RotateCcw },
               { value: "reject" as const, label: "Reject Dispute", desc: "Close dispute, no refund to lister", icon: XCircle },
+              {
+                value: "return_to_review" as const,
+                label: "Return to review",
+                desc: "Lister must approve again; new auto-release timer (no payout yet)",
+                icon: Clock,
+              },
             ].map(({ value, label, desc, icon: Icon }) => (
               <label
                 key={value}

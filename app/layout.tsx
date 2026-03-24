@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { getSiteUrl } from "@/lib/site";
 import "./globals.css";
 import { Header } from "@/components/layout/header";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -22,10 +23,61 @@ import { ContextualFab } from "@/components/contextual-fab";
 import { SessionSync } from "@/components/auth/session-sync";
 import { UserPreferencesHydration } from "@/components/providers/user-preferences-hydration";
 
+const site = getSiteUrl();
+
+/** Header + floating chat read global_settings; avoid caching a stale shell. */
+export const dynamic = "force-dynamic";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#3b82f6" },
+    { media: "(prefers-color-scheme: dark)", color: "#1e3a5f" },
+  ],
+};
+
 export const metadata: Metadata = {
-  title: "Bond Back · Bond cleaning reverse-auction",
+  metadataBase: site,
+  title: {
+    default:
+      "Bond Back — Bond cleaning & end of lease cleaning (Australia)",
+    template: "%s · Bond Back",
+  },
   description:
-    "Bond Back is an Australian reverse-auction marketplace for bond cleaning. Listers create listings, cleaners bid, and the lowest bid wins if it's at or below reserve."
+    "Australian marketplace for bond cleaning and end of lease cleaning. Listers post jobs, cleaners bid in a reverse auction, and you get your bond back with transparent pricing.",
+  applicationName: "Bond Back",
+  keywords: [
+    "bond cleaning",
+    "end of lease cleaning",
+    "bond back",
+    "bond clean Australia",
+    "vacate cleaning",
+    "reverse auction cleaning",
+    "rental bond",
+  ],
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_AU",
+    url: "/",
+    siteName: "Bond Back",
+    title: "Bond Back — Bond cleaning & end of lease cleaning",
+    description:
+      "Australian bond cleaning and end of lease cleaning marketplace. Fair pricing through competitive bids — get your bond back.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bond Back — Bond cleaning & end of lease cleaning",
+    description:
+      "Australian marketplace for bond cleaning and end of lease cleaning. List, bid, and release payment securely.",
+  },
+  icons: {
+    icon: [{ url: "/favicon.ico" }],
+  },
 };
 
 export type RootLayoutProps = {
@@ -49,7 +101,18 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
     !!settings?.announcement_active &&
     !!settings?.announcement_text &&
     (settings.announcement_text?.trim().length ?? 0) > 0;
-  const floatingChatEnabled = (settings as { floating_chat_enabled?: boolean } | null)?.floating_chat_enabled !== false;
+  // When settings row is missing (error), default on. When row exists: off only if explicitly false.
+  // Use !== false (not === true) so undefined/null column and legacy rows default to "on", and
+  // strict boolean from PostgREST still works.
+  const rawFloating = (settings as { floating_chat_enabled?: unknown } | null)?.floating_chat_enabled;
+  const floatingChatEnabled =
+    settings == null
+      ? true
+      : !(
+          rawFloating === false ||
+          rawFloating === "false" ||
+          rawFloating === 0
+        );
   const stripeTestMode = (settings as { stripe_test_mode?: boolean } | null)?.stripe_test_mode === true;
 
   const showFirstJobNudge = await getFirstJobRewardsNudgeVisible(session?.user.id ?? null);
@@ -61,8 +124,6 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
       <head>
         <link rel="manifest" href="/manifest.json" />
         <link rel="preload" href="/manifest.json" as="fetch" />
-        <meta name="theme-color" content="#3b82f6" />
-        <meta name="theme-color" content="#1e3a5f" media="(prefers-color-scheme: dark)" />
         <Script
           id="bb-theme-init"
           strategy="beforeInteractive"
@@ -121,7 +182,10 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
               <SiteFooter />
             </div>
             <LazyFloatingChatPanel enabled={!!floatingChatEnabled} />
-            <MobileBottomNav initialActiveRole={session?.activeRole ?? null} />
+            <MobileBottomNav
+              initialActiveRole={session?.activeRole ?? null}
+              userId={session?.user.id ?? null}
+            />
             <ContextualFab activeRole={session?.activeRole ?? null} />
           </ChatPanelProvider>
         </Toaster>

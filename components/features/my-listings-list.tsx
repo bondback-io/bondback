@@ -43,6 +43,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { formatAuctionTimeLeftShort } from "@/components/JobCard";
 import { MyListingsCardMobile } from "@/components/features/my-listings-card-mobile";
@@ -615,6 +616,10 @@ export function MyListingsList({
     listing: ListingRow,
     kind: "active" | "live" | "ended" | "completed"
   ) => {
+    const feePctForListing = resolvePlatformFeePercent(
+      listing.platform_fee_percentage,
+      feePercentage
+    );
     const isJobCard = kind === "active" || kind === "completed";
     const isActiveJob = kind === "active";
     const isLive = kind === "live";
@@ -763,7 +768,7 @@ export function MyListingsList({
     const bedsBathsLine = `${listing.bedrooms} bed · ${listing.bathrooms} bath`;
 
     const jobCents = listing.current_lowest_bid_cents ?? 0;
-    const feeCents = Math.round((jobCents * feePercentage) / 100);
+    const feeCents = Math.round((jobCents * feePctForListing) / 100);
     const totalCents = jobCents + feeCents;
 
     let mobilePriceLabel = "";
@@ -940,7 +945,7 @@ export function MyListingsList({
                     !isDisputedListing &&
                     jobStatus !== "completed" && (
                       <p className="text-xs text-muted-foreground dark:text-gray-400">
-                        Job {formatCents(jobCents)} + {feePercentage}% fee ={" "}
+                        Job {formatCents(jobCents)} + {feePctForListing}% fee ={" "}
                         {formatCents(totalCents)} total
                       </p>
                     )}
@@ -1147,7 +1152,7 @@ export function MyListingsList({
                   </p>
                   {(() => {
                     const jobCents = listing.current_lowest_bid_cents ?? 0;
-                    const feeCents = Math.round((jobCents * feePercentage) / 100);
+                    const feeCents = Math.round((jobCents * feePctForListing) / 100);
                     const totalCents = jobCents + feeCents;
                     return (
                       <div className="mt-2 space-y-1.5 rounded-md border border-emerald-200/80 bg-white/60 px-2 py-2 text-[11px] leading-snug dark:border-emerald-800/50 dark:bg-emerald-950/30 sm:text-xs">
@@ -1158,7 +1163,7 @@ export function MyListingsList({
                           {formatCents(jobCents)}
                         </p>
                         <p className="text-emerald-800/90 dark:text-emerald-300/90">
-                          (excl. {feePercentage}% platform fee:{" "}
+                          (excl. {feePctForListing}% platform fee:{" "}
                           <span className="font-medium tabular-nums">
                             {formatCents(feeCents)}
                           </span>
@@ -1181,7 +1186,7 @@ export function MyListingsList({
                   </p>
                   {(() => {
                     const jobCents = listing.current_lowest_bid_cents ?? 0;
-                    const feeCents = Math.round((jobCents * feePercentage) / 100);
+                    const feeCents = Math.round((jobCents * feePctForListing) / 100);
                     const totalCents = jobCents + feeCents;
                     return (
                       <div className="space-y-2">
@@ -1196,7 +1201,7 @@ export function MyListingsList({
                             {formatCents(jobCents)}
                           </p>
                           <p className="text-emerald-800/90 dark:text-emerald-300/90">
-                            (excl. {feePercentage}% platform fee:{" "}
+                            (excl. {feePctForListing}% platform fee:{" "}
                             <span className="font-medium tabular-nums">
                               {formatCents(feeCents)}
                             </span>

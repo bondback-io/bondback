@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -7,6 +8,12 @@ import type { Database } from "@/types/supabase";
 import { Home } from "lucide-react";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Welcome, lister",
+  description:
+    "Welcome to Bond Back as a property lister — post bond cleaning jobs and compare cleaner bids.",
+};
 
 export default async function ListerWelcomePage() {
   const supabase = await createServerSupabaseClient();

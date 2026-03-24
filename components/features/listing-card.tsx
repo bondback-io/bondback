@@ -474,7 +474,12 @@ export function ListingCard({
       </div>
 
       {/* 2. Main info + Price + CTA — larger padding on mobile for touch */}
-      <CardContent className="flex flex-1 flex-col gap-4 p-6 dark:bg-gray-900 dark:border-t dark:border-gray-800 md:gap-3 md:p-4">
+      <CardContent
+        className={cn(
+          "flex flex-1 flex-col gap-4 p-6 dark:bg-gray-900 dark:border-t dark:border-gray-800 md:gap-3",
+          isCleaner ? "md:gap-4 md:p-5" : "md:p-4"
+        )}
+      >
         {/* Urgency badges — compact row */}
         {(endingInUnder24h || highDemand || (noBidsYet && isLive)) && (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -509,7 +514,12 @@ export function ListingCard({
         {/* Title + location + Photos badge */}
         <div className="space-y-1.5">
           <div className="flex items-start gap-2">
-            <h3 className="line-clamp-2 flex-1 text-xl font-bold leading-snug tracking-tight text-foreground dark:text-gray-100 md:text-base md:font-semibold md:leading-tight">
+            <h3
+              className={cn(
+                "line-clamp-2 flex-1 text-xl font-bold leading-snug tracking-tight text-foreground dark:text-gray-100 md:leading-tight",
+                isCleaner ? "md:text-lg md:font-bold" : "md:text-base md:font-semibold"
+              )}
+            >
               {title}
             </h3>
             {hasPhotos && (
@@ -523,8 +533,13 @@ export function ListingCard({
               </Tooltip>
             )}
           </div>
-          <p className="flex items-center gap-2 text-base text-muted-foreground dark:text-gray-400 md:gap-1.5 md:text-sm">
-            <MapPin className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5" aria-hidden />
+          <p
+            className={cn(
+              "flex items-center gap-2 text-base text-muted-foreground dark:text-gray-400 md:gap-1.5",
+              isCleaner ? "md:text-base" : "md:text-sm"
+            )}
+          >
+            <MapPin className={cn("shrink-0", isCleaner ? "h-5 w-5 md:h-4 md:w-4" : "h-5 w-5 md:h-3.5 md:w-3.5")} aria-hidden />
             <span>
               {formatLocationWithState(listing.suburb, listing.postcode)}
               {distanceKm != null && !Number.isNaN(distanceKm) && (
@@ -537,7 +552,13 @@ export function ListingCard({
         </div>
 
         {/* Quick stats: Beds | Baths | Price range */}
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-0 text-sm text-muted-foreground dark:text-gray-400" aria-label={`${listing.bedrooms ?? "—"} beds, ${listing.bathrooms ?? "—"} baths, price ${priceRangeLabel}`}>
+        <p
+          className={cn(
+            "flex flex-wrap items-center gap-x-3 gap-y-0 text-sm text-muted-foreground dark:text-gray-400",
+            isCleaner && "md:text-base"
+          )}
+          aria-label={`${listing.bedrooms ?? "—"} beds, ${listing.bathrooms ?? "—"} baths, price ${priceRangeLabel}`}
+        >
           <span>Beds: {listing.bedrooms ?? "—"}</span>
           <span aria-hidden>|</span>
           <span>Baths: {listing.bathrooms ?? "—"}</span>
@@ -580,14 +601,21 @@ export function ListingCard({
         )}
 
         {/* Price & urgency row */}
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        <div
+          className={cn(
+            "flex flex-wrap items-end justify-between gap-3",
+            isCleaner &&
+              "rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 dark:border-emerald-800/40 dark:bg-emerald-950/30"
+          )}
+        >
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
               {hasBuyNow && isLive ? "Fixed price" : "Current lowest bid"}
             </p>
             <p
               className={cn(
-                "text-2xl font-bold tabular-nums md:text-xl md:font-bold",
+                "font-bold tabular-nums",
+                isCleaner ? "text-3xl md:text-2xl" : "text-2xl md:text-xl md:font-bold",
                 (isLowPrice || hasBuyNow) && isLive
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-foreground dark:text-gray-100"
@@ -636,14 +664,43 @@ export function ListingCard({
               />
             )}
             {showPlaceBid && isLive && !hideCleanerCancelledAuctionUi ? (
-              <Button asChild className="min-h-10 w-full rounded-lg transition-transform active:scale-[0.98] md:min-h-10" size="default">
-                <Link href={jobHref} className="flex min-h-10 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label={`Bid on ${title}`}>
+              <Button
+                asChild
+                className={cn(
+                  "w-full rounded-xl font-semibold transition-transform active:scale-[0.98]",
+                  isCleaner ? "min-h-12 text-base md:min-h-12" : "min-h-10 rounded-lg md:min-h-10"
+                )}
+                size="default"
+              >
+                <Link
+                  href={jobHref}
+                  className={cn(
+                    "flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    isCleaner ? "min-h-12" : "min-h-10"
+                  )}
+                  aria-label={`Bid on ${title}`}
+                >
                   Bid now
                 </Link>
               </Button>
             ) : (
-              <Button asChild variant="outline" className="min-h-10 w-full rounded-lg transition-transform active:scale-[0.98] dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 md:min-h-10" size="default">
-                <Link href={jobHref} className="flex min-h-10 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label={`View details for ${title}`}>
+              <Button
+                asChild
+                variant="outline"
+                className={cn(
+                  "w-full rounded-xl transition-transform active:scale-[0.98] dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700",
+                  isCleaner ? "min-h-12 text-base font-semibold md:min-h-12" : "min-h-10 rounded-lg md:min-h-10"
+                )}
+                size="default"
+              >
+                <Link
+                  href={jobHref}
+                  className={cn(
+                    "flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    isCleaner ? "min-h-12" : "min-h-10"
+                  )}
+                  aria-label={`View details for ${title}`}
+                >
                   View details
                 </Link>
               </Button>

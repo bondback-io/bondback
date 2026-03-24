@@ -32,3 +32,28 @@ export async function logAdminActivity(payload: AdminActivityPayload): Promise<v
     // Swallow so main action is not affected
   }
 }
+
+/** Lister/other timer actions — admin_id null; actor in details.actor_user_id. */
+export async function logTimerActivity(payload: {
+  actorUserId: string;
+  actionType: string;
+  jobId: number;
+  details?: Record<string, unknown>;
+}): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+  try {
+    await (admin as any).from("admin_activity_log").insert({
+      admin_id: null,
+      action_type: payload.actionType,
+      target_type: "job",
+      target_id: String(payload.jobId),
+      details: {
+        actor_user_id: payload.actorUserId,
+        ...payload.details,
+      },
+    });
+  } catch {
+    /* ignore */
+  }
+}

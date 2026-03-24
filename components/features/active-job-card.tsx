@@ -81,8 +81,8 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
   return (
     <>
       {/* Mobile (&lt;768px): thumb-friendly hero + bold price + large CTAs */}
-      <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-md dark:border-gray-800 dark:bg-gray-950 md:hidden">
-        <div className="relative min-h-[180px] max-h-[220px] h-[200px] w-full overflow-hidden bg-muted dark:bg-gray-800">
+      <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-lg ring-1 ring-border/80 dark:border-gray-800 dark:bg-gray-950 dark:ring-gray-800 md:hidden">
+        <div className="relative h-[220px] min-h-[200px] max-h-[260px] w-full overflow-hidden bg-muted dark:bg-gray-800">
           <Link
             href={jobHref}
             className="absolute inset-0 z-0 block"
@@ -110,10 +110,10 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 shrink-0 rounded-full bg-background/90 text-muted-foreground hover:bg-background dark:bg-gray-900/90"
+                  className="h-12 w-12 shrink-0 rounded-full bg-background/95 text-muted-foreground shadow-md hover:bg-background dark:bg-gray-900/95"
                   aria-label="Open job actions menu"
                 >
-                  <MoreVertical className="h-5 w-5" />
+                  <MoreVertical className="h-6 w-6" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48">
@@ -145,56 +145,63 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 border-t border-border px-4 pb-5 pt-4 dark:border-gray-800">
-          <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+        <div className="flex flex-col gap-5 border-t border-border px-4 pb-6 pt-5 dark:border-gray-800 sm:px-5">
+          <h3 className="line-clamp-2 text-xl font-bold leading-tight tracking-tight text-foreground dark:text-gray-50">
+            {title}
+          </h3>
+
+          <div className="rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.12] to-transparent p-4 dark:border-emerald-800/50 dark:from-emerald-950/45">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800/90 dark:text-emerald-400/90">
               Job price
             </p>
-            <p className="text-4xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
+            <p className="text-5xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
               {listing ? formatCents(listing.current_lowest_bid_cents ?? 0) : "—"}
             </p>
             <div
               className={cn(
-                "inline-flex w-fit max-w-full rounded-xl border-2 px-3 py-2 text-base font-bold leading-tight",
+                "mt-3 inline-flex w-fit max-w-full rounded-xl border-2 px-3 py-2.5 text-lg font-bold leading-tight",
                 statusPillClass
               )}
             >
               {statusLine}
             </div>
             {daysLeft != null && (
-              <p className="text-sm font-medium text-muted-foreground dark:text-gray-400">{daysLeft} days left</p>
+              <p className="mt-2 text-base font-semibold text-muted-foreground dark:text-gray-400">
+                {daysLeft} days left
+              </p>
             )}
           </div>
 
-          <p className="line-clamp-2 text-base font-semibold leading-snug text-foreground dark:text-gray-100">{title}</p>
           {listing && (
-            <p className="flex items-center gap-1 text-base text-muted-foreground dark:text-gray-400">
-              <MapPin className="h-4 w-4 shrink-0" aria-hidden />
-              {formatLocationWithState(listing.suburb, listing.postcode)}
-            </p>
+            <div className="space-y-1">
+              <p className="flex items-center gap-2 text-lg font-semibold text-foreground dark:text-gray-100">
+                <MapPin className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-500" aria-hidden />
+                {formatLocationWithState(listing.suburb, listing.postcode)}
+              </p>
+              {bedsBaths && (
+                <p className="text-base text-muted-foreground dark:text-gray-400">{bedsBaths}</p>
+              )}
+            </div>
           )}
-          {bedsBaths && (
-            <p className="text-base text-muted-foreground dark:text-gray-500">{bedsBaths}</p>
-          )}
-          <p className="text-xs text-muted-foreground dark:text-gray-500">
+          <p className="text-xs leading-relaxed text-muted-foreground dark:text-gray-500">
             Price includes 12% platform fee paid by the lister
           </p>
 
-          <div className="flex flex-col gap-3 pt-1">
+          <div className="flex flex-col gap-3.5 pt-1">
             {isDisputed && (
               <Button
                 variant="destructive"
                 size="lg"
-                className="min-h-12 w-full rounded-xl text-base font-semibold"
+                className="min-h-14 w-full rounded-xl text-lg font-semibold"
                 type="button"
                 onClick={() => router.push(`${jobHref}#dispute`)}
               >
                 View Dispute
               </Button>
             )}
-            <Button asChild size="lg" className="min-h-12 w-full rounded-xl text-base font-semibold shadow-md">
+            <Button asChild size="lg" className="min-h-14 w-full rounded-xl text-lg font-semibold shadow-md">
               <Link href={jobHref} className="flex items-center justify-center gap-2">
-                <Eye className="h-5 w-5 shrink-0" aria-hidden />
+                <Eye className="h-6 w-6 shrink-0" aria-hidden />
                 View job
               </Link>
             </Button>
@@ -202,10 +209,10 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
               asChild
               size="lg"
               variant="secondary"
-              className="min-h-12 w-full rounded-xl text-base font-semibold dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+              className="min-h-14 w-full rounded-xl text-lg font-semibold dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
             >
               <Link href={`/messages?job=${job.id}`} className="flex items-center justify-center gap-2">
-                <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
+                <MessageCircle className="h-6 w-6 shrink-0" aria-hidden />
                 Message lister
               </Link>
             </Button>
@@ -282,21 +289,23 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
             </DropdownMenu>
           </div>
         </div>
-        <div className="flex flex-1 flex-col gap-2 p-3">
-          <p className="line-clamp-2 font-semibold text-foreground dark:text-gray-100">{title}</p>
+        <div className="flex flex-1 flex-col gap-3 p-4">
+          <p className="line-clamp-2 text-base font-bold text-foreground dark:text-gray-100">{title}</p>
           {listing && (
-            <p className="flex items-center gap-1 text-xs text-muted-foreground dark:text-gray-400">
-              <MapPin className="h-3 w-3 shrink-0" aria-hidden />
+            <p className="flex items-center gap-1.5 text-sm text-muted-foreground dark:text-gray-400">
+              <MapPin className="h-4 w-4 shrink-0" aria-hidden />
               {formatLocationWithState(listing.suburb, listing.postcode)}
             </p>
           )}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             {listing && (
               <>
-                <span className="text-base font-bold tabular-nums text-foreground dark:text-gray-100">
+                <span className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
                   {formatCents(listing.current_lowest_bid_cents ?? 0)}
                 </span>
-                <span className="text-[10px] text-muted-foreground dark:text-gray-500">Price includes 12% platform fee paid by the lister</span>
+                <span className="max-w-[14rem] text-xs leading-snug text-muted-foreground dark:text-gray-500">
+                  Price includes 12% platform fee paid by the lister
+                </span>
               </>
             )}
             {daysLeft != null && (

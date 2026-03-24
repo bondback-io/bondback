@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
@@ -18,16 +19,21 @@ import {
   ChevronDown,
   CheckCircle2,
 } from "lucide-react";
-import { getProfileCompletion } from "@/lib/profile-completion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Cleaner dashboard",
+  description:
+    "Your Bond Back cleaner dashboard — browse bids, active bond cleans, and completed end of lease jobs in Australia.",
+  alternates: { canonical: "/cleaner/dashboard" },
+  robots: { index: false, follow: true },
+};
 
 export default async function CleanerDashboardPage() {
   const supabase = await createServerSupabaseClient();
@@ -144,18 +150,6 @@ export default async function CleanerDashboardPage() {
   const showWelcomeBanner =
     createdAtMs > 0 && nowMs - createdAtMs < welcomeWithinMs;
 
-  const portfolioCount = Array.isArray(profile.portfolio_photo_urls)
-    ? profile.portfolio_photo_urls.length
-    : 0;
-  const showPhotoProgressNudge = portfolioCount === 0;
-
-  const completion = getProfileCompletion({
-    ...profile,
-    active_role: "cleaner",
-  } as ProfileRow);
-  const showCompletionFallbackNudge =
-    !showPhotoProgressNudge && completion.percent < 100;
-
   return (
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
       {/* Mobile: title — sticky; desktop: title only (job search / radius lives on /jobs) */}
@@ -187,59 +181,6 @@ export default async function CleanerDashboardPage() {
               You&apos;re set up as a cleaner — add portfolio photos and browse jobs to land your first bond clean.
             </CardDescription>
           </CardHeader>
-        </Card>
-      )}
-
-      {showPhotoProgressNudge && (
-        <Card className="border-amber-200/90 bg-amber-50/50 dark:border-amber-800/60 dark:bg-amber-950/25">
-          <CardContent className="space-y-4 pt-5 sm:pt-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <p className="text-lg font-semibold text-foreground dark:text-gray-100 sm:text-base">
-                  75% complete — add photos to win more jobs
-                </p>
-                <p className="text-sm text-muted-foreground dark:text-gray-400">
-                  Portfolio photos help listers trust your work — upload before/after shots from past bond cleans.
-                </p>
-              </div>
-              <Button
-                asChild
-                size="lg"
-                className="h-12 w-full shrink-0 px-6 text-base font-semibold sm:h-11 sm:w-auto"
-              >
-                <Link href="/profile">Add photos</Link>
-              </Button>
-            </div>
-            <Progress value={75} className="h-3" />
-          </CardContent>
-        </Card>
-      )}
-
-      {showCompletionFallbackNudge && (
-        <Card className="border-sky-200/80 bg-sky-50/40 dark:border-sky-800/50 dark:bg-sky-950/20">
-          <CardContent className="space-y-4 pt-5 sm:pt-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <p className="text-lg font-semibold text-foreground dark:text-gray-100 sm:text-base">
-                  {completion.percent}% complete
-                </p>
-                {completion.message && (
-                  <p className="text-sm text-muted-foreground dark:text-gray-400">
-                    {completion.message}
-                  </p>
-                )}
-              </div>
-              <Button
-                asChild
-                size="lg"
-                variant="secondary"
-                className="h-12 w-full shrink-0 px-6 text-base font-semibold sm:h-11 sm:w-auto"
-              >
-                <Link href="/profile">Finish profile</Link>
-              </Button>
-            </div>
-            <Progress value={completion.percent} className="h-3" />
-          </CardContent>
         </Card>
       )}
 

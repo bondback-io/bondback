@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -7,6 +8,12 @@ import { RoleChoiceClient } from "@/components/onboarding/role-choice-client";
  * Auth-only: user arrives after `/signup` (or `/dashboard` when `roles` is empty).
  * `?ref=` is still accepted on `/signup`; referral is applied in minimal profile upsert.
  */
+export const metadata: Metadata = {
+  title: "Choose your role",
+  description:
+    "Choose lister or cleaner to continue onboarding on Bond Back — bond cleaning and end of lease jobs.",
+};
+
 export default async function RoleChoicePage() {
   const supabase = await createServerSupabaseClient();
   const {

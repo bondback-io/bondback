@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -19,6 +20,14 @@ import { SettingsPaymentReturnHandler } from "@/components/settings/settings-pay
 import type { DistanceUnitPref, ThemePreference } from "@/lib/types";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Account & profile",
+  description:
+    "Manage your Bond Back profile, payments, notifications, and preferences for bond cleaning jobs in Australia.",
+  alternates: { canonical: "/profile" },
+  robots: { index: false, follow: true },
+};
 
 type ProfileSearchParams = {
   tab?: string;

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
@@ -9,6 +10,14 @@ import type { Database } from "@/types/supabase";
 import { Home, LogIn } from "lucide-react";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Post a bond cleaning job",
+  description:
+    "Create a new bond cleaning or end of lease listing on Bond Back — set reserve, receive cleaner bids, and get your bond back.",
+  alternates: { canonical: "/listings/new" },
+  robots: { index: false, follow: true },
+};
 
 const NewListingPage = async () => {
   const supabase = await createServerSupabaseClient();

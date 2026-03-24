@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -30,6 +30,11 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import type { ActiveRole } from "@/lib/notifications/notification-role-filter";
+import {
+  filterNotificationsForActiveRole,
+  prependNotificationDeduped,
+} from "@/lib/notifications/notification-role-filter";
 
 const RECENT_LIMIT = 15;
 
@@ -37,6 +42,8 @@ type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
 export type NotificationBellProps = {
   userId: string;
+  /** When set, hide notifications that belong to the other role (dual lister/cleaner accounts). */
+  activeRole?: ActiveRole;
   variant?: "icon" | "row";
 };
 
@@ -83,17 +90,26 @@ function labelForType(type: NotificationRow["type"]): string {
   }
 }
 
-export function NotificationBell({ userId, variant = "icon" }: NotificationBellProps) {
+export function NotificationBell({
+  userId,
+  activeRole = null,
+  variant = "icon",
+}: NotificationBellProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  const displayedNotifications = useMemo(
+    () => filterNotificationsForActiveRole(notifications, activeRole ?? null),
+    [notifications, activeRole]
+  );
+  const unreadCount = useMemo(
+    () => displayedNotifications.filter((n) => !n.is_read).length,
+    [displayedNotifications]
+  );
   const toastRef = useRef(toast);
   toastRef.current = toast;
-  const routerRef = useRef(router);
-  routerRef.current = router;
-
   const loadNotifications = useCallback(async () => {
     const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase
@@ -111,13 +127,18 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
         console.warn("[NotificationBell] load error:", error.message);
       }
       setNotifications([]);
-      setUnreadCount(0);
       setLoading(false);
       return;
     }
     if (data) {
-      setNotifications(data as NotificationRow[]);
-      setUnreadCount(data.filter((n) => !(n as NotificationRow).is_read).length);
+      const rows = data as NotificationRow[];
+      const seen = new Set<string>();
+      const deduped = rows.filter((n) => {
+        if (seen.has(n.id)) return false;
+        seen.add(n.id);
+        return true;
+      });
+      setNotifications(deduped);
     }
     setLoading(false);
   }, [userId]);
@@ -145,9 +166,12 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
         },
         (payload) => {
           const row = payload.new as NotificationRow;
-          setNotifications((prev) => [row, ...prev].slice(0, RECENT_LIMIT));
-          setUnreadCount((prev) => prev + (row.is_read ? 0 : 1));
-          routerRef.current.refresh();
+          setNotifications((prev) =>
+            prependNotificationDeduped(prev, row, RECENT_LIMIT)
+          );
+          const visibleForRole =
+            filterNotificationsForActiveRole([row], activeRole ?? null).length > 0;
+          if (!visibleForRole) return;
           const isDisputeNotif = row.type === "dispute_opened" || row.type === "dispute_resolved";
           const title =
             row.type === "new_message" && row.job_id != null
@@ -185,7 +209,7 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
       window.clearInterval(pollId);
       supabase.removeChannel(channel);
     };
-  }, [userId, loadNotifications]);
+  }, [userId, loadNotifications, activeRole]);
 
   const handleClickNotification = async (n: NotificationRow) => {
     if (!n.is_read) {
@@ -193,7 +217,6 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
       setNotifications((prev) =>
         prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x))
       );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
     }
     if (n.job_id) {
       const isDispute = n.type === "dispute_opened" || n.type === "dispute_resolved";
@@ -206,7 +229,6 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
   const handleMarkAll = async () => {
     await markAllNotificationsRead();
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    setUnreadCount(0);
   };
 
   const triggerContent =
@@ -273,14 +295,14 @@ export function NotificationBell({ userId, variant = "icon" }: NotificationBellP
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             Loading…
           </div>
-        ) : notifications.length === 0 ? (
+        ) : displayedNotifications.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             No new notifications
           </div>
         ) : (
           <ScrollArea className="h-[min(60vh,320px)]">
             <div className="p-1">
-              {notifications.map((n) => (
+              {displayedNotifications.map((n) => (
                 <DropdownMenuItem
                   key={n.id}
                   onClick={() => handleClickNotification(n)}

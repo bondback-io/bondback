@@ -11,12 +11,11 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
   CartesianGrid,
-  Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -92,8 +91,6 @@ export type EarningsPageProps = {
   nextPayoutEstimateIso: string;
 };
 
-const PLATFORM_FEE_RATE = 0.12;
-
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -139,9 +136,7 @@ function buildEarningsCsv(
     "Job ID",
     "Job Title",
     "Date Completed",
-    "Gross Amount",
-    "Platform Fee (12%, paid by lister)",
-    "Net Amount",
+    "Your earnings (AUD)",
     "Payout Date",
     "Status",
   ];
@@ -149,25 +144,12 @@ function buildEarningsCsv(
     t.jobId,
     t.title,
     formatDateDDMMYYYY(t.payoutDate ?? t.date),
-    formatCentsTax(t.grossCents),
-    formatCentsTax(t.feeCents),
     formatCentsTax(t.netCents),
     formatDateDDMMYYYY(t.payoutDate),
     t.status,
   ]);
-  const totalGross = paid.reduce((s, t) => s + t.grossCents, 0);
-  const totalFee = paid.reduce((s, t) => s + t.feeCents, 0);
   const totalNet = paid.reduce((s, t) => s + t.netCents, 0);
-  const totalsRow = [
-    "",
-    "TOTAL",
-    "",
-    formatCentsTax(totalGross),
-    formatCentsTax(totalFee),
-    formatCentsTax(totalNet),
-    "",
-    "",
-  ];
+  const totalsRow = ["", "TOTAL", "", formatCentsTax(totalNet), "", ""];
   const allRows = [headers, ...rows.map((r) => r.map(String)), totalsRow];
   const csv = allRows
     .map((row) => row.map(escapeCsvField).join(","))
@@ -197,9 +179,6 @@ function useIsDark() {
 }
 
 const INITIAL_ROWS = 10;
-
-const FEE_EXPLANATION =
-  "You will receive the full bid amount. The lister pays the platform fee separately.";
 
 export function EarningsPageClient({
   totalEarningsCents,
@@ -262,20 +241,18 @@ export function EarningsPageClient({
     const filtered =
       range === "all" ? events : events.filter((e) => e.dateObj >= start);
 
-    const byMonth = new Map<string, { grossCents: number; netCents: number }>();
+    const byMonth = new Map<string, { netCents: number }>();
     filtered.forEach((e) => {
       const key = format(e.dateObj, "MMM yyyy");
-      const cur = byMonth.get(key) ?? { grossCents: 0, netCents: 0 };
+      const cur = byMonth.get(key) ?? { netCents: 0 };
       byMonth.set(key, {
-        grossCents: cur.grossCents + e.grossCents,
         netCents: cur.netCents + e.netCents,
       });
     });
     return Array.from(byMonth.entries())
       .map(([label, v]) => ({
         label,
-        gross: v.grossCents / 100,
-        net: v.netCents / 100,
+        earnings: v.netCents / 100,
       }))
       .sort(
         (a, b) =>
@@ -305,31 +282,30 @@ export function EarningsPageClient({
 
   if (isEmpty) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 pb-24 md:pb-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground dark:text-gray-100 md:text-3xl">
             My Earnings
           </h1>
           <p className="mt-1 text-sm text-muted-foreground dark:text-gray-400">
-            Your earnings and payout history as a cleaner.
+            Track what you&apos;ve earned from completed bond cleans.
           </p>
         </div>
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted dark:bg-gray-800">
-              <span className="text-2xl" aria-hidden>
+          <CardContent className="flex flex-col items-center justify-center px-4 py-14 text-center sm:py-16">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 dark:bg-emerald-950/50">
+              <span className="text-3xl" aria-hidden>
                 💰
               </span>
             </div>
-            <h2 className="mt-4 text-lg font-semibold text-foreground dark:text-gray-100">
+            <h2 className="mt-5 text-lg font-semibold text-foreground dark:text-gray-100">
               No earnings yet
             </h2>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground dark:text-gray-400">
-              Start bidding on bond clean jobs. When you win and complete jobs,
-              your earnings will appear here and you can track payouts.
+            <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
+              Win jobs, complete cleans, and get paid — your totals will show up here.
             </p>
-            <Button asChild className="mt-6" size="lg">
-              <Link href="/jobs">Browse Available Jobs</Link>
+            <Button asChild className="mt-8 min-h-12 w-full max-w-xs rounded-xl text-base font-semibold sm:w-auto" size="lg">
+              <Link href="/jobs">Browse jobs</Link>
             </Button>
           </CardContent>
         </Card>
@@ -343,164 +319,93 @@ export function EarningsPageClient({
       : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 pb-24 md:space-y-6 md:pb-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground dark:text-gray-100 md:text-3xl">
           My Earnings
         </h1>
         <p className="mt-1 text-sm text-muted-foreground dark:text-gray-400">
-          Transparent overview of your earnings, fees and payouts.
+          See what you&apos;ve earned from completed bond cleans.
         </p>
-        <div className="mt-3 space-y-1 text-sm text-muted-foreground dark:text-gray-400">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span>
-              Your payout schedule: <strong className="font-medium text-foreground dark:text-gray-200">{payoutScheduleLabel}</strong>
-            </span>
-            {nextPayoutFormatted && (
-              <span>Next payout estimate: {nextPayoutFormatted}</span>
-            )}
+        <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4 dark:border-gray-800 dark:bg-gray-900/50">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="space-y-1 text-sm text-muted-foreground dark:text-gray-400">
+              <p>
+                Payout schedule:{" "}
+                <strong className="font-medium text-foreground dark:text-gray-200">{payoutScheduleLabel}</strong>
+              </p>
+              {nextPayoutFormatted && (
+                <p>Next estimated payout: {nextPayoutFormatted}</p>
+              )}
+            </div>
             <Link
               href="/profile?tab=payments"
-              className="text-primary underline-offset-4 hover:underline"
+              className="inline-flex min-h-11 min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 text-sm font-semibold text-primary underline-offset-4 hover:bg-primary/10 hover:underline dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-400"
             >
-              Edit
+              Payment settings
             </Link>
           </div>
-          <p className="text-xs">
-            Automatic payout scheduled (2–7 days). Want it faster? Use &quot;Withdraw Now&quot; in Settings → Payments (1% fee).
+          <p className="mt-3 text-xs text-muted-foreground dark:text-gray-500">
+            Automatic payouts typically land in 2–7 business days. For faster access, use{" "}
+            <span className="font-medium text-foreground dark:text-gray-200">Withdraw now</span> in Settings → Payments (1% fee).
           </p>
         </div>
       </div>
 
-      {/* Gross / Fee / Net breakdown card — prominent */}
-      <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base dark:text-gray-100 md:text-lg">
-            Lifetime earnings breakdown
-          </CardTitle>
-          <p className="text-xs text-muted-foreground dark:text-gray-400">
-            You will receive the full bid amount. The lister pays the platform fee separately.
+      <Card className="overflow-hidden border-border shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <CardContent className="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent px-5 py-8 dark:from-emerald-950/40 dark:via-emerald-950/20 sm:px-8 sm:py-10">
+          <p className="text-xs font-medium uppercase tracking-wide text-emerald-800 dark:text-emerald-400/90">
+            Total paid to you
           </p>
-        </CardHeader>
-        <CardContent>
-          <TooltipProvider delayDuration={200}>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/40">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-                  Gross earnings
-                </p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums text-muted-foreground dark:text-gray-400 sm:text-3xl">
-                  {formatCents(periodBreakdown.lifetime.grossCents)}
-                </p>
-                <p className="text-[11px] text-muted-foreground dark:text-gray-500">
-                  Total before fees
-                </p>
-              </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="cursor-help rounded-lg border border-muted bg-muted/50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-                      Platform fee (12%)
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums text-muted-foreground dark:text-gray-400 sm:text-3xl">
-                      {formatCents(periodBreakdown.lifetime.feeCents)}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground dark:text-gray-500">
-                      Paid by lister
-                    </p>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs text-xs">
-                  {FEE_EXPLANATION}
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="cursor-help rounded-lg border border-emerald-200 bg-emerald-50/50 px-4 py-3 dark:border-emerald-800/50 dark:bg-emerald-950/30">
-                    <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                      Net earnings
-                    </p>
-                    <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400 sm:text-4xl">
-                      {formatCents(periodBreakdown.lifetime.netCents)}
-                    </p>
-                    <p className="text-[11px] text-emerald-700/90 dark:text-emerald-400/80">
-                      Full bid amount (lister pays platform fee separately)
-                    </p>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs text-xs">
-                  {FEE_EXPLANATION}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
+          <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-emerald-700 dark:text-emerald-400 sm:text-5xl">
+            {formatCents(totalEarningsCents)}
+          </p>
+          <p className="mt-2 max-w-md text-sm text-muted-foreground dark:text-gray-400">
+            Lifetime earnings from completed jobs — amounts shown are what you receive.
+          </p>
         </CardContent>
       </Card>
 
-      {/* Quick stats */}
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <CardContent className="p-4">
+          <CardContent className="p-4 sm:p-5">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-              This Month
+              This month
             </p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground dark:text-gray-100">
               {formatCents(thisMonthCents)}
             </p>
             <p className="text-[11px] text-muted-foreground dark:text-gray-500">
-              Net
+              Your earnings
             </p>
           </CardContent>
         </Card>
         <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <CardContent className="p-4">
+          <CardContent className="p-4 sm:p-5">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-              Pending Payouts
+              Pending payouts
             </p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-amber-600 dark:text-amber-400">
               {formatCents(pendingPayoutsCents)}
             </p>
             <p className="text-[11px] text-muted-foreground dark:text-gray-500">
-              Held until job approved
+              Held until the job is approved
             </p>
           </CardContent>
         </Card>
         <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <CardContent className="p-4">
+          <CardContent className="p-4 sm:p-5">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-              Avg per Job
+              Avg per job
             </p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground dark:text-gray-100">
               {formatCents(averagePerJobCents)}
             </p>
             <p className="text-[11px] text-muted-foreground dark:text-gray-500">
-              Net
+              Your earnings
             </p>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Tax CSV export */}
-      <div className="flex flex-col gap-2">
-        <Button
-          variant="secondary"
-          size="lg"
-          onClick={handleExportTaxCsv}
-          disabled={exportingCsv}
-          className="w-full sm:w-auto"
-        >
-          {exportingCsv ? (
-            "Preparing…"
-          ) : (
-            <>
-              <Download className="mr-2 h-4 w-4" />
-              Export Earnings for Tax (CSV)
-            </>
-          )}
-        </Button>
-        <p className="text-xs text-muted-foreground dark:text-gray-500">
-          For tax purposes only – contains only your earnings data.
-        </p>
       </div>
 
       {/* Upcoming & Recent Payouts */}
@@ -528,7 +433,7 @@ export function EarningsPageClient({
               {upcomingPayouts.map((item) => (
                 <li
                   key={item.jobId}
-                  className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/40 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
+                  className="flex min-h-[52px] flex-col gap-2 rounded-xl border border-border bg-muted/20 px-4 py-3.5 dark:border-gray-700 dark:bg-gray-800/40 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
                 >
                   <div className="min-w-0 flex-1">
                     <Link
@@ -538,7 +443,7 @@ export function EarningsPageClient({
                       {item.title}
                     </Link>
                     <p className="mt-0.5 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                      {formatCents(item.netCents)} net
+                      {formatCents(item.netCents)}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -604,27 +509,39 @@ export function EarningsPageClient({
 
       {/* Chart */}
       <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
-        <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
+        <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base dark:text-gray-100 md:text-lg">
-              Earnings Over Time
+              Earnings over time
             </CardTitle>
             <p className="text-xs text-muted-foreground dark:text-gray-400">
-              Gross vs net (after platform fee)
+              Your earnings by month
             </p>
           </div>
           <Tabs value={range} onValueChange={(v) => setRange(v as typeof range)}>
-            <TabsList className="dark:bg-gray-800">
-              <TabsTrigger value="3m" className="dark:data-[state=active]:bg-gray-700">
+            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 p-1 dark:bg-gray-800 sm:w-auto">
+              <TabsTrigger
+                value="3m"
+                className="min-h-10 min-w-[44px] px-2 text-xs sm:text-sm dark:data-[state=active]:bg-gray-700"
+              >
                 3M
               </TabsTrigger>
-              <TabsTrigger value="6m" className="dark:data-[state=active]:bg-gray-700">
+              <TabsTrigger
+                value="6m"
+                className="min-h-10 min-w-[44px] px-2 text-xs sm:text-sm dark:data-[state=active]:bg-gray-700"
+              >
                 6M
               </TabsTrigger>
-              <TabsTrigger value="12m" className="dark:data-[state=active]:bg-gray-700">
+              <TabsTrigger
+                value="12m"
+                className="min-h-10 min-w-[44px] px-2 text-xs sm:text-sm dark:data-[state=active]:bg-gray-700"
+              >
                 12M
               </TabsTrigger>
-              <TabsTrigger value="all" className="dark:data-[state=active]:bg-gray-700">
+              <TabsTrigger
+                value="all"
+                className="min-h-10 min-w-[44px] px-2 text-xs sm:text-sm dark:data-[state=active]:bg-gray-700"
+              >
                 All
               </TabsTrigger>
             </TabsList>
@@ -677,37 +594,17 @@ export function EarningsPageClient({
                       color: isDark ? "#f3f4f6" : undefined,
                       fontSize: 12,
                     }}
-                    formatter={(value, name) => [
-                      `$${Number(value).toFixed(0)}`,
-                      name === "net" ? "Net Earnings (after 12% fee)" : "Gross Earnings",
-                    ]}
+                    formatter={(value) => [`$${Number(value).toFixed(0)}`, "Your earnings"]}
                     labelFormatter={(label) => label}
                   />
-                  <Legend
-                    wrapperStyle={{ fontSize: 12 }}
-                    formatter={(value) =>
-                      value === "net" ? "Net Earnings (after 12% fee)" : "Gross Earnings"
-                    }
-                    iconType="line"
-                    iconSize={8}
-                  />
                   <Line
                     type="monotone"
-                    dataKey="gross"
-                    name="gross"
-                    stroke={isDark ? "#6b7280" : "#9ca3af"}
-                    strokeWidth={1.5}
-                    dot={false}
-                    activeDot={{ r: 4 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="net"
-                    name="net"
+                    dataKey="earnings"
+                    name="earnings"
                     stroke={isDark ? "#4ade80" : "#22c55e"}
                     strokeWidth={2}
                     dot={{ r: 2 }}
-                    activeDot={{ r: 4 }}
+                    activeDot={{ r: 5 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -716,180 +613,189 @@ export function EarningsPageClient({
         </CardContent>
       </Card>
 
-      {/* Period breakdown table */}
       <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
         <CardHeader className="pb-2">
           <CardTitle className="text-base dark:text-gray-100 md:text-lg">
             Earnings by period
           </CardTitle>
-          <TooltipProvider delayDuration={200}>
-            <p className="text-xs text-muted-foreground dark:text-gray-400">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="cursor-help underline decoration-dotted underline-offset-2">
-                    Platform fee of 12% covers payment processing, support, and escrow protection.
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs text-xs">
-                  {FEE_EXPLANATION}
-                </TooltipContent>
-              </Tooltip>
-            </p>
-          </TooltipProvider>
+          <p className="text-xs text-muted-foreground dark:text-gray-400">
+            Totals are what you earn from completed work.
+          </p>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="dark:border-gray-800 dark:hover:bg-transparent">
-                <TableHead className="dark:text-gray-300">Period</TableHead>
-                <TableHead className="text-right dark:text-gray-300">Gross</TableHead>
-                <TableHead className="text-right dark:text-gray-300">Fee</TableHead>
-                <TableHead className="text-right dark:text-gray-300">Net</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow className="dark:border-gray-800 dark:hover:bg-gray-800/50">
-                <TableCell className="font-medium dark:text-gray-200">This Month</TableCell>
-                <TableCell className="text-right tabular-nums dark:text-gray-300">
-                  {formatCents(periodBreakdown.thisMonth.grossCents)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground dark:text-gray-400">
-                  {formatCents(periodBreakdown.thisMonth.feeCents)} (lister)
-                </TableCell>
-                <TableCell className="text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
-                  {formatCents(periodBreakdown.thisMonth.netCents)}
-                </TableCell>
-              </TableRow>
-              <TableRow className="dark:border-gray-800 dark:hover:bg-gray-800/50">
-                <TableCell className="font-medium dark:text-gray-200">Last 30 Days</TableCell>
-                <TableCell className="text-right tabular-nums dark:text-gray-300">
-                  {formatCents(periodBreakdown.last30Days.grossCents)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground dark:text-gray-400">
-                  {formatCents(periodBreakdown.last30Days.feeCents)} (lister)
-                </TableCell>
-                <TableCell className="text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
-                  {formatCents(periodBreakdown.last30Days.netCents)}
-                </TableCell>
-              </TableRow>
-              <TableRow className="dark:border-gray-800 dark:hover:bg-gray-800/50">
-                <TableCell className="font-medium dark:text-gray-200">Year to Date</TableCell>
-                <TableCell className="text-right tabular-nums dark:text-gray-300">
-                  {formatCents(periodBreakdown.ytd.grossCents)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground dark:text-gray-400">
-                  {formatCents(periodBreakdown.ytd.feeCents)} (lister)
-                </TableCell>
-                <TableCell className="text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
-                  {formatCents(periodBreakdown.ytd.netCents)}
-                </TableCell>
-              </TableRow>
-              <TableRow className="dark:border-gray-800 dark:hover:bg-gray-800/50">
-                <TableCell className="font-medium dark:text-gray-200">Lifetime</TableCell>
-                <TableCell className="text-right tabular-nums dark:text-gray-300">
-                  {formatCents(periodBreakdown.lifetime.grossCents)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground dark:text-gray-400">
-                  {formatCents(periodBreakdown.lifetime.feeCents)} (lister)
-                </TableCell>
-                <TableCell className="text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
-                  {formatCents(periodBreakdown.lifetime.netCents)}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+        <CardContent className="space-y-3">
+          <ul className="space-y-2 md:hidden">
+            {(
+              [
+                { label: "This month", cents: periodBreakdown.thisMonth.netCents },
+                { label: "Last 30 days", cents: periodBreakdown.last30Days.netCents },
+                { label: "Year to date", cents: periodBreakdown.ytd.netCents },
+                { label: "Lifetime", cents: periodBreakdown.lifetime.netCents },
+              ] as const
+            ).map((row) => (
+              <li
+                key={row.label}
+                className="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/40"
+              >
+                <span className="text-sm font-medium text-foreground dark:text-gray-200">{row.label}</span>
+                <span className="text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  {formatCents(row.cents)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="dark:border-gray-800 dark:hover:bg-transparent">
+                  <TableHead className="dark:text-gray-300">Period</TableHead>
+                  <TableHead className="text-right dark:text-gray-300">Your earnings</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow className="dark:border-gray-800 dark:hover:bg-gray-800/50">
+                  <TableCell className="font-medium dark:text-gray-200">This month</TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+                    {formatCents(periodBreakdown.thisMonth.netCents)}
+                  </TableCell>
+                </TableRow>
+                <TableRow className="dark:border-gray-800 dark:hover:bg-gray-800/50">
+                  <TableCell className="font-medium dark:text-gray-200">Last 30 days</TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+                    {formatCents(periodBreakdown.last30Days.netCents)}
+                  </TableCell>
+                </TableRow>
+                <TableRow className="dark:border-gray-800 dark:hover:bg-gray-800/50">
+                  <TableCell className="font-medium dark:text-gray-200">Year to date</TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+                    {formatCents(periodBreakdown.ytd.netCents)}
+                  </TableCell>
+                </TableRow>
+                <TableRow className="dark:border-gray-800 dark:hover:bg-gray-800/50">
+                  <TableCell className="font-medium dark:text-gray-200">Lifetime</TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+                    {formatCents(periodBreakdown.lifetime.netCents)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Transaction history */}
       <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
         <CardHeader>
           <CardTitle className="text-base dark:text-gray-100 md:text-lg">
-            Transaction History
+            Transaction history
           </CardTitle>
           <p className="text-xs text-muted-foreground dark:text-gray-400">
-            Sort by date or net amount using the column headers.
+            Tap column headers on desktop to sort by date or amount.
           </p>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="dark:border-gray-800 dark:hover:bg-transparent">
-                <TableHead className="dark:text-gray-300">Job</TableHead>
-                <TableHead className="dark:text-gray-300">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSortBy("date");
-                      setSortDesc((d) => (sortBy === "date" ? !d : true));
-                    }}
-                    className="font-medium underline-offset-2 hover:underline dark:text-gray-300"
-                  >
-                    Date {sortBy === "date" ? (sortDesc ? "↓" : "↑") : ""}
-                  </button>
-                </TableHead>
-                <TableHead className="text-right dark:text-gray-300">Gross</TableHead>
-                <TableHead className="text-right dark:text-gray-300">Fee (12%, paid by lister)</TableHead>
-                <TableHead className="text-right dark:text-gray-300">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSortBy("amount");
-                      setSortDesc((d) => (sortBy === "amount" ? !d : true));
-                    }}
-                    className="font-medium underline-offset-2 hover:underline dark:text-gray-300"
-                  >
-                    Net {sortBy === "amount" ? (sortDesc ? "↓" : "↑") : ""}
-                  </button>
-                </TableHead>
-                <TableHead className="dark:text-gray-300">Status</TableHead>
-                <TableHead className="dark:text-gray-300">Payout</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleTransactions.map((tx) => (
-                <TableRow key={tx.jobId}>
-                  <TableCell className="font-medium dark:text-gray-100">
+          <ul className="space-y-2 lg:hidden">
+            {visibleTransactions.map((tx) => (
+              <li
+                key={tx.jobId}
+                className="rounded-xl border border-border bg-muted/20 p-4 dark:border-gray-700 dark:bg-gray-800/40"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
                     <Link
                       href={`/jobs/${tx.jobId}`}
-                      className="text-foreground underline hover:no-underline dark:text-emerald-300 dark:hover:text-emerald-200"
+                      className="text-base font-medium text-foreground underline-offset-2 hover:underline dark:text-emerald-300"
                     >
-                      {tx.title.length > 28 ? `${tx.title.slice(0, 28)}…` : tx.title}
+                      {tx.title.length > 40 ? `${tx.title.slice(0, 40)}…` : tx.title}
                     </Link>
-                    <span className="ml-1 text-muted-foreground dark:text-gray-500">
-                      #{tx.jobId}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground dark:text-gray-400">
-                    {format(new Date(tx.date), "d MMM yyyy")}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums dark:text-gray-200">
-                    {formatCents(tx.grossCents)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground dark:text-gray-400">
-                    {formatCents(tx.feeCents)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums font-medium dark:text-gray-100">
+                    <p className="mt-1 text-xs text-muted-foreground dark:text-gray-500">
+                      #{tx.jobId} · {format(new Date(tx.date), "d MMM yyyy")}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
                     {formatCents(tx.netCents)}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={tx.status} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground dark:text-gray-400">
-                    {tx.payoutDate
-                      ? format(new Date(tx.payoutDate), "d MMM yyyy")
-                      : "—"}
-                  </TableCell>
+                  </p>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <StatusBadge status={tx.status} />
+                  <span className="text-xs text-muted-foreground dark:text-gray-400">
+                    Payout:{" "}
+                    {tx.payoutDate ? format(new Date(tx.payoutDate), "d MMM yyyy") : "—"}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto lg:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="dark:border-gray-800 dark:hover:bg-transparent">
+                  <TableHead className="dark:text-gray-300">Job</TableHead>
+                  <TableHead className="dark:text-gray-300">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortBy("date");
+                        setSortDesc((d) => (sortBy === "date" ? !d : true));
+                      }}
+                      className="inline-flex min-h-11 min-w-[44px] items-center font-medium underline-offset-2 hover:underline dark:text-gray-300"
+                    >
+                      Date {sortBy === "date" ? (sortDesc ? "↓" : "↑") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right dark:text-gray-300">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortBy("amount");
+                        setSortDesc((d) => (sortBy === "amount" ? !d : true));
+                      }}
+                      className="inline-flex min-h-11 min-w-[44px] w-full items-center justify-end font-medium underline-offset-2 hover:underline dark:text-gray-300"
+                    >
+                      Your earnings {sortBy === "amount" ? (sortDesc ? "↓" : "↑") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="dark:text-gray-300">Status</TableHead>
+                  <TableHead className="dark:text-gray-300">Payout</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {visibleTransactions.map((tx) => (
+                  <TableRow key={tx.jobId}>
+                    <TableCell className="max-w-[220px] font-medium dark:text-gray-100">
+                      <Link
+                        href={`/jobs/${tx.jobId}`}
+                        className="text-foreground underline hover:no-underline dark:text-emerald-300 dark:hover:text-emerald-200"
+                      >
+                        {tx.title.length > 28 ? `${tx.title.slice(0, 28)}…` : tx.title}
+                      </Link>
+                      <span className="ml-1 text-muted-foreground dark:text-gray-500">
+                        #{tx.jobId}
+                      </span>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground dark:text-gray-400">
+                      {format(new Date(tx.date), "d MMM yyyy")}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-400">
+                      {formatCents(tx.netCents)}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={tx.status} />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground dark:text-gray-400">
+                      {tx.payoutDate
+                        ? format(new Date(tx.payoutDate), "d MMM yyyy")
+                        : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
           {hasMore && (
             <div className="mt-4 flex justify-center">
               <Button
                 variant="outline"
-                size="sm"
-                className="dark:border-gray-600 dark:hover:bg-gray-800"
+                size="lg"
+                className="min-h-11 w-full max-w-xs rounded-xl dark:border-gray-600 dark:hover:bg-gray-800 sm:w-auto"
                 onClick={() => setShowRows((n) => n + INITIAL_ROWS)}
               >
                 Load more
@@ -899,60 +805,84 @@ export function EarningsPageClient({
         </CardContent>
       </Card>
 
-      {/* Payout History Table */}
       <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
         <CardHeader>
           <CardTitle className="text-base dark:text-gray-100 md:text-lg">
-            Payout History
+            Payout history
           </CardTitle>
           <p className="text-xs text-muted-foreground dark:text-gray-400">
-            Past payouts to your connected account (escrow released). Platform fee shown for transparency (paid by lister).
+            Money sent to your account after escrow is released.
           </p>
         </CardHeader>
         <CardContent>
           {payoutHistory.length === 0 ? (
             <Alert className="border-dashed dark:border-gray-700 dark:bg-gray-800/50">
-              <AlertDescription className="text-center py-4 text-muted-foreground dark:text-gray-400">
+              <AlertDescription className="py-4 text-center text-muted-foreground dark:text-gray-400">
                 No payouts yet – complete more jobs to get paid!
               </AlertDescription>
             </Alert>
           ) : (
             <>
-              <div className="overflow-x-auto -mx-2 px-2">
+              <ul className="space-y-2 md:hidden">
+                {payoutHistory.slice(0, showPayoutRows).map((row) => (
+                  <li
+                    key={row.jobId}
+                    className="rounded-xl border border-border bg-muted/20 p-4 dark:border-gray-700 dark:bg-gray-800/40"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/jobs/${row.jobId}`}
+                          className="font-medium text-primary underline-offset-2 hover:underline dark:text-emerald-400"
+                        >
+                          #{row.jobId}
+                        </Link>
+                        <p className="mt-0.5 line-clamp-2 text-sm text-foreground dark:text-gray-200" title={row.title}>
+                          {row.title}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                        {formatCents(row.netCents)}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <PayoutStatusBadge status={row.status} />
+                      <span className="text-xs text-muted-foreground dark:text-gray-400">
+                        {formatDateDDMMYYYY(row.payoutDate)}
+                      </span>
+                      <Badge variant="outline" className="font-normal dark:border-gray-600 dark:text-gray-300">
+                        Stripe
+                      </Badge>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden overflow-x-auto md:block">
                 <Table>
                   <TableHeader>
                     <TableRow className="dark:border-gray-800 dark:hover:bg-transparent">
-                      <TableHead className="whitespace-nowrap dark:text-gray-300">Job ID</TableHead>
-                      <TableHead className="min-w-[120px] dark:text-gray-300">Job Title</TableHead>
-                      <TableHead className="text-right whitespace-nowrap dark:text-gray-300">Gross</TableHead>
-                      <TableHead className="text-right whitespace-nowrap dark:text-gray-300">Platform Fee (12%)</TableHead>
-                      <TableHead className="text-right whitespace-nowrap dark:text-gray-300">Net</TableHead>
-                      <TableHead className="whitespace-nowrap dark:text-gray-300">Payout Date</TableHead>
+                      <TableHead className="whitespace-nowrap dark:text-gray-300">Job</TableHead>
+                      <TableHead className="text-right whitespace-nowrap dark:text-gray-300">Your earnings</TableHead>
+                      <TableHead className="whitespace-nowrap dark:text-gray-300">Payout date</TableHead>
                       <TableHead className="whitespace-nowrap dark:text-gray-300">Status</TableHead>
-                      <TableHead className="whitespace-nowrap dark:text-gray-300">Payout Method</TableHead>
+                      <TableHead className="whitespace-nowrap dark:text-gray-300">Method</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payoutHistory.slice(0, showPayoutRows).map((row) => (
                       <TableRow key={row.jobId} className="dark:border-gray-800 dark:hover:bg-gray-800/50">
-                        <TableCell className="font-medium whitespace-nowrap dark:text-gray-100">
+                        <TableCell className="max-w-[200px] dark:text-gray-100">
                           <Link
                             href={`/jobs/${row.jobId}`}
-                            className="text-primary underline-offset-2 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
+                            className="font-medium text-primary underline-offset-2 hover:underline dark:text-emerald-400"
                           >
                             #{row.jobId}
                           </Link>
+                          <p className="mt-0.5 truncate text-sm text-muted-foreground dark:text-gray-400" title={row.title}>
+                            {row.title}
+                          </p>
                         </TableCell>
-                        <TableCell className="max-w-[180px] truncate dark:text-gray-200" title={row.title}>
-                          {row.title.length > 32 ? `${row.title.slice(0, 32)}…` : row.title}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums whitespace-nowrap dark:text-gray-200">
-                          {formatCents(row.grossCents)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap dark:text-gray-400">
-                          {formatCents(row.feeCents)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums font-medium whitespace-nowrap text-emerald-700 dark:text-emerald-400">
+                        <TableCell className="text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-400">
                           {formatCents(row.netCents)}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground dark:text-gray-400">
@@ -971,15 +901,7 @@ export function EarningsPageClient({
                   </TableBody>
                   <tfoot>
                     <TableRow className="border-t-2 border-border font-semibold dark:border-gray-700 dark:bg-gray-800/30 dark:hover:bg-transparent">
-                      <TableCell colSpan={2} className="dark:text-gray-100">
-                        Total
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums dark:text-gray-200">
-                        {formatCents(payoutHistory.reduce((s, r) => s + r.grossCents, 0))}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground dark:text-gray-400">
-                        {formatCents(payoutHistory.reduce((s, r) => s + r.feeCents, 0))}
-                      </TableCell>
+                      <TableCell className="dark:text-gray-100">Total</TableCell>
                       <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400">
                         {formatCents(payoutHistory.reduce((s, r) => s + r.netCents, 0))}
                       </TableCell>
@@ -992,8 +914,8 @@ export function EarningsPageClient({
                 <div className="mt-4 flex justify-center">
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="dark:border-gray-600 dark:hover:bg-gray-800"
+                    size="lg"
+                    className="min-h-11 w-full max-w-xs rounded-xl dark:border-gray-600 dark:hover:bg-gray-800 sm:w-auto"
                     onClick={() => setShowPayoutRows((n) => n + PAYOUT_HISTORY_PAGE_SIZE)}
                   >
                     Load more
@@ -1005,15 +927,34 @@ export function EarningsPageClient({
         </CardContent>
       </Card>
 
+      <div className="flex flex-col gap-2">
+        <Button
+          variant="secondary"
+          size="lg"
+          onClick={handleExportTaxCsv}
+          disabled={exportingCsv}
+          className="min-h-12 w-full rounded-xl sm:w-auto"
+        >
+          {exportingCsv ? (
+            "Preparing…"
+          ) : (
+            <>
+              <Download className="mr-2 h-4 w-4" />
+              Export earnings (CSV)
+            </>
+          )}
+        </Button>
+        <p className="text-xs text-muted-foreground dark:text-gray-500">
+          For your records — your earnings only.
+        </p>
+      </div>
+
       {/* Payout method */}
       <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
         <CardHeader>
           <CardTitle className="text-base dark:text-gray-100 md:text-lg">
             Payout Method
           </CardTitle>
-          <p className="text-xs text-muted-foreground dark:text-gray-400">
-            Payments are released 48 hours after the lister approves the job.
-          </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">

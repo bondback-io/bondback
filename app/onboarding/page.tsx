@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { OnboardingForm } from "@/components/features/onboarding-form";
 import type { Database } from "@/types/supabase";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Welcome",
+  description: "Start your Bond Back profile — bond cleaning marketplace in Australia.",
+};
 
 const OnboardingPage = async ({
   searchParams,

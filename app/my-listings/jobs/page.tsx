@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
@@ -14,6 +15,14 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = { id: number; listing_id: string; status: string };
 
 type SearchParams = { tab?: string };
+
+export const metadata: Metadata = {
+  title: "My listing jobs",
+  description:
+    "View jobs linked to your bond cleaning listings on Bond Back — Australia.",
+  alternates: { canonical: "/my-listings/jobs" },
+  robots: { index: false, follow: true },
+};
 
 export default async function MyListingsJobsPage({
   searchParams,

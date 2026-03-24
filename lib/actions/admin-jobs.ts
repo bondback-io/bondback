@@ -7,6 +7,7 @@ import { getStripeServer } from "@/lib/stripe";
 import { createNotification, sendPaymentReceiptEmails } from "@/lib/actions/notifications";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { fetchPlatformFeePercentForListing } from "@/lib/platform-fee";
 import { releaseJobFunds, executeRefund } from "@/lib/actions/jobs";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
@@ -198,6 +199,7 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
     | "partial_refund"
     | "full_refund"
     | "reject"
+    | "return_to_review"
     | null;
   if (!jobId || !resolution) return;
   const { supabase, adminId } = await requireAdmin();
@@ -233,6 +235,48 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
     payment_intent_id?: string | null;
   };
 
+  /** Resume lister review with a fresh auto-release window — no Stripe movement. */
+  if (resolution === "return_to_review") {
+    if (!["disputed", "in_review", "dispute_negotiating"].includes(j.status)) {
+      return;
+    }
+    const settings = await getGlobalSettings();
+    const hrs = settings?.auto_release_hours ?? 48;
+    const newIso = new Date(Date.now() + hrs * 60 * 60 * 1000).toISOString();
+    const { error: updateError } = await supabase
+      .from("jobs")
+      .update({
+        status: "completed_pending_approval",
+        dispute_resolution: "return_to_review",
+        resolution_type: "return_to_review",
+        resolution_at: nowIso,
+        resolution_by: adminId,
+        dispute_status: "resolved",
+        auto_release_at: newIso,
+        auto_release_at_original: newIso,
+      } as never)
+      .eq("id", numericJobId);
+
+    if (updateError) return;
+
+    const msg =
+      "Admin closed the dispute and restarted the review window. Approve payment or wait for auto-release.";
+    if (j.lister_id) await createNotification(j.lister_id, "dispute_resolved", numericJobId, msg);
+    if (j.winner_id) await createNotification(j.winner_id, "dispute_resolved", numericJobId, msg);
+
+    await logAdminActivity({
+      adminId,
+      actionType: "dispute_resolved",
+      targetType: "job",
+      targetId: String(numericJobId),
+      details: { resolution: "return_to_review", new_auto_release_at: newIso },
+    });
+
+    revalidatePath("/admin/disputes");
+    revalidatePath(`/jobs/${numericJobId}`);
+    return;
+  }
+
   // Ensure payout/refund happens when PaymentIntent is still held (manual capture).
   if (resolution === "release_funds" || resolution === "reject") {
     const releaseResult = await releaseJobFunds(numericJobId);
@@ -243,7 +287,7 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
     const settings = await getGlobalSettings();
     const agreedCents = j.agreed_amount_cents ?? 0;
     const feePct =
-      (settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12) / 100;
+      (await fetchPlatformFeePercentForListing(supabase, j.listing_id, settings)) / 100;
     const feeCents = Math.round(agreedCents * feePct);
 
     const refundTotalCents =
@@ -363,7 +407,8 @@ export type OverrideTimerActionType =
   | "force_release_now"
   | "shorten_timer"
   | "extend_timer"
-  | "cancel_override";
+  | "cancel_override"
+  | "pause_timer";
 
 export type OverrideTimerResult =
   | { ok: true }
@@ -375,6 +420,7 @@ export type OverrideTimerResult =
  * - shorten_timer: set auto_release_at to `now + hoursLeft`
  * - extend_timer: add `hours` to current auto_release_at (or original / fallback)
  * - cancel_override: revert auto_release_at back to auto_release_at_original (or baseline)
+ * - pause_timer: clear auto_release_at and auto_release_at_original (auto-release paused until reset)
  *
  * Logs to `admin_activity_log` with `action_type = 'timer_override'`.
  */
@@ -437,7 +483,8 @@ export async function overrideTimer(
 
   const settings = await getGlobalSettings();
   const autoReleaseHours = settings?.auto_release_hours ?? 48;
-  const feePercent = (settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12) / 100;
+  const feePercent =
+    (await fetchPlatformFeePercentForListing(supabase, row.listing_id, settings)) / 100;
 
   const computeBaselineIso = () => {
     if (row.auto_release_at_original) return row.auto_release_at_original;
@@ -531,6 +578,39 @@ export async function overrideTimer(
         prevAutoReleaseAt,
         prevAutoReleaseAtOriginal,
         forcedReleaseAt: nowIso,
+      },
+    });
+
+    revalidatePath("/admin/jobs");
+    revalidatePath("/dashboard");
+    revalidatePath(`/jobs/${jobId}`);
+    return { ok: true };
+  }
+
+  if (actionType === "pause_timer") {
+    const { error: pauseErr } = await supabase
+      .from("jobs")
+      .update({
+        auto_release_at: null,
+        auto_release_at_original: null,
+      } as never)
+      .eq("id", jobId);
+
+    if (pauseErr) {
+      return { ok: false, error: pauseErr.message };
+    }
+
+    await logAdminActivity({
+      adminId,
+      actionType: "timer_override",
+      targetType: "job",
+      targetId: String(jobId),
+      details: {
+        reason: safeReason,
+        actionType: "pause_timer",
+        prevAutoReleaseAt,
+        prevAutoReleaseAtOriginal,
+        newAutoReleaseAt: null,
       },
     });
 

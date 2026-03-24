@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { getSiteUrl } from "@/lib/site";
 
 type Props = { params: Promise<{ code: string }> };
 
@@ -16,7 +17,7 @@ function normalizeCode(raw: string): string {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { code } = await params;
   const c = normalizeCode(code);
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+  const base = getSiteUrl().origin;
   const title = c.length >= 4 ? `Join Bond Back — referral ${c}` : "Join Bond Back";
   const description =
     c.length >= 4
@@ -26,7 +27,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    metadataBase: new URL(base),
+    alternates: {
+      canonical: `/ref/${encodeURIComponent(c || code)}`,
+    },
     openGraph: {
       title,
       description,

@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { House, Briefcase, MessageCircle, User, List } from "lucide-react";
+import { House, Briefcase, MessageCircle, User, List, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useChatPanel } from "@/components/chat/chat-panel-context";
+import { useUnreadNewMessageCount } from "@/hooks/use-unread-new-message-count";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
 
@@ -46,11 +46,11 @@ function isItemActive(pathname: string, href: string): boolean {
 
 /**
  * While profile `active_role` is still loading, infer lister vs cleaner from URL so the
- * second tab doesn’t flash “Jobs” on /lister/dashboard etc.
+ * second tab doesn’t flash the wrong label on /lister/dashboard etc.
  */
 function inferSecondaryTabFromPath(pathname: string): {
   href: string;
-  label: "Listings" | "Jobs";
+  label: "Listings" | "Earnings";
 } | null {
   const p = pathname.replace(/\/$/, "") || "/";
   if (
@@ -62,32 +62,40 @@ function inferSecondaryTabFromPath(pathname: string): {
     return { href: "/my-listings", label: "Listings" };
   }
   if (p.startsWith("/cleaner/") || p.startsWith("/earnings")) {
-    return { href: "/jobs", label: "Jobs" };
+    return { href: "/earnings", label: "Earnings" };
   }
   return null;
 }
 
-/** Second tab: lister → Listings (/my-listings); cleaner → Jobs (/jobs). */
-function isJobsTabActive(pathname: string, activeRole: Role): boolean {
+/** Second tab: lister → Listings (/my-listings); cleaner → Earnings (/earnings). */
+function isSecondaryTabActive(pathname: string, activeRole: Role): boolean {
   if (activeRole === "lister") {
     return pathname === "/my-listings" || pathname.startsWith("/my-listings/");
   }
   if (activeRole === "cleaner") {
-    return pathname === "/jobs" || pathname.startsWith("/jobs/");
+    return pathname === "/earnings" || pathname.startsWith("/earnings/");
   }
   // Still loading active_role: align highlight with inferred routes
   if (pathname === "/my-listings" || pathname.startsWith("/my-listings/")) {
     return true;
   }
   if (pathname.startsWith("/cleaner/") || pathname.startsWith("/earnings")) {
-    return pathname === "/jobs" || pathname.startsWith("/jobs/");
+    return pathname === "/earnings" || pathname.startsWith("/earnings/");
   }
-  return pathname === "/jobs" || pathname.startsWith("/jobs/");
+  return pathname === "/earnings" || pathname.startsWith("/earnings/");
 }
 
-function MessagesTabLink({ active }: { active: boolean }) {
-  const { unreadTotal } = useChatPanel();
-  const showBadge = unreadTotal > 0;
+function MessagesTabLink({
+  active,
+  userId,
+  activeRole,
+}: {
+  active: boolean;
+  userId: string | null;
+  activeRole: Role;
+}) {
+  const unread = useUnreadNewMessageCount(userId, activeRole);
+  const showBadge = unread > 0;
 
   return (
     <Link
@@ -99,6 +107,11 @@ function MessagesTabLink({ active }: { active: boolean }) {
           : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
       )}
       aria-current={active ? "page" : undefined}
+      aria-label={
+        showBadge
+          ? `Messages, ${unread} unread`
+          : "Messages"
+      }
     >
       <span className="relative inline-flex">
         <MessageCircle
@@ -109,8 +122,8 @@ function MessagesTabLink({ active }: { active: boolean }) {
           aria-hidden
         />
         {showBadge && (
-          <span className="absolute -right-1.5 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-background dark:ring-gray-950">
-            {unreadTotal > 9 ? "9+" : unreadTotal}
+          <span className="absolute -right-1 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-bold leading-none text-primary-foreground shadow-sm ring-2 ring-background dark:ring-gray-950">
+            {unread > 99 ? "99+" : unread}
           </span>
         )}
       </span>
@@ -131,6 +144,8 @@ function MessagesTabLink({ active }: { active: boolean }) {
 export type MobileBottomNavProps = {
   /** From server session — avoids “Jobs” flash on /profile before client profile fetch. */
   initialActiveRole?: Role | null;
+  /** Logged-in user id for Messages tab unread badge. */
+  userId?: string | null;
 };
 
 /**
@@ -149,6 +164,7 @@ function readStoredMobileNavRole(): Role {
 
 export function MobileBottomNav({
   initialActiveRole = null,
+  userId = null,
 }: MobileBottomNavProps = {}) {
   const pathname = usePathname();
   const currentPath = pathname ?? "";
@@ -238,20 +254,34 @@ export function MobileBottomNav({
   const effectiveRole =
     activeRole ?? storedRoleFallback ?? initialActiveRole ?? null;
   const inferred = inferSecondaryTabFromPath(currentPath);
-  const jobsTabHref =
+  const secondaryTabHref =
     effectiveRole === "lister"
       ? "/my-listings"
       : effectiveRole === "cleaner"
-        ? "/jobs"
-        : (inferred?.href ?? "/jobs");
-  const jobsTabLabel =
+        ? "/earnings"
+        : (inferred?.href ??
+            (storedRoleFallback === "lister"
+              ? "/my-listings"
+              : storedRoleFallback === "cleaner"
+                ? "/earnings"
+                : "/jobs"));
+  const secondaryTabLabel =
     effectiveRole === "lister"
       ? "Listings"
       : effectiveRole === "cleaner"
-        ? "Jobs"
-        : (inferred?.label ?? "Jobs");
-  const JobsIcon =
-    effectiveRole === "lister" || inferred?.label === "Listings" ? List : Briefcase;
+        ? "Earnings"
+        : (inferred?.label ??
+            (storedRoleFallback === "lister"
+              ? "Listings"
+              : storedRoleFallback === "cleaner"
+                ? "Earnings"
+                : "Jobs"));
+  const SecondaryTabIcon =
+    effectiveRole === "lister" || inferred?.label === "Listings"
+      ? List
+      : effectiveRole === "cleaner" || inferred?.label === "Earnings"
+        ? Wallet
+        : Briefcase;
 
   return (
     <nav
@@ -283,7 +313,7 @@ export function MobileBottomNav({
               aria-hidden
             />
             <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
-              Home
+              Dashboard
             </span>
             <span
               className={cn(
@@ -295,36 +325,36 @@ export function MobileBottomNav({
           </Link>
 
           <Link
-            href={jobsTabHref}
+            href={secondaryTabHref}
             className={cn(
               "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
-              isJobsTabActive(currentPath, effectiveRole)
+              isSecondaryTabActive(currentPath, effectiveRole)
                 ? "text-primary"
                 : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
             )}
-            aria-current={isJobsTabActive(currentPath, effectiveRole) ? "page" : undefined}
+            aria-current={isSecondaryTabActive(currentPath, effectiveRole) ? "page" : undefined}
             aria-label={
               effectiveRole === "cleaner"
-                ? "Jobs — browse and manage jobs"
+                ? "Earnings"
                 : effectiveRole === "lister"
                   ? "Listings"
-                  : "Jobs"
+                  : "Second tab"
             }
           >
-            <JobsIcon
+            <SecondaryTabIcon
               className={cn(
                 "h-7 w-7 shrink-0",
-                isJobsTabActive(currentPath, effectiveRole) ? "stroke-[2.5]" : "stroke-[2]"
+                isSecondaryTabActive(currentPath, effectiveRole) ? "stroke-[2.5]" : "stroke-[2]"
               )}
               aria-hidden
             />
             <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
-              {jobsTabLabel}
+              {secondaryTabLabel}
             </span>
             <span
               className={cn(
                 "h-0.5 w-7 rounded-full",
-                isJobsTabActive(currentPath, effectiveRole) ? "bg-primary" : "bg-transparent"
+                isSecondaryTabActive(currentPath, effectiveRole) ? "bg-primary" : "bg-transparent"
               )}
               aria-hidden
             />
@@ -332,6 +362,8 @@ export function MobileBottomNav({
 
           <MessagesTabLink
             active={isItemActive(currentPath, "/messages")}
+            userId={userId}
+            activeRole={effectiveRole}
           />
 
           <Link

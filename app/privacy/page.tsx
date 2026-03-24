@@ -1,4 +1,17 @@
+import type { Metadata } from "next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description:
+    "Bond Back Privacy Policy — how we handle account, job, and payment data for bond cleaning in Australia.",
+  alternates: { canonical: "/privacy" },
+  openGraph: {
+    title: "Privacy Policy · Bond Back",
+    description: "How Bond Back collects, uses, and protects your personal information.",
+    url: "/privacy",
+  },
+};
 
 export default function PrivacyPage() {
   return (

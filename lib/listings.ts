@@ -88,6 +88,8 @@ export function buildListingInsertRow(params: {
   status: string;
   end_time: string;
   end_date: string;
+  /** Admin global % at publish time — frozen on the listing row. */
+  platform_fee_percentage: number;
   preferred_dates?: string[] | null;
   initial_photos?: string[] | null;
 }): ListingInsertPayload {
@@ -115,6 +117,7 @@ export function buildListingInsertRow(params: {
     status: params.status,
     end_time: params.end_time,
     end_date: params.end_date,
+    platform_fee_percentage: params.platform_fee_percentage,
     preferred_dates: params.preferred_dates ?? null,
     // initial_photos are set in a second step via updateListingInitialPhotos (not sent on insert so DB without column still works)
   };

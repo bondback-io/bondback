@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 
 type Params = Promise<{ id: string }>;
 
@@ -61,10 +62,10 @@ export async function GET(
 
   const settings = await getGlobalSettings();
   const stripeTestMode = (settings as { stripe_test_mode?: boolean } | null)?.stripe_test_mode === true;
-  const feePercentage =
-    settings?.platform_fee_percentage ??
-    settings?.fee_percentage ??
-    12;
+  const feePercentage = resolvePlatformFeePercent(
+    (listing as { platform_fee_percentage?: number | null }).platform_fee_percentage,
+    settings
+  );
 
   const job = jobRow as Record<string, unknown> | null;
   const jobAgreed = job && typeof (job as { agreed_amount_cents?: number }).agreed_amount_cents === "number"

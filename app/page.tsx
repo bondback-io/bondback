@@ -1,9 +1,23 @@
+import type { Metadata } from "next";
 import { LandingHero } from "@/components/features/landing-hero";
 import { HowItWorks } from "@/components/features/how-it-works";
 import { FindJobsSearch } from "@/components/features/find-jobs-search";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminOnlyToast } from "@/components/admin/admin-only-toast";
+
+export const metadata: Metadata = {
+  title: "Bond cleaning & end of lease cleaning marketplace",
+  description:
+    "Bond Back is Australia’s marketplace for bond cleaning and end of lease cleaning. Post a job, receive bids in a reverse auction, and get your bond back with clear pricing.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Bond Back — Bond cleaning & end of lease cleaning (Australia)",
+    description:
+      "List bond cleans, compare cleaner bids, and pay securely — built for Australian renters and cleaners.",
+    url: "/",
+  },
+};
 
 type HomePageProps = { searchParams?: Promise<{ error?: string }> };
 

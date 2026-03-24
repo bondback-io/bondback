@@ -1,5 +1,12 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { getSessionWithProfile } from "@/lib/supabase/session";
+
+export const metadata: Metadata = {
+  title: "Admin",
+  description: "Bond Back administration.",
+  robots: { index: false, follow: false },
+};
 
 /**
  * All /admin/* routes require an authenticated user with profiles.is_admin = true.

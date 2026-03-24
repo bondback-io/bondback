@@ -178,6 +178,8 @@ export interface Database {
           status: string;
           end_time: string;
           created_at: string;
+          /** Snapshot of admin platform % at listing creation; fees for this listing use this value. */
+          platform_fee_percentage: number;
           /** Set when lister ends auction early (cancel listing); null for natural end. */
           cancelled_early_at: string | null;
         };
@@ -205,6 +207,7 @@ export interface Database {
           status?: string;
           end_time: string;
           created_at?: string;
+          platform_fee_percentage?: number;
           cancelled_early_at?: string | null;
         };
         Update: {
@@ -228,6 +231,7 @@ export interface Database {
           duration_days?: number;
           status?: string;
           end_time?: string;
+          platform_fee_percentage?: number;
           cancelled_early_at?: string | null;
         };
         Relationships: [
@@ -297,6 +301,7 @@ export interface Database {
           cleaner_confirmed_at: string | null;
           auto_release_at: string | null;
           auto_release_at_original: string | null;
+          review_extension_used_at: string | null;
           completed_at: string | null;
           disputed_at: string | null;
           dispute_reason: string | null;
@@ -328,6 +333,7 @@ export interface Database {
           cleaner_confirmed_at?: string | null;
           auto_release_at?: string | null;
           auto_release_at_original?: string | null;
+          review_extension_used_at?: string | null;
           completed_at?: string | null;
           disputed_at?: string | null;
           dispute_reason?: string | null;
@@ -358,6 +364,7 @@ export interface Database {
           cleaner_confirmed_at?: string | null;
           auto_release_at?: string | null;
           auto_release_at_original?: string | null;
+          review_extension_used_at?: string | null;
           completed_at?: string | null;
           disputed_at?: string | null;
           dispute_reason?: string | null;

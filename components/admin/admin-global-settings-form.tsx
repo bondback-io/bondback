@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,11 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import type { SaveGlobalSettingsInput } from "@/lib/actions/global-settings";
-import { saveGlobalSettings, setStripeTestMode } from "@/lib/actions/global-settings";
+import {
+  saveGlobalSettings,
+  setStripeTestMode,
+  setFloatingChatEnabled as persistFloatingChatEnabled,
+} from "@/lib/actions/global-settings";
 
 export type AdminGlobalSettingsFormProps = {
   initial: Partial<SaveGlobalSettingsInput> | null;
@@ -90,9 +95,10 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
     value: (initial as any)?.stripeTestMode ?? true,
     saving: false,
   });
-  const [floatingChatEnabled, setFloatingChatEnabled] = React.useState(
-    initial?.floatingChatEnabled ?? true
-  );
+  const [floatingChatEnabledState, setFloatingChatEnabledState] = React.useState({
+    value: initial?.floatingChatEnabled ?? true,
+    saving: false,
+  });
   const [enableSmsAlertsNewJobs, setEnableSmsAlertsNewJobs] = React.useState(
     initial?.enableSmsAlertsNewJobs ?? true
   );
@@ -109,6 +115,16 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (initial?.floatingChatEnabled !== undefined) {
+      setFloatingChatEnabledState((prev) => ({
+        ...prev,
+        value: initial.floatingChatEnabled as boolean,
+      }));
+    }
+  }, [initial?.floatingChatEnabled]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +168,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       stripeConnectEnabled,
       payoutSchedule,
       stripeTestMode: stripeTestMode.value,
-      floatingChatEnabled,
+      floatingChatEnabled: floatingChatEnabledState.value,
       enableSmsAlertsNewJobs,
       maxSmsPerUserPerDay: maxSmsPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxSmsPerUserPerDay, 10) || 5)) : undefined,
       maxPushPerUserPerDay: maxPushPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxPushPerUserPerDay, 10) || 5)) : undefined,
@@ -168,8 +184,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
         title: "Global settings updated",
         description: "Platform-wide configuration has been saved.",
       });
-      // Do not router.refresh() here: it can remount the form with stale server data
-      // and overwrite the toggle, making the second save appear to not persist.
+      router.refresh();
     });
   };
 
@@ -376,12 +391,46 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                   Floating chat (message icon in top nav)
                 </Label>
                 <p className="text-[11px] text-muted-foreground dark:text-gray-400">
-                  When <strong>on</strong>, logged-in users see the chat icon in the header and can open the floating chat panel. When <strong>off</strong>, the chat is hidden site-wide.
+                  When <strong>on</strong>, logged-in users see the chat icon in the header and can open the floating chat panel. When <strong>off</strong>, the chat is hidden site-wide. Saves immediately when toggled.
                 </p>
               </div>
               <Switch
-                checked={floatingChatEnabled}
-                onCheckedChange={(v) => setFloatingChatEnabled(Boolean(v))}
+                checked={floatingChatEnabledState.value}
+                disabled={floatingChatEnabledState.saving}
+                onCheckedChange={async (v) => {
+                  const next = Boolean(v);
+                  setFloatingChatEnabledState((prev) => ({
+                    ...prev,
+                    value: next,
+                    saving: true,
+                  }));
+                  const result = await persistFloatingChatEnabled(next);
+                  if (!result.ok) {
+                    setFloatingChatEnabledState((prev) => ({
+                      ...prev,
+                      saving: false,
+                      value: !next,
+                    }));
+                    toast({
+                      variant: "destructive",
+                      title: "Could not update floating chat",
+                      description: result.error,
+                    });
+                  } else {
+                    setFloatingChatEnabledState((prev) => ({
+                      ...prev,
+                      saving: false,
+                      value: result.floatingChatEnabled,
+                    }));
+                    toast({
+                      title: "Floating chat updated",
+                      description: result.floatingChatEnabled
+                        ? "Chat icon and floating panel are visible."
+                        : "Chat icon and floating panel are hidden site-wide.",
+                    });
+                    router.refresh();
+                  }
+                }}
               />
             </div>
 

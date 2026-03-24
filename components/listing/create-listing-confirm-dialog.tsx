@@ -32,18 +32,18 @@ export function CreateListingConfirmDialog({
             Do you want to create a new bond clean listing?
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="mt-2 gap-3 sm:gap-4">
           <Button
             type="button"
             variant="outline"
-            className="border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-100 dark:hover:bg-emerald-900"
+            className="w-full border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-100 dark:hover:bg-emerald-900 sm:w-auto"
             onClick={() => onOpenChange(false)}
           >
             Not now
           </Button>
           <Button
             type="button"
-            className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            className="w-full bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:w-auto"
             onClick={() => {
               onOpenChange(false);
               router.push("/listings/new");

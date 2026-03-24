@@ -1,6 +1,15 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+  description:
+    "Your Bond Back dashboard — redirects to your lister or cleaner home for bond cleaning jobs in Australia.",
+  alternates: { canonical: "/dashboard" },
+  robots: { index: false, follow: true },
+};
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 

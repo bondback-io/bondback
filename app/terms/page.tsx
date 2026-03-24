@@ -1,4 +1,17 @@
+import type { Metadata } from "next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description:
+    "Bond Back Terms of Service — rules for using the Australian bond cleaning and end of lease marketplace.",
+  alternates: { canonical: "/terms" },
+  openGraph: {
+    title: "Terms of Service · Bond Back",
+    description: "Terms for listing, bidding, payments, and disputes on Bond Back.",
+    url: "/terms",
+  },
+};
 
 export default function TermsPage() {
   return (

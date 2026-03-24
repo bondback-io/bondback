@@ -134,21 +134,43 @@ export function PlaceBidForm({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div
           className={cn(
-            "overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-muted/50 to-background dark:border-gray-800 dark:from-gray-900/80 dark:to-gray-950"
+            "overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-muted/50 to-background dark:border-gray-800 dark:from-gray-900/80 dark:to-gray-950",
+            isCleaner &&
+              "border-emerald-500/30 ring-1 ring-emerald-500/10 dark:border-emerald-900/50 dark:ring-emerald-900/20"
           )}
         >
-          <div className="flex items-start gap-3 border-b border-border/80 px-4 py-3.5 dark:border-gray-800">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-primary/15">
-              <TrendingDown className="h-5 w-5" aria-hidden />
+          <div className="flex items-start gap-3 border-b border-border/80 px-4 py-4 dark:border-gray-800 sm:px-5 sm:py-4">
+            <div
+              className={cn(
+                "flex shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-primary/15",
+                isCleaner ? "h-12 w-12" : "h-10 w-10"
+              )}
+            >
+              <TrendingDown className={cn(isCleaner ? "h-6 w-6" : "h-5 w-5")} aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+              <p
+                className={cn(
+                  "font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400",
+                  isCleaner ? "text-xs" : "text-[11px]"
+                )}
+              >
                 Current lowest bid
               </p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100">
+              <p
+                className={cn(
+                  "mt-0.5 font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100",
+                  isCleaner ? "text-3xl sm:text-4xl" : "text-2xl"
+                )}
+              >
                 {formatCents(currentLowest)}
               </p>
-              <p className="mt-1 text-xs leading-snug text-muted-foreground dark:text-gray-500">
+              <p
+                className={cn(
+                  "mt-1 leading-snug text-muted-foreground dark:text-gray-500",
+                  isCleaner ? "text-sm" : "text-xs"
+                )}
+              >
                 Your new bid must be{" "}
                 <span className="font-medium text-foreground dark:text-gray-300">lower</span> than this
                 {maxAllowedBidDollars > 0 ? (
@@ -166,10 +188,13 @@ export function PlaceBidForm({
             </div>
           </div>
 
-          <div className="space-y-3 px-4 py-4">
+          <div className="space-y-3 px-4 py-4 sm:px-5">
             <Label
               htmlFor="bid-amount"
-              className="text-sm font-medium text-foreground dark:text-gray-100"
+              className={cn(
+                "font-medium text-foreground dark:text-gray-100",
+                isCleaner ? "text-base" : "text-sm"
+              )}
             >
               Your bid amount
             </Label>
@@ -192,7 +217,8 @@ export function PlaceBidForm({
                 value={amountDollars}
                 onChange={(e) => setAmountDollars(e.target.value)}
                 className={cn(
-                  "h-12 min-h-[48px] border-2 pl-8 text-lg font-semibold tabular-nums",
+                  "min-h-[48px] border-2 pl-8 font-semibold tabular-nums",
+                  isCleaner ? "h-14 text-xl" : "h-12 text-lg",
                   "focus-visible:ring-2 focus-visible:ring-primary/30",
                   "dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-100"
                 )}
@@ -200,17 +226,26 @@ export function PlaceBidForm({
                 aria-describedby="bid-amount-hint"
               />
             </div>
-            <p id="bid-amount-hint" className="text-[11px] leading-relaxed text-muted-foreground dark:text-gray-500">
+            <p
+              id="bid-amount-hint"
+              className={cn(
+                "leading-relaxed text-muted-foreground dark:text-gray-500",
+                isCleaner ? "text-sm" : "text-[11px]"
+              )}
+            >
               Enter dollars and cents. We&apos;ll validate against the live lowest bid when you submit.
             </p>
 
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="h-12 min-h-[48px] w-full gap-2 text-base font-semibold shadow-sm sm:max-w-md"
+              className={cn(
+                "w-full gap-2 font-semibold shadow-sm sm:max-w-md",
+                isCleaner ? "h-14 min-h-14 text-lg" : "h-12 min-h-[48px] text-base"
+              )}
               size="lg"
             >
-              <Gavel className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+              <Gavel className={cn("shrink-0 opacity-90", isCleaner ? "h-5 w-5" : "h-4 w-4")} aria-hidden />
               {isSubmitting ? "Placing bid…" : "Place lower bid"}
             </Button>
           </div>

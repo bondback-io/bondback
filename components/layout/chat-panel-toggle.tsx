@@ -6,12 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useChatPanel } from "@/components/chat/chat-panel-context";
 
 export function ChatPanelToggle() {
-  const { unreadTotal, toggleOpen, conversations } = useChatPanel();
-
-  // Hide floating chat until there is at least one approved/active job conversation.
-  if (!conversations || conversations.length === 0) {
-    return null;
-  }
+  const { unreadTotal, toggleOpen } = useChatPanel();
 
   return (
     <button

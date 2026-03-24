@@ -9,6 +9,7 @@ import { ChatPanelToggle } from "@/components/layout/chat-panel-toggle";
 import { MainNav } from "@/components/layout/main-nav";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PendingBidsBadge } from "@/components/pwa/pending-bids-badge";
+import { ListerMobileCreateListingHeaderButton } from "@/components/layout/lister-mobile-create-header-button";
 
 export type HeaderProps = {
   className?: string;
@@ -58,19 +59,24 @@ export const Header = async ({
     >
       {session ? (
         <>
-          {/* Mobile: logo (left) · theme + role pill + avatar (right) */}
+          {/* Mobile: logo + lister create · notifications · theme + role + avatar */}
           <div className="flex min-h-[3.25rem] w-full items-center justify-between gap-2 px-3 py-2 md:hidden">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <LogoMark />
+              {isLister && <ListerMobileCreateListingHeaderButton />}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              <NotificationBell
+                userId={session.user.id}
+                activeRole={session.activeRole}
+              />
               <ThemeToggle persistToServer={!!session} />
               <RoleSwitcher session={session} variant="compact" />
               <UserMenu session={session} />
             </div>
           </div>
 
-          {/* Desktop — single row; inner nav uses flex-nowrap so Create Listing stays aligned with Find Jobs / Dashboard */}
+          {/* Desktop — single row; inner nav + account tools */}
           <div className="container hidden min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-x-2 gap-y-0 px-3 py-2 sm:min-h-14 sm:gap-x-3 sm:px-4 md:flex md:px-6">
             <div className="flex min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] sm:min-h-0 sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
               <LogoMark />
@@ -91,7 +97,10 @@ export const Header = async ({
               aria-label="Account and tools"
             >
               <div className="flex min-w-0 flex-nowrap items-center justify-end gap-x-1 sm:gap-x-1.5 lg:gap-x-2">
-                <NotificationBell userId={session.user.id} />
+                <NotificationBell
+                  userId={session.user.id}
+                  activeRole={session.activeRole}
+                />
                 <PendingBidsBadge isCleaner={isCleaner} />
                 {floatingChatEnabled && <ChatPanelToggle />}
                 <RoleSwitcher session={session} />

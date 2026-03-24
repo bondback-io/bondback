@@ -1,9 +1,16 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { OnboardingCleanerForm } from "@/components/features/onboarding-cleaner-form";
 import type { Database } from "@/types/supabase";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Cleaner onboarding",
+  description:
+    "Set up your cleaner profile on Bond Back — travel radius, bond cleaning, and end of lease work.",
+};
 
 const OnboardingCleanerPage = async ({
   searchParams,

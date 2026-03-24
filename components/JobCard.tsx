@@ -18,7 +18,7 @@ import { BuyNowButton } from "@/components/features/buy-now-button";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import type { ReactNode } from "react";
 
-const HERO_H = "min-h-[180px] max-h-[220px] h-[200px]";
+const HERO_H = "min-h-[200px] max-h-[240px] h-[220px]";
 
 /** Short countdown for status line, e.g. "4h left" */
 export function formatAuctionTimeLeftShort(endMs: number): string {
@@ -117,13 +117,23 @@ export function JobCardMarketplaceMobile({
       ? `${beds ?? "—"} bed · ${baths ?? "—"} bath`
       : null;
 
+  const cleanerBoost = showCleanerMobileActions;
+
   if (layout === "compact") {
     return (
-      <div className="flex w-full flex-col overflow-hidden rounded-xl bg-transparent">
-        <div className="flex flex-row gap-3 p-3">
+      <div
+        className={cn(
+          "flex w-full flex-col overflow-hidden rounded-xl bg-transparent",
+          cleanerBoost && "rounded-2xl border border-border/80 bg-card/50 p-1 dark:border-gray-700/80 dark:bg-gray-950/50"
+        )}
+      >
+        <div className={cn("flex flex-row gap-3", cleanerBoost ? "p-3.5" : "p-3")}>
           <Link
             href={jobHref}
-            className="relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-lg bg-muted dark:bg-gray-800"
+            className={cn(
+              "relative shrink-0 overflow-hidden rounded-xl bg-muted dark:bg-gray-800",
+              cleanerBoost ? "h-[100px] w-[100px]" : "h-[88px] w-[88px] rounded-lg"
+            )}
             aria-label={`View listing: ${title}`}
           >
             {thumb ? (
@@ -148,26 +158,47 @@ export function JobCardMarketplaceMobile({
             )}
           </Link>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
             <div className="flex items-start justify-between gap-2">
-              <h3 className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold leading-snug text-foreground dark:text-gray-100">
+              <h3
+                className={cn(
+                  "line-clamp-2 min-w-0 flex-1 font-bold leading-snug text-foreground dark:text-gray-100",
+                  cleanerBoost ? "text-base" : "text-sm font-semibold"
+                )}
+              >
                 {title}
               </h3>
               <div className="shrink-0">{menu}</div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-500">
+              <div
+                className={cn(
+                  "min-w-0 rounded-xl px-2.5 py-1.5",
+                  cleanerBoost && "bg-emerald-500/10 ring-1 ring-emerald-500/25 dark:bg-emerald-950/50 dark:ring-emerald-800/50"
+                )}
+              >
+                <p
+                  className={cn(
+                    "font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-500",
+                    cleanerBoost ? "text-[11px]" : "text-[10px]"
+                  )}
+                >
                   {priceLabel}
                 </p>
-                <p className="text-lg font-bold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
+                <p
+                  className={cn(
+                    "font-bold tabular-nums leading-none text-emerald-600 dark:text-emerald-400",
+                    cleanerBoost ? "text-2xl" : "text-lg"
+                  )}
+                >
                   {priceDisplay}
                 </p>
               </div>
               <span
                 className={cn(
-                  "inline-flex max-w-full rounded-md border px-2 py-0.5 text-[10px] font-bold leading-tight",
+                  "inline-flex max-w-full rounded-lg border px-2 py-1 font-bold leading-tight",
+                  cleanerBoost ? "text-xs" : "rounded-md px-2 py-0.5 text-[10px]",
                   statusColors
                 )}
               >
@@ -184,11 +215,23 @@ export function JobCardMarketplaceMobile({
               )}
             </div>
 
-            <p className="line-clamp-1 text-xs text-muted-foreground dark:text-gray-400">
+            <p
+              className={cn(
+                "line-clamp-2 text-muted-foreground dark:text-gray-400",
+                cleanerBoost ? "text-sm font-medium" : "line-clamp-1 text-xs"
+              )}
+            >
               {locationLine}
             </p>
             {bedsBaths && (
-              <p className="text-[11px] text-muted-foreground dark:text-gray-500">{bedsBaths}</p>
+              <p
+                className={cn(
+                  "text-muted-foreground dark:text-gray-500",
+                  cleanerBoost ? "text-sm" : "text-[11px]"
+                )}
+              >
+                {bedsBaths}
+              </p>
             )}
             {showListerTrust &&
               listerVerificationBadges &&
@@ -196,14 +239,17 @@ export function JobCardMarketplaceMobile({
                 <VerificationBadges badges={listerVerificationBadges} showLabel size="sm" />
               )}
 
-            <div className="mt-1 flex flex-wrap gap-2 pt-0.5">
+            <div className={cn("mt-1 flex flex-wrap gap-2 pt-0.5", cleanerBoost && "gap-2.5")}>
               <Button
                 asChild
                 size="sm"
-                className="h-9 min-h-9 flex-1 rounded-lg text-xs font-semibold sm:flex-none sm:px-4"
+                className={cn(
+                  "flex-1 rounded-xl font-semibold sm:flex-none sm:px-4",
+                  cleanerBoost ? "min-h-12 text-sm" : "h-9 min-h-9 rounded-lg text-xs"
+                )}
               >
                 <Link href={jobHref} className="inline-flex items-center justify-center gap-1.5">
-                  <Eye className="h-4 w-4 shrink-0" aria-hidden />
+                  <Eye className={cn("shrink-0", cleanerBoost ? "h-5 w-5" : "h-4 w-4")} aria-hidden />
                   View
                 </Link>
               </Button>
@@ -215,17 +261,23 @@ export function JobCardMarketplaceMobile({
                     listingId={listingId}
                     buyNowCents={buyNowCents}
                     disabled={!isLive}
-                    className="h-9 min-h-9 flex-1 rounded-lg border-0 bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
+                    className={cn(
+                      "flex-1 rounded-xl border-0 bg-violet-600 px-3 font-semibold text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500",
+                      cleanerBoost ? "min-h-12 text-sm" : "h-9 min-h-9 rounded-lg text-xs"
+                    )}
                   />
                 )}
               {showCleanerMobileActions && showPlaceBid && !hideCleanerCancelledAuctionUi && (
                 <Button
                   asChild
                   size="sm"
-                  className="h-9 min-h-9 flex-1 rounded-lg border-0 bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500"
+                  className={cn(
+                    "flex-1 rounded-xl border-0 bg-sky-600 px-3 font-semibold text-white hover:bg-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500",
+                    cleanerBoost ? "min-h-12 text-sm" : "h-9 min-h-9 rounded-lg text-xs"
+                  )}
                 >
                   <Link href={jobHref} className="inline-flex items-center justify-center gap-1.5">
-                    <Gavel className="h-4 w-4 shrink-0" aria-hidden />
+                    <Gavel className={cn("shrink-0", cleanerBoost ? "h-5 w-5" : "h-4 w-4")} aria-hidden />
                     Bid
                   </Link>
                 </Button>
@@ -238,20 +290,26 @@ export function JobCardMarketplaceMobile({
                   type="button"
                   variant="secondary"
                   size="sm"
-                  className="h-8 min-h-8 flex-1 rounded-lg text-xs"
+                  className={cn(
+                    "flex-1 rounded-xl",
+                    cleanerBoost ? "min-h-11 text-sm" : "h-8 min-h-8 rounded-lg text-xs"
+                  )}
                   onClick={handleSave}
                 >
-                  <Bookmark className="mr-1 h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <Bookmark className={cn("mr-1 shrink-0", cleanerBoost ? "h-4 w-4" : "h-3.5 w-3.5")} aria-hidden />
                   Save
                 </Button>
                 <Button
                   asChild
                   variant="outline"
                   size="sm"
-                  className="h-8 min-h-8 flex-1 rounded-lg text-xs dark:border-gray-600"
+                  className={cn(
+                    "flex-1 dark:border-gray-600",
+                    cleanerBoost ? "min-h-11 rounded-xl text-sm" : "h-8 min-h-8 rounded-lg text-xs"
+                  )}
                 >
                   <Link href={`/messages?job=${listingId}`} className="inline-flex items-center justify-center gap-1">
-                    <MessageCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <MessageCircle className={cn("shrink-0", cleanerBoost ? "h-4 w-4" : "h-3.5 w-3.5")} aria-hidden />
                     Msg
                   </Link>
                 </Button>
@@ -283,7 +341,12 @@ export function JobCardMarketplaceMobile({
   }
 
   return (
-    <div className="flex w-full flex-col overflow-hidden rounded-xl">
+    <div
+      className={cn(
+        "flex w-full flex-col overflow-hidden rounded-2xl",
+        cleanerBoost && "shadow-lg shadow-emerald-950/10 ring-1 ring-border/90 dark:shadow-black/40 dark:ring-gray-700/90"
+      )}
+    >
       {/* Hero */}
       <div className={cn("relative w-full overflow-hidden bg-muted dark:bg-gray-800", HERO_H)}>
         <Link
@@ -335,22 +398,47 @@ export function JobCardMarketplaceMobile({
       </div>
 
       {/* Body */}
-      <div className="flex flex-col gap-4 border-t border-border bg-card px-4 pb-5 pt-4 text-foreground dark:border-gray-800 dark:bg-gray-950 sm:px-5">
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-            {priceLabel}
-          </p>
-          <p
-            className={cn(
-              "text-4xl font-extrabold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400",
-              "leading-none"
-            )}
-          >
-            {priceDisplay}
-          </p>
+      <div
+        className={cn(
+          "flex flex-col border-t border-border bg-card text-foreground dark:border-gray-800 dark:bg-gray-950",
+          cleanerBoost ? "gap-5 px-5 pb-6 pt-5 sm:px-6" : "gap-4 px-4 pb-5 pt-4 sm:px-5"
+        )}
+      >
+        <h3
+          className={cn(
+            "line-clamp-2 font-bold leading-tight tracking-tight text-foreground dark:text-gray-50",
+            cleanerBoost ? "text-xl sm:text-2xl" : "text-lg font-semibold"
+          )}
+        >
+          {title}
+        </h3>
+
+        <div
+          className={cn(
+            "space-y-3 rounded-2xl border p-4 dark:border-emerald-900/40",
+            cleanerBoost
+              ? "border-emerald-500/30 bg-gradient-to-br from-emerald-500/[0.12] to-transparent dark:from-emerald-950/50"
+              : "border-border/80 bg-muted/30 dark:bg-gray-900/50"
+          )}
+        >
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800/90 dark:text-emerald-400/90">
+              {priceLabel}
+            </p>
+            <p
+              className={cn(
+                "font-extrabold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400",
+                "leading-none",
+                cleanerBoost ? "text-5xl" : "text-4xl"
+              )}
+            >
+              {priceDisplay}
+            </p>
+          </div>
           <div
             className={cn(
-              "inline-flex w-fit max-w-full rounded-xl border-2 px-3 py-2 text-base font-bold leading-tight",
+              "inline-flex w-fit max-w-full rounded-xl border-2 px-3 py-2.5 font-bold leading-tight",
+              cleanerBoost ? "text-lg" : "text-base",
               statusColors
             )}
           >
@@ -358,22 +446,34 @@ export function JobCardMarketplaceMobile({
           </div>
         </div>
 
-        <p className="text-base font-medium leading-snug text-foreground dark:text-gray-100">
-          {locationLine}
-        </p>
-        {bedsBaths && (
-          <p className="text-base text-muted-foreground dark:text-gray-400">{bedsBaths}</p>
-        )}
+        <div className="space-y-1.5">
+          <p
+            className={cn(
+              "font-semibold leading-snug text-foreground dark:text-gray-100",
+              cleanerBoost ? "text-lg" : "text-base font-medium"
+            )}
+          >
+            {locationLine}
+          </p>
+          {bedsBaths && (
+            <p className={cn("text-muted-foreground dark:text-gray-400", cleanerBoost ? "text-base" : "text-base")}>
+              {bedsBaths}
+            </p>
+          )}
+        </div>
 
         {/* CTAs */}
-        <div className="flex flex-col gap-3 pt-1">
+        <div className={cn("flex flex-col pt-1", cleanerBoost ? "gap-3.5" : "gap-3")}>
           <Button
             asChild
             size="lg"
-            className="min-h-12 w-full rounded-xl text-base font-semibold shadow-md active:scale-[0.98]"
+            className={cn(
+              "w-full rounded-xl font-semibold shadow-md active:scale-[0.98]",
+              cleanerBoost ? "min-h-14 text-lg" : "min-h-12 text-base"
+            )}
           >
             <Link href={jobHref} className="flex items-center justify-center gap-2">
-              <Eye className="h-5 w-5 shrink-0" aria-hidden />
+              <Eye className={cn("shrink-0", cleanerBoost ? "h-6 w-6" : "h-5 w-5")} aria-hidden />
               View Details
             </Link>
           </Button>
@@ -383,7 +483,10 @@ export function JobCardMarketplaceMobile({
               listingId={listingId}
               buyNowCents={buyNowCents}
               disabled={!isLive}
-              className="min-h-12 w-full rounded-xl border-0 bg-violet-600 text-base font-semibold text-white hover:bg-violet-700 active:scale-[0.98] dark:bg-violet-600 dark:hover:bg-violet-500"
+              className={cn(
+                "w-full rounded-xl border-0 bg-violet-600 font-semibold text-white hover:bg-violet-700 active:scale-[0.98] dark:bg-violet-600 dark:hover:bg-violet-500",
+                cleanerBoost ? "min-h-14 text-lg" : "min-h-12 text-base"
+              )}
             />
           )}
 
@@ -391,10 +494,13 @@ export function JobCardMarketplaceMobile({
             <Button
               asChild
               size="lg"
-              className="min-h-12 w-full rounded-xl border-0 bg-sky-600 text-base font-semibold text-white shadow-sm hover:bg-sky-700 active:scale-[0.98] dark:bg-sky-600 dark:hover:bg-sky-500"
+              className={cn(
+                "w-full rounded-xl border-0 bg-sky-600 font-semibold text-white shadow-sm hover:bg-sky-700 active:scale-[0.98] dark:bg-sky-600 dark:hover:bg-sky-500",
+                cleanerBoost ? "min-h-14 text-lg" : "min-h-12 text-base"
+              )}
             >
               <Link href={jobHref} className="flex items-center justify-center gap-2">
-                <Gavel className="h-5 w-5 shrink-0" aria-hidden />
+                <Gavel className={cn("shrink-0", cleanerBoost ? "h-6 w-6" : "h-5 w-5")} aria-hidden />
                 Bid Now
               </Link>
             </Button>
@@ -406,20 +512,26 @@ export function JobCardMarketplaceMobile({
                 type="button"
                 variant="secondary"
                 size="lg"
-                className="min-h-12 rounded-xl text-base font-semibold active:scale-[0.98]"
+                className={cn(
+                  "rounded-xl font-semibold active:scale-[0.98]",
+                  cleanerBoost ? "min-h-14 text-base" : "min-h-12 text-base"
+                )}
                 onClick={handleSave}
               >
-                <Bookmark className="mr-2 h-5 w-5 shrink-0" aria-hidden />
+                <Bookmark className={cn("mr-2 shrink-0", cleanerBoost ? "h-5 w-5" : "h-5 w-5")} aria-hidden />
                 Save
               </Button>
               <Button
                 asChild
                 variant="outline"
                 size="lg"
-                className="min-h-12 rounded-xl border-2 text-base font-semibold active:scale-[0.98] dark:border-gray-500 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
+                className={cn(
+                  "rounded-xl border-2 font-semibold active:scale-[0.98] dark:border-gray-500 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800",
+                  cleanerBoost ? "min-h-14 text-base" : "min-h-12 text-base"
+                )}
               >
                 <Link href={`/messages?job=${listingId}`} className="flex items-center justify-center gap-2">
-                  <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
+                  <MessageCircle className={cn("shrink-0", cleanerBoost ? "h-5 w-5" : "h-5 w-5")} aria-hidden />
                   Message
                 </Link>
               </Button>

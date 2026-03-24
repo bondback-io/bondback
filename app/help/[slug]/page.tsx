@@ -1,10 +1,35 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getArticleBySlug } from "@/lib/help-articles";
 import { markdownToHtml } from "@/lib/markdown";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft } from "lucide-react";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const article = await getArticleBySlug(slug);
+  if (!article) {
+    return { title: "Help article" };
+  }
+  const title = article.title;
+  const description = `${article.title} — Bond Back help centre for bond cleaning and end of lease cleaning in Australia.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/help/${slug}` },
+    openGraph: {
+      title: `${title} · Bond Back Help`,
+      description,
+      url: `/help/${slug}`,
+    },
+  };
+}
 
 export default async function HelpArticlePage({
   params,

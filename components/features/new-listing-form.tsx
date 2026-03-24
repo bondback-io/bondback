@@ -60,6 +60,7 @@ import {
   ChevronLeft,
   HelpCircle,
   X,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
@@ -491,6 +492,7 @@ export function NewListingForm({
         status: "live",
         end_time: endTime,
         end_date: endTime.slice(0, 10),
+        platform_fee_percentage: Math.max(0, Math.min(30, Number(feePercentage) || 12)),
         preferred_dates: [moveOutDateStr],
       });
 
@@ -630,7 +632,30 @@ export function NewListingForm({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <section className="page-inner space-y-8 pb-12 md:space-y-6">
+      <section className="page-inner space-y-6 pb-12 md:space-y-6">
+        <header className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-sky-50/40 px-4 py-5 shadow-sm ring-1 ring-emerald-500/10 dark:border-emerald-800/60 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25 dark:ring-emerald-400/10 sm:px-6 sm:py-6">
+          <div
+            className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl dark:bg-emerald-500/15"
+            aria-hidden
+          />
+          <div className="relative flex flex-col gap-2.5 sm:gap-3">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-900/20 dark:bg-emerald-600 dark:shadow-emerald-950/40">
+                <Sparkles className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" aria-hidden />
+              </span>
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 sm:text-sm">
+                New bond clean listing
+              </p>
+            </div>
+            <h1 className="text-2xl font-bold leading-[1.15] tracking-tight text-foreground dark:text-gray-50 sm:text-3xl">
+              Post your job and get cleaner bids
+            </h1>
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground dark:text-gray-400 sm:text-base">
+              You&apos;re on the create-listing flow: add your property, move-out date, photos, and pricing. Cleaners will see your listing and place competitive bids so you can choose the best offer.
+            </p>
+          </div>
+        </header>
+
         {/* Stepper */}
         <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
           <CardContent className="p-5 sm:p-6 md:p-6">

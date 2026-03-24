@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -6,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import type { Database } from "@/types/supabase";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Lister & cleaner",
+  description:
+    "Onboard as both lister and cleaner on Bond Back — post and bid on bond cleaning jobs.",
+};
 
 export default async function OnboardingBothPage() {
   const supabase = await createServerSupabaseClient();

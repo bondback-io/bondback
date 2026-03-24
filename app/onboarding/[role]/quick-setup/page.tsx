@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { QuickSetupListerClient } from "@/components/onboarding/quick-setup-lister-client";
 import { QuickSetupCleanerClient } from "@/components/onboarding/quick-setup-cleaner-client";
@@ -21,6 +22,23 @@ import { QuickSetupCleanerClient } from "@/components/onboarding/quick-setup-cle
 type PageProps = {
   params: Promise<{ role: string }>;
 };
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { role } = await params;
+  const title =
+    role === "lister"
+      ? "Quick setup — lister"
+      : role === "cleaner"
+        ? "Quick setup — cleaner"
+        : "Quick setup";
+  return {
+    title,
+    description:
+      "Quick setup step for Bond Back — finish onboarding and start listing or bidding on bond cleans.",
+  };
+}
 
 export default async function QuickSetupPage({ params }: PageProps) {
   const { role } = await params;

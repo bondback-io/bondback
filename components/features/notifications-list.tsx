@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -17,6 +17,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { markNotificationRead } from "@/lib/actions/notifications";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import type { ActiveRole } from "@/lib/notifications/notification-role-filter";
+import {
+  filterNotificationsForActiveRole,
+  prependNotificationDeduped,
+} from "@/lib/notifications/notification-role-filter";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
@@ -57,13 +62,20 @@ function labelForType(type: NotificationRow["type"]): string {
 export function NotificationsList({
   initialNotifications,
   currentUserId,
+  activeRole = null,
 }: {
   initialNotifications: NotificationRow[];
   currentUserId: string;
+  activeRole?: ActiveRole;
 }) {
   const supabase = createBrowserSupabaseClient();
   const router = useRouter();
   const [notifications, setNotifications] = useState(initialNotifications);
+
+  const displayedNotifications = useMemo(
+    () => filterNotificationsForActiveRole(notifications, activeRole ?? null),
+    [notifications, activeRole]
+  );
 
   useEffect(() => {
     const channel = supabase
@@ -77,7 +89,10 @@ export function NotificationsList({
           filter: `user_id=eq.${currentUserId}`,
         },
         (payload) => {
-          setNotifications((prev) => [payload.new as NotificationRow, ...prev]);
+          const row = payload.new as NotificationRow;
+          setNotifications((prev) =>
+            prependNotificationDeduped(prev, row, 200)
+          );
         }
       )
       .subscribe();
@@ -99,7 +114,7 @@ export function NotificationsList({
     } else router.push("/dashboard");
   };
 
-  if (notifications.length === 0) {
+  if (displayedNotifications.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
         No notifications yet.
@@ -110,7 +125,7 @@ export function NotificationsList({
   return (
     <ScrollArea className="h-[60vh]">
       <ul className="space-y-1 pr-2">
-        {notifications.map((n) => (
+        {displayedNotifications.map((n) => (
           <li key={n.id}>
             <button
               type="button"

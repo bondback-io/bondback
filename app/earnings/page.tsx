@@ -1,14 +1,22 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getSessionWithProfile } from "@/lib/supabase/session";
 import { EarningsPageClient } from "@/components/features/earnings-page-client";
 import { getEffectivePayoutSchedule, getNextPayoutEstimate, formatPayoutScheduleLabel } from "@/lib/payout-schedule";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
-import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import type { Database } from "@/types/supabase";
 
 const PLATFORM_FEE_RATE = 0.12;
 
-type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+export const metadata: Metadata = {
+  title: "Earnings",
+  description:
+    "Track cleaner earnings and payouts from bond cleaning jobs on Bond Back — Australia.",
+  alternates: { canonical: "/earnings" },
+  robots: { index: false, follow: true },
+};
+
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = {
   id: number;
@@ -24,40 +32,39 @@ type JobRow = {
 };
 
 export default async function EarningsPage() {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) redirect("/login");
+  const sessionData = await getSessionWithProfile();
+  if (!sessionData) redirect("/login");
+  /** Must match avatar menu: same `roles` as layout (getUser + normalizeProfileRolesFromDb). */
+  if (!sessionData.roles.includes("cleaner")) {
+    redirect("/dashboard");
+  }
 
-  const { data: profileData } = await supabase
+  const supabase = await createServerSupabaseClient();
+  const { data: payoutPrefs } = await supabase
     .from("profiles")
-    .select("roles, active_role, full_name, preferred_payout_schedule")
-    .eq("id", session.user.id)
+    .select("preferred_payout_schedule")
+    .eq("id", sessionData.user.id)
     .maybeSingle();
 
   const globalSettings = await getGlobalSettings();
-  const preferred = (profileData as { preferred_payout_schedule?: string | null } | null)?.preferred_payout_schedule ?? "platform_default";
+  const preferred =
+    (payoutPrefs as { preferred_payout_schedule?: string | null } | null)?.preferred_payout_schedule ??
+    "platform_default";
   const platformDefault = (globalSettings?.payout_schedule as "daily" | "weekly" | "monthly") ?? "weekly";
   const effectiveSchedule = getEffectivePayoutSchedule(preferred as "daily" | "weekly" | "monthly" | "platform_default", platformDefault);
   const nextPayoutEstimate = getNextPayoutEstimate(effectiveSchedule);
 
-  const profile = profileData as (ProfileRow & { full_name?: string | null }) | null;
-  /** Same rule as `/cleaner/dashboard`: any profile with the cleaner role can view earnings. */
-  const roles = normalizeProfileRolesFromDb(profile?.roles, !!profile);
   const userName =
-    (profile?.full_name ?? session.user.email?.split("@")[0] ?? "User")
+    (sessionData.profile?.full_name?.trim() ||
+      sessionData.user.email?.split("@")[0] ||
+      "User")
       .replace(/[^a-zA-Z0-9-_]/g, "_")
       .slice(0, 50) || "User";
-
-  if (!roles.includes("cleaner")) {
-    redirect("/dashboard");
-  }
 
   const { data: jobsData } = await supabase
     .from("jobs")
     .select("id, listing_id, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at")
-    .eq("winner_id", session.user.id)
+    .eq("winner_id", sessionData.user.id)
     .in("status", ["in_progress", "completed", "completed_pending_approval"])
     .order("created_at", { ascending: false });
 

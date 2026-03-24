@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { MessagesPageClient } from "@/components/features/messages-page-client";
@@ -7,6 +8,14 @@ type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobMessageRow = Database["public"]["Tables"]["job_messages"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Messages",
+  description:
+    "Job messages between listers and cleaners on Bond Back — bond cleaning coordination in Australia.",
+  alternates: { canonical: "/messages" },
+  robots: { index: false, follow: true },
+};
 
 const MessagesPage = async () => {
   const supabase = await createServerSupabaseClient();

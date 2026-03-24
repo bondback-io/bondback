@@ -7,11 +7,16 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { createNotification, sendPaymentReceiptEmails, sendRefundReceiptEmail } from "@/lib/actions/notifications";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import {
+  fetchPlatformFeePercentForListing,
+  resolvePlatformFeePercent,
+} from "@/lib/platform-fee";
 import { getStripeServer, createJobCheckoutSessionUrl, createJobPaymentIntentWithSavedMethod } from "@/lib/stripe";
 import { isStripeTestMode } from "@/lib/stripe/config";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
+import { logTimerActivity } from "@/lib/admin-activity-log";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -68,8 +73,11 @@ export async function createJobPayment(
   }
 
   const settings = await getGlobalSettings();
-  const feePercent =
-    settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12;
+  const feePercent = await fetchPlatformFeePercentForListing(
+    supabase,
+    j.listing_id,
+    settings
+  );
   const feeCents = Math.round((agreedCents * feePercent) / 100);
   const totalCents = agreedCents + feeCents;
 
@@ -416,7 +424,7 @@ export async function createJobCheckoutSession(
 
   const { data: listing } = await supabase
     .from("listings")
-    .select("id, title, suburb, postcode, buy_now_cents, reserve_cents")
+    .select("id, title, suburb, postcode, buy_now_cents, reserve_cents, platform_fee_percentage")
     .eq("id", row.listing_id)
     .maybeSingle();
 
@@ -441,8 +449,10 @@ export async function createJobCheckoutSession(
   }
 
   const settings = await getGlobalSettings();
-  const feePercent =
-    settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12;
+  const feePercent = resolvePlatformFeePercent(
+    (listing as { platform_fee_percentage?: number | null }).platform_fee_percentage,
+    settings
+  );
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   const { data: listerProfile } = await supabase
@@ -1100,7 +1110,9 @@ export async function releaseJobFunds(
 
   const { data: job, error: jobError } = await supabase
     .from("jobs")
-    .select("id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id")
+    .select(
+      "id, listing_id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id"
+    )
     .eq("id", numericJobId)
     .maybeSingle();
 
@@ -1109,6 +1121,7 @@ export async function releaseJobFunds(
   }
 
   const j = job as {
+    listing_id: string | null;
     payment_intent_id: string | null;
     agreed_amount_cents: number | null;
     winner_id: string | null;
@@ -1193,8 +1206,11 @@ export async function releaseJobFunds(
     // Fee is computed from the job price (agreed_amount_cents), and the payment hold totals:
     // total = job + fee; net = total - fee.
     const settings = await getGlobalSettings();
-    const feePercent =
-      settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12;
+    const feePercent = await fetchPlatformFeePercentForListing(
+      supabase,
+      j.listing_id,
+      settings
+    );
     const feeCents = Math.round((agreedCents * feePercent) / 100);
     const totalCents = agreedCents + feeCents;
     const netCents = Math.max(1, totalCents - feeCents);
@@ -1273,12 +1289,15 @@ export async function executeRefund(
   const supabase = await createServerSupabaseClient();
   const { data: job, error: jobError } = await supabase
     .from("jobs")
-    .select("id, payment_intent_id, agreed_amount_cents, stripe_transfer_id, payment_released_at")
+    .select(
+      "id, listing_id, payment_intent_id, agreed_amount_cents, stripe_transfer_id, payment_released_at"
+    )
     .eq("id", jobId)
     .maybeSingle();
 
   if (jobError || !job) return { ok: false, error: "Job not found." };
   const j = job as {
+    listing_id: string | null;
     payment_intent_id: string | null;
     agreed_amount_cents: number | null;
     stripe_transfer_id: string | null;
@@ -1291,7 +1310,8 @@ export async function executeRefund(
 
   const agreedCents = j.agreed_amount_cents ?? 0;
   const settings = await getGlobalSettings();
-  const feePct = (settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 0) / 100;
+  const feePct =
+    (await fetchPlatformFeePercentForListing(supabase, j.listing_id, settings)) / 100;
   const feeCents = Math.round(agreedCents * feePct);
   const chargeTotalCents = agreedCents + feeCents;
   const amount = Math.min(refundCents, Math.max(1, chargeTotalCents));
@@ -1481,19 +1501,21 @@ export async function finalizeJobPayment(
   const agreedCents = row.agreed_amount_cents ?? 0;
   if (agreedCents >= 1 && row.lister_id) {
     const settings = await getGlobalSettings();
-    const feePct =
-      (settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12) / 100;
-    const feeCents = Math.round(agreedCents * feePct);
-    const totalCents = agreedCents + feeCents;
     let jobTitle: string | null = null;
+    let feePct = (settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12) / 100;
     if (row.listing_id) {
       const { data: listing } = await supabase
         .from("listings")
-        .select("title")
+        .select("title, platform_fee_percentage")
         .eq("id", row.listing_id)
         .maybeSingle();
-      jobTitle = (listing as { title?: string } | null)?.title ?? null;
+      const lr = listing as { title?: string; platform_fee_percentage?: number | null } | null;
+      jobTitle = lr?.title ?? null;
+      feePct =
+        resolvePlatformFeePercent(lr?.platform_fee_percentage, settings) / 100;
     }
+    const feeCents = Math.round(agreedCents * feePct);
+    const totalCents = agreedCents + feeCents;
     await sendPaymentReceiptEmails({
       jobId: numericJobId,
       listerId: row.lister_id,
@@ -1545,15 +1567,14 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
     return { processed: 0, jobIds: [] };
   }
 
-  // Jobs move into `completed_pending_approval` when the cleaner finishes the checklist.
-  // Cron runs with no user session — use service role so RLS does not block reads/updates.
-  // Admin override updates `auto_release_at`, so we rely on that timestamp when present.
+  // Only jobs awaiting lister approval — not in_progress (implicit timer without a row is unsupported).
+  // Paused timers: both auto_release_at and auto_release_at_original null (e.g. after dispute).
   const { data: jobs, error } = await admin
     .from("jobs")
     .select(
       "id, listing_id, lister_id, winner_id, agreed_amount_cents, auto_release_at, auto_release_at_original, cleaner_confirmed_at"
     )
-    .in("status", ["completed_pending_approval", "in_progress"])
+    .eq("status", "completed_pending_approval")
     .eq("cleaner_confirmed_complete", true)
     .is("payment_released_at", null);
 
@@ -1575,14 +1596,8 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
   const nowMs = Date.now();
   const getReleaseAtMs = (job: typeof list[number]) => {
     const atIso = job.auto_release_at ?? job.auto_release_at_original;
-    if (atIso) return new Date(atIso).getTime();
-    if (job.cleaner_confirmed_at) {
-      return (
-        new Date(job.cleaner_confirmed_at).getTime() +
-        autoReleaseHours * 60 * 60 * 1000
-      );
-    }
-    return null;
+    if (!atIso) return null;
+    return new Date(atIso).getTime();
   };
 
   const dueJobs = list.filter((job) => {
@@ -1648,20 +1663,21 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
 
     const agreedCents = job.agreed_amount_cents ?? 0;
     if (agreedCents >= 1 && job.lister_id) {
-      const feePct =
-        (settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12) /
-        100;
-      const feeCents = Math.round(agreedCents * feePct);
-      const totalCents = agreedCents + feeCents;
+      let feePct =
+        (settings?.platform_fee_percentage ?? settings?.fee_percentage ?? 12) / 100;
       let jobTitle: string | null = null;
       if (job.listing_id) {
         const { data: listing } = await admin
           .from("listings")
-          .select("title")
+          .select("title, platform_fee_percentage")
           .eq("id", job.listing_id)
           .maybeSingle();
-        jobTitle = (listing as { title?: string } | null)?.title ?? null;
+        const lr = listing as { title?: string; platform_fee_percentage?: number | null } | null;
+        jobTitle = lr?.title ?? null;
+        feePct = resolvePlatformFeePercent(lr?.platform_fee_percentage, settings) / 100;
       }
+      const feeCents = Math.round(agreedCents * feePct);
+      const totalCents = agreedCents + feeCents;
       await sendPaymentReceiptEmails({
         jobId: job.id,
         listerId: job.lister_id,
@@ -1869,6 +1885,9 @@ export async function openDispute(
     dispute_opened_by: isLister ? "lister" : "cleaner",
     disputed_at: nowIso,
     dispute_status: "disputed",
+    /** Pause auto-release until dispute is resolved */
+    auto_release_at: null as string | null,
+    auto_release_at_original: null as string | null,
     ...(isLister && proposedRefundCents != null
       ? { proposed_refund_amount: proposedRefundCents, counter_proposal_amount: null }
       : {}),
@@ -1884,12 +1903,18 @@ export async function openDispute(
   }
 
   const otherUserId = isLister ? j.winner_id : j.lister_id;
+  const reasonSnippet = fullReason.length > 150 ? `${fullReason.slice(0, 147)}…` : fullReason;
   if (otherUserId) {
-    const reasonSnippet = fullReason.length > 150 ? `${fullReason.slice(0, 147)}…` : fullReason;
     const msg =
-      `A dispute has been opened on this job. You have 72 hours to respond. Reason: ${reasonSnippet}`;
+      `A dispute has been opened on this job. Auto-release is paused. You have 72 hours to respond. Reason: ${reasonSnippet}`;
     await createNotification(otherUserId, "dispute_opened", jobId, msg);
   }
+  await createNotification(
+    session.user.id,
+    "dispute_opened",
+    jobId,
+    "Your dispute was submitted. The review timer is paused until the dispute is resolved."
+  );
 
   revalidatePath("/dashboard");
   revalidatePath(`/jobs/${jobId}`);
@@ -1897,6 +1922,111 @@ export async function openDispute(
   revalidatePath("/admin/disputes");
 
   return { ok: true };
+}
+
+export type ExtendListerReviewResult =
+  | { ok: true; newAutoReleaseAt: string }
+  | { ok: false; error: string };
+
+/**
+ * Lister-only: extend the auto-release deadline by 24 hours once per job.
+ */
+export async function extendListerReview24h(
+  jobId: number
+): Promise<ExtendListerReviewResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  const { data: job, error } = await supabase
+    .from("jobs")
+    .select(
+      "id, lister_id, winner_id, status, auto_release_at, review_extension_used_at"
+    )
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (error || !job) {
+    return { ok: false, error: "Job not found." };
+  }
+
+  const row = job as {
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    auto_release_at: string | null;
+    review_extension_used_at?: string | null;
+  };
+
+  if (row.lister_id !== session.user.id) {
+    return { ok: false, error: "Only the lister can extend the review window." };
+  }
+  if (row.status !== "completed_pending_approval") {
+    return { ok: false, error: "This job is not awaiting your approval." };
+  }
+  if (row.review_extension_used_at) {
+    return { ok: false, error: "You have already used this one-time extension." };
+  }
+  if (!row.auto_release_at?.trim()) {
+    return {
+      ok: false,
+      error: "No active review timer is set (cannot extend when auto-release is paused).",
+    };
+  }
+
+  const prev = new Date(row.auto_release_at).getTime();
+  const newIso = new Date(prev + 24 * 60 * 60 * 1000).toISOString();
+  const usedIso = new Date().toISOString();
+
+  const { error: updateError } = await supabase
+    .from("jobs")
+    .update(
+      {
+        auto_release_at: newIso,
+        auto_release_at_original: newIso,
+        review_extension_used_at: usedIso,
+      } as Partial<JobRow> as never
+    )
+    .eq("id", jobId);
+
+  if (updateError) {
+    return { ok: false, error: updateError.message };
+  }
+
+  await logTimerActivity({
+    actorUserId: session.user.id,
+    actionType: "lister_extend_review_24h",
+    jobId,
+    details: {
+      prev_auto_release_at: row.auto_release_at,
+      new_auto_release_at: newIso,
+    },
+  });
+
+  await createNotification(
+    row.lister_id,
+    "job_completed",
+    jobId,
+    "You extended the review window by 24 hours."
+  );
+  if (row.winner_id) {
+    await createNotification(
+      row.winner_id,
+      "job_completed",
+      jobId,
+      "The lister extended the review window by 24 hours before auto-release."
+    );
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/my-listings");
+
+  return { ok: true, newAutoReleaseAt: newIso };
 }
 
 export type AcceptRefundResult = { ok: true } | { ok: false; error: string };
@@ -2266,8 +2396,8 @@ export async function respondToDispute(
 export type AcceptResolutionResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Mutual "Accept Resolution" – both parties agree (e.g. partial refund).
- * Sets dispute_resolution and completes the job.
+ * Mutual "Accept Resolution" — both parties agree to end the dispute and return to lister review.
+ * Sets status to `completed_pending_approval` with a fresh auto-release timer; does not release funds.
  */
 export async function acceptResolution(jobId: number): Promise<AcceptResolutionResult> {
   const supabase = await createServerSupabaseClient();
@@ -2301,22 +2431,22 @@ export async function acceptResolution(jobId: number): Promise<AcceptResolutionR
   }
 
   const nowIso = new Date().toISOString();
+  const settings = await getGlobalSettings();
+  const hrs = settings?.auto_release_hours ?? 48;
+  const newReleaseIso = new Date(
+    Date.now() + hrs * 60 * 60 * 1000
+  ).toISOString();
 
-  // Mutual agreement closes the dispute and releases funds to the cleaner.
-  if (!j.payment_released_at && j.payment_intent_id?.trim()) {
-    const releaseResult = await releaseJobFunds(jobId);
-    if (!releaseResult.ok) {
-      return { ok: false, error: releaseResult.error };
-    }
-  }
-
+  /** Mutual agreement: close dispute and return to lister review — no payout until lister approves again. */
   const updatePayload = {
-    status: "completed",
+    status: "completed_pending_approval",
     dispute_resolution: "mutual_agreement",
-    resolution_type: "release_funds",
+    resolution_type: "return_to_review",
     resolution_at: nowIso,
     resolution_by: session.user.id,
-    dispute_status: "completed",
+    dispute_status: "resolved",
+    auto_release_at: newReleaseIso,
+    auto_release_at_original: newReleaseIso,
   };
 
   const { error: updateError } = await supabase
@@ -2328,24 +2458,12 @@ export async function acceptResolution(jobId: number): Promise<AcceptResolutionR
     return { ok: false, error: updateError.message };
   }
 
-  // Dispute resolved by mutual agreement and funds released; mark listing ended
-  // so it no longer shows as live.
-  if (j.listing_id) {
-    await supabase
-      .from("listings")
-      .update({ status: "ended" } as never)
-      .eq("id", j.listing_id as never);
-  }
-
-  const resolvedMsg = "Dispute resolved by mutual agreement. Funds have been released.";
+  const resolvedMsg =
+    "Dispute closed by mutual agreement. The lister has a fresh review window — funds stay in escrow until they approve or the timer elapses.";
   if (j.winner_id) {
-    await createNotification(j.winner_id, "payment_released", jobId, resolvedMsg);
     await createNotification(j.winner_id, "dispute_resolved", jobId, resolvedMsg);
   }
-  await createNotification(j.lister_id, "payment_released", jobId, resolvedMsg);
   await createNotification(j.lister_id, "dispute_resolved", jobId, resolvedMsg);
-
-  await applyReferralRewardsForCompletedJob(jobId);
 
   revalidatePath("/dashboard");
   revalidatePath(`/jobs/${jobId}`);

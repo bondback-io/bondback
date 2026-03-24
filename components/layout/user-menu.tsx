@@ -295,18 +295,6 @@ export function UserMenu({ session }: UserMenuProps) {
                     </Link>
                   </SheetClose>
                 )}
-                {isLister && (
-                  <SheetClose asChild>
-                    <Link
-                      href="/dashboard"
-                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                      aria-label="Dashboard"
-                    >
-                      <Briefcase className="h-5 w-5 shrink-0" aria-hidden />
-                      <span>Dashboard</span>
-                    </Link>
-                  </SheetClose>
-                )}
                 <SheetClose asChild>
                   <Link
                     href={jobsActivityHref(isLister, hasCleanerRole)}
@@ -426,14 +414,6 @@ export function UserMenu({ session }: UserMenuProps) {
           <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
             Jobs &amp; activity
           </div>
-          {isLister && (
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard" className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800">
-                <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span>Dashboard</span>
-              </Link>
-            </DropdownMenuItem>
-          )}
           <DropdownMenuItem asChild>
             <Link
               href={jobsActivityHref(isLister, hasCleanerRole)}

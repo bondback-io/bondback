@@ -11,6 +11,7 @@ import {
 import { DashboardListingCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 import { XCircle, ChevronDown } from "lucide-react";
 import type { ListingRow } from "@/lib/listings";
+import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 
 type JobRow = { id: number; listing_id: string; status: string; updated_at?: string | null };
 
@@ -105,7 +106,10 @@ export function ListerDashboardContent({
                   listing={listing}
                   bidCount={bidCountByListingId[String(listing.id)] ?? 0}
                   isUrgent={isUrgent}
-                  feePercentage={feePercentage}
+                  feePercentage={resolvePlatformFeePercent(
+                    listing.platform_fee_percentage,
+                    feePercentage
+                  )}
                 />
               );
             })}

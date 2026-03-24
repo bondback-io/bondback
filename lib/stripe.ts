@@ -84,7 +84,7 @@ export async function createBuyNowCheckoutSessionUrl(
  *
  * Calculation: total = agreed_amount (to cleaner) + platform fee.
  * Example: $395 job + 12% fee = $395 + $47.40 = $442.40 charged at checkout.
- * Fee is from Admin > Global Settings > platform_fee_percentage (default 12).
+ * Fee % is passed by the caller (from the listing row snapshot at creation, not only global settings).
  */
 export async function createJobCheckoutSessionUrl(
   job: { id: number | string; agreed_amount_cents: number },

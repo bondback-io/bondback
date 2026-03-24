@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
@@ -7,6 +8,14 @@ import { Button } from "@/components/ui/button";
 import { NotificationsList } from "@/components/features/notifications-list";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Notifications",
+  description:
+    "Bond Back notifications for bids, jobs, payments, and bond cleaning updates in Australia.",
+  alternates: { canonical: "/notifications" },
+  robots: { index: false, follow: true },
+};
 
 export default async function NotificationsPage() {
   const supabase = await createServerSupabaseClient();
@@ -17,6 +26,15 @@ export default async function NotificationsPage() {
   if (!session) {
     redirect("/login?next=/notifications");
   }
+
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("active_role")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  const ar = (profileRow as { active_role?: string } | null)?.active_role;
+  const activeRole =
+    ar === "lister" || ar === "cleaner" ? ar : null;
 
   const { data: rows } = await supabase
     .from("notifications")
@@ -51,6 +69,7 @@ export default async function NotificationsPage() {
           <NotificationsList
             initialNotifications={notifications}
             currentUserId={session.user.id}
+            activeRole={activeRole}
           />
         </CardContent>
       </Card>

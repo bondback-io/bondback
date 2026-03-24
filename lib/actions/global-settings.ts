@@ -204,6 +204,7 @@ export async function saveGlobalSettings(
   data: SaveGlobalSettingsInput
 ): Promise<SaveGlobalSettingsResult> {
   const supabase = await requireAdmin();
+  const admin = createSupabaseAdminClient();
 
   const row: Record<string, unknown> = {
     id: 1,
@@ -236,9 +237,9 @@ export async function saveGlobalSettings(
     max_push_per_user_per_day: data.maxPushPerUserPerDay ?? null,
   };
 
-  const { error } = await supabase
-    .from("global_settings")
-    .upsert(row as never, { onConflict: "id" });
+  const { error } = admin
+    ? await admin.from("global_settings").upsert(row as never, { onConflict: "id" })
+    : await supabase.from("global_settings").upsert(row as never, { onConflict: "id" });
 
   if (error) {
     const msg = error.message;
@@ -270,6 +271,7 @@ export async function saveGlobalSettings(
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/emails");
   revalidatePath("/");
+  revalidatePath("/", "layout");
 
   // Clear Stripe config/server cache so next request uses the new test/live mode
   const { clearStripeConfigCache } = await import("@/lib/stripe/config");
@@ -278,6 +280,66 @@ export async function saveGlobalSettings(
   clearStripeServerCache();
 
   return { ok: true };
+}
+
+export type SetFloatingChatEnabledResult =
+  | { ok: true; floatingChatEnabled: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Update only floating chat visibility (header icon + floating panel).
+ * Uses upsert (not bare update) so id=1 always gets a row — plain UPDATE can match 0 rows with no error.
+ */
+export async function setFloatingChatEnabled(
+  enabled: boolean
+): Promise<SetFloatingChatEnabledResult> {
+  const supabase = await requireAdmin();
+  const admin = createSupabaseAdminClient();
+
+  const nowIso = new Date().toISOString();
+  const row = {
+    id: 1,
+    floating_chat_enabled: enabled,
+    updated_at: nowIso,
+  };
+
+  const { data: upserted, error } = admin
+    ? await admin
+        .from("global_settings")
+        .upsert(row as never, { onConflict: "id" })
+        .select("floating_chat_enabled")
+        .maybeSingle()
+    : await supabase
+        .from("global_settings")
+        .upsert(row as never, { onConflict: "id" })
+        .select("floating_chat_enabled")
+        .maybeSingle();
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  const savedRaw = (upserted as { floating_chat_enabled?: unknown } | null)?.floating_chat_enabled;
+  const saved =
+    savedRaw === false || savedRaw === "false" || savedRaw === 0 ? false : true;
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const { logAdminActivity } = await import("@/lib/admin-activity-log");
+  await logAdminActivity({
+    adminId: session?.user?.id ?? null,
+    actionType: "floating_chat_toggled",
+    targetType: "other",
+    targetId: null,
+    details: { floating_chat_enabled: saved },
+  });
+
+  revalidatePath("/admin/global-settings");
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/dashboard");
+  revalidatePath("/");
+  revalidatePath("/", "layout");
+
+  return { ok: true, floatingChatEnabled: saved };
 }
 
 export type SetStripeTestModeResult =
@@ -305,6 +367,7 @@ export async function setStripeTestMode(
   });
   revalidatePath("/admin/global-settings");
   revalidatePath("/");
+  revalidatePath("/", "layout");
   const { clearStripeConfigCache } = await import("@/lib/stripe/config");
   const { clearStripeServerCache } = await import("@/lib/stripe");
   clearStripeConfigCache();

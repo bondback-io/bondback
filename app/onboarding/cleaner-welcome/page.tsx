@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -7,6 +8,12 @@ import type { Database } from "@/types/supabase";
 import { Briefcase, CheckCircle2 } from "lucide-react";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+export const metadata: Metadata = {
+  title: "Welcome, cleaner",
+  description:
+    "Welcome to Bond Back as a cleaner — bid on bond cleaning and end of lease jobs near you.",
+};
 
 export default async function CleanerWelcomePage() {
   const supabase = await createServerSupabaseClient();

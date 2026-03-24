@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { DetailsFormClient } from "@/components/onboarding/details-form-client";
 import type { OnboardingRole } from "@/components/onboarding/onboarding-storage";
 
@@ -7,6 +8,24 @@ const VALID_ROLES: OnboardingRole[] = ["lister", "cleaner", "both"];
 type PageProps = {
   params: Promise<{ role: string }>;
 };
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { role } = await params;
+  const label =
+    role === "lister"
+      ? "Lister details"
+      : role === "cleaner"
+        ? "Cleaner details"
+        : role === "both"
+          ? "Lister & cleaner details"
+          : "Your details";
+  return {
+    title: label,
+    description: `Add your ${role} details for Bond Back onboarding — bond cleaning marketplace.`,
+  };
+}
 
 export default async function OnboardingDetailsPage({ params }: PageProps) {
   const { role } = await params;

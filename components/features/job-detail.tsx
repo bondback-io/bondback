@@ -14,7 +14,7 @@ import { BidHistoryTable } from "@/components/features/bid-history-table";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
 import { BuyNowButton } from "@/components/features/buy-now-button";
 import { formatCents } from "@/lib/listings";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { parseUtcTimestamp, cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 import {
   Dialog,
@@ -33,7 +33,16 @@ import { ReviewForm } from "@/components/features/review-form";
 import { GuidedDisputeForm } from "@/components/features/guided-dispute-form";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsOffline } from "@/hooks/use-offline";
-import { respondToDispute, acceptResolution, acceptRefund, counterRefund, rejectRefund, acceptCounterRefund, acceptBid } from "@/lib/actions/jobs";
+import {
+  respondToDispute,
+  acceptResolution,
+  acceptRefund,
+  counterRefund,
+  rejectRefund,
+  acceptCounterRefund,
+  acceptBid,
+  extendListerReview24h,
+} from "@/lib/actions/jobs";
 import {
   Select,
   SelectContent,
@@ -83,6 +92,8 @@ export type JobDetailProps = {
   autoReleaseAt?: string | null;
   /** Review window duration hours (defaults to 48). */
   autoReleaseHours?: number;
+  /** Set when the lister used the one-time 24h extension (server column). */
+  reviewExtensionUsedAt?: string | null;
   cleanerConfirmedComplete?: boolean;
   cleanerConfirmedAt?: string | null;
   /** Who opened the dispute (when status is disputed/in_review). */
@@ -139,6 +150,7 @@ export function JobDetail({
   completedAt = null,
   autoReleaseAt = null,
   autoReleaseHours = 48,
+  reviewExtensionUsedAt = null,
   cleanerConfirmedComplete = false,
   cleanerConfirmedAt = null,
   disputeOpenedBy = null,
@@ -204,6 +216,7 @@ export function JobDetail({
   const [isSubmittingResponse, startSubmitResponse] = useTransition();
   const [responseSubmitted, setResponseSubmitted] = useState(false);
   const [isAcceptingResolution, startAcceptResolution] = useTransition();
+  const [isExtendingReview, startExtendReview] = useTransition();
   const [isAcceptingRefund, startAcceptRefund] = useTransition();
   const [isCounteringRefund, startCounteringRefund] = useTransition();
   const [isRejectingRefund, startRejectingRefund] = useTransition();
@@ -770,13 +783,35 @@ export function JobDetail({
     return `${hours}h ${minutes}m`;
   };
 
+  const canExtendListerReview =
+    isJobLister &&
+    localJobStatus === "completed_pending_approval" &&
+    !!autoReleaseAt?.trim() &&
+    !reviewExtensionUsedAt;
+
+  /** Larger type, spacing, and highlighted panels for cleaner or lister job-detail views. */
+  const listerDetailUI = !isCleaner && (isListingOwner || isJobLister);
+  const detailUiBoost = isCleaner || listerDetailUI;
+  /** Checklist is used by both parties during in-progress — match touch targets for both. */
+  const checklistParty = isJobCleaner || isJobLister;
+
   return (
-    <div className="space-y-6">
+    <div className={cn("space-y-6", detailUiBoost && "pb-24 md:pb-10")}>
       {paymentTimeline && (
         <JobPaymentTimeline {...paymentTimeline} />
       )}
-      <Card>
-        <CardHeader className="space-y-3">
+      <Card
+        className={cn(
+          detailUiBoost &&
+            "overflow-hidden rounded-2xl border-border/90 shadow-md ring-1 ring-border/50 dark:border-gray-800 dark:ring-gray-800/50"
+        )}
+      >
+        <CardHeader
+          className={cn(
+            "space-y-3",
+            detailUiBoost && "space-y-4 px-4 pt-2 sm:px-6 sm:pt-4"
+          )}
+        >
           {isListingOwner && !hasActiveJob && isLive && (
             <div className="flex justify-end">
               <Button
@@ -791,23 +826,49 @@ export function JobDetail({
             </div>
           )}
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <CardTitle className="text-xl dark:text-gray-100">{listing.title}</CardTitle>
+            <CardTitle
+              className={cn(
+                "text-xl dark:text-gray-100",
+                detailUiBoost &&
+                  "text-2xl font-bold leading-tight tracking-tight sm:text-3xl"
+              )}
+            >
+              {listing.title}
+            </CardTitle>
             {!isSold && !hideCleanerCancelledAuctionUi && (
               <CountdownTimer
                 endTime={listing.end_time}
-                className="text-sm font-medium"
+                className={cn(
+                  "font-medium",
+                  detailUiBoost ? "text-base font-semibold sm:text-lg" : "text-sm"
+                )}
                 expiredLabel="Auction ended"
               />
             )}
           </div>
-          <p className="flex items-center gap-2 text-sm text-muted-foreground dark:text-gray-400">
-            <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+          <p
+            className={cn(
+              "flex items-center gap-2 text-muted-foreground dark:text-gray-400",
+              detailUiBoost ? "text-base sm:text-lg" : "text-sm"
+            )}
+          >
+            <MapPin
+              className={cn("shrink-0", detailUiBoost ? "h-5 w-5" : "h-4 w-4")}
+              aria-hidden
+            />
             <span>{formatLocationWithState(listing.suburb, listing.postcode)}</span>
           </p>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent
+          className={cn("space-y-4", detailUiBoost && "space-y-5 px-4 sm:px-6")}
+        >
           {hasActiveJob && (listerName || cleanerName) && (
-            <div className="border-b border-border pb-3 text-[11px] text-muted-foreground dark:border-gray-700 dark:text-gray-400">
+            <div
+              className={cn(
+                "border-b border-border pb-3 text-muted-foreground dark:border-gray-700 dark:text-gray-400",
+                detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
+              )}
+            >
               <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
                 {listerName && (
                   <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -847,7 +908,12 @@ export function JobDetail({
             bids.length > 0 &&
             !hasActiveJob &&
             !hideCleanerCancelledAuctionUi && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/90 px-4 py-2.5 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+            <div
+              className={cn(
+                "flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-2.5 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200",
+                detailUiBoost ? "py-3 text-base font-semibold" : "text-sm"
+              )}
+            >
               <span className="flex h-2 w-2 shrink-0 rounded-full bg-emerald-500 dark:bg-emerald-400" aria-hidden />
               <span className="font-medium">
                 This listing is currently live and has bids
@@ -855,11 +921,26 @@ export function JobDetail({
             </div>
           )}
           {isListingOwner && !hasActiveJob && isLive && (
-            <div className="rounded-lg border border-sky-200/70 bg-sky-50/60 px-4 py-3 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/35">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700/90 dark:text-sky-400/90">
+            <div
+              className={cn(
+                "rounded-xl border border-sky-200/70 bg-sky-50/60 px-4 py-3 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/35",
+                listerDetailUI && "rounded-2xl border-2 px-5 py-4"
+              )}
+            >
+              <p
+                className={cn(
+                  "font-semibold uppercase tracking-wide text-sky-700/90 dark:text-sky-400/90",
+                  listerDetailUI ? "text-xs sm:text-sm" : "text-[11px]"
+                )}
+              >
                 Status
               </p>
-              <p className="mt-1 text-sm font-medium leading-snug text-sky-900 dark:text-sky-100">
+              <p
+                className={cn(
+                  "mt-1 font-medium leading-snug text-sky-900 dark:text-sky-100",
+                  listerDetailUI ? "text-lg sm:text-xl" : "text-sm"
+                )}
+              >
                 Live &amp; Waiting for Cleaner Bids
               </p>
             </div>
@@ -886,9 +967,19 @@ export function JobDetail({
             </div>
           )}
           {hasActiveJob && (
-            <div className="space-y-1 rounded-md border border-border bg-muted/40 px-4 py-3 text-[11px] dark:border-gray-700 dark:bg-gray-800/50">
+            <div
+              className={cn(
+                "space-y-2 rounded-xl border border-border bg-muted/40 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50",
+                detailUiBoost && "text-sm ring-1 ring-border/60 dark:ring-gray-700/80"
+              )}
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-300">
+                <p
+                  className={cn(
+                    "font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-300",
+                    detailUiBoost && "text-xs sm:text-sm"
+                  )}
+                >
                   Job progress
                 </p>
                 {localJobStatus === "accepted" && hasPaymentHold && (
@@ -936,10 +1027,18 @@ export function JobDetail({
                 ].map((step, index) => (
                   <div
                     key={step.label}
-                    className="flex items-center gap-1 text-[11px]"
+                    className={cn(
+                      "flex items-center gap-1.5",
+                      detailUiBoost ? "text-xs sm:text-sm" : "text-[11px]"
+                    )}
                   >
                     {step.done ? (
-                      <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                      <CheckCircle2
+                        className={cn(
+                          "text-emerald-600",
+                          detailUiBoost ? "h-4 w-4" : "h-3 w-3"
+                        )}
+                      />
                     ) : (
                       <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40 dark:bg-gray-500/60" />
                     )}
@@ -965,20 +1064,58 @@ export function JobDetail({
             (localJobStatus === "in_progress" ||
               localJobStatus === "completed_pending_approval") &&
             isJobCleaner && (
-              <div className="space-y-1 rounded-md border border-sky-300 bg-sky-50/70 px-4 py-3 dark:border-sky-800 dark:bg-sky-900/40">
-                <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-sky-900 dark:text-sky-100">
-                  <MapPin className="h-3 w-3" />
+              <div className="space-y-2 rounded-2xl border-2 border-sky-400/50 bg-gradient-to-br from-sky-50 to-transparent px-4 py-4 dark:border-sky-700 dark:from-sky-950/50 sm:px-5">
+                <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-sky-900 dark:text-sky-100">
+                  <MapPin className="h-5 w-5 shrink-0" />
                   <span>Property address</span>
                 </p>
-                <p className="text-sm font-medium text-sky-900 dark:text-sky-100">
+                <p className="text-lg font-semibold leading-snug text-sky-950 dark:text-sky-50 sm:text-xl">
                   {propertyAddress && propertyAddress.trim().length > 0
                     ? propertyAddress
                     : formatLocationWithState(listing.suburb, listing.postcode)}
                 </p>
-                <p className="text-[11px] text-sky-800 dark:text-sky-200">
+                <p className="text-sm leading-relaxed text-sky-900 dark:text-sky-200">
                   This is the location for this bond clean job. Use it for your
                   maps and travel planning.
                 </p>
+              </div>
+            )}
+
+          {hasActiveJob &&
+            isJobCleaner &&
+            localJobStatus === "completed_pending_approval" && (
+              <div className="rounded-2xl border border-amber-400/70 bg-gradient-to-br from-amber-50 to-amber-100/40 px-4 py-4 dark:border-amber-800/60 dark:from-amber-950/50 dark:to-amber-900/20 sm:px-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base font-bold text-amber-950 dark:text-amber-100">
+                      Lister review window
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-amber-900/95 dark:text-amber-200/95">
+                      {autoReleaseAt && autoReleaseMsLeft != null
+                        ? `If the lister doesn't approve or raise a dispute, your payment auto-releases when this timer hits zero.`
+                        : `Auto-release is paused (e.g. dispute open or admin hold). You'll be notified when the review timer resumes.`}
+                    </p>
+                  </div>
+                  {autoReleaseAt && autoReleaseMsLeft != null ? (
+                    <Badge
+                      className={cn(
+                        "shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums",
+                        autoReleaseBadgeClass
+                      )}
+                    >
+                      {autoReleaseMsLeft <= 0
+                        ? "Auto-release now"
+                        : `Auto-release in ${formatAutoReleaseCountdown(autoReleaseMsLeft)}`}
+                    </Badge>
+                  ) : (
+                    <Badge className="shrink-0 rounded-full border-amber-300 bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
+                      Paused
+                    </Badge>
+                  )}
+                </div>
+                {autoReleaseAt && autoReleaseMsLeft != null && autoReleaseMsLeft > 0 && (
+                  <Progress value={autoReleaseProgressValue} className="mt-3 h-2.5" />
+                )}
               </div>
             )}
 
@@ -988,11 +1125,11 @@ export function JobDetail({
                 <>
                   {isJobLister && (
                     <>
-                      <div className="space-y-2 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-3 dark:border-emerald-700 dark:bg-emerald-900/40">
-                        <p className="text-xs font-medium uppercase tracking-wide text-emerald-900 dark:text-emerald-200">
+                      <div className="space-y-3 rounded-2xl border-2 border-emerald-400/60 bg-gradient-to-br from-emerald-50 to-emerald-100/50 px-4 py-4 dark:border-emerald-700 dark:from-emerald-950/40 dark:to-emerald-900/30 sm:px-5">
+                        <p className="text-sm font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-200">
                           Payment released
                         </p>
-                        <p className="text-xl font-semibold text-emerald-900 sm:text-2xl dark:text-emerald-100">
+                        <p className="text-xl font-semibold leading-snug text-emerald-900 sm:text-2xl dark:text-emerald-100">
                           {`Congratulations! Your payment of ${formatCents(
                             agreedAmountCents
                           )} has been paid to ${
@@ -1002,11 +1139,11 @@ export function JobDetail({
                           }.`}
                         </p>
                       </div>
-                      <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                      <div className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
                         <div className="flex items-center gap-0.5 text-amber-500 dark:text-amber-400">
-                          <Star className="h-3 w-3 fill-amber-400 dark:fill-amber-500" />
-                          <Star className="h-3 w-3 fill-amber-400 dark:fill-amber-500" />
-                          <Star className="h-3 w-3 fill-amber-400 dark:fill-amber-500" />
+                          <Star className="h-4 w-4 fill-amber-400 dark:fill-amber-500" />
+                          <Star className="h-4 w-4 fill-amber-400 dark:fill-amber-500" />
+                          <Star className="h-4 w-4 fill-amber-400 dark:fill-amber-500" />
                         </div>
                         <p>
                           Leave a review for{" "}
@@ -1022,19 +1159,19 @@ export function JobDetail({
                   )}
                   {isJobCleaner && (
                     <>
-                      <div className="space-y-2 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-3 dark:border-emerald-700 dark:bg-emerald-900/40">
-                        <p className="text-xs font-medium uppercase tracking-wide text-emerald-900 dark:text-emerald-200">
+                      <div className="space-y-3 rounded-2xl border-2 border-emerald-400/60 bg-gradient-to-br from-emerald-50 to-emerald-100/50 px-4 py-4 dark:border-emerald-700 dark:from-emerald-950/40 dark:to-emerald-900/30 sm:px-5">
+                        <p className="text-sm font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-200">
                           Payment released
                         </p>
-                        <p className="text-xl font-semibold text-emerald-900 sm:text-2xl dark:text-emerald-100">
+                        <p className="text-xl font-semibold leading-snug text-emerald-900 sm:text-2xl dark:text-emerald-100">
                           {`Payment of ${formatCents(
                             agreedAmountCents
                           )} has been released to you :)`}
                         </p>
-                        <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
+                        <p className="text-sm leading-relaxed text-emerald-800 dark:text-emerald-200">
                           You received the full bid amount. The lister paid the platform fee separately.
                         </p>
-                        <p className="text-[11px] text-emerald-800/90 dark:text-emerald-200/90">
+                        <p className="text-sm leading-relaxed text-emerald-800/90 dark:text-emerald-200/90">
                           Funds sent to your Stripe account – automatic payout in 2–7 days, or use Withdraw Now in Settings → Payments.
                         </p>
                       </div>
@@ -1083,80 +1220,121 @@ export function JobDetail({
               This listing is no longer accepting bids.
             </p>
           ) : isListingOwner && !isCleaner ? (
-            <div className="space-y-4 rounded-xl border border-border bg-muted/25 p-4 dark:border-gray-700 dark:bg-gray-900/35 sm:p-5">
+            <div className="space-y-5 rounded-2xl border border-border bg-gradient-to-b from-muted/40 to-muted/10 p-4 dark:border-gray-700 dark:from-gray-900/50 dark:to-gray-950/30 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-x-6 sm:gap-y-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground dark:text-gray-400 sm:text-sm">
                     Starting price
                   </p>
-                  <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-xl">
+                  <p className="mt-1 text-xl font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-2xl">
                     {formatCents(listing.starting_price_cents)}
                   </p>
                 </div>
                 {listing.buy_now_cents != null && listing.buy_now_cents > 0 && (
                   <div className="min-w-0 sm:text-right">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground dark:text-gray-400 sm:text-sm">
                       Buy now
                     </p>
-                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-xl">
+                    <p className="mt-1 text-xl font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-2xl">
                       {formatCents(listing.buy_now_cents)}
                     </p>
                     {listing.current_lowest_bid_cents < listing.buy_now_cents && (
-                      <p className="mt-2 max-w-md rounded-md bg-amber-50 px-2.5 py-1.5 text-left text-xs leading-snug text-amber-900 dark:bg-amber-900/30 dark:text-amber-100 sm:ml-auto sm:text-right">
+                      <p className="mt-3 max-w-md rounded-xl bg-amber-50 px-3 py-2 text-left text-sm leading-snug text-amber-900 dark:bg-amber-900/30 dark:text-amber-100 sm:ml-auto sm:text-right">
                         Current bid is below the fixed price. Securing at this price may no longer be available.
                       </p>
                     )}
                   </div>
                 )}
               </div>
-              <div className="rounded-xl border-2 border-primary/25 bg-background/90 px-4 py-5 dark:border-primary/35 dark:bg-gray-950/70">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+              <div className="rounded-2xl border-2 border-primary/30 bg-background/95 px-4 py-5 dark:border-primary/40 dark:bg-gray-950/80 sm:px-6 sm:py-6">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground dark:text-gray-400 sm:text-sm">
                   Current lowest bid
                 </p>
                 <p className="mt-2 text-3xl font-bold tabular-nums leading-none tracking-tight text-primary sm:text-4xl md:text-5xl">
                   {formatCents(listing.current_lowest_bid_cents)}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3 dark:border-gray-600 dark:bg-gray-800/70">
-                <span className="text-sm font-medium text-muted-foreground dark:text-gray-300">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 dark:border-gray-600 dark:bg-gray-800/70">
+                <span className="text-base font-medium text-muted-foreground dark:text-gray-300">
                   Platform fee ({feePercentage}%)
                 </span>
-                <span className="text-xl font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-2xl">
+                <span className="text-2xl font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-3xl">
                   {formatCents(platformFeeOnCurrentBidCents)}
                 </span>
               </div>
-              <p className="text-[11px] leading-relaxed text-muted-foreground dark:text-gray-500">
+              <p className="text-sm leading-relaxed text-muted-foreground dark:text-gray-500">
                 Fee is calculated on the current lowest bid and updates as bids change.
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div
+              className={cn(
+                "grid gap-4 sm:grid-cols-2",
+                detailUiBoost &&
+                  "rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.1] to-transparent p-4 dark:border-emerald-900/50 dark:from-emerald-950/40 sm:p-5"
+              )}
+            >
               <div>
-                <p className="text-xs font-medium text-muted-foreground dark:text-gray-400">
+                <p
+                  className={cn(
+                    "font-medium text-muted-foreground dark:text-gray-400",
+                    detailUiBoost ? "text-sm" : "text-xs"
+                  )}
+                >
                   Starting price
                 </p>
-                <p className="text-base font-semibold tabular-nums dark:text-gray-100">
+                <p
+                  className={cn(
+                    "font-semibold tabular-nums dark:text-gray-100",
+                    detailUiBoost ? "text-xl" : "text-base"
+                  )}
+                >
                   {formatCents(listing.starting_price_cents)}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground dark:text-gray-400">
+                <p
+                  className={cn(
+                    "font-medium text-muted-foreground dark:text-gray-400",
+                    detailUiBoost ? "text-sm" : "text-xs"
+                  )}
+                >
                   Current lowest bid
                 </p>
-                <p className="text-2xl font-bold tabular-nums text-primary dark:text-primary sm:text-3xl">
+                <p
+                  className={cn(
+                    "font-bold tabular-nums text-primary dark:text-primary",
+                    detailUiBoost ? "text-3xl sm:text-4xl" : "text-2xl sm:text-3xl"
+                  )}
+                >
                   {formatCents(listing.current_lowest_bid_cents)}
                 </p>
               </div>
               {listing.buy_now_cents != null && listing.buy_now_cents > 0 && (
                 <div className="sm:col-span-2">
-                  <p className="text-xs font-medium text-muted-foreground dark:text-gray-400">
+                  <p
+                    className={cn(
+                      "font-medium text-muted-foreground dark:text-gray-400",
+                      detailUiBoost ? "text-sm" : "text-xs"
+                    )}
+                  >
                     Buy now
                   </p>
-                  <p className="text-base font-semibold tabular-nums dark:text-gray-100">
+                  <p
+                    className={cn(
+                      "font-semibold tabular-nums dark:text-gray-100",
+                      detailUiBoost ? "text-xl" : "text-base"
+                    )}
+                  >
                     {formatCents(listing.buy_now_cents)}
                   </p>
                   {listing.current_lowest_bid_cents < listing.buy_now_cents && (
-                    <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                    <p
+                      className={cn(
+                        "mt-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+                        detailUiBoost ? "text-sm leading-snug" : "mt-1.5 px-2 py-1 text-xs"
+                      )}
+                    >
                       Current bid is below the fixed price. Securing at this price may no longer be available.
                     </p>
                   )}
@@ -1166,15 +1344,30 @@ export function JobDetail({
           )}
 
           {bondGuideline && (
-            <details className="mt-2 text-xs text-muted-foreground dark:text-gray-400">
-              <summary className="cursor-pointer select-none dark:text-gray-300">
+            <details
+              className={cn(
+                "mt-2 text-muted-foreground dark:text-gray-400",
+                detailUiBoost ? "text-sm" : "text-xs"
+              )}
+            >
+              <summary
+                className={cn(
+                  "cursor-pointer select-none rounded-lg py-2 font-medium dark:text-gray-300",
+                  detailUiBoost && "min-h-12 text-base"
+                )}
+              >
                 Bond cleaning guideline ({bondGuideline.state})
               </summary>
-              <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/30">
-                <p className="text-[11px] dark:text-gray-200">
+              <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/30 px-3 py-3 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-200">
+                <p className={cn(detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]")}>
                   {bondGuideline.summary}
                 </p>
-                <ul className="list-inside list-disc space-y-0.5 text-[11px] dark:text-gray-200">
+                <ul
+                  className={cn(
+                    "list-inside list-disc space-y-1",
+                    detailUiBoost ? "text-sm" : "text-[11px]"
+                  )}
+                >
                   {bondGuideline.checklist.map((item, i) => (
                     <li key={i}>{item}</li>
                   ))}
@@ -1201,7 +1394,11 @@ export function JobDetail({
               onAcceptBid={
                 isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
               }
-              className="mt-3 border-t border-border pt-2 text-[11px] text-muted-foreground dark:border-gray-700 dark:text-gray-500"
+              largeTouch={detailUiBoost}
+              className={cn(
+                "mt-3 border-t border-border pt-2 text-muted-foreground dark:border-gray-700 dark:text-gray-500",
+                detailUiBoost ? "text-sm" : "text-[11px]"
+              )}
             />
           )}
 
@@ -1403,11 +1600,29 @@ export function JobDetail({
             numericJobId && (
             <>
               {localJobStatus === "in_progress" && (
-                <div className="space-y-3 rounded-md border bg-background/60 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+                <div
+                  className={cn(
+                    "space-y-3 rounded-xl border bg-background/60 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50",
+                    checklistParty &&
+                      "border-emerald-500/30 bg-gradient-to-br from-emerald-500/[0.06] to-transparent px-4 py-4 dark:from-emerald-950/25 sm:px-5"
+                  )}
+                >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <div>
-                      <p className="text-sm font-medium dark:text-gray-100">Cleaning checklist</p>
-                      <p className="text-xs text-muted-foreground dark:text-gray-400">
+                      <p
+                        className={cn(
+                          "font-semibold dark:text-gray-100",
+                          checklistParty ? "text-lg" : "text-sm font-medium"
+                        )}
+                      >
+                        Cleaning checklist
+                      </p>
+                      <p
+                        className={cn(
+                          "text-muted-foreground dark:text-gray-400",
+                          checklistParty ? "text-sm leading-relaxed" : "text-xs"
+                        )}
+                      >
                         {isJobLister
                           ? "Add or adjust tasks, including any extras. Your cleaner will see updates in real time."
                           : "Work through the agreed tasks and tick them off as you go."}
@@ -1427,28 +1642,39 @@ export function JobDetail({
                   )}
 
                   {checklist && checklist.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {checklist.map((item) => (
                         <div
                           key={item.id}
-                          className="flex items-start justify-between gap-2 text-xs dark:text-gray-200"
+                          className={cn(
+                            "flex items-start justify-between gap-2 dark:text-gray-200",
+                            checklistParty ? "text-base" : "text-xs"
+                          )}
                         >
-                          <label className="flex flex-1 items-start gap-2">
+                          <label className="flex min-h-[44px] flex-1 items-start gap-3">
                             <Checkbox
                               checked={item.is_completed}
                               onCheckedChange={(value) =>
                                 handleToggleItem(item, value === true)
                               }
-                              className="mt-0.5 h-3.5 w-3.5"
+                              className={cn(
+                                "mt-0.5",
+                                checklistParty ? "h-5 w-5" : "h-3.5 w-3.5"
+                              )}
                             />
-                            <span>{item.label}</span>
+                            <span className="leading-snug">{item.label}</span>
                           </label>
                           {isJobLister && (
                             <Button
                               type="button"
                               size="xs"
                               variant="ghost"
-                              className="px-1 text-[10px] text-muted-foreground hover:text-destructive dark:text-gray-400 dark:hover:text-red-400"
+                              className={cn(
+                                "text-muted-foreground hover:text-destructive dark:text-gray-400 dark:hover:text-red-400",
+                                listerDetailUI
+                                  ? "min-h-11 px-2 text-xs font-medium"
+                                  : "px-1 text-[10px]"
+                              )}
                               onClick={async () => {
                                 if (!numericJobId) return;
                                 const confirmed = window.confirm(
@@ -1484,9 +1710,13 @@ export function JobDetail({
                     <div className="pt-1">
                       <Button
                         type="button"
-                        size="xs"
                         variant="outline"
-                        className="text-[10px]"
+                        className={cn(
+                          isJobCleaner
+                            ? "min-h-12 rounded-xl px-4 text-sm font-semibold"
+                            : "text-[10px]"
+                        )}
+                        size={isJobCleaner ? "default" : "xs"}
                         onClick={handleMarkAllComplete}
                       >
                         Mark all tasks as complete
@@ -1495,7 +1725,12 @@ export function JobDetail({
                   )}
 
                   {allCompleted && (
-                    <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                    <p
+                      className={cn(
+                        "mt-1 rounded-md bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+                        checklistParty ? "text-sm leading-relaxed" : "text-[11px]"
+                      )}
+                    >
                       Congratulations! All tasks have been completed on the
                       checklist.
                     </p>
@@ -1513,8 +1748,18 @@ export function JobDetail({
               {(localJobStatus === "completed" ||
                 localJobStatus === "completed_pending_approval") && (
                 <>
-                  <details className="rounded-md border bg-background/60 px-4 py-3 text-xs text-muted-foreground dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
-                    <summary className="cursor-pointer select-none text-sm font-medium text-foreground dark:text-gray-100">
+                  <details
+                    className={cn(
+                      "rounded-xl border bg-background/60 px-4 py-3 text-muted-foreground dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400",
+                      detailUiBoost ? "text-sm" : "text-xs"
+                    )}
+                  >
+                    <summary
+                      className={cn(
+                        "cursor-pointer select-none font-medium text-foreground dark:text-gray-100",
+                        detailUiBoost ? "min-h-12 text-base" : "text-sm"
+                      )}
+                    >
                       Cleaning checklist history{" "}
                       {completedDateLabel
                         ? `(Completed ${completedDateLabel})`
@@ -1525,11 +1770,17 @@ export function JobDetail({
                         checklist.map((item) => (
                           <div
                             key={item.id}
-                            className="flex items-start gap-2 text-xs dark:text-gray-200"
+                            className={cn(
+                              "flex items-start gap-2 dark:text-gray-200",
+                              detailUiBoost ? "text-sm" : "text-xs"
+                            )}
                           >
                             <Checkbox
                               checked={item.is_completed}
-                              className="mt-0.5 h-3.5 w-3.5"
+                              className={cn(
+                                "mt-0.5",
+                                detailUiBoost ? "h-4 w-4" : "h-3.5 w-3.5"
+                              )}
                               disabled
                             />
                             <span>{item.label}</span>
@@ -1537,17 +1788,22 @@ export function JobDetail({
                         ))}
                     </div>
                   </details>
-                  <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                  <p
+                    className={cn(
+                      "mt-1 rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+                      detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
+                    )}
+                  >
                     {localJobStatus === "completed"
                       ? "Payment has been released. Thanks for completing this bond clean through Bond Back."
                       : "Waiting on final approval and payment release…"}
                   </p>
                   {isJobLister && afterPhotoEntries.length > 0 && (
-                    <div className="mt-3 rounded-md border border-emerald-300 bg-emerald-50/80 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
-                      <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+                    <div className="mt-3 rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-50/90 to-transparent px-4 py-4 dark:border-emerald-800 dark:from-emerald-950/40 sm:px-5">
+                      <p className="text-base font-bold text-emerald-900 dark:text-emerald-200">
                         After photos from your cleaner
                       </p>
-                      <p className="mt-1 text-[11px] text-emerald-800 dark:text-emerald-200">
+                      <p className="mt-2 text-sm leading-relaxed text-emerald-800 dark:text-emerald-200">
                         Review the after photos before you finalize and release funds.
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -1572,11 +1828,11 @@ export function JobDetail({
               )}
 
               {isJobCleaner && (
-                <div className="mt-4 space-y-2 rounded-md border bg-background/60 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+                <div className="mt-4 space-y-3 rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.06] to-transparent px-4 py-4 dark:border-violet-900/40 dark:from-violet-950/30 sm:px-5">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <div>
-                      <p className="text-sm font-medium dark:text-gray-100">After photos</p>
-                      <p className="text-xs text-muted-foreground dark:text-gray-400">
+                      <p className="text-lg font-bold dark:text-gray-100">After photos</p>
+                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
                         Upload at least 3 photos showing the finished clean so the
                         owner can review before releasing funds. Max {PHOTO_LIMITS.JOB_AFTER} photos.
                       </p>
@@ -1630,14 +1886,16 @@ export function JobDetail({
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <Button
                       type="button"
-                      size="sm"
                       variant="outline"
-                      className="gap-1 text-xs"
+                      className={cn(
+                        "gap-1",
+                        "min-h-12 rounded-xl px-4 text-sm font-semibold"
+                      )}
                       disabled={afterPhotosUploading || afterPhotoEntries.length >= PHOTO_LIMITS.JOB_AFTER}
                       asChild
                     >
                       <label className={afterPhotoEntries.length >= PHOTO_LIMITS.JOB_AFTER ? "cursor-not-allowed pointer-events-none" : "cursor-pointer"}>
-                        <ImagePlus className="mr-1 h-3.5 w-3.5" />
+                        <ImagePlus className="mr-2 h-5 w-5" />
                         <span>
                           {afterPhotosUploading
                             ? "Uploading…"
@@ -1734,7 +1992,7 @@ export function JobDetail({
                         />
                       </label>
                     </Button>
-                    <span className="text-[11px] text-muted-foreground dark:text-gray-400">
+                    <span className="text-sm font-medium text-muted-foreground dark:text-gray-400">
                       {afterPhotoEntries.length}/{PHOTO_LIMITS.JOB_AFTER} photos
                     </span>
                   </div>
@@ -1748,7 +2006,26 @@ export function JobDetail({
               localJobStatus === "completed_pending_approval") &&
             !cleanerConfirmed && (
               <div className="space-y-2 rounded-md border bg-background/80 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium dark:text-gray-100">Approve &amp; Release Funds</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium dark:text-gray-100">Approve &amp; Release Funds</p>
+                  {localJobStatus === "completed_pending_approval" &&
+                    (autoReleaseAt && autoReleaseMsLeft != null ? (
+                      <Badge
+                        className={cn(
+                          "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums",
+                          autoReleaseBadgeClass
+                        )}
+                      >
+                        {autoReleaseMsLeft <= 0
+                          ? "Auto-release now"
+                          : `Auto-release in ${formatAutoReleaseCountdown(autoReleaseMsLeft)}`}
+                      </Badge>
+                    ) : (
+                      <Badge className="shrink-0 rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
+                        Auto-release paused
+                      </Badge>
+                    ))}
+                </div>
                 {agreedAmountCents > 0 && (
                   <JobPaymentBreakdown
                     agreedAmountCents={agreedAmountCents}
@@ -1757,6 +2034,12 @@ export function JobDetail({
                     variant="release"
                   />
                 )}
+                {localJobStatus === "completed_pending_approval" &&
+                  autoReleaseAt &&
+                  autoReleaseMsLeft != null &&
+                  autoReleaseMsLeft > 0 && (
+                    <Progress value={autoReleaseProgressValue} className="h-2" />
+                  )}
                 <p className="text-xs text-muted-foreground dark:text-gray-400">
                   Once the checklist and after-photos are done, you can release funds from escrow. After the cleaner marks complete, you&apos;ll have {autoReleaseHours} hours to approve or open a dispute.
                 </p>
@@ -1777,7 +2060,26 @@ export function JobDetail({
               localJobStatus === "completed_pending_approval") &&
             cleanerConfirmed && (
               <div className="space-y-2 rounded-md border bg-background/80 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium dark:text-gray-100">Approve &amp; Release Funds</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium dark:text-gray-100">Approve &amp; Release Funds</p>
+                  {localJobStatus === "completed_pending_approval" &&
+                    (autoReleaseAt && autoReleaseMsLeft != null ? (
+                      <Badge
+                        className={cn(
+                          "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums",
+                          autoReleaseBadgeClass
+                        )}
+                      >
+                        {autoReleaseMsLeft <= 0
+                          ? "Auto-release now"
+                          : `Auto-release in ${formatAutoReleaseCountdown(autoReleaseMsLeft)}`}
+                      </Badge>
+                    ) : (
+                      <Badge className="shrink-0 rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
+                        Auto-release paused
+                      </Badge>
+                    ))}
+                </div>
                 {agreedAmountCents > 0 && (
                   <JobPaymentBreakdown
                     agreedAmountCents={agreedAmountCents}
@@ -1788,25 +2090,12 @@ export function JobDetail({
                 )}
                 {localJobStatus === "completed_pending_approval" &&
                   autoReleaseAt &&
-                  autoReleaseMsLeft != null && (
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Badge
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${autoReleaseBadgeClass}`}
-                        >
-                          Auto-release in {formatAutoReleaseCountdown(autoReleaseMsLeft)}
-                        </Badge>
-                        {autoReleaseMsLeft <= 0 && (
-                          <span className="text-[11px] text-destructive dark:text-red-300">
-                            Due now
-                          </span>
-                        )}
-                      </div>
-                      <Progress value={autoReleaseProgressValue} className="h-2" />
-                    </div>
+                  autoReleaseMsLeft != null &&
+                  autoReleaseMsLeft > 0 && (
+                    <Progress value={autoReleaseProgressValue} className="h-2" />
                   )}
                 <p className="text-xs text-muted-foreground dark:text-gray-400">
-                  The cleaner has marked the job complete. Review photos, then approve and release funds from escrow, or open a dispute with evidence.
+                  The cleaner has marked the job complete. Review photos, then approve and release funds from escrow, or raise a dispute with evidence. Auto-release stays paused while a dispute is open.
                 </p>
                 {showListerFinalizeNotice && (
                   <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
@@ -1828,30 +2117,72 @@ export function JobDetail({
                         Waiting for after photos to be uploaded…
                       </p>
                     )}
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {hasAfterPhotos && allCompleted && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={!allCompleted || !hasAfterPhotos || isFinalizing}
-                          onClick={handleFinalizePayment}
-                          className="bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-                        >
-                          {isFinalizing ? "Releasing…" : "Approve & Release Funds"}
-                        </Button>
-                      )}
+                    <div className="mt-3 space-y-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                        {hasAfterPhotos && allCompleted && (
+                          <Button
+                            type="button"
+                            size="lg"
+                            disabled={!allCompleted || !hasAfterPhotos || isFinalizing}
+                            onClick={handleFinalizePayment}
+                            className="min-h-[48px] flex-1 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                          >
+                            {isFinalizing ? "Releasing…" : "Approve & Release Funds"}
+                          </Button>
+                        )}
 
-                      {localJobStatus === "completed_pending_approval" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-950/50"
-                          onClick={() => setShowOpenDisputeForm(true)}
-                        >
-                          Open Dispute
-                        </Button>
+                        {localJobStatus === "completed_pending_approval" && (
+                          <Button
+                            type="button"
+                            size="lg"
+                            variant="outline"
+                            className="min-h-[48px] flex-1 border-orange-500 bg-orange-50 text-orange-950 hover:bg-orange-100 hover:text-orange-950 dark:border-orange-600 dark:bg-orange-950/40 dark:text-orange-50 dark:hover:bg-orange-900/50"
+                            onClick={() => setShowOpenDisputeForm(true)}
+                          >
+                            Raise Dispute
+                          </Button>
+                        )}
+                      </div>
+                      {canExtendListerReview && numericJobId != null && (
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            disabled={isExtendingReview}
+                            onClick={() => {
+                              startExtendReview(async () => {
+                                const res = await extendListerReview24h(numericJobId);
+                                if (!res.ok) {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Could not extend review",
+                                    description: res.error,
+                                  });
+                                  return;
+                                }
+                                toast({
+                                  title: "Review extended",
+                                  description: "24 hours were added to the auto-release timer.",
+                                });
+                                router.refresh();
+                              });
+                            }}
+                          >
+                            {isExtendingReview ? "Extending…" : "Extend review by 24h"}
+                          </Button>
+                          <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+                            One-time extension per job. Use if you need more time before approving or disputing.
+                          </p>
+                        </div>
                       )}
+                      {!!reviewExtensionUsedAt &&
+                        localJobStatus === "completed_pending_approval" && (
+                          <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+                            You already used the one-time 24-hour extension on this job.
+                          </p>
+                        )}
                     </div>
                     {showOpenDisputeForm && (
                       <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
@@ -2324,19 +2655,50 @@ export function JobDetail({
             )}
 
           {listing.special_instructions && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground dark:text-gray-300">Special instructions</p>
-              <p className="text-sm dark:text-gray-200">{listing.special_instructions}</p>
+            <div
+              className={cn(
+                detailUiBoost &&
+                  "rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20"
+              )}
+            >
+              <p
+                className={cn(
+                  "font-medium text-muted-foreground dark:text-gray-300",
+                  detailUiBoost ? "text-sm font-semibold uppercase tracking-wide" : "text-xs"
+                )}
+              >
+                Special instructions
+              </p>
+              <p
+                className={cn(
+                  "dark:text-gray-200",
+                  detailUiBoost ? "mt-2 text-base leading-relaxed" : "text-sm"
+                )}
+              >
+                {listing.special_instructions}
+              </p>
             </div>
           )}
           {listing.addons && Array.isArray(listing.addons) && listing.addons.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-muted-foreground dark:text-gray-300">Add-ons included</p>
-              <div className="mt-1 flex flex-wrap gap-2 text-xs">
+              <p
+                className={cn(
+                  "font-medium text-muted-foreground dark:text-gray-300",
+                  detailUiBoost ? "text-sm font-semibold" : "text-xs"
+                )}
+              >
+                Add-ons included
+              </p>
+              <div
+                className={cn(
+                  "mt-2 flex flex-wrap gap-2",
+                  detailUiBoost ? "text-sm" : "text-xs"
+                )}
+              >
                 {listing.addons.map((addon) => (
                   <span
                     key={addon}
-                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 dark:bg-gray-700/60 dark:text-gray-200"
+                    className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 dark:bg-gray-700/60 dark:text-gray-200"
                   >
                     <span className="text-emerald-600 dark:text-emerald-400">✓</span>
                     <span className="capitalize">
@@ -2361,10 +2723,20 @@ export function JobDetail({
               <div className="space-y-2">
                 {dates.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground dark:text-gray-300">
+                    <p
+                      className={cn(
+                        "font-medium text-muted-foreground dark:text-gray-300",
+                        detailUiBoost ? "text-sm font-semibold" : "text-xs"
+                      )}
+                    >
                       Preferred cleaning dates
                     </p>
-                    <ul className="mt-1 space-y-0.5 text-sm dark:text-gray-200">
+                    <ul
+                      className={cn(
+                        "mt-1 space-y-1 dark:text-gray-200",
+                        detailUiBoost ? "text-base font-medium" : "text-sm"
+                      )}
+                    >
                       {dates.map((d) => (
                         <li key={d.toISOString()}>
                           {format(d, "EEEE, MMMM 'the' do yyyy")}
@@ -2374,8 +2746,18 @@ export function JobDetail({
                   </div>
                 )}
 
-                <div className="rounded-md border border-sky-200 bg-sky-50/60 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                  <p className="text-xs font-semibold text-sky-900 dark:text-gray-100">
+                <div
+                  className={cn(
+                    "rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50",
+                    detailUiBoost && "px-4 py-3"
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "font-semibold text-sky-900 dark:text-gray-100",
+                      detailUiBoost ? "text-base" : "text-xs"
+                    )}
+                  >
                     Initial property photos (condition before bond clean)
                   </p>
                   {initialPhotosLoading ? (
@@ -2603,19 +2985,37 @@ export function JobDetail({
       {showAuctionActions && (
         <Card
           id="place-bid"
-          className="scroll-mt-20 overflow-hidden border-border shadow-sm md:scroll-mt-8 dark:border-gray-800 dark:bg-gray-950/40"
+          className={cn(
+            "scroll-mt-20 overflow-hidden border-border shadow-sm md:scroll-mt-8 dark:border-gray-800 dark:bg-gray-950/40",
+            detailUiBoost &&
+              "rounded-2xl border-border/90 ring-1 ring-emerald-500/15 dark:ring-emerald-900/30"
+          )}
         >
-          <CardHeader className="space-y-1 pb-2 pt-6 sm:pb-3 sm:pt-6">
-            <CardTitle className="text-lg font-semibold tracking-tight sm:text-xl">
+          <CardHeader
+            className={cn(
+              "space-y-1 pb-2 pt-6 sm:pb-3 sm:pt-6",
+              detailUiBoost && "px-4 sm:px-6"
+            )}
+          >
+            <CardTitle
+              className={cn(
+                "font-semibold tracking-tight",
+                detailUiBoost ? "text-xl sm:text-2xl" : "text-lg sm:text-xl"
+              )}
+            >
               Place a lower bid
             </CardTitle>
-            <CardDescription className="text-sm leading-snug">
+            <CardDescription
+              className={cn("leading-snug", detailUiBoost ? "text-base" : "text-sm")}
+            >
               Reverse auction: cleaners compete by bidding{" "}
               <span className="font-medium text-foreground dark:text-gray-200">below</span> the current
               lowest price.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5 pb-6 pt-0 sm:pb-6">
+          <CardContent
+            className={cn("space-y-5 pb-6 pt-0 sm:pb-6", detailUiBoost && "px-4 sm:px-6")}
+          >
             <PlaceBidForm
               listingId={listingId}
               listing={listing}
@@ -2640,7 +3040,7 @@ export function JobDetail({
                       buyNowCents={listing.buy_now_cents}
                       disabled={!isLive}
                       currentUserId={currentUserId}
-                      className="w-full min-h-12 justify-center px-4 text-sm font-semibold sm:flex-1"
+                      className="w-full min-h-14 justify-center px-4 text-base font-semibold sm:flex-1"
                     />
                   </div>
                 </div>
@@ -2652,7 +3052,11 @@ export function JobDetail({
                 onAcceptBid={
                   isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
                 }
-                className="border-t border-border pt-5 text-[11px] text-muted-foreground dark:border-gray-800 dark:text-gray-500"
+                largeTouch={detailUiBoost}
+                className={cn(
+                  "border-t border-border pt-5 text-muted-foreground dark:border-gray-800 dark:text-gray-500",
+                  detailUiBoost ? "text-sm" : "text-[11px]"
+                )}
               />
             )}
           </CardContent>
@@ -2695,14 +3099,22 @@ function BidHistorySection({
   bids,
   onAcceptBid,
   className,
+  largeTouch = false,
 }: {
   bids: BidWithBidder[];
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
   className?: string;
+  /** Larger summary + body copy (cleaner or lister job detail). */
+  largeTouch?: boolean;
 }) {
   return (
     <details className={className}>
-      <summary className="flex min-h-11 cursor-pointer list-none select-none items-center rounded-lg py-2 text-sm font-medium text-foreground hover:bg-muted/50 dark:text-gray-200 dark:hover:bg-gray-800/60 [&::-webkit-details-marker]:hidden">
+      <summary
+        className={cn(
+          "flex cursor-pointer list-none select-none items-center rounded-xl py-2 font-medium text-foreground hover:bg-muted/50 dark:text-gray-200 dark:hover:bg-gray-800/60 [&::-webkit-details-marker]:hidden",
+          largeTouch ? "min-h-14 text-base sm:text-lg" : "min-h-11 text-sm"
+        )}
+      >
         View bid history
       </summary>
       {bids.length > 0 ? (
@@ -2710,7 +3122,12 @@ function BidHistorySection({
           <BidHistoryTable bids={bids} onAcceptBid={onAcceptBid} />
         </div>
       ) : (
-        <p className="mt-2 text-[11px] text-muted-foreground dark:text-gray-400">
+        <p
+          className={cn(
+            "mt-2 text-muted-foreground dark:text-gray-400",
+            largeTouch ? "text-sm" : "text-[11px]"
+          )}
+        >
           No bids were placed on this listing.
         </p>
       )}

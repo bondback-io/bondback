@@ -7,7 +7,6 @@ import {
   Menu,
   Home,
   Search,
-  LayoutDashboard,
   PlusCircle,
   User,
   DollarSign,
@@ -60,8 +59,6 @@ function DesktopNavLinks({
         "bg-muted text-foreground dark:bg-gray-800 dark:text-gray-100 ring-1 ring-border/50 dark:ring-gray-700"
     );
 
-  const dashboardHref = "/dashboard";
-
   return (
     <nav
       className="hidden min-w-0 flex-nowrap items-center gap-1 md:flex md:gap-1.5 lg:gap-2"
@@ -74,29 +71,17 @@ function DesktopNavLinks({
       )}
       {isLoggedIn && (
         <>
-          <Link
-            href="/jobs"
-            className={linkClass("/jobs")}
-            title="Find jobs"
-            aria-label="Find jobs"
-          >
-            <Search className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-            <span>Find Jobs</span>
-          </Link>
-          <Link
-            href={dashboardHref}
-            title="Dashboard"
-            className={cn(
-              desktopLinkBase,
-              "font-semibold text-foreground dark:text-gray-100",
-              "hover:bg-muted/80 hover:text-foreground dark:hover:bg-gray-800 dark:hover:text-gray-100",
-              isActive(dashboardHref) &&
-                "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300 dark:ring-emerald-400/30"
-            )}
-          >
-            <LayoutDashboard className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            <span className="max-2xl:sr-only">Dashboard</span>
-          </Link>
+          {isCleaner && (
+            <Link
+              href="/jobs"
+              className={linkClass("/jobs")}
+              title="Find jobs"
+              aria-label="Find jobs"
+            >
+              <Search className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+              <span>Find Jobs</span>
+            </Link>
+          )}
           {isLister &&
             (onRequestCreateListing ? (
               <Button
@@ -220,33 +205,20 @@ function MobileNavContent({
         )}
         {isLoggedIn && (
           <>
-        <SheetClose asChild>
-          <Link
-            href="/jobs"
-            className={linkClass("/jobs")}
-            onClick={onNavigate}
-            title="Find jobs"
-            aria-label="Find jobs"
-          >
-            <Search className="h-5 w-5 shrink-0" aria-hidden />
-            <span>Find Jobs</span>
-          </Link>
-        </SheetClose>
-        <SheetClose asChild>
-          <Link
-            href="/dashboard"
-            className={cn(
-              MOBILE_ROW,
-              "bg-emerald-600 font-semibold text-white shadow-sm",
-              "hover:bg-emerald-700 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500",
-              isActive("/dashboard") && "ring-2 ring-emerald-400 ring-offset-2 dark:ring-emerald-500 dark:ring-offset-gray-950"
-            )}
-            onClick={onNavigate}
-          >
-            <LayoutDashboard className="h-5 w-5 shrink-0" aria-hidden />
-            <span>Dashboard</span>
-          </Link>
-        </SheetClose>
+        {isCleaner && (
+          <SheetClose asChild>
+            <Link
+              href="/jobs"
+              className={linkClass("/jobs")}
+              onClick={onNavigate}
+              title="Find jobs"
+              aria-label="Find jobs"
+            >
+              <Search className="h-5 w-5 shrink-0" aria-hidden />
+              <span>Find Jobs</span>
+            </Link>
+          </SheetClose>
+        )}
         {isLister &&
           (onRequestCreateListing ? (
             <button
@@ -280,7 +252,11 @@ function MobileNavContent({
           ))}
         {session && (
           <div className="min-h-12 w-full">
-            <NotificationBell userId={session.user.id} variant="row" />
+            <NotificationBell
+              userId={session.user.id}
+              activeRole={session?.activeRole ?? null}
+              variant="row"
+            />
           </div>
         )}
           </>

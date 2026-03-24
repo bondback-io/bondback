@@ -253,6 +253,17 @@ export function AdminJobsPendingReviewTable({
               >
                 Cancel Override
               </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={actionType === "pause_timer" ? "default" : "outline"}
+                onClick={() => {
+                  setActionType("pause_timer");
+                  setHoursInput("");
+                }}
+              >
+                Pause Timer
+              </Button>
             </div>
 
             {(actionType === "shorten_timer" || actionType === "extend_timer") && (

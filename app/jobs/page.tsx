@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -21,6 +22,19 @@ import { SearchX } from "lucide-react";
 import { JobsPageMobileShell } from "@/components/features/jobs-page-mobile-shell";
 import { OfflineJobsPrimer } from "@/components/offline/offline-jobs-primer";
 import { JobsPageMobileChrome } from "@/components/mobile-job-search";
+
+export const metadata: Metadata = {
+  title: "Browse bond cleaning jobs",
+  description:
+    "Search bond cleaning and end of lease jobs near you in Australia. Filter by suburb, compare bids, and find your next bond back clean on Bond Back.",
+  alternates: { canonical: "/jobs" },
+  openGraph: {
+    title: "Browse bond cleaning jobs · Bond Back",
+    description:
+      "Find live bond cleaning and vacate cleaning listings — reverse-auction pricing across Australia.",
+    url: "/jobs",
+  },
+};
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 

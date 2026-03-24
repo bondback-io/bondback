@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
@@ -17,6 +18,14 @@ type MyListingsPageProps = {
 
 /** Fresh list after admin deletes listing or job status changes */
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "My listings",
+  description:
+    "Manage your bond cleaning listings, bids, and jobs on Bond Back — end of lease cleaning in Australia.",
+  alternates: { canonical: "/my-listings" },
+  robots: { index: false, follow: true },
+};
 
 export default async function MyListingsPage({ searchParams }: MyListingsPageProps) {
   const supabase = await createServerSupabaseClient();
