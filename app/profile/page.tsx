@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { MyAccountSections } from "@/components/account/my-account-sections";
 import { SettingsPaymentReturnHandler } from "@/components/settings/settings-payment-return-handler";
 import type { DistanceUnitPref, ThemePreference } from "@/lib/types";
+import { getAppBaseUrl } from "@/lib/site";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -102,7 +103,7 @@ const ProfilePage = async ({
 
   const globalSettings = await getGlobalSettings();
   const referralEnabled = globalSettings?.referral_enabled === true;
-  const appOrigin = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appOrigin = getAppBaseUrl();
   let referralCode: string | null = null;
   if (referralEnabled) {
     referralCode = await ensureReferralCodeForUser(session.user.id);

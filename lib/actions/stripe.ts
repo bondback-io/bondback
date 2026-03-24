@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createBuyNowCheckoutSessionUrl } from "@/lib/stripe";
+import { getAppBaseUrl } from "@/lib/site";
 import type { Database } from "@/types/supabase";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -54,7 +55,7 @@ export async function createBuyNowCheckoutSession(
       }
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const baseUrl = getAppBaseUrl();
     const url = await createBuyNowCheckoutSessionUrl(
       {
         id: row.id,

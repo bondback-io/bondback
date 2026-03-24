@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getEffectivePayoutSchedule, type PayoutScheduleInterval } from "@/lib/payout-schedule";
 import { getStripeServer } from "@/lib/stripe";
+import { getAppBaseUrl } from "@/lib/site";
 
 /**
  * Set payout schedule on a Stripe Connect Express account.
@@ -138,7 +139,7 @@ export async function createConnectAccount(
       return { ok: false, error: "Only cleaners can connect a bank account for payouts. Switch to the Cleaner role in Settings if you have it." };
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = getAppBaseUrl();
     const returnUrl = `${appUrl}/stripe/connect/success`;
     const refreshUrl = `${appUrl}/stripe/connect/success?refresh=1`;
 

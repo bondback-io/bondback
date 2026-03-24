@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createBuyNowCheckoutSessionUrl } from "@/lib/stripe";
+import { getAppBaseUrl } from "@/lib/site";
 import type { Database } from "@/types/supabase";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -59,8 +60,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const origin = request.headers.get("origin") ?? request.headers.get("referer") ?? "http://localhost:3000";
-    const base = new URL(origin).origin;
+    const headerOrigin = request.headers.get("origin") ?? request.headers.get("referer");
+    let base: string;
+    if (headerOrigin) {
+      try {
+        base = new URL(headerOrigin).origin;
+      } catch {
+        base = getAppBaseUrl();
+      }
+    } else {
+      base = getAppBaseUrl();
+    }
 
     const url = await createBuyNowCheckoutSessionUrl(
       {

@@ -17,6 +17,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
 import { logTimerActivity } from "@/lib/admin-activity-log";
+import { getAppBaseUrl } from "@/lib/site";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -453,7 +454,7 @@ export async function createJobCheckoutSession(
     (listing as { platform_fee_percentage?: number | null }).platform_fee_percentage,
     settings
   );
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const baseUrl = getAppBaseUrl();
 
   const { data: listerProfile } = await supabase
     .from("profiles")
