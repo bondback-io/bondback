@@ -170,13 +170,13 @@ export function JobProgressTimeline({
         <div>
           <p
             className={cn(
-              "font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400",
+              "font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-200",
               detailUiBoost ? "text-xs sm:text-sm" : "text-[11px] sm:text-xs"
             )}
           >
             Job progress
           </p>
-          <p className="mt-1 text-xs text-muted-foreground dark:text-gray-500 sm:text-sm">
+          <p className="mt-1 text-xs text-muted-foreground dark:text-gray-400 sm:text-sm">
             {isJobLister && "Your listing — follow these steps."}
             {isJobCleaner && "Your job — work through each stage."}
             {!isJobLister && !isJobCleaner && "Job stages."}
@@ -186,12 +186,12 @@ export function JobProgressTimeline({
       </div>
 
       <p
-        className="mt-3 text-[11px] font-medium tabular-nums text-muted-foreground sm:hidden"
+        className="mt-3 text-[11px] font-medium tabular-nums text-muted-foreground dark:text-gray-300 sm:hidden"
         aria-live="polite"
       >
         Step {Math.min(activeIndex + 1, steps.length)} of {steps.length}
         {steps[activeIndex]?.done === false && steps[activeIndex] ? (
-          <span className="text-foreground"> — {steps[activeIndex].title}</span>
+          <span className="text-foreground dark:text-gray-100"> — {steps[activeIndex].title}</span>
         ) : null}
       </p>
 

@@ -31,6 +31,15 @@ function firstSearchParam(
   return Array.isArray(v) ? v[0] : v;
 }
 
+/** `?payment=success` or malformed `?payment-success` (flag-only) from some redirects */
+function isStripePaymentSuccessReturn(
+  sp: Record<string, string | string[] | undefined>
+): boolean {
+  if (firstSearchParam(sp.payment) === "success") return true;
+  if (sp["payment-success"] !== undefined) return true;
+  return false;
+}
+
 function plainTextFromListingDescription(raw: string | null | undefined): string {
   if (!raw?.trim()) return "";
   return raw.replace(/\s+/g, " ").trim();
@@ -292,8 +301,9 @@ export default async function JobDetailPage({
   const paymentParam = firstSearchParam(sp.payment);
   const checkoutSessionId = firstSearchParam(sp.session_id);
   const paymentNotice = firstSearchParam(sp.payment_notice);
+  const paymentSuccessReturn = isStripePaymentSuccessReturn(sp);
 
-  if (paymentParam === "success" && checkoutSessionId?.startsWith("cs_")) {
+  if (paymentSuccessReturn && checkoutSessionId?.startsWith("cs_")) {
     const result = await fulfillStripeCheckoutReturn(checkoutSessionId);
     redirect(
       `/jobs/${encodeURIComponent(id)}?payment_notice=${result.ok ? "success" : "error"}`

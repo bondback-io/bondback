@@ -559,125 +559,145 @@ export async function fulfillJobPaymentFromSession(
     return { ok: false, error: "Stripe is not configured." };
   }
 
-  const cs = await stripe.checkout.sessions.retrieve(checkoutSessionId, {
-    expand: ["payment_intent"],
-  });
+  try {
+    const cs = await stripe.checkout.sessions.retrieve(checkoutSessionId, {
+      expand: ["payment_intent"],
+    });
 
-  if (cs.mode !== "payment") {
-    return { ok: false, error: "Invalid session type." };
-  }
+    if (cs.mode !== "payment") {
+      return { ok: false, error: "Invalid session type." };
+    }
 
-  const jobIdMeta = cs.metadata?.job_id ?? cs.client_reference_id;
-  if (!jobIdMeta) {
-    return { ok: false, error: "No job id on session." };
-  }
+    const jobIdMeta = cs.metadata?.job_id ?? cs.client_reference_id;
+    if (!jobIdMeta) {
+      return { ok: false, error: "No job id on session." };
+    }
 
-  const numericJobId = Number(jobIdMeta);
-  const pi =
-    typeof cs.payment_intent === "string"
-      ? await stripe.paymentIntents.retrieve(cs.payment_intent)
-      : (cs.payment_intent as Stripe.PaymentIntent | null);
+    const numericJobId = Number(jobIdMeta);
+    const pi =
+      typeof cs.payment_intent === "string"
+        ? await stripe.paymentIntents.retrieve(cs.payment_intent)
+        : (cs.payment_intent as Stripe.PaymentIntent | null);
 
-  if (!pi?.id) {
-    return { ok: false, error: "No PaymentIntent on session." };
-  }
+    if (!pi?.id) {
+      return { ok: false, error: "No PaymentIntent on session." };
+    }
 
-  const { data: job } = await supabase
-    .from("jobs")
-    .select("id, lister_id, winner_id, status, listing_id")
-    .eq("id", numericJobId)
-    .maybeSingle();
-
-  if (!job) {
-    return { ok: false, error: "Job not found or you are not the lister." };
-  }
-
-  const checkoutJob = job as {
-    id: number | string;
-    lister_id: string;
-    winner_id: string | null;
-    status: string;
-    listing_id: string;
-  };
-
-  if (checkoutJob.lister_id !== session.user.id) {
-    return { ok: false, error: "Job not found or you are not the lister." };
-  }
-  if (checkoutJob.status !== "accepted") {
-    return { ok: true };
-  }
-
-  const nowIso = new Date().toISOString();
-  const { error: updateError } = await supabase
-    .from("jobs")
-    .update({
-      payment_intent_id: pi.id,
-      status: "in_progress",
-      updated_at: nowIso,
-    } as never)
-    .eq("id", numericJobId)
-    .eq("status", "accepted");
-
-  if (updateError) {
-    return { ok: false, error: updateError.message };
-  }
-
-  if (checkoutJob.winner_id) {
-    await createNotification(
-      checkoutJob.winner_id,
-      "job_approved_to_start",
-      numericJobId,
-      "Lister approved – you can start the job."
-    );
-  }
-
-  // Create default cleaning checklist items (same as approveJobStart) so checklist appears
-  const { data: existingItems } = await supabase
-    .from("job_checklist_items")
-    .select("id")
-    .eq("job_id", numericJobId as never)
-    .limit(1);
-
-  if (!existingItems || existingItems.length === 0) {
-    const { data: listingForChecklist } = await supabase
-      .from("listings")
-      .select("addons")
-      .eq("id", checkoutJob.listing_id as never)
+    const { data: job } = await supabase
+      .from("jobs")
+      .select("id, lister_id, winner_id, status, listing_id")
+      .eq("id", numericJobId)
       .maybeSingle();
 
-    const addons = ((listingForChecklist as { addons?: string[] | null } | null)?.addons ??
-      []) as string[];
-    const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
-    const isSpecialArea = (key: string) =>
-      (specialAreaKeys as readonly string[]).includes(key);
-    const defaultLabels = [
-      "Vacuum Apartment/House",
-      "Clean all Bedrooms",
-      "Clean all Bathrooms",
-      "Clean Toilet",
-      "Clean Kitchen",
-      "Clean Laundry",
-      "Mop Floors (if needed)",
-    ];
+    if (!job) {
+      return { ok: false, error: "Job not found or you are not the lister." };
+    }
 
-    const rows: { job_id: number; label: string }[] = [];
-    for (const addon of addons) {
-      const pretty = addon.replace(/_/g, " ");
-      const label = isSpecialArea(addon)
-        ? `Special area: ${pretty.charAt(0).toUpperCase() + pretty.slice(1)}`
-        : `Add-on: ${pretty}`;
-      rows.push({ job_id: numericJobId, label });
+    const checkoutJob = job as {
+      id: number | string;
+      lister_id: string;
+      winner_id: string | null;
+      status: string;
+      listing_id: string;
+    };
+
+    if (checkoutJob.lister_id !== session.user.id) {
+      return { ok: false, error: "Job not found or you are not the lister." };
     }
-    for (const label of defaultLabels) {
-      rows.push({ job_id: numericJobId, label });
+    if (checkoutJob.status !== "accepted") {
+      return { ok: true };
     }
-    if (rows.length > 0) {
-      await supabase.from("job_checklist_items").insert(rows as never);
+
+    const nowIso = new Date().toISOString();
+    const { error: updateError } = await supabase
+      .from("jobs")
+      .update({
+        payment_intent_id: pi.id,
+        status: "in_progress",
+        updated_at: nowIso,
+      } as never)
+      .eq("id", numericJobId)
+      .eq("status", "accepted");
+
+    if (updateError) {
+      return { ok: false, error: updateError.message };
     }
+
+    if (checkoutJob.winner_id) {
+      try {
+        await createNotification(
+          checkoutJob.winner_id,
+          "job_approved_to_start",
+          numericJobId,
+          "Lister approved – you can start the job."
+        );
+      } catch (notifyErr) {
+        console.error("[fulfillJobPaymentFromSession] notification failed", notifyErr);
+      }
+    }
+
+    // Create default cleaning checklist items (same as approveJobStart) so checklist appears
+    const { data: existingItems } = await supabase
+      .from("job_checklist_items")
+      .select("id")
+      .eq("job_id", numericJobId as never)
+      .limit(1);
+
+    if (!existingItems || existingItems.length === 0) {
+      const { data: listingForChecklist } = await supabase
+        .from("listings")
+        .select("addons")
+        .eq("id", checkoutJob.listing_id as never)
+        .maybeSingle();
+
+      const addons = ((listingForChecklist as { addons?: string[] | null } | null)?.addons ??
+        []) as string[];
+      const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
+      const isSpecialArea = (key: string) =>
+        (specialAreaKeys as readonly string[]).includes(key);
+      const defaultLabels = [
+        "Vacuum Apartment/House",
+        "Clean all Bedrooms",
+        "Clean all Bathrooms",
+        "Clean Toilet",
+        "Clean Kitchen",
+        "Clean Laundry",
+        "Mop Floors (if needed)",
+      ];
+
+      const rows: { job_id: number; label: string }[] = [];
+      for (const addon of addons) {
+        const pretty = addon.replace(/_/g, " ");
+        const label = isSpecialArea(addon)
+          ? `Special area: ${pretty.charAt(0).toUpperCase() + pretty.slice(1)}`
+          : `Add-on: ${pretty}`;
+        rows.push({ job_id: numericJobId, label });
+      }
+      for (const label of defaultLabels) {
+        rows.push({ job_id: numericJobId, label });
+      }
+      if (rows.length > 0) {
+        await supabase.from("job_checklist_items").insert(rows as never);
+      }
+    }
+
+    revalidatePath(`/jobs/${numericJobId}`);
+    return { ok: true };
+  } catch (e) {
+    const err = e as Error & { type?: string; code?: string };
+    console.error("[fulfillJobPaymentFromSession] Stripe or update failed", {
+      message: err.message,
+      code: err.code,
+      type: err.type,
+    });
+    return {
+      ok: false,
+      error:
+        err.message && err.message.length < 200
+          ? err.message
+          : "Could not confirm payment with Stripe. Try again or contact support.",
+    };
   }
-
-  revalidatePath(`/jobs/${numericJobId}`);
-  return { ok: true };
 }
 
 /**
@@ -703,65 +723,81 @@ export async function fulfillStripeCheckoutReturn(
     return { ok: false, error: "Stripe is not configured." };
   }
 
-  const cs = await stripe.checkout.sessions.retrieve(checkoutSessionId, {
-    expand: ["payment_intent"],
-  });
+  try {
+    const cs = await stripe.checkout.sessions.retrieve(checkoutSessionId, {
+      expand: ["payment_intent"],
+    });
 
-  if (cs.mode !== "payment") {
-    return { ok: false, error: "Invalid session type." };
-  }
-
-  const jobIdMeta = cs.metadata?.job_id ?? cs.client_reference_id;
-  if (jobIdMeta && cs.metadata?.type !== "buy_now") {
-    return fulfillJobPaymentFromSession(checkoutSessionId);
-  }
-
-  const listingId = cs.metadata?.listing_id;
-  if (cs.metadata?.type === "buy_now" && listingId) {
-    const pi =
-      typeof cs.payment_intent === "string"
-        ? await stripe.paymentIntents.retrieve(cs.payment_intent)
-        : (cs.payment_intent as Stripe.PaymentIntent | null);
-    if (!pi?.id) {
-      return { ok: false, error: "No PaymentIntent on session." };
+    if (cs.mode !== "payment") {
+      return { ok: false, error: "Invalid session type." };
     }
 
-    const { data: jobRows } = await supabase
-      .from("jobs")
-      .select("id, lister_id, winner_id")
-      .eq("listing_id", listingId)
-      .limit(1);
-    const jobRow = jobRows?.[0] as
-      | { id: number | string; lister_id: string; winner_id: string | null }
-      | undefined;
-    if (!jobRow) {
-      return { ok: false, error: "Job not found for this listing." };
-    }
-    const uid = session.user.id;
-    if (uid !== jobRow.lister_id && uid !== jobRow.winner_id) {
-      return { ok: false, error: "Not authorized for this payment." };
+    const jobIdMeta = cs.metadata?.job_id ?? cs.client_reference_id;
+    if (jobIdMeta && cs.metadata?.type !== "buy_now") {
+      return fulfillJobPaymentFromSession(checkoutSessionId);
     }
 
-    const { error } = await supabase
-      .from("jobs")
-      .update({
-        payment_intent_id: pi.id,
-        updated_at: new Date().toISOString(),
-      } as never)
-      .eq("listing_id", listingId);
-    if (error) {
-      return { ok: false, error: error.message };
+    const listingId = cs.metadata?.listing_id;
+    if (cs.metadata?.type === "buy_now" && listingId) {
+      const pi =
+        typeof cs.payment_intent === "string"
+          ? await stripe.paymentIntents.retrieve(cs.payment_intent)
+          : (cs.payment_intent as Stripe.PaymentIntent | null);
+      if (!pi?.id) {
+        return { ok: false, error: "No PaymentIntent on session." };
+      }
+
+      const { data: jobRows } = await supabase
+        .from("jobs")
+        .select("id, lister_id, winner_id")
+        .eq("listing_id", listingId)
+        .limit(1);
+      const jobRow = jobRows?.[0] as
+        | { id: number | string; lister_id: string; winner_id: string | null }
+        | undefined;
+      if (!jobRow) {
+        return { ok: false, error: "Job not found for this listing." };
+      }
+      const uid = session.user.id;
+      if (uid !== jobRow.lister_id && uid !== jobRow.winner_id) {
+        return { ok: false, error: "Not authorized for this payment." };
+      }
+
+      const { error } = await supabase
+        .from("jobs")
+        .update({
+          payment_intent_id: pi.id,
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq("listing_id", listingId);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      revalidatePath(`/jobs/${listingId}`);
+      revalidatePath(`/jobs/${jobRow.id}`);
+      return { ok: true };
     }
-    revalidatePath(`/jobs/${listingId}`);
-    revalidatePath(`/jobs/${jobRow.id}`);
-    return { ok: true };
+
+    if (jobIdMeta) {
+      return fulfillJobPaymentFromSession(checkoutSessionId);
+    }
+
+    return { ok: false, error: "No job id on session." };
+  } catch (e) {
+    const err = e as Error & { type?: string; code?: string };
+    console.error("[fulfillStripeCheckoutReturn] failed", {
+      message: err.message,
+      code: err.code,
+      type: err.type,
+    });
+    return {
+      ok: false,
+      error:
+        err.message && err.message.length < 200
+          ? err.message
+          : "Could not confirm payment with Stripe. Try again or contact support.",
+    };
   }
-
-  if (jobIdMeta) {
-    return fulfillJobPaymentFromSession(checkoutSessionId);
-  }
-
-  return { ok: false, error: "No job id on session." };
 }
 
 /** Ensure default checklist items exist for an in_progress job that has none (e.g. job was set in_progress via webhook). Call from job page so checklist appears. */

@@ -398,7 +398,9 @@ export function JobDetail({
   useEffect(() => {
     const payment = searchParams.get("payment");
     const sessionId = searchParams.get("session_id");
-    if (paymentSuccessToastShown || payment !== "success" || !sessionId || !jobId) return;
+    const paymentSuccess =
+      payment === "success" || searchParams.has("payment-success");
+    if (paymentSuccessToastShown || !paymentSuccess || !sessionId || !jobId) return;
 
     setPaymentSuccessToastShown(true);
 
@@ -423,6 +425,7 @@ export function JobDetail({
       } finally {
         const url = new URL(window.location.href);
         url.searchParams.delete("payment");
+        url.searchParams.delete("payment-success");
         url.searchParams.delete("session_id");
         window.history.replaceState({}, "", url.pathname + (url.search || ""));
       }
@@ -1017,14 +1020,35 @@ export function JobDetail({
               <span>You have cancelled this job. The cleaner has been notified.</span>
             </div>
           )}
-          {hasActiveJob && localJobStatus === "accepted" && isJobCleaner && (
-            <div className="flex items-center gap-2 rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 dark:border-amber-500 dark:bg-amber-950/70 dark:text-amber-100">
-              <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden />
-              <span>
-                This job has been won. Pending property lister approval to start.
-              </span>
-            </div>
-          )}
+          {hasActiveJob &&
+            isJobCleaner &&
+            localJobStatus !== "completed" &&
+            !cleanerReviewPendingMinimal &&
+            !listerReleaseFundsStep && (
+              <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
+                <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">
+                  Won for
+                </p>
+                <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
+                  {formatCents(agreedAmountCents)}
+                </p>
+                <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
+                  You will receive the full bid amount ({formatCents(agreedAmountCents)}). The lister pays
+                  the platform fee separately.
+                </p>
+              </div>
+            )}
+          {hasActiveJob &&
+            isJobLister &&
+            localJobStatus !== "completed" &&
+            !listerReleaseFundsStep && (
+              <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
+                <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
+                <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
+                  {formatCents(agreedAmountCents)}
+                </p>
+              </div>
+            )}
           {hasActiveJob && (
             <JobProgressTimeline
               detailUiBoost={detailUiBoost}
@@ -1180,7 +1204,9 @@ export function JobDetail({
                 </>
               ) : (
                 !cleanerReviewPendingMinimal &&
-                !listerReleaseFundsStep && (
+                !listerReleaseFundsStep &&
+                !isJobCleaner &&
+                !isJobLister && (
                 <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
                   <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">
                     Won for
@@ -1188,11 +1214,6 @@ export function JobDetail({
                   <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
                     {formatCents(agreedAmountCents)}
                   </p>
-                  {isJobCleaner && (
-                    <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
-                      You will receive the full bid amount ({formatCents(agreedAmountCents)}). The lister pays the platform fee separately.
-                    </p>
-                  )}
                 </div>
                 )
               )}
@@ -1375,7 +1396,7 @@ export function JobDetail({
 
           {/* Escrow flow: Pay & Start Job (Stripe) then optionally Start Job if webhook hasn't moved status yet */}
           {hasActiveJob && localJobStatus === "accepted" && (
-            <div className="mt-2 space-y-2 rounded-md border bg-background/60 px-3 py-2 text-xs sm:text-sm dark:border-gray-700 dark:bg-gray-800/50">
+            <div className="mt-2 space-y-3 text-xs sm:text-sm">
               {isJobLister && !hasPaymentHold && agreedAmountCents > 0 && (
                 <JobPaymentBreakdown
                   agreedAmountCents={agreedAmountCents}
@@ -1384,7 +1405,7 @@ export function JobDetail({
                   variant="pay"
                 />
               )}
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/60 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800/40">
                 <div className="space-y-0.5">
                   <p className="font-medium dark:text-gray-100">
                     {isJobLister
@@ -2057,10 +2078,16 @@ export function JobDetail({
             isJobLister &&
             (localJobStatus === "in_progress" ||
               localJobStatus === "completed_pending_approval") && (
-              <div
-                id="job-approve-release"
-                className="scroll-mt-24 space-y-2 rounded-md border bg-background/80 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50"
-              >
+              <div id="job-approve-release" className="scroll-mt-24 space-y-3">
+                {agreedAmountCents > 0 && (
+                  <JobPaymentBreakdown
+                    agreedAmountCents={agreedAmountCents}
+                    feePercentage={feePercentage}
+                    isStripeTestMode={isStripeTestMode}
+                    variant="release"
+                  />
+                )}
+                <div className="space-y-2 rounded-lg border border-border/70 bg-background/80 px-3 py-3 dark:border-gray-700 dark:bg-gray-800/40 sm:px-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium dark:text-gray-100">Approve &amp; Release Funds</p>
                   {localJobStatus === "completed_pending_approval" &&
@@ -2081,24 +2108,16 @@ export function JobDetail({
                       </Badge>
                     ))}
                 </div>
-                {agreedAmountCents > 0 && (
-                  <JobPaymentBreakdown
-                    agreedAmountCents={agreedAmountCents}
-                    feePercentage={feePercentage}
-                    isStripeTestMode={isStripeTestMode}
-                    variant="release"
-                  />
-                )}
                 {localJobStatus === "completed_pending_approval" &&
                   autoReleaseAt &&
                   autoReleaseMsLeft != null &&
                   autoReleaseMsLeft > 0 && (
                     <Progress value={autoReleaseProgressValue} className="h-2" />
                   )}
-                <p className="text-xs text-muted-foreground dark:text-gray-400">
+                <p className="text-[11px] leading-snug text-muted-foreground dark:text-gray-400 sm:text-xs">
                   {localJobStatus === "completed_pending_approval"
-                    ? "The cleaner has requested payment. Review after-photos, then release funds from escrow or raise a dispute with evidence. Opening a dispute pauses the auto-release timer until the dispute is resolved."
-                    : `Once the checklist and after-photos are done, you can release funds from escrow. After the cleaner taps “Clean Complete — Request Payment”, you&apos;ll have ${autoReleaseHours} hours to approve or open a dispute.`}
+                    ? "Review after-photos, then release or raise a dispute. A dispute pauses auto-release until it is resolved."
+                    : `After the cleaner requests payment, you have ${autoReleaseHours} hours to approve or dispute once after-photos are in.`}
                 </p>
                 {showListerFinalizeNotice && (
                   <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
@@ -2207,6 +2226,7 @@ export function JobDetail({
                     )}
                   </>
                 )}
+                </div>
               </div>
             )}
 
