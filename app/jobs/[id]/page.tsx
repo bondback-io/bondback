@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Lock, AlertTriangle } from "lucide-react";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
-import { ensureJobChecklistIfEmpty } from "@/lib/actions/jobs";
+import { ensureJobChecklistIfEmpty, fulfillStripeCheckoutReturn } from "@/lib/actions/jobs";
 import { JobDetail } from "@/components/features/job-detail";
 import type { BidWithBidder } from "@/components/features/job-detail";
 import { JobChat } from "@/components/features/job-chat";
@@ -24,6 +24,13 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
 const META_DESC_MAX = 165;
+
+function firstSearchParam(
+  v: string | string[] | undefined
+): string | undefined {
+  if (v == null) return undefined;
+  return Array.isArray(v) ? v[0] : v;
+}
 
 function plainTextFromListingDescription(raw: string | null | undefined): string {
   if (!raw?.trim()) return "";
@@ -276,10 +283,28 @@ export async function generateMetadata({
 
 export default async function JobDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params; // id can be a job id or listing id
+  const sp = searchParams ? await searchParams : {};
+  const paymentParam = firstSearchParam(sp.payment);
+  const checkoutSessionId = firstSearchParam(sp.session_id);
+  const paymentNotice = firstSearchParam(sp.payment_notice);
+
+  if (paymentParam === "success" && checkoutSessionId?.startsWith("cs_")) {
+    const result = await fulfillStripeCheckoutReturn(checkoutSessionId);
+    redirect(
+      `/jobs/${encodeURIComponent(id)}?payment_notice=${result.ok ? "success" : "error"}`
+    );
+  }
+
+  if (paymentParam === "canceled") {
+    redirect(`/jobs/${encodeURIComponent(id)}?payment_notice=canceled`);
+  }
+
   const supabase = await createServerSupabaseClient();
 
   const {
@@ -500,6 +525,26 @@ export default async function JobDetailPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <ScrollToDispute />
+      {paymentNotice === "success" && (
+        <Alert variant="success" className="text-sm">
+          <AlertDescription>
+            Payment confirmed. Funds are held in escrow and the job can proceed.
+          </AlertDescription>
+        </Alert>
+      )}
+      {paymentNotice === "error" && (
+        <Alert variant="destructive" className="text-sm">
+          <AlertDescription>
+            We could not confirm your payment from Stripe. If a charge appears on your card, contact
+            support with your checkout session details.
+          </AlertDescription>
+        </Alert>
+      )}
+      {paymentNotice === "canceled" && (
+        <Alert variant="warning" className="text-sm">
+          <AlertDescription>Payment was canceled. You can try again when you are ready.</AlertDescription>
+        </Alert>
+      )}
       {session && jobId && <RecordJobView jobId={jobId} />}
       <Button variant="ghost" asChild className="dark:hover:bg-gray-800 dark:hover:text-gray-100">
         <Link href={backHref}>← {backLabel}</Link>

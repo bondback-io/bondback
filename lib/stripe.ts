@@ -66,8 +66,8 @@ export async function createBuyNowCheckoutSessionUrl(
         },
       },
     ],
-    success_url: `${baseUrl}/jobs/${listing.id}?buy_now=success`,
-    cancel_url: `${baseUrl}/jobs/${listing.id}?buy_now=cancelled`,
+    success_url: `${baseUrl}/jobs/${listing.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${baseUrl}/jobs/${listing.id}?payment=canceled`,
     client_reference_id: listing.id,
     metadata: {
       listing_id: listing.id,

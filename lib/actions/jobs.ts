@@ -679,6 +679,90 @@ export async function fulfillJobPaymentFromSession(
   return { ok: true };
 }
 
+/**
+ * After Stripe Checkout redirect to `/jobs/...?payment=success&session_id=...`, confirm the session
+ * server-side. Routes Pay & Start Job (`job_payment`) vs buy-now (`buy_now`) using session metadata.
+ */
+export async function fulfillStripeCheckoutReturn(
+  checkoutSessionId: string
+): Promise<FulfillJobPaymentFromSessionResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  let stripe: import("stripe").default;
+  try {
+    stripe = await getStripeServer();
+  } catch {
+    return { ok: false, error: "Stripe is not configured." };
+  }
+
+  const cs = await stripe.checkout.sessions.retrieve(checkoutSessionId, {
+    expand: ["payment_intent"],
+  });
+
+  if (cs.mode !== "payment") {
+    return { ok: false, error: "Invalid session type." };
+  }
+
+  const jobIdMeta = cs.metadata?.job_id ?? cs.client_reference_id;
+  if (jobIdMeta && cs.metadata?.type !== "buy_now") {
+    return fulfillJobPaymentFromSession(checkoutSessionId);
+  }
+
+  const listingId = cs.metadata?.listing_id;
+  if (cs.metadata?.type === "buy_now" && listingId) {
+    const pi =
+      typeof cs.payment_intent === "string"
+        ? await stripe.paymentIntents.retrieve(cs.payment_intent)
+        : (cs.payment_intent as Stripe.PaymentIntent | null);
+    if (!pi?.id) {
+      return { ok: false, error: "No PaymentIntent on session." };
+    }
+
+    const { data: jobRows } = await supabase
+      .from("jobs")
+      .select("id, lister_id, winner_id")
+      .eq("listing_id", listingId)
+      .limit(1);
+    const jobRow = jobRows?.[0] as
+      | { id: number | string; lister_id: string; winner_id: string | null }
+      | undefined;
+    if (!jobRow) {
+      return { ok: false, error: "Job not found for this listing." };
+    }
+    const uid = session.user.id;
+    if (uid !== jobRow.lister_id && uid !== jobRow.winner_id) {
+      return { ok: false, error: "Not authorized for this payment." };
+    }
+
+    const { error } = await supabase
+      .from("jobs")
+      .update({
+        payment_intent_id: pi.id,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("listing_id", listingId);
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    revalidatePath(`/jobs/${listingId}`);
+    revalidatePath(`/jobs/${jobRow.id}`);
+    return { ok: true };
+  }
+
+  if (jobIdMeta) {
+    return fulfillJobPaymentFromSession(checkoutSessionId);
+  }
+
+  return { ok: false, error: "No job id on session." };
+}
+
 /** Ensure default checklist items exist for an in_progress job that has none (e.g. job was set in_progress via webhook). Call from job page so checklist appears. */
 export async function ensureJobChecklistIfEmpty(
   jobId: string | number
