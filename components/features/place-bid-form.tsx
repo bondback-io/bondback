@@ -192,13 +192,14 @@ export function PlaceBidForm({
             <Label
               htmlFor="bid-amount"
               className={cn(
-                "font-medium text-foreground dark:text-gray-100",
+                "block font-medium text-foreground dark:text-gray-100",
                 isCleaner ? "text-base" : "text-sm"
               )}
             >
               Your bid amount
             </Label>
-            <div className="relative">
+            {/* Cap width on large viewports — matches submit button (sm:max-w-md); full width on narrow screens */}
+            <div className="relative w-full max-w-md">
               <span
                 className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-base font-semibold text-muted-foreground dark:text-gray-400"
                 aria-hidden
@@ -217,7 +218,7 @@ export function PlaceBidForm({
                 value={amountDollars}
                 onChange={(e) => setAmountDollars(e.target.value)}
                 className={cn(
-                  "min-h-[48px] border-2 pl-8 font-semibold tabular-nums",
+                  "w-full min-h-[48px] border-2 pl-8 font-semibold tabular-nums",
                   isCleaner ? "h-14 text-xl" : "h-12 text-lg",
                   "focus-visible:ring-2 focus-visible:ring-primary/30",
                   "dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-100"
@@ -229,7 +230,7 @@ export function PlaceBidForm({
             <p
               id="bid-amount-hint"
               className={cn(
-                "leading-relaxed text-muted-foreground dark:text-gray-500",
+                "max-w-md leading-relaxed text-muted-foreground dark:text-gray-500",
                 isCleaner ? "text-sm" : "text-[11px]"
               )}
             >

@@ -922,7 +922,7 @@ export function JobDetail({
               </span>
             </div>
           )}
-          {isListingOwner && !hasActiveJob && isLive && (
+          {isListingOwner && !hasActiveJob && isLive && bids.length === 0 && (
             <div
               className={cn(
                 "rounded-xl border border-sky-200/70 bg-sky-50/60 px-4 py-3 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/35",
@@ -1397,6 +1397,7 @@ export function JobDetail({
                 isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
               }
               largeTouch={detailUiBoost}
+              defaultOpen={false}
               className={cn(
                 "mt-3 border-t border-border pt-2 text-muted-foreground dark:border-gray-700 dark:text-gray-500",
                 detailUiBoost ? "text-sm" : "text-[11px]"
@@ -3070,6 +3071,7 @@ export function JobDetail({
                   isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
                 }
                 largeTouch={detailUiBoost}
+                defaultOpen={Boolean(isListingOwner && !isCleaner)}
                 className={cn(
                   "border-t border-border pt-5 text-muted-foreground dark:border-gray-800 dark:text-gray-500",
                   detailUiBoost ? "text-sm" : "text-[11px]"
@@ -3123,18 +3125,26 @@ function BidHistorySection({
   onAcceptBid,
   className,
   largeTouch = false,
+  /** Lister live auction: start expanded. After auction/job won, collapsed. */
+  defaultOpen = false,
 }: {
   bids: BidWithBidder[];
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
   className?: string;
   /** Larger summary + body copy (cleaner or lister job detail). */
   largeTouch?: boolean;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <details className={className}>
+    <details
+      className={className}
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
       <summary
         className={cn(
-          "flex cursor-pointer list-none select-none items-center rounded-xl py-2 font-medium text-foreground hover:bg-muted/50 dark:text-gray-200 dark:hover:bg-gray-800/60 [&::-webkit-details-marker]:hidden",
+          "flex cursor-pointer list-none select-none items-center rounded-xl py-2 font-medium text-foreground hover:bg-muted/50 dark:text-gray-100 dark:hover:bg-gray-800/70 [&::-webkit-details-marker]:hidden",
           largeTouch ? "min-h-14 text-base sm:text-lg" : "min-h-11 text-sm"
         )}
       >
