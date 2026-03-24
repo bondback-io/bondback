@@ -1,64 +1,12 @@
-# === Cursor ignore - ignore heavy/irrelevant folders/files ===
+﻿# Bond Back – Cursor index exclusions (faster indexing on large repos)
 
-# Node.js / build artifacts (huge speedup)
 node_modules/
 .next/
-.turbo/
 dist/
 build/
-out/
-
-# Cache / temp files
-.cache/
-*.cache
-*.log
-*.tmp
-*.bak
-*.swp
-
-# Coverage / test reports
-coverage/
-.nyc_output/
-
-# Public static assets (not needed for code understanding)
 public/
-static/
-
-# Git / version control
+*.log
+coverage/
+.env*.local
 .git/
-.gitignore
-.gitattributes
-
-# Editor / OS files
-.DS_Store
-Thumbs.db
-*.sublime-project
-*.sublime-workspace
-.vscode/
-.idea/
-
-# Large binary/media files
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.webp
-*.svg  # optional - remove if you want Cursor to see SVGs
-*.pdf
-*.zip
-*.tar.gz
-
-# Environment / secrets
-.env*
-*.env.local
-*.env.development
-*.env.production
-
-# Optional: ignore test files if they're numerous
-# __tests__/
-# *.test.ts
-# *.spec.ts
-
-# Optional: ignore old/experimental code
-# archive/
-# experiments/
+.cursor/

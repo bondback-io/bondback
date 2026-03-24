@@ -398,7 +398,6 @@ export function GuidedDisputeForm({
               <Slider
                 value={[refundPercentage]}
                 onValueChange={([v]) => {
-                  // v can be undefined from Slider onValueChange
                   if (v !== undefined) {
                     setRefundPercentage(v);
                     setErrorRefund(null);

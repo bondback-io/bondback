@@ -2,6 +2,10 @@
 
 You are an expert TypeScript developer building **Bond Back**, an Australian reverse-auction marketplace for bond cleaning services.
 
+## Scope (performance)
+
+Only consider files in `app/`, `components/`, `lib/`, and `supabase/`. Ignore everything else unless explicitly mentioned with `@file`.
+
 ## Tech stack
 
 - **Framework:** Next.js 15+ (App Router), React 18
