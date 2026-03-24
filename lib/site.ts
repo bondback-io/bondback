@@ -1,15 +1,36 @@
+function originFromVercelUrl(vercel: string): string | null {
+  const withProto =
+    vercel.startsWith("http://") || vercel.startsWith("https://")
+      ? vercel
+      : `https://${vercel}`;
+  try {
+    return new URL(withProto).origin;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Base origin for Stripe success/cancel redirects, Connect return URLs, and server actions.
  *
- * Priority:
- * 1. `NEXT_PUBLIC_APP_URL` (set in Vercel to your canonical URL, e.g. https://bondback.vercel.app)
- * 2. `VERCEL_URL` (injected on Vercel; prefixed with https://)
- * 3. `http://localhost:3000` for local dev
+ * **Preview deployments:** Uses `VERCEL_URL` so redirects return to the same host as the
+ * user’s session cookies. If `NEXT_PUBLIC_APP_URL` pointed at production while testing on a
+ * preview URL, Stripe would send users to production without a session → login loop.
  *
- * Test mode vs live mode does not change this — only which Stripe keys are used.
+ * **Production:** Uses `NEXT_PUBLIC_APP_URL` when set (canonical domain), else `VERCEL_URL`.
+ *
+ * Local: `NEXT_PUBLIC_APP_URL` or `http://localhost:3000`.
  */
 export function getAppBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const vercel = process.env.VERCEL_URL?.trim();
+  const vercelEnv = process.env.VERCEL_ENV;
+
+  if (vercelEnv === "preview" && vercel) {
+    const o = originFromVercelUrl(vercel);
+    if (o) return o;
+  }
+
   if (explicit) {
     const normalized = explicit.replace(/\/$/, "");
     try {
@@ -18,18 +39,12 @@ export function getAppBaseUrl(): string {
       /* fallthrough */
     }
   }
-  const vercel = process.env.VERCEL_URL?.trim();
+
   if (vercel) {
-    const withProto =
-      vercel.startsWith("http://") || vercel.startsWith("https://")
-        ? vercel
-        : `https://${vercel}`;
-    try {
-      return new URL(withProto).origin;
-    } catch {
-      /* fallthrough */
-    }
+    const o = originFromVercelUrl(vercel);
+    if (o) return o;
   }
+
   return "http://localhost:3000";
 }
 

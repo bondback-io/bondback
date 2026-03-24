@@ -32,8 +32,7 @@ function isProtected(pathname: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
-  const url = request.nextUrl.clone();
-  let response = NextResponse.next({ request });
+  const supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,24 +44,29 @@ export async function middleware(request: NextRequest) {
         },
         setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options as Record<string, unknown>);
+            supabaseResponse.cookies.set(name, value, options as Record<string, unknown>);
           });
         },
       },
     }
   );
 
+  // Refresh session (e.g. after long Stripe Checkout) so JWT is valid before getUser
+  await supabase.auth.getSession();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (isProtected(request.nextUrl.pathname) && !user) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", request.nextUrl.pathname);
+    const nextDest =
+      request.nextUrl.pathname +
+      (request.nextUrl.search ?? "");
+    loginUrl.searchParams.set("next", nextDest);
     return NextResponse.redirect(loginUrl);
   }
 
-  return response;
+  return supabaseResponse;
 }
 
 export const config = {

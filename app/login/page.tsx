@@ -22,6 +22,12 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
+/** Internal path + optional query only (avoid open redirects). */
+function safeNextDestination(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+  return raw;
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -90,7 +96,7 @@ function LoginForm() {
             );
             return;
           }
-          const next = searchParams.get("next") ?? "/dashboard";
+          const next = safeNextDestination(searchParams.get("next"));
           // Revalidate RSC + cookies so header/layout see the new session immediately
           router.refresh();
           router.replace(next);
