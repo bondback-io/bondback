@@ -63,7 +63,7 @@ export type MyListingsListProps = {
   listerVerificationBadges?: string[] | null;
   /** When set, open the edit panel for this listing id (e.g. from /listings/[id]/edit redirect). */
   initialEditListingId?: string | null;
-  /** From `?cancel=` (e.g. dashboard swipe) — open cancel-confirmation dialog for that listing if still live. */
+  /** From `?cancel=` — open cancel-confirmation dialog for that listing if still live. */
   initialOpenCancelListingId?: string | null;
   /** Platform fee % (lister pays on top of job price). Used for fee breakdown on job cards. */
   feePercentage?: number;
@@ -353,7 +353,7 @@ export function MyListingsList({
     }
   };
 
-  /** Dashboard swipe → `/my-listings?cancel=id` opens the same confirmation dialog as the card button. */
+  /** `/my-listings?cancel=id` opens the same confirmation dialog as the card button. */
   useEffect(() => {
     if (!initialOpenCancelListingId) {
       cancelParamHandledRef.current = false;

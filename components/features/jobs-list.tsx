@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { ListingCard } from "@/components/features/listing-card";
-import { CardSwipeActions } from "@/components/features/card-swipe-actions";
-import { addSavedListingId, removeSavedListingId } from "@/lib/saved-listings-local";
 import {
   clampRadiusKm,
   getStoredRadiusKm,
@@ -27,8 +25,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
-import { Gavel, HelpCircle, Loader2, MapPin, Star } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { HelpCircle, Loader2, MapPin } from "lucide-react";
 import { useDistanceUnit } from "@/hooks/use-distance-unit";
 import { formatRadiusBannerLabel } from "@/lib/distance-format";
 import {
@@ -55,8 +52,6 @@ function haversineKm(
 
 const INITIAL_PAGE_SIZE = 20;
 const PRELOAD_IMAGE_COUNT = 4;
-/** Off until we fix gesture conflict with vertical scroll (react-swipeable preventScrollOnSwipe). */
-const ENABLE_JOB_CARD_SWIPE = true;
 /**
  * Mobile-only: window virtualizer when list is long (keeps scroll smooth on phones).
  * Desktop always uses the CSS grid below — no change to md+ layout.
@@ -116,7 +111,6 @@ export function JobsList({
   const [isMobile, setIsMobile] = useState(false);
   const supabase = createBrowserSupabaseClient();
   const { toast } = useToast();
-  const router = useRouter();
   const distanceUnit = useDistanceUnit();
   const setJobsSearchCount = useJobsSearchCountSetter();
 
@@ -325,7 +319,7 @@ export function JobsList({
     const bidCount = bidCountByListingId[String(listing.id)] ?? 0;
     const isListerOwner = Boolean(currentUserId && (listing as { lister_id?: string }).lister_id === currentUserId);
     const listerCard = listerCardDataByListingId[String(listing.id)];
-    const card = (
+    return (
       <ListingCard
         key={listing.id}
         listing={listing}
@@ -340,35 +334,6 @@ export function JobsList({
         listerVerificationBadges={listerCard?.listerVerificationBadges ?? null}
         compactMobileMarketplace={isMobile}
       />
-    );
-    const canSwipeBrowse = ENABLE_JOB_CARD_SWIPE && isCleaner && !isListerOwner;
-    if (!canSwipeBrowse) {
-      return card;
-    }
-    const listingId = String(listing.id);
-    return (
-      <CardSwipeActions
-        key={listing.id}
-        className="md:block"
-        rightIcon={Gavel}
-        leftIcon={Star}
-        rightActionLabel="Quick bid"
-        leftActionLabel="Save"
-        onSwipeRight={() => router.push(`/jobs/${listingId}?quickBid=1`)}
-        onSwipeLeft={() => {
-          addSavedListingId(listingId);
-          toast({
-            title: "Saved to favourites",
-            description: "Stored on this device.",
-            actionButton: {
-              label: "Undo",
-              onClick: () => removeSavedListingId(listingId),
-            },
-          });
-        }}
-      >
-        {card}
-      </CardSwipeActions>
     );
   }
 
@@ -507,20 +472,9 @@ export function JobsList({
               aria-label={`Search radius: ${mobileRadiusKm} kilometers`}
             />
             <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
-              {isCleaner ? (
-                ENABLE_JOB_CARD_SWIPE ? (
-                  <>
-                    Swipe card right:{" "}
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">Quick bid</span>
-                    {" · "}left:{" "}
-                    <span className="font-semibold text-yellow-700 dark:text-yellow-400">Save</span>
-                  </>
-                ) : (
-                  "Open a listing to place a bid or save it to favourites."
-                )
-              ) : (
-                "Swipe gestures are available when browsing as a cleaner."
-              )}
+              {isCleaner
+                ? "Open a listing to place a bid or save it to favourites from the job page."
+                : "Adjust radius to see more or fewer jobs near you."}
             </p>
           </div>
         </div>

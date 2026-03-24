@@ -300,7 +300,7 @@ export default async function CleanerDashboardPage() {
         </div>
       </div>
 
-      {/* My Active Jobs — swipeable on mobile, grid on md+ */}
+      {/* My Active Jobs — stacked on mobile, grid on md+ */}
       <ScrollToHash anchorId="active-jobs" />
       <div
         id="active-jobs"

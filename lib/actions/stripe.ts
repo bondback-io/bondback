@@ -2,7 +2,6 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createBuyNowCheckoutSessionUrl } from "@/lib/stripe";
-import { getAppBaseUrl } from "@/lib/site";
 import type { Database } from "@/types/supabase";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -55,18 +54,14 @@ export async function createBuyNowCheckoutSession(
       }
     }
 
-    const baseUrl = getAppBaseUrl();
-    const url = await createBuyNowCheckoutSessionUrl(
-      {
-        id: row.id,
-        title: row.title,
-        suburb: row.suburb,
-        postcode: row.postcode,
-        buy_now_cents: row.buy_now_cents,
-        lister_id: row.lister_id,
-      },
-      baseUrl
-    );
+    const url = await createBuyNowCheckoutSessionUrl({
+      id: row.id,
+      title: row.title,
+      suburb: row.suburb,
+      postcode: row.postcode,
+      buy_now_cents: row.buy_now_cents,
+      lister_id: row.lister_id,
+    });
 
     if (!url) return { error: "Failed to create checkout session." };
     return { url };

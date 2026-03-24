@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { getStripeCheckoutAppUrl } from "@/lib/site";
 import { getStripeConfig, getStripeConfigForMode, type StripeMode } from "@/lib/stripe/config";
 
 /** Platform fee: 12% of transaction (e.g. cleaner payout = 88%). */
@@ -45,9 +46,9 @@ export function getStripeServerForMode(mode: StripeMode): Stripe {
  * Platform fee (12%): use payment_intent_data.application_fee_amount when on Connect.
  */
 export async function createBuyNowCheckoutSessionUrl(
-  listing: { id: string; title: string; suburb: string; postcode: string; buy_now_cents: number; lister_id: string },
-  baseUrl: string
+  listing: { id: string; title: string; suburb: string; postcode: string; buy_now_cents: number; lister_id: string }
 ): Promise<string | null> {
+  const baseUrl = getStripeCheckoutAppUrl();
   const stripe = await getStripeServer();
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -89,9 +90,9 @@ export async function createBuyNowCheckoutSessionUrl(
 export async function createJobCheckoutSessionUrl(
   job: { id: number | string; agreed_amount_cents: number },
   listing: { title: string; suburb: string; postcode: string },
-  baseUrl: string,
   feePercent: number = PLATFORM_FEE_PERCENT
 ): Promise<string | null> {
+  const baseUrl = getStripeCheckoutAppUrl();
   const stripe = await getStripeServer();
   const agreedCents = job.agreed_amount_cents;
   const feeCents = Math.round((agreedCents * feePercent) / 100);
@@ -130,7 +131,7 @@ export async function createJobCheckoutSessionUrl(
         : []),
     ],
     success_url: `${baseUrl}/jobs/${jobIdStr}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/jobs/${jobIdStr}?payment=cancelled`,
+    cancel_url: `${baseUrl}/jobs/${jobIdStr}?payment=canceled`,
     client_reference_id: jobIdStr,
     metadata: {
       job_id: jobIdStr,
@@ -148,10 +149,8 @@ export async function createJobCheckoutSessionUrl(
  * Create Stripe Checkout Session in mode=setup for lister to save a card (Setup Intent).
  * On success, webhook saves setup_intent.payment_method and session.customer to profile.
  */
-export async function createSetupIntentCheckoutSessionUrl(
-  userId: string,
-  baseUrl: string
-): Promise<string | null> {
+export async function createSetupIntentCheckoutSessionUrl(userId: string): Promise<string | null> {
+  const baseUrl = getStripeCheckoutAppUrl();
   const stripe = await getStripeServer();
   const session = await stripe.checkout.sessions.create({
     mode: "setup",

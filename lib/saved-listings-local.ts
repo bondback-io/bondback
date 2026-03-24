@@ -1,4 +1,4 @@
-/** Client-only favourites (no backend). Used for swipe-to-save on /jobs. */
+/** Client-only favourites (no backend). Used from listing / job flows. */
 const STORAGE_KEY = "bondback_saved_listing_ids";
 
 export function getSavedListingIds(): string[] {

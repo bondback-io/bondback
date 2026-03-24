@@ -31,8 +31,7 @@ export type DashboardListingCardProps = {
   isUrgent?: boolean;
   feePercentage?: number;
   /**
-   * When set (e.g. lister dashboard with swipe wrapper), Cancel uses a button + handler so taps work
-   * under touch-swipe. Otherwise links to /my-listings?cancel=…
+   * When set, Cancel uses a button + handler. Otherwise links to /my-listings?cancel=…
    */
   onCancelClick?: () => void;
 };

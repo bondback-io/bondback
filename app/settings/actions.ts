@@ -8,7 +8,6 @@ import type Stripe from "stripe";
 import type { Database } from "@/types/supabase";
 import type { DistanceUnitPref, ThemePreference } from "@/lib/types";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
-import { getAppBaseUrl } from "@/lib/site";
 
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
@@ -350,10 +349,9 @@ export async function createListerSetupSession(): Promise<CreateListerSetupSessi
     return { ok: false, error: "You must be logged in." };
   }
 
-  const baseUrl = getAppBaseUrl();
   try {
     const { createSetupIntentCheckoutSessionUrl } = await import("@/lib/stripe");
-    const url = await createSetupIntentCheckoutSessionUrl(session.user.id, baseUrl);
+    const url = await createSetupIntentCheckoutSessionUrl(session.user.id);
     if (!url) return { ok: false, error: "Failed to create setup session." };
     return { ok: true, url };
   } catch (e) {

@@ -131,8 +131,35 @@ export function JobsPageMobileChrome({
   );
 }
 
+const CLEANERS_URL_PARAMS = new Set([
+  "suburb",
+  "postcode",
+  "radius_km",
+  "center_lat",
+  "center_lon",
+]);
+
+function buildSearchHref(
+  path: "/jobs" | "/cleaners",
+  base: URLSearchParams,
+  patch: Record<string, string | undefined | null>
+): string {
+  const next = new URLSearchParams(base.toString());
+  Object.entries(patch).forEach(([k, v]) => {
+    if (v == null || v === "") next.delete(k);
+    else next.set(k, v);
+  });
+  if (path === "/cleaners") {
+    for (const key of [...next.keys()]) {
+      if (!CLEANERS_URL_PARAMS.has(key)) next.delete(key);
+    }
+  }
+  const qs = next.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
 export type MobileJobSearchBarProps = {
-  variant: "jobs" | "dashboard";
+  variant: "jobs" | "dashboard" | "cleaners";
   defaultRadiusKm: number;
   profileSuburb?: string | null;
   /** jobs URL / SSR */
@@ -175,17 +202,38 @@ function dispatchRadius(km: number) {
   );
 }
 
-function buildJobsHref(
-  base: URLSearchParams,
-  patch: Record<string, string | undefined | null>
-): string {
-  const next = new URLSearchParams(base.toString());
-  Object.entries(patch).forEach(([k, v]) => {
-    if (v == null || v === "") next.delete(k);
-    else next.set(k, v);
-  });
-  const qs = next.toString();
-  return qs ? `/jobs?${qs}` : "/jobs";
+export type CleanersPageMobileChromeProps = {
+  children: React.ReactNode;
+  initialResultCount: number;
+  defaultRadiusKm: number;
+  profileSuburb: string | null;
+  initialSuburb: string;
+  initialPostcode: string;
+  initialRadiusKm: number;
+  initialCenterLat: number | null;
+  initialCenterLon: number | null;
+};
+
+export function CleanersPageMobileChrome({
+  children,
+  initialResultCount,
+  ...barProps
+}: CleanersPageMobileChromeProps) {
+  const [count, setCount] = React.useState(initialResultCount);
+  React.useEffect(() => {
+    setCount(initialResultCount);
+  }, [initialResultCount]);
+
+  const value = React.useMemo(() => ({ setResultCount: setCount }), []);
+
+  return (
+    <JobsSearchCountContext.Provider value={value}>
+      <div className="mx-auto w-full max-w-6xl px-3 pt-2 md:px-4 md:pt-4">
+        <MobileJobSearchBar variant="cleaners" resultCount={count} {...barProps} />
+      </div>
+      {children}
+    </JobsSearchCountContext.Provider>
+  );
 }
 
 export function MobileJobSearchBar({
@@ -333,7 +381,7 @@ export function MobileJobSearchBar({
     profileSuburb?.trim() ||
     (centerLat != null && centerLon != null ? "Near me" : "Area");
 
-  const navigateJobs = React.useCallback(
+  const navigateSearch = React.useCallback(
     (patch: Record<string, string | undefined | null>, replace = true) => {
       if (variant === "dashboard") {
         const sp = new URLSearchParams();
@@ -344,7 +392,9 @@ export function MobileJobSearchBar({
         router.push(qs ? `/jobs?${qs}` : "/jobs");
         return;
       }
-      const href = buildJobsHref(
+      const path = variant === "cleaners" ? "/cleaners" : "/jobs";
+      const href = buildSearchHref(
+        path,
         new URLSearchParams(searchParams?.toString() ?? ""),
         patch
       );
@@ -364,10 +414,10 @@ export function MobileJobSearchBar({
     setRadiusKm(next);
     setStoredRadiusKm(next);
     dispatchRadius(next);
-    if (variant === "jobs") {
-      navigateJobs({ radius_km: String(next) }, true);
+    if (variant === "jobs" || variant === "cleaners") {
+      navigateSearch({ radius_km: String(next) }, true);
     }
-  }, [defaultRadiusKm, navigateJobs, variant]);
+  }, [defaultRadiusKm, navigateSearch, variant]);
 
   React.useEffect(() => {
     if (skipRadiusFromUrlOnceRef.current) {
@@ -378,14 +428,15 @@ export function MobileJobSearchBar({
   }, [initialRadiusKm, defaultRadiusKm]);
 
   const scheduleBidFilterNavigate = React.useCallback(() => {
+    if (variant !== "jobs") return;
     if (bidDebounceRef.current) clearTimeout(bidDebounceRef.current);
     bidDebounceRef.current = setTimeout(() => {
-      navigateJobs({
+      navigateSearch({
         min_bid_price: minBidRef.current.trim() || undefined,
         max_bid_price: maxBidRef.current.trim() || undefined,
       });
     }, 450);
-  }, [navigateJobs]);
+  }, [navigateSearch, variant]);
 
   React.useEffect(() => {
     return () => {
@@ -395,20 +446,21 @@ export function MobileJobSearchBar({
   }, []);
 
   const scheduleReserveFilterNavigate = React.useCallback(() => {
+    if (variant !== "jobs") return;
     if (reserveDebounceRef.current) clearTimeout(reserveDebounceRef.current);
     reserveDebounceRef.current = setTimeout(() => {
-      navigateJobs({
+      navigateSearch({
         min_price: minReserveRef.current.trim() || undefined,
         max_price: maxReserveRef.current.trim() || undefined,
       });
     }, 450);
-  }, [navigateJobs]);
+  }, [navigateSearch, variant]);
 
   const debouncedNavigateSuburb = React.useCallback(
     (sub: string, pc: string, lat: string | undefined, lon: string | undefined) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        navigateJobs({
+        navigateSearch({
           suburb: sub.trim() || undefined,
           postcode: pc.trim() || undefined,
           center_lat: lat,
@@ -416,7 +468,7 @@ export function MobileJobSearchBar({
         });
       }, 320);
     },
-    [navigateJobs]
+    [navigateSearch]
   );
 
   React.useEffect(() => {
@@ -454,7 +506,7 @@ export function MobileJobSearchBar({
     if (typeof row.lat === "number" && typeof row.lon === "number") {
       setCenterLat(row.lat);
       setCenterLon(row.lon);
-      navigateJobs({
+      navigateSearch({
         suburb: row.suburb,
         postcode: String(row.postcode ?? ""),
         center_lat: String(row.lat),
@@ -462,7 +514,7 @@ export function MobileJobSearchBar({
         radius_km: String(radiusKm),
       });
     } else {
-      navigateJobs({
+      navigateSearch({
         suburb: row.suburb,
         postcode: String(row.postcode ?? ""),
         center_lat: undefined,
@@ -501,7 +553,7 @@ export function MobileJobSearchBar({
     if (syncUrl) {
       setStoredSearchSuburb(suburb);
       setStoredSearchPostcode(postcode);
-      navigateJobs({
+      navigateSearch({
         radius_km: String(next),
         suburb: suburb.trim() || undefined,
         postcode: postcode.trim() || undefined,
@@ -595,15 +647,16 @@ export function MobileJobSearchBar({
   };
 
   const hasExtraFilters =
-    minBidPrice.trim() !== "" ||
-    maxBidPrice.trim() !== "" ||
-    buyNowOnly ||
-    (sort && sort !== "ending-soon") ||
-    minReservePrice.trim() !== "" ||
-    maxReservePrice.trim() !== "" ||
-    bedrooms !== "any" ||
-    bathrooms !== "any" ||
-    propertyType !== "any";
+    variant === "jobs" &&
+    (minBidPrice.trim() !== "" ||
+      maxBidPrice.trim() !== "" ||
+      buyNowOnly ||
+      (sort && sort !== "ending-soon") ||
+      minReservePrice.trim() !== "" ||
+      maxReservePrice.trim() !== "" ||
+      bedrooms !== "any" ||
+      bathrooms !== "any" ||
+      propertyType !== "any");
   const pillLabel = `${formatRadiusBannerLabel(radiusKm, distanceUnit)} (${suburbLabel})`;
 
   return (
@@ -620,7 +673,11 @@ export function MobileJobSearchBar({
           <Input
             type="search"
             enterKeyHint="search"
-            placeholder="Search jobs near me…"
+            placeholder={
+              variant === "cleaners"
+                ? "Search cleaners near me…"
+                : "Search jobs near me…"
+            }
             value={query}
             onChange={(e) => handleMainInput(e.target.value)}
             className={cn(
@@ -630,7 +687,11 @@ export function MobileJobSearchBar({
               "dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100",
               "md:h-11 md:max-w-full"
             )}
-            aria-label="Search jobs by suburb"
+            aria-label={
+              variant === "cleaners"
+                ? "Search cleaners by suburb"
+                : "Search jobs by suburb"
+            }
           />
         </div>
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -642,14 +703,18 @@ export function MobileJobSearchBar({
                 "max-w-[38vw] truncate sm:max-w-[min(280px,32vw)] dark:border-primary/50 dark:bg-primary/15 dark:text-primary",
                 hasExtraFilters && "ring-2 ring-primary/30"
               )}
-              aria-label="Open search area, radius, and filters"
+              aria-label={
+                variant === "cleaners"
+                  ? "Open search area and radius"
+                  : "Open search area, radius, and filters"
+              }
             >
               {pillLabel}
             </button>
           </SheetTrigger>
           <SheetContent
             side={mdUp ? "right" : "bottom"}
-            title="Search and filters"
+            title={variant === "cleaners" ? "Search area and radius" : "Search and filters"}
             className={cn(
               "border-border bg-card p-0 dark:border-gray-800 dark:bg-gray-950",
               mdUp
@@ -659,13 +724,24 @@ export function MobileJobSearchBar({
           >
             <div className="border-b border-border px-4 pb-3 pt-4 text-left dark:border-gray-800">
               <SheetTitle className="text-lg font-semibold text-foreground dark:text-gray-100">
-                Search &amp; filters
+                {variant === "cleaners" ? "Search area & radius" : "Search & filters"}
               </SheetTitle>
               <p className="mt-1 text-base text-muted-foreground dark:text-gray-400">
-                Jobs within{" "}
-                <span className="font-semibold text-foreground dark:text-gray-200">
-                  {formatRadiusBannerLabel(radiusKm, distanceUnit)}
-                </span>
+                {variant === "cleaners" ? (
+                  <>
+                    Cleaners within{" "}
+                    <span className="font-semibold text-foreground dark:text-gray-200">
+                      {formatRadiusBannerLabel(radiusKm, distanceUnit)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Jobs within{" "}
+                    <span className="font-semibold text-foreground dark:text-gray-200">
+                      {formatRadiusBannerLabel(radiusKm, distanceUnit)}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
             <div className="space-y-6 overflow-y-auto px-4 py-5 pb-10">
@@ -683,7 +759,7 @@ export function MobileJobSearchBar({
                     if (navigateDebounceRef.current)
                       clearTimeout(navigateDebounceRef.current);
                     navigateDebounceRef.current = setTimeout(() => {
-                      navigateJobs({
+                      navigateSearch({
                         radius_km: String(next),
                         suburb: suburb.trim() || undefined,
                         postcode: postcode.trim() || undefined,
@@ -763,6 +839,8 @@ export function MobileJobSearchBar({
                 )}
               </Button>
 
+              {variant === "jobs" && (
+              <>
               <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4 dark:border-gray-800 dark:bg-gray-900/40">
                 <div>
                   <p className="text-sm font-semibold text-foreground dark:text-gray-100">
@@ -780,7 +858,7 @@ export function MobileJobSearchBar({
                     value={sort}
                     onValueChange={(v) => {
                       setSort(v);
-                      navigateJobs({
+                      navigateSearch({
                         sort: v === "ending-soon" ? undefined : v,
                       });
                     }}
@@ -844,7 +922,7 @@ export function MobileJobSearchBar({
                       value={bedrooms}
                       onValueChange={(v) => {
                         setBedrooms(v);
-                        navigateJobs({
+                        navigateSearch({
                           bedrooms: v === "any" ? undefined : v,
                         });
                       }}
@@ -868,7 +946,7 @@ export function MobileJobSearchBar({
                       value={bathrooms}
                       onValueChange={(v) => {
                         setBathrooms(v);
-                        navigateJobs({
+                        navigateSearch({
                           bathrooms: v === "any" ? undefined : v,
                         });
                       }}
@@ -892,7 +970,7 @@ export function MobileJobSearchBar({
                     value={propertyType}
                     onValueChange={(v) => {
                       setPropertyType(v);
-                      navigateJobs({
+                      navigateSearch({
                         property_type: v === "any" ? undefined : v,
                       });
                     }}
@@ -977,12 +1055,14 @@ export function MobileJobSearchBar({
                   checked={buyNowOnly}
                   onCheckedChange={(checked) => {
                     setBuyNowOnly(checked);
-                    navigateJobs({
+                    navigateSearch({
                       buy_now_only: checked ? "1" : undefined,
                     });
                   }}
                 />
               </div>
+              </>
+              )}
 
               <Button
                 type="button"
@@ -999,19 +1079,24 @@ export function MobileJobSearchBar({
         </Sheet>
       </div>
 
-      {variant === "jobs" && (
+      {(variant === "jobs" || variant === "cleaners") && (
         <p
           className="mt-2 px-0.5 text-sm font-medium leading-snug text-foreground dark:text-gray-200 md:text-sm"
           aria-live="polite"
         >
           {resultCount === 0 ? (
             <span className="text-muted-foreground dark:text-gray-400">
-              No jobs in this area yet — try increasing radius
+              {variant === "cleaners"
+                ? "No cleaners in this area yet — try increasing radius"
+                : "No jobs in this area yet — try increasing radius"}
             </span>
           ) : (
             <>
-              {resultCount} job{resultCount === 1 ? "" : "s"} within{" "}
-              {radiusKm} km of {suburbLabel}
+              {resultCount}{" "}
+              {variant === "cleaners"
+                ? `cleaner${resultCount === 1 ? "" : "s"}`
+                : `job${resultCount === 1 ? "" : "s"}`}{" "}
+              within {radiusKm} km of {suburbLabel}
             </>
           )}
         </p>

@@ -51,7 +51,6 @@
     "react-dom": "^18.3.0",
     "react-hook-form": "^7.53.0",
     "react-infinite-scroll-component": "^6.1.1",
-    "react-swipeable": "^7.0.2",
     "recharts": "^3.8.0",
     "resend": "^6.9.3",
     "sharp": "^0.34.5",

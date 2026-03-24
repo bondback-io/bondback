@@ -20,6 +20,8 @@ import { parseUtcTimestamp } from "@/lib/utils";
 import { ChevronDown, XCircle } from "lucide-react";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
+import { getListingCoverUrl } from "@/lib/listings";
+import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { getProfileCompletion } from "@/lib/profile-completion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -68,7 +70,9 @@ export default async function ListerDashboardPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("jobs")
-      .select("id, listing_id, status, created_at, updated_at")
+      .select(
+        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete"
+      )
       .eq("lister_id", session.user.id),
     supabase
       .from("notifications")
@@ -140,6 +144,28 @@ export default async function ListerDashboardPage() {
   });
   const totalCancelledItems = cancelledJobs.length + cancelledEarlyListings.length;
   const listingMap = new Map(listings.map((l) => [l.id, l]));
+
+  const activeJobPreview = activeJobs.slice(0, 5);
+  const winnerIds = [
+    ...new Set(
+      activeJobPreview
+        .map((j) => (j as JobRow & { winner_id?: string | null }).winner_id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+    ),
+  ];
+  let winnerFirstNameById: Record<string, string> = {};
+  if (winnerIds.length > 0) {
+    const { data: winnerProfiles } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", winnerIds);
+    for (const row of winnerProfiles ?? []) {
+      const r = row as { id: string; full_name: string | null };
+      const raw = (r.full_name ?? "").trim();
+      const first = raw.split(/\s+/)[0] ?? "";
+      winnerFirstNameById[r.id] = first || "Cleaner";
+    }
+  }
 
   type CancelledDashboardRow =
     | { kind: "job"; id: string; cancelledAt: string; job: JobRow }
@@ -297,7 +323,7 @@ export default async function ListerDashboardPage() {
         <QuickActionsRow actions={actions} />
       </div>
 
-      {/* My Active Listings — swipeable cards on mobile, grid on md+ */}
+      {/* My Active Listings — stacked cards on mobile, grid on md+ */}
       <div className="space-y-5 md:space-y-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xl font-bold tracking-tight text-foreground dark:text-gray-100 md:text-base md:font-semibold">
@@ -358,13 +384,46 @@ export default async function ListerDashboardPage() {
             </p>
           ) : (
             <ListerActiveJobsList
-              items={activeJobs.slice(0, 5).map((job) => {
+              items={activeJobPreview.map((job) => {
                 const listing = listingMap.get(job.listing_id);
+                const j = job as JobRow & {
+                  agreed_amount_cents?: number | null;
+                  payment_intent_id?: string | null;
+                  winner_id?: string | null;
+                  cleaner_confirmed_complete?: boolean | null;
+                };
+                const agreed =
+                  j.agreed_amount_cents != null && j.agreed_amount_cents > 0
+                    ? j.agreed_amount_cents
+                    : (listing as { current_lowest_bid_cents?: number | null } | undefined)
+                        ?.current_lowest_bid_cents ?? null;
+                const winnerId = j.winner_id?.trim() ?? null;
+                const locationLabel =
+                  listing != null
+                    ? formatLocationWithState(listing.suburb, listing.postcode)
+                    : null;
                 return {
                   jobId: Number(job.id),
                   title: listing?.title ?? `Job #${job.id}`,
-                  suburb: listing?.suburb ?? null,
-                  postcode: listing?.postcode != null ? String(listing.postcode) : null,
+                  status: job.status,
+                  agreedAmountCents: typeof agreed === "number" && agreed > 0 ? agreed : null,
+                  hasEscrowPayment: !!j.payment_intent_id?.trim(),
+                  locationLabel,
+                  coverUrl: getListingCoverUrl(listing ?? null),
+                  bedrooms:
+                    listing != null
+                      ? (listing as { bedrooms?: number | null }).bedrooms ?? null
+                      : null,
+                  bathrooms:
+                    listing != null
+                      ? (listing as { bathrooms?: number | null }).bathrooms ?? null
+                      : null,
+                  cleanerFirstName:
+                    winnerId && winnerFirstNameById[winnerId]
+                      ? winnerFirstNameById[winnerId]
+                      : winnerId
+                        ? "Cleaner"
+                        : null,
                 };
               })}
             />

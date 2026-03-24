@@ -17,7 +17,6 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
 import { logTimerActivity } from "@/lib/admin-activity-log";
-import { getAppBaseUrl } from "@/lib/site";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -454,7 +453,6 @@ export async function createJobCheckoutSession(
     (listing as { platform_fee_percentage?: number | null }).platform_fee_percentage,
     settings
   );
-  const baseUrl = getAppBaseUrl();
 
   const { data: listerProfile } = await supabase
     .from("profiles")
@@ -509,7 +507,6 @@ export async function createJobCheckoutSession(
     const url = await createJobCheckoutSessionUrl(
       { id: numericJobId, agreed_amount_cents: agreedCents },
       { title: (listing as { title?: string }).title ?? "Bond clean", suburb: (listing as { suburb?: string }).suburb ?? "", postcode: (listing as { postcode?: string }).postcode ?? "" },
-      baseUrl,
       feePercent
     );
     if (!url) {

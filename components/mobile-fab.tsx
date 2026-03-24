@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, Search, Star } from "lucide-react";
+import Image from "next/image";
+import { Plus, Search, Star, Briefcase, MapPin, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatCents } from "@/lib/listings";
+import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import type { DashboardJobCardProps } from "@/components/dashboard/dashboard-job-card";
 import { DashboardJobCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 
@@ -89,9 +92,62 @@ export function ResponsiveCleanerJobCards({
 export type ListerActiveJobItem = {
   jobId: number;
   title: string;
-  suburb?: string | null;
-  postcode?: string | null;
+  status: string;
+  agreedAmountCents: number | null;
+  hasEscrowPayment: boolean;
+  /** e.g. "Suburb NSW 2000" */
+  locationLabel: string | null;
+  coverUrl: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  /** First name of assigned cleaner, if any */
+  cleanerFirstName: string | null;
 };
+
+function listerActiveJobCopy(item: ListerActiveJobItem): {
+  label: string;
+  hint: string | null;
+  badgeClass: string;
+} {
+  const { status, hasEscrowPayment } = item;
+  if (status === "completed_pending_approval") {
+    return {
+      label: "Review needed",
+      hint: "Cleaner marked complete — confirm to finish",
+      badgeClass:
+        "border-amber-400/70 bg-amber-500/15 text-amber-950 dark:border-amber-600/50 dark:bg-amber-950/50 dark:text-amber-100",
+    };
+  }
+  if (status === "in_progress") {
+    return {
+      label: "In progress",
+      hint: hasEscrowPayment ? "Payment held in escrow" : null,
+      badgeClass:
+        "border-emerald-400/70 bg-emerald-500/15 text-emerald-950 dark:border-emerald-600/50 dark:bg-emerald-950/50 dark:text-emerald-100",
+    };
+  }
+  if (status === "accepted") {
+    if (hasEscrowPayment) {
+      return {
+        label: "Payment held",
+        hint: "Escrow secured — job can start",
+        badgeClass:
+          "border-sky-400/70 bg-sky-500/15 text-sky-950 dark:border-sky-600/50 dark:bg-sky-950/50 dark:text-sky-100",
+      };
+    }
+    return {
+      label: "Awaiting payment",
+      hint: "Pay on the job page to begin",
+      badgeClass:
+        "border-sky-400/70 bg-sky-500/15 text-sky-950 dark:border-sky-600/50 dark:bg-sky-950/50 dark:text-sky-100",
+    };
+  }
+  return {
+    label: status.replace(/_/g, " "),
+    hint: null,
+    badgeClass: "border-border bg-muted text-muted-foreground dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300",
+  };
+}
 
 /** Lister dashboard: vertical list of active jobs (all breakpoints). */
 export function ListerActiveJobsList({
@@ -102,27 +158,91 @@ export function ListerActiveJobsList({
   if (items.length === 0) return null;
 
   return (
-    <ul className="space-y-2">
-      {items.map((item) => (
-        <li key={item.jobId}>
-          <Link
-            href={`/jobs/${item.jobId}`}
-            className="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted/60 dark:border-gray-800 dark:hover:bg-gray-800/50 md:min-h-12"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="line-clamp-2 text-base font-semibold text-foreground dark:text-gray-100 md:line-clamp-1">
-                {item.title}
-              </p>
-              {(item.suburb || item.postcode) && (
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {[item.suburb, item.postcode].filter(Boolean).join(" ")}
-                </p>
+    <ul className="space-y-3 md:space-y-2">
+      {items.map((item) => {
+        const { label, hint, badgeClass } = listerActiveJobCopy(item);
+        const bedsBaths =
+          item.bedrooms != null && item.bathrooms != null
+            ? `${item.bedrooms} bed · ${item.bathrooms} bath`
+            : null;
+
+        return (
+          <li key={item.jobId}>
+            <Link
+              href={`/jobs/${item.jobId}`}
+              className={cn(
+                "flex min-h-[4.5rem] gap-3 rounded-xl border border-border/70 bg-muted/15 p-3 pr-2 transition-colors",
+                "hover:bg-muted/40 active:bg-muted/50",
+                "dark:border-gray-800 dark:bg-gray-950/40 dark:hover:bg-gray-900/60"
               )}
-            </div>
-            <span className="shrink-0 text-sm font-semibold text-primary">View →</span>
-          </Link>
-        </li>
-      ))}
+            >
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted dark:bg-gray-800">
+                {item.coverUrl ? (
+                  <Image
+                    src={item.coverUrl}
+                    alt={item.title ? `Photo for ${item.title}` : "Listing photo"}
+                    fill
+                    className="object-cover"
+                    sizes="56px"
+                    loading="lazy"
+                    placeholder="blur"
+                    blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-500">
+                    <Briefcase className="h-6 w-6" aria-hidden />
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "inline-flex max-w-full rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+                      badgeClass
+                    )}
+                  >
+                    {label}
+                  </span>
+                </div>
+                <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-foreground dark:text-gray-100 md:text-sm">
+                  {item.title}
+                </p>
+                {item.locationLabel ? (
+                  <p className="flex items-start gap-1 text-xs text-muted-foreground dark:text-gray-400">
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="min-w-0 leading-snug">{item.locationLabel}</span>
+                  </p>
+                ) : null}
+                {bedsBaths ? (
+                  <p className="text-xs text-muted-foreground dark:text-gray-500">{bedsBaths}</p>
+                ) : null}
+                {item.agreedAmountCents != null && item.agreedAmountCents > 0 ? (
+                  <p className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                    Agreed {formatCents(item.agreedAmountCents)}
+                  </p>
+                ) : null}
+                {item.cleanerFirstName ? (
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">
+                    Cleaner · {item.cleanerFirstName}
+                  </p>
+                ) : null}
+                {hint ? (
+                  <p className="text-[11px] leading-snug text-muted-foreground/90 dark:text-gray-500">
+                    {hint}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex shrink-0 flex-col items-center justify-center self-center pl-0.5">
+                <ChevronRight className="h-5 w-5 text-muted-foreground dark:text-gray-500" aria-hidden />
+                <span className="sr-only">Open job</span>
+              </div>
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }
