@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { saveCleanerQuickSetup } from "@/lib/actions/onboarding";
 import { Brush } from "lucide-react";
+import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
 
 const DEFAULT_KM = 30;
 
@@ -18,7 +19,8 @@ const DEFAULT_KM = 30;
  */
 export function QuickSetupCleanerClient() {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startQuickTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
   const [abn, setAbn] = useState("");
   const [km, setKm] = useState([DEFAULT_KM]);
   const [error, setError] = useState<string | null>(null);
@@ -31,21 +33,32 @@ export function QuickSetupCleanerClient() {
       return;
     }
 
-    startTransition(async () => {
-      const result = await saveCleanerQuickSetup({
-        abn: skipAbn ? null : digits.length === 11 ? digits : null,
-        max_travel_km: km[0] ?? DEFAULT_KM,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
+    startQuickTransition(() => setSaving(true));
+    void (async () => {
+      try {
+        const result = await saveCleanerQuickSetup({
+          abn: skipAbn ? null : digits.length === 11 ? digits : null,
+          max_travel_km: km[0] ?? DEFAULT_KM,
+        });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        router.replace("/cleaner/dashboard");
+      } finally {
+        setSaving(false);
       }
-      router.replace("/cleaner/dashboard");
-    });
+    })();
   };
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col justify-center gap-6 px-3 py-10">
+      <FormSavingOverlay
+        show={saving}
+        variant="screen"
+        title="Saving your cleaner profile…"
+        description="Applying travel radius and business details."
+      />
       <div className="flex flex-col items-center gap-3 text-center">
         <ProgressRing value={100} size={88} strokeWidth={7} label="2/2" />
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/40">
@@ -59,7 +72,7 @@ export function QuickSetupCleanerClient() {
         </p>
       </div>
 
-      <Card className="border-border/80 shadow-md dark:border-gray-800 dark:bg-gray-900">
+      <Card className="relative border-border/80 shadow-md dark:border-gray-800 dark:bg-gray-900">
         <CardHeader>
           <CardTitle className="text-lg">Business details</CardTitle>
           <CardDescription className="text-base">
@@ -111,17 +124,17 @@ export function QuickSetupCleanerClient() {
               type="button"
               size="lg"
               className="min-h-14 w-full flex-1 text-base font-semibold sm:min-h-12"
-              disabled={isPending}
+              disabled={saving}
               onClick={() => submit(false)}
             >
-              {isPending ? "Saving…" : "Continue"}
+              {saving ? "Saving…" : "Continue"}
             </Button>
             <Button
               type="button"
               variant="outline"
               size="lg"
               className="min-h-14 w-full flex-1 text-base font-semibold sm:min-h-12"
-              disabled={isPending}
+              disabled={saving}
               onClick={() => submit(true)}
             >
               Verify later

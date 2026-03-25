@@ -22,6 +22,7 @@ import { AdminUserActions } from "@/components/admin/admin-user-actions";
 import { AdminUsersFilters } from "@/components/admin/admin-users-filters";
 import { AdminUserVerificationActions } from "@/components/admin/admin-user-verification-actions";
 import { VerificationBadges } from "@/components/shared/verification-badges";
+import { PROFILE_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = { id: number; lister_id: string; winner_id: string | null; listing_id: string; status: string };
@@ -171,7 +172,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   if (allProfiles.length === 0 && !serviceRoleMissing && profile && supabaseAdmin) {
     const { data: fullAdminRow } = await supabaseAdmin
       .from("profiles")
-      .select("*")
+      .select(PROFILE_ADMIN_TABLE_SELECT)
       .eq("id", session.user.id)
       .maybeSingle();
     if (fullAdminRow) {

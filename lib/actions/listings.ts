@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PHOTO_LIMITS } from "@/lib/photo-validation";
@@ -287,9 +288,12 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
     }
   }
 
+  revalidateJobsBrowseCaches();
   revalidatePath("/my-listings");
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/jobs");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
 
   return { ok: true };
 }
@@ -393,10 +397,12 @@ export async function relistExpiredListing(
     };
   }
 
+  revalidateJobsBrowseCaches();
   revalidatePath("/my-listings");
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
 
   void triggerNewListingJobAlerts(listingId);
 

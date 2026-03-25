@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
+import { LISTING_FULL_SELECT } from "@/lib/supabase/queries";
 
 export type JobsListFilters = {
   suburb?: string;
@@ -44,7 +45,7 @@ export function buildLiveListingsQuery(
 
   let query = supabase
     .from("listings")
-    .select("*")
+    .select(LISTING_FULL_SELECT)
     .eq("status", "live")
     .is("cancelled_early_at", null)
     .gt("end_time", now);

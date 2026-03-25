@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
+import {
+  BID_FULL_SELECT,
+  JOB_DETAIL_PAGE_SELECT,
+  JOB_MESSAGES_FULL_SELECT,
+  LISTING_FULL_SELECT,
+} from "@/lib/supabase/queries";
 
 type Params = Promise<{ id: string }>;
 
@@ -24,7 +30,7 @@ export async function GET(
 
   const { data: jobRow, error: jobError } = await supabase
     .from("jobs")
-    .select("*")
+    .select(JOB_DETAIL_PAGE_SELECT)
     .eq("id", id)
     .maybeSingle();
 
@@ -35,7 +41,7 @@ export async function GET(
 
   const { data: listing, error: listError } = await supabase
     .from("listings")
-    .select("*")
+    .select(LISTING_FULL_SELECT)
     .eq("id", listingId)
     .single();
 
@@ -45,7 +51,7 @@ export async function GET(
 
   const { data: bids } = await supabase
     .from("bids")
-    .select("*")
+    .select(BID_FULL_SELECT)
     .eq("listing_id", listingId)
     .order("created_at", { ascending: false });
 
@@ -54,7 +60,7 @@ export async function GET(
     const jobId = (jobRow as { id: number }).id;
     const { data: messages } = await supabase
       .from("job_messages")
-      .select("*")
+      .select(JOB_MESSAGES_FULL_SELECT)
       .eq("job_id", jobId)
       .order("created_at", { ascending: true });
     jobMessages = messages ?? [];

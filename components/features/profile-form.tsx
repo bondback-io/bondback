@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useAbnAutoSaveOnValid } from "@/hooks/use-abn-auto-save-on-valid";
 import { useForm, Controller } from "react-hook-form";
@@ -51,6 +51,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ImagePlus, Info } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import {
@@ -61,6 +62,8 @@ import {
   checkImageHeader,
 } from "@/lib/photo-validation";
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
+import { resizeImageFileForUpload } from "@/lib/client-image-resize";
+import { NEXT_IMAGE_SIZES_AVATAR_80 } from "@/lib/next-image-sizes";
 import {
   clampRadiusKm,
   setStoredRadiusKm,
@@ -135,6 +138,8 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
   );
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingPortfolio, setUploadingPortfolio] = useState(false);
+  const [, startPhotoTransition] = useTransition();
+  const [portfolioPendingSlots, setPortfolioPendingSlots] = useState(0);
   const [availability, setAvailability] = useState<Record<string, boolean>>(
     (profile.availability as Record<string, boolean>) ?? defaultAvailability()
   );
@@ -212,7 +217,8 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       e.target.value = "";
       return;
     }
-    const header = await checkImageHeader(file);
+    const resized = await resizeImageFileForUpload(file);
+    const header = await checkImageHeader(resized);
     if (!header.valid) {
       toast({
         variant: "destructive",
@@ -222,11 +228,16 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       e.target.value = "";
       return;
     }
-    setUploadingPhoto(true);
+    const revertUrl = profilePhotoUrl;
+    const optimisticUrl = URL.createObjectURL(resized);
+    startPhotoTransition(() => {
+      setProfilePhotoUrl(optimisticUrl);
+      setUploadingPhoto(true);
+    });
     setSubmitError(null);
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", resized);
       const { results, error: actionError } = await uploadProcessedPhotos(fd, {
         bucket: "profile-photos",
         pathPrefix: String(profile.id),
@@ -236,15 +247,20 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       const res = results[0];
       if (actionError || !res?.url) {
         const err = res?.error ?? actionError ?? "Upload failed";
+        startPhotoTransition(() => setProfilePhotoUrl(revertUrl));
+        URL.revokeObjectURL(optimisticUrl);
         setSubmitError(err);
         toast({ variant: "destructive", title: "Upload failed", description: err });
         return;
       }
+      URL.revokeObjectURL(optimisticUrl);
       setProfilePhotoUrl(res.url);
       const updateResult = await updateProfile({ profile_photo_url: res.url });
       if (!updateResult.ok) setSubmitError(updateResult.error);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to upload profile photo.";
+      startPhotoTransition(() => setProfilePhotoUrl(revertUrl));
+      URL.revokeObjectURL(optimisticUrl);
       setSubmitError(msg);
       toast({ variant: "destructive", title: "Upload failed", description: msg });
     } finally {
@@ -274,7 +290,8 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
     }
     const withHeaderCheck: File[] = [];
     for (const f of validFiles) {
-      const header = await checkImageHeader(f);
+      const resized = await resizeImageFileForUpload(f);
+      const header = await checkImageHeader(resized);
       if (!header.valid) {
         toast({
           variant: "destructive",
@@ -283,12 +300,13 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
         });
         continue;
       }
-      withHeaderCheck.push(f);
+      withHeaderCheck.push(resized);
     }
     if (withHeaderCheck.length === 0) {
       e.target.value = "";
       return;
     }
+    setPortfolioPendingSlots(withHeaderCheck.length);
     setUploadingPortfolio(true);
     setSubmitError(null);
     try {
@@ -329,6 +347,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       setSubmitError(msg);
       toast({ variant: "destructive", title: "Upload failed", description: msg });
     } finally {
+      setPortfolioPendingSlots(0);
       setUploadingPortfolio(false);
       e.target.value = "";
     }
@@ -450,8 +469,8 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                       alt="Profile"
                       width={80}
                       height={80}
-                      sizes="80px"
-                      quality={70}
+                      sizes={NEXT_IMAGE_SIZES_AVATAR_80}
+                      quality={75}
                       className="rounded-full object-cover ring-2 ring-emerald-500/80 dark:ring-emerald-500/60"
                     />
                   ) : (
@@ -869,8 +888,8 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                       alt="Portfolio"
                       width={80}
                       height={80}
-                      sizes="80px"
-                      quality={65}
+                      sizes={NEXT_IMAGE_SIZES_AVATAR_80}
+                      quality={75}
                       className="h-full w-full rounded-md object-cover"
                     />
                     <button
@@ -882,6 +901,14 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                     </button>
                   </div>
                 ))}
+                {portfolioPendingSlots > 0 &&
+                  Array.from({ length: portfolioPendingSlots }).map((_, i) => (
+                    <Skeleton
+                      key={`pf-pending-${i}`}
+                      className="h-20 w-20 shrink-0 rounded-md ring-1 ring-sky-400/40"
+                      aria-hidden
+                    />
+                  ))}
                 <label className={cn(
                     "flex h-20 w-24 cursor-pointer items-center justify-center rounded-md border border-dashed border-sky-300 bg-sky-50/60 text-[11px] font-medium text-sky-900 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-200 dark:hover:bg-sky-900/50",
                     (Array.isArray(portfolioUrls) ? portfolioUrls : []).length >= PHOTO_LIMITS.PORTFOLIO && "pointer-events-none opacity-60"
@@ -1001,8 +1028,8 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                     alt="Profile"
                     width={80}
                     height={80}
-                    sizes="80px"
-                    quality={70}
+                    sizes={NEXT_IMAGE_SIZES_AVATAR_80}
+                    quality={75}
                     className="rounded-full object-cover ring-2 ring-emerald-500/80 dark:ring-emerald-500/60"
                   />
                 ) : (

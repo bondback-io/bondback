@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ import {
   AbnLiveValidationMessages,
 } from "@/components/features/abn-validation-ui";
 import { ArrowLeft } from "lucide-react";
+import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
 
 type Props = {
   role: OnboardingRole;
@@ -40,6 +41,7 @@ const defaultDetails = {
 export function DetailsFormClient({ role }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [, startDetailsTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(defaultDetails);
 
@@ -71,17 +73,15 @@ export function DetailsFormClient({ role }: Props) {
     e.preventDefault();
     setError(null);
     if (!validate()) return;
+    startDetailsTransition(() => setLoading(true));
     if (needsAbn && form.abn.replace(/\D/g, "").length === 11) {
-      setLoading(true);
       const result = await validateAbnIfRequired(form.abn);
       if (!result.ok) {
         setError(result.error);
         setLoading(false);
         return;
       }
-      setLoading(false);
     }
-    setLoading(true);
     setOnboardingDetails({
       ...form,
       abn: needsAbn ? form.abn.replace(/\D/g, "") : "",
@@ -96,7 +96,13 @@ export function DetailsFormClient({ role }: Props) {
       : "We need a few details and your ABN before you create your account.";
 
   return (
-    <Card className="w-full max-w-md border-border dark:border-gray-800 dark:bg-gray-900">
+    <Card className="relative w-full max-w-md border-border dark:border-gray-800 dark:bg-gray-900">
+      <FormSavingOverlay
+        show={loading}
+        variant="card"
+        title="Saving your details…"
+        description="Taking you to account creation."
+      />
       <CardHeader className="space-y-1">
         <CardTitle className="text-xl dark:text-gray-100">{title}</CardTitle>
         <CardDescription className="text-base dark:text-gray-400 md:text-sm">{description}</CardDescription>

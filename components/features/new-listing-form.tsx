@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
@@ -59,6 +60,9 @@ import {
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
+import { Skeleton } from "@/components/ui/skeleton";
+import { resizeImageFileForUpload } from "@/lib/client-image-resize";
+import { NEXT_IMAGE_SIZES_LISTING_PREVIEW, NEXT_IMAGE_SIZES_UPLOAD_TILE } from "@/lib/next-image-sizes";
 import { useToast } from "@/components/ui/use-toast";
 import {
   validatePhotoFiles,
@@ -254,6 +258,9 @@ export function NewListingForm({
   const [suburbOpen, setSuburbOpen] = useState(false);
   const [suburbResults, setSuburbResults] = useState<SuburbRow[]>([]);
   const [isPendingSuburb, startSuburbTransition] = useTransition();
+  const [, startSubmitTransition] = useTransition();
+  const [submitPhase, setSubmitPhase] = useState<"idle" | "creating" | "uploading">("idle");
+  const [photoStagingCount, setPhotoStagingCount] = useState(0);
 
   /** Optional custom price per addon key (e.g. { balcony: "45" }). Empty string = use default. */
   const [addonCustomPrices, setAddonCustomPrices] = useState<Record<string, string>>({});
@@ -397,31 +404,40 @@ export function NewListingForm({
       });
     });
     if (validFiles.length > 0) {
+      setPhotoStagingCount(validFiles.length);
       const withHeaderCheck: File[] = [];
-      for (const f of validFiles) {
-        const header = await checkImageHeader(f);
-        if (!header.valid) {
-          toast({
-            variant: "destructive",
-            title: "Photo validation",
-            description: `${f.name}: ${header.error}`,
-          });
-          continue;
+      try {
+        for (const f of validFiles) {
+          const resized = await resizeImageFileForUpload(f);
+          const header = await checkImageHeader(resized);
+          if (!header.valid) {
+            toast({
+              variant: "destructive",
+              title: "Photo validation",
+              description: `${f.name}: ${header.error}`,
+            });
+            continue;
+          }
+          withHeaderCheck.push(resized);
         }
-        withHeaderCheck.push(f);
-      }
-      if (withHeaderCheck.length > 0) {
-        const previews = withHeaderCheck.map((f) => URL.createObjectURL(f));
-        setInitialPhotoFiles((prev) => [...prev, ...withHeaderCheck]);
-        setInitialPhotoPreviews((prev) => [...prev, ...previews]);
+        if (withHeaderCheck.length > 0) {
+          const previews = withHeaderCheck.map((f) => URL.createObjectURL(f));
+          setInitialPhotoFiles((prev) => [...prev, ...withHeaderCheck]);
+          setInitialPhotoPreviews((prev) => [...prev, ...previews]);
+        }
+      } finally {
+        setPhotoStagingCount(0);
       }
     }
     e.target.value = "";
   };
 
   const onSubmit = async (values: ListingFormValues) => {
-    setSubmitError(null);
-    setIsSubmitting(true);
+    startSubmitTransition(() => {
+      setSubmitError(null);
+      setIsSubmitting(true);
+      setSubmitPhase("creating");
+    });
 
     try {
       const reserve = values.reservePrice;
@@ -509,6 +525,7 @@ export function NewListingForm({
       const total = initialPhotoFiles.length;
       const uploadedUrls: string[] = [];
 
+      setSubmitPhase("uploading");
       setFileStatuses(initialPhotoFiles.map(() => ({ status: "pending" as const })));
       setUploading(true);
       try {
@@ -591,6 +608,7 @@ export function NewListingForm({
       toast({ variant: "destructive", title: "Error", description: msg });
     } finally {
       setIsSubmitting(false);
+      setSubmitPhase("idle");
     }
   };
 
@@ -627,7 +645,13 @@ export function NewListingForm({
   }
 
   return (
-    <section className="page-inner space-y-6 pb-12 md:space-y-6">
+    <section className="page-inner relative space-y-6 pb-12 md:space-y-6">
+        <FormSavingOverlay
+          show={isSubmitting}
+          variant="screen"
+          title={submitPhase === "uploading" ? "Uploading photos…" : "Creating listing…"}
+          description="Hang tight — this usually takes a few seconds on mobile networks."
+        />
         <header className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-sky-50/40 px-4 py-5 shadow-sm ring-1 ring-emerald-500/10 dark:border-emerald-800/60 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25 dark:ring-emerald-400/10 sm:px-6 sm:py-6">
           <div
             className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl dark:bg-emerald-500/15"
@@ -954,6 +978,22 @@ export function NewListingForm({
                       {initialPhotoFiles.length}/{PHOTO_LIMITS.LISTING_INITIAL} photos · JPG, PNG or WebP, max {PHOTO_VALIDATION.MAX_FILE_LABEL} each
                     </span>
                   </div>
+                  {photoStagingCount > 0 && (
+                    <div className="mt-4">
+                      <p className="mb-2 text-xs font-medium text-muted-foreground dark:text-gray-400">
+                        Adding photos…
+                      </p>
+                      <div className="flex flex-wrap gap-3" aria-busy="true">
+                        {Array.from({ length: photoStagingCount }).map((_, i) => (
+                          <Skeleton
+                            key={`staging-${i}`}
+                            className="h-24 w-24 shrink-0 rounded-lg sm:h-28 sm:w-28"
+                            aria-hidden
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {uploading && (
                     <div className="mt-4 space-y-2">
                       <Progress value={uploadProgress} className="h-4 md:h-2" />
@@ -981,9 +1021,9 @@ export function NewListingForm({
                                         alt={`Uploaded ${index + 1}`}
                                         fill
                                         className="object-cover"
-                                        sizes="64px"
+                                        sizes={NEXT_IMAGE_SIZES_UPLOAD_TILE}
                                         unoptimized={isBlob}
-                                        quality={65}
+                                        quality={75}
                                         {...(isBlob
                                           ? {}
                                           : {
@@ -1055,8 +1095,9 @@ export function NewListingForm({
                               alt={`Preview ${index + 1}`}
                               fill
                               className="object-cover"
-                              sizes="96px"
+                              sizes={NEXT_IMAGE_SIZES_LISTING_PREVIEW}
                               unoptimized
+                              loading="lazy"
                             />
                             {coverPhotoIndex === index && (
                               <span className="absolute bottom-0 left-0 right-0 bg-primary/90 px-1 py-0.5 text-center text-[10px] font-medium text-primary-foreground">

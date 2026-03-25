@@ -2,9 +2,9 @@
 
 import type { Database } from "@/types/supabase";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { fetchTakenListingIds } from "@/lib/jobs-taken-listing-ids";
+import { getCachedTakenListingIds } from "@/lib/cached-taken-listing-ids";
 import { buildLiveListingsQuery, type JobsListFilters } from "@/lib/jobs-query";
+import { jobsBrowsePageRange } from "@/lib/supabase/queries";
 import {
   buildListerCardDataByListingId,
   type ListerCardData,
@@ -18,8 +18,6 @@ export type GetJobsPageResult =
       listerCardDataByListingId: Record<string, ListerCardData>;
     }
   | { ok: false; error: string };
-
-const JOBS_PAGE_SIZE = 20;
 
 /**
  * Fetch a page of live listings for the /jobs list (infinite scroll).
@@ -37,12 +35,11 @@ export async function getJobsPage(
     return { ok: false, error: "You must be logged in." };
   }
 
-  const admin = createSupabaseAdminClient();
-  const takenIds = await fetchTakenListingIds(supabase, admin);
+  const takenIds = await getCachedTakenListingIds();
 
-  const offset = (page - 1) * JOBS_PAGE_SIZE;
+  const { from, to } = jobsBrowsePageRange(page);
   const query = buildLiveListingsQuery(supabase, filters, takenIds);
-  const { data: listings, error } = await query.range(offset, offset + JOBS_PAGE_SIZE - 1);
+  const { data: listings, error } = await query.range(from, to);
 
   if (error) {
     return { ok: false, error: error.message };

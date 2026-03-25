@@ -20,6 +20,7 @@ import {
   changePassword,
 } from "@/app/settings/actions";
 import { AlertTriangle } from "lucide-react";
+import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_LABELS,
@@ -42,7 +43,8 @@ type ProfileSnapshot = {
 type NotificationPrefs = Record<string, boolean> | null;
 
 export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
   const [abnValue, setAbnValue] = useState(() =>
     (profile?.abn ?? "").replace(/\D/g, "").slice(0, 11)
@@ -58,28 +60,39 @@ export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
 
   return (
     <form
-      className="space-y-4 text-foreground dark:text-gray-100"
+      className="relative space-y-4 text-foreground dark:text-gray-100"
       onSubmit={(e) => {
         e.preventDefault();
         const form = e.currentTarget;
         const formData = new FormData(form);
-        startTransition(async () => {
-          const result = await saveProfileSettings(formData);
-          if (result.ok) {
-            toast({
-              title: "Settings saved successfully",
-              description: "Your profile has been updated.",
-            });
-          } else {
-            toast({
-              title: "Error",
-              description: result.error,
-              variant: "destructive",
-            });
+        startTransition(() => setIsSaving(true));
+        void (async () => {
+          try {
+            const result = await saveProfileSettings(formData);
+            if (result.ok) {
+              toast({
+                title: "Settings saved successfully",
+                description: "Your profile has been updated.",
+              });
+            } else {
+              toast({
+                title: "Error",
+                description: result.error,
+                variant: "destructive",
+              });
+            }
+          } finally {
+            setIsSaving(false);
           }
-        });
+        })();
       }}
     >
+      <FormSavingOverlay
+        show={isSaving}
+        variant="card"
+        title="Saving profile…"
+        description="Updating your details — almost done."
+      />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="full_name" className="text-muted-foreground dark:text-gray-300">
@@ -181,8 +194,8 @@ export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
           rows={4}
         />
       </div>
-      <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-10 md:min-h-0 md:w-auto" disabled={isPending}>
-        {isPending ? "Saving…" : "Save profile"}
+      <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-10 md:min-h-0 md:w-auto" disabled={isSaving}>
+        {isSaving ? "Saving…" : "Save profile"}
       </Button>
     </form>
   );
@@ -389,9 +402,10 @@ export function SettingsNotificationsForm({
 }
 
 export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean }) {
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const { toast } = useToast();
   const [publicProfile, setPublicProfile] = useState(profilePublic);
+  const [privacySaving, setPrivacySaving] = useState(false);
 
   useEffect(() => {
     setPublicProfile(profilePublic);
@@ -399,29 +413,40 @@ export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean 
 
   const onPublicChange = (checked: boolean) => {
     const prev = publicProfile;
-    setPublicProfile(checked);
-    startTransition(async () => {
-      const fd = new FormData();
-      if (checked) fd.set("profile_public", "on");
-      const result = await savePrivacySettings(fd);
-      if (result.ok) {
+    startTransition(() => setPublicProfile(checked));
+    setPrivacySaving(true);
+    void (async () => {
+      try {
+        const fd = new FormData();
+        if (checked) fd.set("profile_public", "on");
+        const result = await savePrivacySettings(fd);
+        if (result.ok) {
+          toast({
+            title: "Privacy updated",
+            description: "Your visibility preference is saved.",
+          });
+          return;
+        }
+        startTransition(() => setPublicProfile(prev));
         toast({
-          title: "Privacy updated",
-          description: "Your visibility preference is saved.",
+          title: "Couldn’t save",
+          description: result.error,
+          variant: "destructive",
         });
-        return;
+      } finally {
+        setPrivacySaving(false);
       }
-      setPublicProfile(prev);
-      toast({
-        title: "Couldn’t save",
-        description: result.error,
-        variant: "destructive",
-      });
-    });
+    })();
   };
 
   return (
-    <div className="space-y-4 text-foreground dark:text-gray-100">
+    <div className="relative space-y-4 text-foreground dark:text-gray-100">
+      <FormSavingOverlay
+        show={privacySaving}
+        variant="card"
+        title="Saving privacy…"
+        className="min-h-[4.5rem]"
+      />
       <div className="flex min-h-[52px] items-center justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/40">
         <Label htmlFor="profile_public_switch" className="flex-1 cursor-pointer text-base dark:text-gray-200 md:text-sm">
           Show my profile publicly in search results
@@ -430,7 +455,7 @@ export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean 
           id="profile_public_switch"
           checked={publicProfile}
           onCheckedChange={onPublicChange}
-          disabled={isPending}
+          disabled={privacySaving}
         />
       </div>
     </div>
@@ -438,7 +463,8 @@ export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean 
 }
 
 export function SettingsPasswordForm() {
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [showSaveOverlay, setShowSaveOverlay] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -462,28 +488,34 @@ export function SettingsPasswordForm() {
       });
       return;
     }
-    startTransition(async () => {
-      const result = await changePassword(currentPassword, newPassword);
-      if (result.ok) {
-        toast({
-          title: "Password updated",
-          description: "Your password has been changed. Use it next time you sign in.",
-        });
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      } else {
-        toast({
-          title: "Could not change password",
-          description: result.error,
-          variant: "destructive",
-        });
+    startTransition(() => setShowSaveOverlay(true));
+    void (async () => {
+      try {
+        const result = await changePassword(currentPassword, newPassword);
+        if (result.ok) {
+          toast({
+            title: "Password updated",
+            description: "Your password has been changed. Use it next time you sign in.",
+          });
+          setCurrentPassword("");
+          setNewPassword("");
+          setConfirmPassword("");
+        } else {
+          toast({
+            title: "Could not change password",
+            description: result.error,
+            variant: "destructive",
+          });
+        }
+      } finally {
+        setShowSaveOverlay(false);
       }
-    });
+    })();
   };
 
   return (
-    <form className="space-y-4 text-foreground dark:text-gray-100" onSubmit={handleSubmit}>
+    <form className="relative space-y-4 text-foreground dark:text-gray-100" onSubmit={handleSubmit}>
+      <FormSavingOverlay show={showSaveOverlay} variant="card" title="Updating password…" />
       <div className="space-y-2">
         <Label htmlFor="current_password" className="text-muted-foreground dark:text-gray-300">
           Current password
@@ -534,8 +566,8 @@ export function SettingsPasswordForm() {
           className="w-full max-w-full md:max-w-xs"
         />
       </div>
-      <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-8 md:min-h-0 md:w-auto" disabled={isPending}>
-        {isPending ? "Updating…" : "Change password"}
+      <Button type="submit" size="lg" className="h-12 min-h-[48px] w-full rounded-full md:h-8 md:min-h-0 md:w-auto" disabled={showSaveOverlay}>
+        {showSaveOverlay ? "Updating…" : "Change password"}
       </Button>
     </form>
   );

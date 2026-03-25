@@ -18,7 +18,7 @@
  * ============================================================================
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
+import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
 
 const PENDING_PROFILE_KEY = "bondback_pending_minimal_profile";
 
@@ -56,6 +57,7 @@ function SignupForm() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [, startSignupTransition] = useTransition();
 
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
@@ -70,7 +72,7 @@ function SignupForm() {
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null);
     setInfo(null);
-    setSubmitting(true);
+    startSignupTransition(() => setSubmitting(true));
 
     const supabase = createBrowserSupabaseClient();
     const postcode = values.postcode?.trim() || null;
@@ -134,7 +136,13 @@ function SignupForm() {
 
   return (
     <section className="page-inner flex min-h-[70vh] flex-col items-center justify-center px-3 py-8">
-      <Card className="w-full max-w-md border-border/80 shadow-lg dark:border-gray-800 dark:bg-gray-900">
+      <Card className="relative w-full max-w-md border-border/80 shadow-lg dark:border-gray-800 dark:bg-gray-900">
+        <FormSavingOverlay
+          show={submitting}
+          variant="card"
+          title="Creating your account…"
+          description="Securing your profile — you’ll choose Lister or Cleaner next."
+        />
         <CardHeader className="space-y-1 pb-4 text-center sm:text-left">
           <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
             Create your account

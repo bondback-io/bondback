@@ -3,8 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { fetchTakenListingIds } from "@/lib/jobs-taken-listing-ids";
+import { getCachedTakenListingIds } from "@/lib/cached-taken-listing-ids";
+import { jobsBrowsePageRange } from "@/lib/supabase/queries";
 import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
 import { buildLiveListingsQuery } from "@/lib/jobs-query";
@@ -35,6 +35,9 @@ export const metadata: Metadata = {
     url: "/jobs",
   },
 };
+
+/** ISR hint: session + live listings stay request-scoped; shared “taken listing ids” uses unstable_cache. */
+export const revalidate = 30;
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -115,9 +118,7 @@ export default async function JobsPage({
   const propertyTypeFilter = (sp.property_type ?? "").trim();
 
   // Exclude listings that already have an associated job (assigned/approved).
-  // Use admin client when set; otherwise RPC listing_ids_with_jobs (see migration).
-  const admin = createSupabaseAdminClient();
-  const takenIds = await fetchTakenListingIds(supabase, admin);
+  const takenIds = await getCachedTakenListingIds();
 
   const filters = {
     suburb: suburbFilter || undefined,
@@ -134,7 +135,8 @@ export default async function JobsPage({
   };
 
   const query = buildLiveListingsQuery(supabase, filters, takenIds);
-  const { data: listings } = await query.range(0, 19);
+  const { from, to } = jobsBrowsePageRange(1);
+  const { data: listings } = await query.range(from, to);
 
   const liveListings = (listings ?? []) as ListingRow[];
   let initialListings = liveListings;

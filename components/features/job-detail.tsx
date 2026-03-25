@@ -63,6 +63,8 @@ import {
   checkImageHeader,
 } from "@/lib/photo-validation";
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
+import { resizeImageFileForUpload } from "@/lib/client-image-resize";
+import { NEXT_IMAGE_SIZES_THUMB_GRID } from "@/lib/next-image-sizes";
 import { getStateFromPostcode, formatLocationWithState } from "@/lib/state-from-postcode";
 import { getBondGuidelineForState } from "@/lib/bond-cleaning-guidelines";
 import { JobPaymentTimeline, type JobPaymentTimelineProps } from "@/components/features/job-payment-timeline";
@@ -1846,8 +1848,8 @@ export function JobDetail({
                               src={entry.url}
                               alt="After clean"
                               fill
-                              sizes="96px"
-                              quality={65}
+                              sizes={NEXT_IMAGE_SIZES_THUMB_GRID}
+                              quality={75}
                               loading="lazy"
                               placeholder="blur"
                               blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
@@ -1891,8 +1893,8 @@ export function JobDetail({
                               src={entry.url}
                               alt="After clean"
                               fill
-                              sizes="96px"
-                              quality={65}
+                              sizes={NEXT_IMAGE_SIZES_THUMB_GRID}
+                              quality={75}
                               loading="lazy"
                               placeholder="blur"
                               blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
@@ -1981,7 +1983,8 @@ export function JobDetail({
                             }
                             const withHeaderCheck: File[] = [];
                             for (const f of validFiles) {
-                              const header = await checkImageHeader(f);
+                              const resized = await resizeImageFileForUpload(f);
+                              const header = await checkImageHeader(resized);
                               if (!header.valid) {
                                 toast({
                                   variant: "destructive",
@@ -1990,7 +1993,7 @@ export function JobDetail({
                                 });
                                 continue;
                               }
-                              withHeaderCheck.push(f);
+                              withHeaderCheck.push(resized);
                             }
                             if (withHeaderCheck.length === 0) {
                               event.target.value = "";
@@ -2825,8 +2828,8 @@ export function JobDetail({
                               src={entry.url}
                               alt="Property"
                               fill
-                              sizes="96px"
-                              quality={65}
+                              sizes={NEXT_IMAGE_SIZES_THUMB_GRID}
+                              quality={75}
                               loading="lazy"
                               placeholder="blur"
                               blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
@@ -2946,7 +2949,8 @@ export function JobDetail({
                               }
                               const withHeaderCheck: File[] = [];
                               for (const f of validFiles) {
-                                const header = await checkImageHeader(f);
+                                const resized = await resizeImageFileForUpload(f);
+                                const header = await checkImageHeader(resized);
                                 if (!header.valid) {
                                   toast({
                                     variant: "destructive",
@@ -2955,7 +2959,7 @@ export function JobDetail({
                                   });
                                   continue;
                                 }
-                                withHeaderCheck.push(f);
+                                withHeaderCheck.push(resized);
                               }
                               if (withHeaderCheck.length === 0) {
                                 event.target.value = "";
@@ -3134,11 +3138,12 @@ export function JobDetail({
               width={1600}
               height={1200}
               sizes="100vw"
-              quality={85}
+              quality={75}
               placeholder="blur"
               blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
               className="max-h-[90vh] max-w-[90vw] h-auto w-auto rounded-md object-contain shadow-lg"
               priority
+              fetchPriority="high"
             />
           </div>
         </div>

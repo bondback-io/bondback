@@ -6,6 +6,9 @@ import { cn } from "@/lib/utils";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { isSupabasePublicImageUrl } from "@/lib/supabase-image-url";
 
+/** Default `sizes` — override per layout (grids, avatars) via `lib/next-image-sizes.ts`. */
+const DEFAULT_SIZES = "(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw";
+
 export type OptimizedImageProps = {
   src: string | null | undefined;
   alt: string;
@@ -33,7 +36,7 @@ export function OptimizedImage({
   fill,
   width,
   height,
-  sizes = "(max-width: 768px) 100vw, 50vw",
+  sizes = DEFAULT_SIZES,
   priority = false,
   quality = 75,
   blur = true,
@@ -57,6 +60,7 @@ export function OptimizedImage({
         sizes={sizes}
         quality={quality}
         loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
         priority={priority}
         placeholder={blur ? "blur" : "empty"}
         blurDataURL={blur ? REMOTE_IMAGE_BLUR_DATA_URL : undefined}

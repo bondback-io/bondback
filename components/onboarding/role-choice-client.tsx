@@ -39,14 +39,18 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { saveRoleChoice, upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
+import { cn } from "@/lib/utils";
 
 const PENDING_PROFILE_KEY = "bondback_pending_minimal_profile";
 
 export function RoleChoiceClient() {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startChoiceTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(true);
+  const [savingChoice, setSavingChoice] = useState<"lister" | "cleaner" | null>(null);
+  const [optimisticChoice, setOptimisticChoice] = useState<"lister" | "cleaner" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,18 +112,31 @@ export function RoleChoiceClient() {
 
   const handleChoice = (choice: "lister" | "cleaner") => {
     setError(null);
-    startTransition(async () => {
-      const result = await saveRoleChoice(choice);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+    startChoiceTransition(() => setOptimisticChoice(choice));
+    setSavingChoice(choice);
+    void (async () => {
+      try {
+        const result = await saveRoleChoice(choice);
+        if (!result.ok) {
+          setOptimisticChoice(null);
+          setError(result.error);
+          return;
+        }
+        router.push(result.redirect);
+      } finally {
+        setSavingChoice(null);
       }
-      router.push(result.redirect);
-    });
+    })();
   };
 
   return (
-    <div className="flex min-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col justify-center gap-6 px-3 py-8 sm:max-w-2xl md:max-w-4xl md:py-12">
+    <div className="relative flex min-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col justify-center gap-6 px-3 py-8 sm:max-w-2xl md:max-w-4xl md:py-12">
+      <FormSavingOverlay
+        show={savingChoice != null}
+        variant="screen"
+        title={savingChoice === "cleaner" ? "Setting up cleaner…" : "Setting up lister…"}
+        description="Applying your role — almost there."
+      />
       <div className="space-y-2 text-center">
         <h1 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           How do you want to use Bond Back?
@@ -146,7 +163,14 @@ export function RoleChoiceClient() {
 
       <div className="grid gap-5 md:grid-cols-2 md:gap-8">
         {/* Lister path */}
-        <Card className="flex flex-col border-2 border-transparent shadow-md transition-colors dark:border-gray-800 dark:bg-gray-900 dark:shadow-none">
+        <Card
+          className={cn(
+            "flex flex-col border-2 shadow-md transition-colors dark:border-gray-800 dark:bg-gray-900 dark:shadow-none",
+            optimisticChoice === "lister"
+              ? "border-sky-500/70 ring-2 ring-sky-500/25 dark:border-sky-500/60"
+              : "border-transparent"
+          )}
+        >
           <CardHeader className="space-y-4 pb-2">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-100 dark:bg-sky-900/50">
               <Home className="h-9 w-9 text-sky-600 dark:text-sky-300" aria-hidden />
@@ -175,16 +199,23 @@ export function RoleChoiceClient() {
               type="button"
               size="lg"
               className="w-full min-h-14 shrink-0 text-base font-semibold sm:min-h-12"
-              disabled={isPending || syncing}
+              disabled={savingChoice != null || syncing}
               onClick={() => handleChoice("lister")}
             >
-              Start as Lister
+              {savingChoice === "lister" ? "Starting…" : "Start as Lister"}
             </Button>
           </CardContent>
         </Card>
 
         {/* Cleaner path */}
-        <Card className="flex flex-col border-2 border-transparent shadow-md transition-colors dark:border-gray-800 dark:bg-gray-900 dark:shadow-none">
+        <Card
+          className={cn(
+            "flex flex-col border-2 shadow-md transition-colors dark:border-gray-800 dark:bg-gray-900 dark:shadow-none",
+            optimisticChoice === "cleaner"
+              ? "border-emerald-500/70 ring-2 ring-emerald-500/25 dark:border-emerald-500/60"
+              : "border-transparent"
+          )}
+        >
           <CardHeader className="space-y-4 pb-2">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/40">
               <Brush className="h-9 w-9 text-emerald-700 dark:text-emerald-300" aria-hidden />
@@ -214,10 +245,10 @@ export function RoleChoiceClient() {
               size="lg"
               variant="secondary"
               className="w-full min-h-14 shrink-0 border border-emerald-600/30 bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-600/90 dark:border-emerald-500/30 sm:min-h-12"
-              disabled={isPending || syncing}
+              disabled={savingChoice != null || syncing}
               onClick={() => handleChoice("cleaner")}
             >
-              Start as Cleaner
+              {savingChoice === "cleaner" ? "Starting…" : "Start as Cleaner"}
             </Button>
           </CardContent>
         </Card>

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
 import type Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -239,10 +240,13 @@ export async function acceptBid(
     { listingTitle }
   );
 
+  revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/my-listings");
   revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
 
   return { ok: true, jobId };
 }
@@ -358,11 +362,14 @@ export async function secureJobAtPrice(
     { listingTitle }
   );
 
+  revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/my-listings");
   revalidatePath("/dashboard");
   revalidatePath("/messages");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
 
   return { ok: true, jobId };
 }

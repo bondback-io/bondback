@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateGlobalSettingsCache } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -350,6 +351,7 @@ export async function saveGlobalSettings(
   revalidatePath("/admin/emails");
   revalidatePath("/");
   revalidatePath("/", "layout");
+  revalidateGlobalSettingsCache();
 
   // Clear Stripe config/server cache so next request uses the new test/live mode
   const { clearStripeConfigCache } = await import("@/lib/stripe/config");
@@ -416,6 +418,7 @@ export async function setFloatingChatEnabled(
   revalidatePath("/dashboard");
   revalidatePath("/");
   revalidatePath("/", "layout");
+  revalidateGlobalSettingsCache();
 
   return { ok: true, floatingChatEnabled: saved };
 }
@@ -446,6 +449,7 @@ export async function setStripeTestMode(
   revalidatePath("/admin/global-settings");
   revalidatePath("/");
   revalidatePath("/", "layout");
+  revalidateGlobalSettingsCache();
   const { clearStripeConfigCache } = await import("@/lib/stripe/config");
   const { clearStripeServerCache } = await import("@/lib/stripe");
   clearStripeConfigCache();
@@ -475,6 +479,7 @@ export async function setEmailsEnabled(
   await logAdminActivity({ adminId: session?.user?.id ?? null, actionType: "emails_enabled_toggled", targetType: "other", targetId: null, details: { enabled } });
   revalidatePath("/admin/emails");
   revalidatePath("/admin/global-settings");
+  revalidateGlobalSettingsCache();
   return { ok: true };
 }
 

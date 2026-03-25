@@ -16,6 +16,7 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminDeleteJobButton } from "@/components/admin/admin-delete-job-button";
 import { adminForceCompleteJob, adminRefundJob, adminResetAllJobs, adminReinstateJob } from "@/lib/actions/admin-jobs";
 import { AdminJobsPendingReviewTable } from "@/components/admin/admin-jobs-pending-review-table";
+import { JOB_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
 
 interface AdminJobsPageProps {
   searchParams: Promise<{
@@ -47,7 +48,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
 
   const { data: jobsData } = await supabase
     .from("jobs")
-    .select("*")
+    .select(JOB_ADMIN_TABLE_SELECT)
     .order("created_at", { ascending: false });
 
   const jobs = (jobsData ?? []) as any[];

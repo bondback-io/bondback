@@ -132,6 +132,7 @@ export async function placeBid(
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/my-listings");
   revalidatePath("/cleaner/dashboard");
+  revalidatePath("/lister/dashboard");
   return { ok: true };
 }
 
@@ -233,5 +234,6 @@ export async function cancelLastBid(
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/my-listings");
   revalidatePath("/cleaner/dashboard");
+  revalidatePath("/lister/dashboard");
   return { ok: true };
 }

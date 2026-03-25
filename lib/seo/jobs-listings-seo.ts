@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { getSiteUrl } from "@/lib/site";
+import { JOB_TYPED_SELECT, LISTING_FULL_SELECT } from "@/lib/supabase/queries";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -82,7 +83,7 @@ export async function buildJobListingMetadata(
   if (!Number.isNaN(numericId)) {
     const { data: jr } = await supabase
       .from("jobs")
-      .select("*")
+      .select(JOB_TYPED_SELECT)
       .eq("id", numericId)
       .maybeSingle();
     const jl = jr as JobRow | null;
@@ -94,7 +95,7 @@ export async function buildJobListingMetadata(
 
   const { data: listingRaw, error: listErr } = await supabase
     .from("listings")
-    .select("*")
+    .select(LISTING_FULL_SELECT)
     .eq("id", listingId)
     .maybeSingle();
 
@@ -108,7 +109,7 @@ export async function buildJobListingMetadata(
   if (!jobForPrice) {
     const { data: j2 } = await supabase
       .from("jobs")
-      .select("*")
+      .select(JOB_TYPED_SELECT)
       .eq("listing_id", listingId)
       .order("created_at", { ascending: false })
       .limit(1)

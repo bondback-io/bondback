@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminDeleteListingButton } from "@/components/admin/admin-delete-listing-button";
 import { adminForceEndListing, adminResetAllListings } from "@/lib/actions/admin-listings";
+import { LISTING_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -62,7 +63,7 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
 
   const { data: listingsData } = await supabase
     .from("listings")
-    .select("*")
+    .select(LISTING_ADMIN_TABLE_SELECT)
     .order("created_at", { ascending: false });
 
   const listings = (listingsData ?? []) as ListingRow[];

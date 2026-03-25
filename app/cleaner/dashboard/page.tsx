@@ -3,8 +3,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { fetchTakenListingIds } from "@/lib/jobs-taken-listing-ids";
+import { getCachedTakenListingIds } from "@/lib/cached-taken-listing-ids";
+import {
+  LISTING_FULL_SELECT,
+  LISTING_LIVE_BID_CARD_SELECT,
+  NOTIFICATION_FEED_SELECT,
+  PROFILE_CLEANER_DASHBOARD_SELECT,
+} from "@/lib/supabase/queries";
 import type { Database } from "@/types/supabase";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -34,6 +39,9 @@ type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
+/** Notifications + job rows are per-user; “taken listing” set for live-bid filtering is cached when service role exists. */
+export const revalidate = 30;
+
 export const metadata: Metadata = {
   title: "Cleaner dashboard",
   description:
@@ -52,7 +60,7 @@ export default async function CleanerDashboardPage() {
 
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
-    .select("*")
+    .select(PROFILE_CLEANER_DASHBOARD_SELECT)
     .eq("id", session.user.id)
     .maybeSingle();
 
@@ -76,7 +84,7 @@ export default async function CleanerDashboardPage() {
   if (listingIds.length > 0) {
     const { data: listingsData } = await supabase
       .from("listings")
-      .select("*")
+      .select(LISTING_FULL_SELECT)
       .in("id", listingIds as string[]);
     (listingsData ?? []).forEach((l: unknown) => {
       const row = l as ListingRow & { id: string };
@@ -112,7 +120,7 @@ export default async function CleanerDashboardPage() {
 
   const { data: notificationsData } = await supabase
     .from("notifications")
-    .select("*")
+    .select(NOTIFICATION_FEED_SELECT)
     .eq("user_id", session.user.id)
     .order("created_at", { ascending: false })
     .limit(8);
@@ -187,15 +195,14 @@ export default async function CleanerDashboardPage() {
 
   let liveBidItems: CleanerLiveBidItem[] = [];
   if (bestBidByListing.size > 0) {
-    const admin = createSupabaseAdminClient();
     const takenIds = new Set(
-      (await fetchTakenListingIds(supabase, admin)).map((id) => String(id))
+      (await getCachedTakenListingIds()).map((id) => String(id))
     );
 
     const bidListingIds = [...bestBidByListing.keys()];
     const { data: listingsForBids } = await supabase
       .from("listings")
-      .select("*")
+      .select(LISTING_LIVE_BID_CARD_SELECT)
       .in("id", bidListingIds);
 
     const listingsForBidList = (listingsForBids ?? []) as ListingRow[];

@@ -7,7 +7,7 @@ import { getSiteUrl } from "@/lib/site";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
-import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { ensureJobChecklistIfEmpty, fulfillStripeCheckoutReturn } from "@/lib/actions/jobs";
 import { JobDetail } from "@/components/features/job-detail";
@@ -16,6 +16,11 @@ import { ScrollToDispute } from "@/components/features/scroll-to-dispute";
 import { RecordJobView } from "@/components/features/record-job-view";
 import { OfflineJobsPrimer } from "@/components/offline/offline-jobs-primer";
 import { buildJobListingMetadata, buildJobPostingJsonLd } from "@/lib/seo/jobs-listings-seo";
+import {
+  BID_FULL_SELECT,
+  JOB_DETAIL_PAGE_SELECT,
+  LISTING_FULL_SELECT,
+} from "@/lib/supabase/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +105,7 @@ export default async function JobDetailPage({
   // still view "View & bids" / history for listings without a job.
   const { data: jobRow, error: jobError } = await supabase
     .from("jobs")
-    .select("*")
+    .select(JOB_DETAIL_PAGE_SELECT)
     .eq("id", id)
     .maybeSingle();
 
@@ -114,7 +119,7 @@ export default async function JobDetailPage({
 
   const { data: listing, error: listError } = await supabase
     .from("listings")
-    .select("*")
+    .select(LISTING_FULL_SELECT)
     .eq("id", listingId)
     .single();
 
@@ -126,13 +131,13 @@ export default async function JobDetailPage({
 
   const { data: bids } = await supabase
     .from("bids")
-    .select("*")
+    .select(BID_FULL_SELECT)
     .eq("listing_id", listingId)
     .order("created_at", { ascending: false });
 
   const initialBids: BidWithBidder[] = (bids ?? []) as BidWithBidder[];
 
-  const settings = await getGlobalSettings();
+  const settings = await getCachedGlobalSettingsForPages();
   const stripeTestMode = (settings as { stripe_test_mode?: boolean } | null)?.stripe_test_mode === true;
   const autoReleaseHours = (settings?.auto_release_hours ?? 48) as number;
   const feePercentage = resolvePlatformFeePercent(

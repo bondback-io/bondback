@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -14,6 +14,7 @@ import { setDistanceUnitClient } from "@/hooks/use-distance-unit";
 import type { ProfileRole } from "@/lib/types";
 import { Brush, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
 
 type Props = {
   themePreference: ThemePreference;
@@ -30,50 +31,84 @@ export function SettingsPreferencesForm({
 }: Props) {
   const router = useRouter();
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [displayTheme, setDisplayTheme] = useState(initialTheme);
+  const [displayDistance, setDisplayDistance] = useState(initialDistance);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+
+  useEffect(() => {
+    setDisplayTheme(initialTheme);
+    setDisplayDistance(initialDistance);
+  }, [initialTheme, initialDistance]);
 
   const hasLister = roles.includes("lister");
   const hasCleaner = roles.includes("cleaner");
   const dualRole = hasLister && hasCleaner;
 
   const handleSaveDisplayPrefs = (theme: ThemePreference, distance: DistanceUnitPref) => {
-    startTransition(async () => {
-      const result = await saveUserPreferences({
-        theme_preference: theme,
-        distance_unit: distance,
-      });
-      if (!result.ok) {
-        toast({ variant: "destructive", title: "Couldn’t save", description: result.error });
-        return;
-      }
-      applyThemeToDocument(theme);
-      setDistanceUnitClient(distance);
-      toast({ title: "Preferences saved", description: "Theme and distance display updated." });
-      router.refresh();
+    const prevTheme = displayTheme;
+    const prevDistance = displayDistance;
+    startTransition(() => {
+      setDisplayTheme(theme);
+      setDisplayDistance(distance);
     });
+    setPrefsSaving(true);
+    void (async () => {
+      try {
+        const result = await saveUserPreferences({
+          theme_preference: theme,
+          distance_unit: distance,
+        });
+        if (!result.ok) {
+          startTransition(() => {
+            setDisplayTheme(prevTheme);
+            setDisplayDistance(prevDistance);
+          });
+          toast({ variant: "destructive", title: "Couldn’t save", description: result.error });
+          return;
+        }
+        applyThemeToDocument(theme);
+        setDistanceUnitClient(distance);
+        toast({ title: "Preferences saved", description: "Theme and distance display updated." });
+        router.refresh();
+      } finally {
+        setPrefsSaving(false);
+      }
+    })();
   };
 
   const switchDefaultRole = (role: ProfileRole) => {
     if (activeRole === role) return;
-    startTransition(async () => {
-      const result = await setActiveRole(role);
-      if (!result.ok) {
-        toast({ variant: "destructive", title: "Couldn’t switch", description: result.error });
-        return;
+    setPrefsSaving(true);
+    void (async () => {
+      try {
+        const result = await setActiveRole(role);
+        if (!result.ok) {
+          toast({ variant: "destructive", title: "Couldn’t switch", description: result.error });
+          return;
+        }
+        notifyActiveRoleChanged();
+        toast({
+          title: role === "lister" ? "Lister mode" : "Cleaner mode",
+          description: "Default role updated. Dashboard links will use this mode.",
+        });
+        const dest = role === "lister" ? "/lister/dashboard" : "/cleaner/dashboard";
+        router.replace(dest);
+        router.refresh();
+      } finally {
+        setPrefsSaving(false);
       }
-      notifyActiveRoleChanged();
-      toast({
-        title: role === "lister" ? "Lister mode" : "Cleaner mode",
-        description: "Default role updated. Dashboard links will use this mode.",
-      });
-      const dest = role === "lister" ? "/lister/dashboard" : "/cleaner/dashboard";
-      router.replace(dest);
-      router.refresh();
-    });
+    })();
   };
 
   return (
-    <div className="space-y-8">
+    <div className="relative space-y-8">
+      <FormSavingOverlay
+        show={prefsSaving}
+        variant="card"
+        title="Saving preferences…"
+        description="Theme, distance, or default role — syncing to your account."
+      />
       {/* Theme */}
       <div className="space-y-3">
         <div>
@@ -83,10 +118,10 @@ export function SettingsPreferencesForm({
           </p>
         </div>
         <RadioGroup
-          value={initialTheme}
-          onValueChange={(v) => handleSaveDisplayPrefs(v as ThemePreference, initialDistance)}
+          value={displayTheme}
+          onValueChange={(v) => handleSaveDisplayPrefs(v as ThemePreference, displayDistance)}
           className="grid gap-2 sm:grid-cols-3"
-          disabled={isPending}
+          disabled={prefsSaving}
         >
           {(
             [
@@ -100,7 +135,7 @@ export function SettingsPreferencesForm({
               className={cn(
                 "flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 transition-colors dark:border-gray-800 dark:bg-gray-900/50",
                 "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
-                isPending && "pointer-events-none opacity-60"
+                prefsSaving && "pointer-events-none opacity-60"
               )}
             >
               <RadioGroupItem value={value} id={`theme-${value}`} />
@@ -121,10 +156,10 @@ export function SettingsPreferencesForm({
           </p>
         </div>
         <RadioGroup
-          value={initialDistance}
-          onValueChange={(v) => handleSaveDisplayPrefs(initialTheme, v as DistanceUnitPref)}
+          value={displayDistance}
+          onValueChange={(v) => handleSaveDisplayPrefs(displayTheme, v as DistanceUnitPref)}
           className="grid gap-2 sm:grid-cols-2"
-          disabled={isPending}
+          disabled={prefsSaving}
         >
           {(
             [
@@ -137,7 +172,7 @@ export function SettingsPreferencesForm({
               className={cn(
                 "flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 transition-colors dark:border-gray-800 dark:bg-gray-900/50",
                 "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
-                isPending && "pointer-events-none opacity-60"
+                prefsSaving && "pointer-events-none opacity-60"
               )}
             >
               <RadioGroupItem value={value} id={`dist-${value}`} />
@@ -165,7 +200,7 @@ export function SettingsPreferencesForm({
           >
             <button
               type="button"
-              disabled={isPending || activeRole === "lister"}
+              disabled={prefsSaving || activeRole === "lister"}
               onClick={() => switchDefaultRole("lister")}
               className={cn(
                 "flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-3 text-sm font-semibold transition-all",
@@ -185,7 +220,7 @@ export function SettingsPreferencesForm({
             </button>
             <button
               type="button"
-              disabled={isPending || activeRole === "cleaner"}
+              disabled={prefsSaving || activeRole === "cleaner"}
               onClick={() => switchDefaultRole("cleaner")}
               className={cn(
                 "flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-3 text-sm font-semibold transition-all",

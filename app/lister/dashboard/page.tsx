@@ -18,7 +18,12 @@ import { cn } from "@/lib/utils";
 import { formatCents, isListingLive, listingIdsWithCancelledJobs } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ChevronDown, XCircle } from "lucide-react";
-import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
+import {
+  LISTING_FULL_SELECT,
+  NOTIFICATION_FEED_SELECT,
+  PROFILE_LISTER_DASHBOARD_SELECT,
+} from "@/lib/supabase/queries";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { getListingCoverUrl } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
@@ -31,8 +36,8 @@ type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
-/** Always fresh data after admin moderation / job cancel (avoid stale listing cards). */
-export const dynamic = "force-dynamic";
+/** User-specific queries stay per-request; global_settings row is cached + tag-invalidated on admin save. */
+export const revalidate = 30;
 
 export const metadata: Metadata = {
   title: "Lister dashboard",
@@ -52,7 +57,7 @@ export default async function ListerDashboardPage() {
 
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
-    .select("*")
+    .select(PROFILE_LISTER_DASHBOARD_SELECT)
     .eq("id", session.user.id)
     .maybeSingle();
 
@@ -65,7 +70,7 @@ export default async function ListerDashboardPage() {
   const [listingsRes, jobsRes, notificationsRes, globalSettings] = await Promise.all([
     supabase
       .from("listings")
-      .select("*")
+      .select(LISTING_FULL_SELECT)
       .eq("lister_id", session.user.id)
       .order("created_at", { ascending: false }),
     supabase
@@ -76,11 +81,11 @@ export default async function ListerDashboardPage() {
       .eq("lister_id", session.user.id),
     supabase
       .from("notifications")
-      .select("*")
+      .select(NOTIFICATION_FEED_SELECT)
       .eq("user_id", session.user.id)
       .order("created_at", { ascending: false })
       .limit(8),
-    getGlobalSettings(),
+    getCachedGlobalSettingsForPages(),
   ]);
   const feePercentage =
     globalSettings?.platform_fee_percentage ??
