@@ -45,8 +45,8 @@ export type ListerDashboardContentProps = {
 const LISTER_ACTIONS = [
   { label: "Create New Listing", href: "/listings/new", primary: true, icon: "plus" as const },
   { label: "Browse Cleaners", href: "/cleaners", icon: "search" as const },
-  { label: "My Active Jobs", href: "/my-listings?tab=active_listings", icon: "briefcase" as const },
-  { label: "My Completed Jobs", href: "/my-listings?tab=completed_jobs", icon: "check-circle" as const },
+  { label: "My Active Jobs", href: "/lister/dashboard#active-jobs", icon: "briefcase" as const },
+  { label: "My Completed Jobs", href: "/lister/dashboard#completed-jobs", icon: "check-circle" as const },
 ];
 
 export function ListerDashboardContent({

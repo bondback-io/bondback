@@ -21,11 +21,20 @@ export async function sendScheduledTutorialEmails(): Promise<{
   skipped: number;
   errors: string[];
 }> {
+  console.info("[email:tutorial-cron]", { phase: "start" });
   const admin = createSupabaseAdminClient();
-  if (!admin) return { sent: 0, skipped: 0, errors: ["Admin client not configured"] };
+  if (!admin) {
+    const msg = "Admin client not configured (SUPABASE_SERVICE_ROLE_KEY)";
+    console.error("[email:tutorial-cron]", { outcome: "aborted", error: msg });
+    return { sent: 0, skipped: 0, errors: [msg] };
+  }
 
   const globalSettings = await getGlobalSettings();
   if (globalSettings?.emails_enabled === false) {
+    console.info("[email:tutorial-cron]", {
+      outcome: "skipped",
+      reason: "global_settings.emails_enabled=false",
+    });
     return { sent: 0, skipped: 0, errors: [] };
   }
 
@@ -39,7 +48,10 @@ export async function sendScheduledTutorialEmails(): Promise<{
     .gte("created_at", minCreated)
     .lte("created_at", maxCreated);
 
-  if (error) return { sent: 0, skipped: 0, errors: [error.message] };
+  if (error) {
+    console.error("[email:tutorial-cron]", { phase: "query_failed", error: error.message });
+    return { sent: 0, skipped: 0, errors: [error.message] };
+  }
 
   const rows = (profiles ?? []) as {
     id: string;
@@ -83,7 +95,17 @@ export async function sendScheduledTutorialEmails(): Promise<{
         log: { userId: row.id, kind: `tutorial_${role}` },
       });
       if (!result.ok) {
+        console.error("[email:tutorial]", {
+          outcome: "failed",
+          userId: row.id,
+          role,
+          error: result.error,
+        });
         errors.push(`${row.id}: ${result.error}`);
+        continue;
+      }
+      if (result.skipped) {
+        skipped++;
         continue;
       }
       const newPrefs = { ...prefs, email_tutorial_sent: true };
@@ -97,5 +119,7 @@ export async function sendScheduledTutorialEmails(): Promise<{
     }
   }
 
-  return { sent, skipped, errors };
+  const summary = { sent, skipped, errors };
+  console.info("[email:tutorial-cron]", { phase: "complete", ...summary });
+  return summary;
 }

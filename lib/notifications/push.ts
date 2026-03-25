@@ -204,6 +204,7 @@ export const PUSH_NOTIFICATION_TYPES = new Set<string>([
   "job_completed",
   "payment_released",
   "dispute_opened",
+  "dispute_resolved",
 ]);
 
 /**
@@ -275,6 +276,12 @@ export function buildPushPayload(
         title: "Dispute opened",
         body: `Dispute on Job #${id}. Tap to respond.`,
         data: { jobId: id, type: "dispute_opened" },
+      };
+    case "dispute_resolved":
+      return {
+        title: "Dispute resolved",
+        body: `Dispute on Job #${id} – outcome is final. Tap to view.`,
+        data: { jobId: id, type: "dispute_resolved" },
       };
     case "new_job_near_you":
       const suburb = (options?.suburb ?? "").trim() || "Your area";

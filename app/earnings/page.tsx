@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -370,6 +371,32 @@ export default async function EarningsPage() {
 
   return (
     <section className="page-inner space-y-6">
+      <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground dark:text-gray-400">
+        <ol className="flex flex-wrap items-center gap-1.5">
+          <li>
+            <Link href="/" className="transition-colors hover:text-foreground hover:underline dark:hover:text-gray-200">
+              Home
+            </Link>
+          </li>
+          <li aria-hidden className="select-none text-muted-foreground/50">
+            /
+          </li>
+          <li>
+            <Link
+              href="/cleaner/dashboard"
+              className="transition-colors hover:text-foreground hover:underline dark:hover:text-gray-200"
+            >
+              Cleaner dashboard
+            </Link>
+          </li>
+          <li aria-hidden className="select-none text-muted-foreground/50">
+            /
+          </li>
+          <li className="font-medium text-foreground dark:text-gray-100" aria-current="page">
+            Earnings
+          </li>
+        </ol>
+      </nav>
       <EarningsPageClient {...props} />
     </section>
   );

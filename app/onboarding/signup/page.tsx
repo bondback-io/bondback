@@ -197,6 +197,11 @@ function OnboardingSignupInner() {
               Log in
             </Link>
           </p>
+          <p className="mt-2 text-center text-sm text-muted-foreground dark:text-gray-400">
+            <Link href="/forgot-password" className="font-medium text-primary underline underline-offset-2">
+              Forgot password?
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </section>

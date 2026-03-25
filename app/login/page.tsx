@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { checkBanAfterLogin } from "@/lib/actions/admin-users";
 import { scheduleRouterAction } from "@/lib/deferred-router";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -23,12 +25,6 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
-/** Internal path + optional query only (avoid open redirects). */
-function safeNextDestination(raw: string | null): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
-  return raw;
-}
-
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,6 +32,7 @@ function LoginForm() {
   const signupHref = searchParams.toString() ? `/signup?${searchParams.toString()}` : "/signup";
   const bannedParam = searchParams.get("banned");
   const bannedReason = searchParams.get("reason") ?? null;
+  const messageParam = searchParams.get("message");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,7 +96,7 @@ function LoginForm() {
             );
             return;
           }
-          const next = safeNextDestination(searchParams.get("next"));
+          const next = sanitizeInternalNextPath(searchParams.get("next"));
           // Defer navigation so App Router is initialized (avoids double dispatch with refresh+replace).
           scheduleRouterAction(() => router.replace(next));
           return;
@@ -119,7 +116,18 @@ function LoginForm() {
             One account for listers and cleaners — switch roles anytime after you sign in.
           </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          <GoogleSignInButton
+            nextPath={sanitizeInternalNextPath(searchParams.get("next"))}
+          />
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center" aria-hidden>
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or</span>
+            </div>
+          </div>
           <form
             className="space-y-5"
             onSubmit={form.handleSubmit(onSubmit)}
@@ -141,7 +149,15 @@ function LoginForm() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-primary underline underline-offset-2"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -172,6 +188,11 @@ function LoginForm() {
             {bannedMessage && (
               <Alert variant="destructive" className="text-xs">
                 {bannedMessage}
+              </Alert>
+            )}
+            {messageParam === "password-reset" && (
+              <Alert variant="success" className="text-xs">
+                Password updated. Log in with your new password.
               </Alert>
             )}
             {error && <p className="text-xs text-destructive">{error}</p>}

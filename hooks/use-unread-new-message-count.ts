@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/supabase";
+import { CLEAR_MESSAGES_UNREAD_NAV_EVENT } from "@/lib/messages/messages-unread-events";
 import {
   filterNotificationsForActiveRole,
   type ActiveRole,
@@ -74,10 +75,14 @@ export function useUnreadNewMessageCount(
     };
     document.addEventListener("visibilitychange", onVis);
 
+    const onClearedNav = () => void load();
+    window.addEventListener(CLEAR_MESSAGES_UNREAD_NAV_EVENT, onClearedNav);
+
     return () => {
       supabase.removeChannel(channel);
       window.clearInterval(poll);
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener(CLEAR_MESSAGES_UNREAD_NAV_EVENT, onClearedNav);
     };
   }, [userId, load]);
 

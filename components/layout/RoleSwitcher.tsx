@@ -159,8 +159,7 @@ export function RoleSwitcher({
           {/* Lister row */}
           {hasLister ? (
             <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
+              onSelect={() => {
                 if (activeRole !== "lister") handleSwitch("lister");
               }}
               disabled={activeRole === "lister"}
@@ -219,8 +218,7 @@ export function RoleSwitcher({
           {/* Cleaner row (Brush ≈ broom in UI) */}
           {hasCleaner ? (
             <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
+              onSelect={() => {
                 if (activeRole !== "cleaner") handleSwitch("cleaner");
               }}
               disabled={activeRole === "cleaner"}

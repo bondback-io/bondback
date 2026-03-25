@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 
 const PENDING_PROFILE_KEY = "bondback_pending_minimal_profile";
 
@@ -151,7 +152,16 @@ function SignupForm() {
             One account — choose Lister or Cleaner next. You can unlock the other role later.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          <GoogleSignInButton variant="signup" referralCode={refParam} />
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center" aria-hidden>
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or sign up with email</span>
+            </div>
+          </div>
           <form className="space-y-4" onSubmit={onSubmit}>
             {error && (
               <Alert variant="destructive" className="text-sm">
@@ -241,6 +251,11 @@ function SignupForm() {
               Already have an account?{" "}
               <Link href="/login" className="font-medium text-primary underline underline-offset-2">
                 Log in
+              </Link>
+            </p>
+            <p className="text-center text-sm text-muted-foreground">
+              <Link href="/forgot-password" className="font-medium text-primary underline underline-offset-2">
+                Forgot password?
               </Link>
             </p>
           </form>

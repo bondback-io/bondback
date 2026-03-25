@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   MessageSquare,
@@ -22,7 +23,17 @@ import type { ActiveRole } from "@/lib/notifications/notification-role-filter";
 import { filterNotificationsForActiveRole } from "@/lib/notifications/notification-role-filter";
 import type { Database } from "@/types/supabase";
 import { useNotificationsInfinite } from "@/hooks/use-notifications-infinite";
-import { getNotificationBody, getNotificationTitle } from "@/lib/notifications/display";
+import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
+import {
+  decrementUnreadCountCache,
+  invalidateUnreadCountsForUser,
+  setUnreadCountCacheZero,
+} from "@/lib/notifications/unread-count-cache";
+import {
+  getNotificationBody,
+  getNotificationTitle,
+  getNotificationHref,
+} from "@/lib/notifications/display";
 import { useToast } from "@/components/ui/use-toast";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
@@ -59,7 +70,10 @@ export function NotificationCenter({
   initialNotifications: NotificationRow[];
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
+  const role = activeRole ?? null;
+  const { data: unreadFromServer = 0 } = useUnreadNotificationCount(currentUserId, role);
   const {
     flat,
     fetchNextPage,
@@ -78,30 +92,33 @@ export function NotificationCenter({
   const handleClick = async (n: NotificationRow) => {
     if (!n.is_read) {
       optimisticMarkRead(n.id);
+      decrementUnreadCountCache(queryClient, currentUserId, role);
       const res = await markNotificationRead(n.id);
+      if (res.ok && process.env.NODE_ENV === "development") {
+        console.info("[notifications:center-mark-read]", { id: n.id });
+      }
       if (!res.ok) {
         toast({ variant: "destructive", title: "Couldn’t mark read", description: res.error });
         void refetch();
+        void invalidateUnreadCountsForUser(queryClient, currentUserId);
       }
     }
-    if (n.job_id) {
-      const isDispute = n.type === "dispute_opened" || n.type === "dispute_resolved";
-      router.push(isDispute ? `/jobs/${n.job_id}#dispute` : `/jobs/${n.job_id}`);
-    } else {
-      router.push("/dashboard");
-    }
+    const href = getNotificationHref(n);
+    router.push(href ?? "/dashboard");
   };
 
   const handleMarkAll = async () => {
     optimisticMarkAllRead();
+    setUnreadCountCacheZero(queryClient, currentUserId, role);
     const res = await markAllNotificationsRead();
     if (!res.ok) {
       toast({ variant: "destructive", title: "Couldn’t update", description: res.error });
       void refetch();
+      void invalidateUnreadCountsForUser(queryClient, currentUserId);
     }
   };
 
-  const unread = displayed.filter((n) => !n.is_read).length;
+  const unread = unreadFromServer;
 
   if (isPending && flat.length === 0) {
     return (

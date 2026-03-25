@@ -12,11 +12,9 @@ import {
   DollarSign,
   HelpCircle,
   LogOut,
-  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { CreateListingConfirmDialog } from "@/components/listing/create-listing-confirm-dialog";
@@ -25,8 +23,6 @@ import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { scheduleRouterAction } from "@/lib/deferred-router";
 import type { SessionWithProfile } from "@/lib/types";
-import { useUnreadNewMessageCount } from "@/hooks/use-unread-new-message-count";
-import type { ActiveRole } from "@/lib/notifications/notification-role-filter";
 export type MainNavProps = {
   isLoggedIn: boolean;
   /** User has cleaner on their profile — used for /earnings link (same gate as earnings page). */
@@ -35,8 +31,6 @@ export type MainNavProps = {
   isLister: boolean;
   /** When provided (logged in), mobile sheet shows full menu including profile section. */
   session?: SessionWithProfile | null;
-  /** Optional unread message count for Messages badge. */
-  unreadMessageCount?: number;
 };
 
 const desktopLinkBase =
@@ -47,13 +41,12 @@ function DesktopNavLinks({
   isCleaner,
   isLister,
   onRequestCreateListing,
-  messagesUnread = 0,
-}: Omit<MainNavProps, "session" | "unreadMessageCount"> & {
+}: Omit<MainNavProps, "session"> & {
   onRequestCreateListing?: () => void;
-  messagesUnread?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const isHomePage = pathname === "/";
 
   const isActive = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(href));
@@ -71,7 +64,7 @@ function DesktopNavLinks({
       className="hidden min-w-0 flex-nowrap items-center gap-1 md:flex md:gap-1.5 lg:gap-2"
       aria-label="Main navigation"
     >
-      {!isLoggedIn && (
+      {!isLoggedIn && !isHomePage && (
         <Link href="/" className={linkClass("/")}>
           Home
         </Link>
@@ -91,26 +84,6 @@ function DesktopNavLinks({
               <span>Find Jobs</span>
             </Link>
           )}
-          <Link
-            href="/messages"
-            prefetch
-            className={linkClass("/messages")}
-            title="Messages"
-            aria-label={
-              messagesUnread > 0
-                ? `Messages, ${messagesUnread} unread`
-                : "Messages"
-            }
-            onMouseEnter={() => router.prefetch("/messages")}
-          >
-            <MessageCircle className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-            <span>Messages</span>
-            {messagesUnread > 0 && (
-              <Badge className="ml-0.5 h-5 min-w-[1.25rem] justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
-                {messagesUnread > 9 ? "9+" : messagesUnread}
-              </Badge>
-            )}
-          </Link>
           {isLister &&
             (onRequestCreateListing ? (
               <Button
@@ -156,12 +129,12 @@ function MobileNavContent({
   isCleaner,
   isLister,
   session,
-  unreadMessageCount = 0,
   onNavigate,
   onRequestCreateListing,
 }: MainNavProps & { onNavigate?: () => void; onRequestCreateListing?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const isHomePage = pathname === "/";
   const isActive = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(href));
 
@@ -200,13 +173,20 @@ function MobileNavContent({
       <nav className="space-y-0.5 pt-4" aria-label="Main navigation">
         {!isLoggedIn && (
           <>
-            <SheetClose asChild>
-              <Link href="/" className={linkClass("/")} onClick={onNavigate}>
-                <Home className="h-5 w-5 shrink-0" aria-hidden />
-                <span>Home</span>
-              </Link>
-            </SheetClose>
-            <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4 dark:border-gray-800">
+            {!isHomePage && (
+              <SheetClose asChild>
+                <Link href="/" className={linkClass("/")} onClick={onNavigate}>
+                  <Home className="h-5 w-5 shrink-0" aria-hidden />
+                  <span>Home</span>
+                </Link>
+              </SheetClose>
+            )}
+            <div
+              className={cn(
+                "flex flex-col gap-2 border-t border-border pt-4 dark:border-gray-800",
+                isHomePage && "mt-0 border-t-0 pt-0"
+              )}
+            >
               <SheetClose asChild>
                 <Link
                   href="/login"
@@ -249,31 +229,6 @@ function MobileNavContent({
             </Link>
           </SheetClose>
         )}
-        <SheetClose asChild>
-          <Link
-            href="/messages"
-            prefetch
-            className={linkClass("/messages")}
-            onPointerDown={() => router.prefetch("/messages")}
-            onClick={onNavigate}
-            title="Messages"
-            aria-label={
-              unreadMessageCount > 0
-                ? `Messages, ${unreadMessageCount} unread`
-                : "Messages"
-            }
-          >
-            <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
-            <span className="flex flex-1 items-center justify-between gap-2">
-              Messages
-              {unreadMessageCount > 0 && (
-                <Badge className="h-6 min-w-[1.5rem] justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
-                  {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
-                </Badge>
-              )}
-            </span>
-          </Link>
-        </SheetClose>
         {isLister &&
           (onRequestCreateListing ? (
             <button
@@ -387,13 +342,7 @@ export function MainNav({
   isCleaner,
   isLister,
   session,
-  unreadMessageCount,
 }: MainNavProps) {
-  const hookUnread = useUnreadNewMessageCount(
-    session?.user.id ?? null,
-    (session?.activeRole ?? "lister") as ActiveRole
-  );
-  const resolvedUnread = unreadMessageCount ?? hookUnread;
   const [open, setOpen] = React.useState(false);
   const [createListingOpen, setCreateListingOpen] = React.useState(false);
   const openCreateListingDialog = React.useCallback(() => setCreateListingOpen(true), []);
@@ -407,7 +356,6 @@ export function MainNav({
         isCleaner={isCleaner}
         isLister={isLister}
         onRequestCreateListing={isLister ? openCreateListingDialog : undefined}
-        messagesUnread={resolvedUnread}
       />
 
       {/* Mobile: hamburger — 44px touch target, slide-in sheet from right */}
@@ -447,7 +395,6 @@ export function MainNav({
               isCleaner={isCleaner}
               isLister={isLister}
               session={session ?? null}
-              unreadMessageCount={resolvedUnread}
               onNavigate={() => setOpen(false)}
               onRequestCreateListing={isLister ? openCreateListingDialog : undefined}
             />

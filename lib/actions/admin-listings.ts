@@ -84,7 +84,7 @@ export async function adminResetAllListings(formData: FormData): Promise<void> {
     const fd = new FormData();
     fd.set("listingId", id);
     try {
-      // eslint-disable-next-line no-await-in-loop
+       
       await adminDeleteListing(fd);
     } catch {
       /* continue bulk reset */

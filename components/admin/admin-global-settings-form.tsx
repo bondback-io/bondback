@@ -27,6 +27,7 @@ import {
   setFloatingChatEnabled as persistFloatingChatEnabled,
 } from "@/lib/actions/global-settings";
 import { sendGlobalSettingsTestEmail } from "@/lib/actions/admin-email-templates";
+import { sendAdminTestNotification } from "@/lib/actions/notifications";
 
 export type AdminGlobalSettingsFormProps = {
   initial: Partial<SaveGlobalSettingsInput> | null;
@@ -117,6 +118,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [isPending, startTransition] = useTransition();
   const [testEmailTo, setTestEmailTo] = React.useState("");
   const [testEmailPending, setTestEmailPending] = React.useState(false);
+  const [testNotifPending, setTestNotifPending] = React.useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -821,25 +823,61 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                     className="h-8 text-xs mt-1 dark:bg-gray-900 dark:border-gray-700"
                   />
                 </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={testEmailPending}
-                  onClick={() => {
-                    setTestEmailPending(true);
-                    void sendGlobalSettingsTestEmail(testEmailTo.trim() || null).then((r) => {
-                      setTestEmailPending(false);
-                      if (r.ok) {
-                        toast({ title: "Test email sent", description: "Check the inbox and server logs." });
-                      } else {
-                        toast({ variant: "destructive", title: "Test email failed", description: r.error });
-                      }
-                    });
-                  }}
-                >
-                  {testEmailPending ? "Sending…" : "Send test email"}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={testEmailPending}
+                    onClick={() => {
+                      setTestEmailPending(true);
+                      void sendGlobalSettingsTestEmail(testEmailTo.trim() || null).then((r) => {
+                        setTestEmailPending(false);
+                        if (r.ok) {
+                          toast({
+                            title: "Test email sent",
+                            description: "Check the inbox and server logs.",
+                          });
+                        } else {
+                          toast({
+                            variant: "destructive",
+                            title: "Test email failed",
+                            description: r.error,
+                          });
+                        }
+                      });
+                    }}
+                  >
+                    {testEmailPending ? "Sending…" : "Send test email"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={testNotifPending}
+                    onClick={() => {
+                      setTestNotifPending(true);
+                      void sendAdminTestNotification().then((r) => {
+                        setTestNotifPending(false);
+                        if (r.ok) {
+                          toast({
+                            title: "Test notification sent",
+                            description: "Check the bell icon and /notifications. No email or push is sent.",
+                          });
+                          router.refresh();
+                        } else {
+                          toast({
+                            variant: "destructive",
+                            title: "Test notification failed",
+                            description: r.error,
+                          });
+                        }
+                      });
+                    }}
+                  >
+                    {testNotifPending ? "Sending…" : "Send test notification"}
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>

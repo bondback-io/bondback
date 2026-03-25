@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { getHelpArticles } from "@/lib/help-articles";
 import { HelpPageClient } from "@/components/help/help-page-client";
 
+/** Help index — ISR: refresh article list periodically without per-request DB on every hit. */
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: "Help centre",
   description:

@@ -33,6 +33,10 @@ import {
 } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
+import {
+  normalizeProfileRolesFromDb,
+  resolveActiveRoleFromProfile,
+} from "@/lib/profile-roles";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -67,8 +71,13 @@ export default async function CleanerDashboardPage() {
   if (profileError || !profileData) redirect("/onboarding/role-choice");
 
   const profile = profileData as ProfileRow;
-  const roles = (profile.roles as string[] | null) ?? [];
+  const roles = normalizeProfileRolesFromDb(profile.roles, true);
   if (!roles.includes("cleaner")) redirect("/dashboard");
+
+  const resolvedActive = resolveActiveRoleFromProfile(profile);
+  if (resolvedActive === "lister" && roles.includes("lister")) {
+    redirect("/lister/dashboard");
+  }
 
   const { data: jobsData } = await supabase
     .from("jobs")
@@ -152,7 +161,6 @@ export default async function CleanerDashboardPage() {
       href: "/cleaner/dashboard#live-bids",
       icon: "gavel" as const,
     },
-    { label: "Browse cleaners", href: "/cleaners", icon: "list" as const },
     { label: "My Active Jobs", href: "/cleaner/dashboard#active-jobs", icon: "briefcase" as const },
     { label: "My Earnings", href: "/earnings", icon: "dollar-sign" as const },
   ];

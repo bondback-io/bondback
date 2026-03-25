@@ -8,6 +8,8 @@ import { getEmailForUserId } from "@/lib/supabase/admin";
 import { substitutePlaceholders } from "@/lib/notifications/email";
 import {
   buildNotificationEmail,
+  buildWelcomeEmail,
+  buildTutorialEmail,
   sendEmail,
   type NotificationType as EmailNotificationType,
 } from "@/lib/notifications/email";
@@ -400,8 +402,41 @@ export async function sendTestEmail(
     };
     subject = substituteTestData(override.subject.trim(), testData);
     html = substituteTestData(bodyHtml, testData) + getUnsubscribeFooterHtml();
+  } else if (type === "welcome") {
+    const built = await buildWelcomeEmail("Alex", "lister");
+    subject = built.subject;
+    html = built.html + getUnsubscribeFooterHtml();
+  } else if (type === "tutorial_lister") {
+    const built = await buildTutorialEmail("lister", "Alex");
+    subject = built.subject;
+    html = built.html + getUnsubscribeFooterHtml();
+  } else if (type === "tutorial_cleaner") {
+    const built = await buildTutorialEmail("cleaner", "Alex");
+    subject = built.subject;
+    html = built.html + getUnsubscribeFooterHtml();
+  } else if (type === "birthday") {
+    const { getDefaultTemplate } = await import("@/lib/default-email-templates");
+    const { markdownToHtml } = await import("@/lib/markdown");
+    const def = getDefaultTemplate("birthday");
+    const subj = (def?.subject ?? "Happy Birthday! – Bond Back").replace(/\{name\}/gi, "Alex");
+    const bodyRaw = (def?.body ?? "Hi {name},\n\nHappy Birthday from Bond Back!").replace(/\{name\}/gi, "Alex");
+    subject = subj;
+    html = markdownToHtml(bodyRaw) + getUnsubscribeFooterHtml();
   } else {
-    const knownType = EMAIL_TEMPLATE_TYPES.includes(type as EmailTemplateType)
+    const transactionalTypes: EmailNotificationType[] = [
+      "new_message",
+      "new_bid",
+      "job_created",
+      "job_accepted",
+      "job_approved_to_start",
+      "job_completed",
+      "payment_released",
+      "funds_ready",
+      "dispute_opened",
+      "dispute_resolved",
+      "job_cancelled_by_lister",
+    ];
+    const knownType = transactionalTypes.includes(type as EmailNotificationType)
       ? (type as EmailNotificationType)
       : "new_message";
     const built = await buildNotificationEmail(

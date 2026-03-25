@@ -36,7 +36,7 @@ export function resolvePlatformFeePercent(
  * `supabase` is untyped so `@supabase/ssr`, anon, and service clients all fit.
  */
 export async function fetchPlatformFeePercentForListing(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   supabase: any,
   listingId: string | number | null | undefined,
   settings: GlobalFeeSettings

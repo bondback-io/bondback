@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCents } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
+import { MAX_BID_DROP_PER_BID_CENTS } from "@/lib/bidding-rules";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { ConnectRequiredModal } from "@/components/features/connect-required-modal";
 import {
@@ -45,6 +46,9 @@ export function PlaceBidForm({
   const currentLowest = listing.current_lowest_bid_cents;
   /** Highest allowed bid in dollars (1¢ below current lowest — reverse auction). */
   const maxAllowedBidDollars = Math.max(0, (currentLowest - 1) / 100);
+  /** Lowest allowed bid: at most $100 below current lowest in one step. */
+  const minAllowedBidCents = Math.max(1, currentLowest - MAX_BID_DROP_PER_BID_CENTS);
+  const minAllowedBidDollars = minAllowedBidCents / 100;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +60,12 @@ export function PlaceBidForm({
     }
     if (amount >= currentLowest) {
       setError(`Bid must be lower than ${formatCents(currentLowest)}.`);
+      return;
+    }
+    if (amount < minAllowedBidCents) {
+      setError(
+        `Each bid can lower the price by at most $${(MAX_BID_DROP_PER_BID_CENTS / 100).toFixed(0)} in one step. Enter between ${formatCents(minAllowedBidCents)} and ${formatCents(currentLowest - 1)}.`
+      );
       return;
     }
 
@@ -176,7 +186,11 @@ export function PlaceBidForm({
                 {maxAllowedBidDollars > 0 ? (
                   <>
                     {" "}
-                    (max you can enter:{" "}
+                    (max ${(MAX_BID_DROP_PER_BID_CENTS / 100).toFixed(0)} drop per bid; between{" "}
+                    <span className="tabular-nums font-medium text-foreground dark:text-gray-200">
+                      ${minAllowedBidDollars.toFixed(2)}
+                    </span>{" "}
+                    and{" "}
                     <span className="tabular-nums font-medium text-foreground dark:text-gray-200">
                       ${maxAllowedBidDollars.toFixed(2)}
                     </span>
@@ -212,14 +226,15 @@ export function PlaceBidForm({
                 type="number"
                 inputMode="decimal"
                 step="0.01"
-                min={0.01}
+                min={maxAllowedBidDollars > 0 ? minAllowedBidDollars : 0.01}
                 max={maxAllowedBidDollars > 0 ? maxAllowedBidDollars : undefined}
                 placeholder={maxAllowedBidDollars > 0 ? maxAllowedBidDollars.toFixed(2) : "0.00"}
                 value={amountDollars}
                 onChange={(e) => setAmountDollars(e.target.value)}
                 className={cn(
-                  "w-full min-h-[48px] border-2 pl-8 font-semibold tabular-nums",
-                  isCleaner ? "h-14 text-xl" : "h-12 text-lg",
+                  // Input applies md:px-3; without md:pl-* the $ prefix overlaps the value.
+                  "w-full min-h-[48px] border-2 pl-8 font-semibold tabular-nums md:pl-11",
+                  isCleaner ? "h-14 text-xl md:pl-[2.85rem]" : "h-12 text-lg",
                   "focus-visible:ring-2 focus-visible:ring-primary/30",
                   "dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-100"
                 )}

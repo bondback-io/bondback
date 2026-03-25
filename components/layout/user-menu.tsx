@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { scheduleRouterAction } from "@/lib/deferred-router";
 import { Button } from "@/components/ui/button";
@@ -39,11 +40,14 @@ import {
   Moon,
   Sun,
   Search,
+  LayoutDashboard,
+  Users,
 } from "lucide-react";
 import { useThemeToggle } from "@/components/layout/theme-toggle";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
-import type { SessionWithProfile } from "@/lib/types";
+import type { ProfileRole, SessionWithProfile } from "@/lib/types";
+import { clearMessagesUnreadForNav } from "@/lib/messages/clear-messages-unread-nav";
 
 export type UserMenuProps = {
   session: SessionWithProfile;
@@ -118,14 +122,29 @@ function UserMenuThemeToggleDropdownItem({ persistToServer }: { persistToServer:
 /** Cleaner "My Jobs" — opens dashboard scrolled to Active jobs (matches `#active-jobs` on page). */
 const CLEANER_JOBS_DASHBOARD_HREF = "/cleaner/dashboard#active-jobs";
 
-function jobsActivityHref(isLister: boolean, hasCleanerRole: boolean) {
-  if (isLister) return "/my-listings";
-  if (hasCleanerRole) return CLEANER_JOBS_DASHBOARD_HREF;
+/** Lister home — overview, stats, quick links. */
+const LISTER_DASHBOARD_HREF = "/lister/dashboard";
+
+/** Browse verified cleaners directory. */
+const BROWSE_CLEANERS_HREF = "/cleaners";
+
+/**
+ * "My Jobs" / "My Listings" — follow **active role** (same as `/dashboard` redirect and role switcher),
+ * not `isLister` alone, so dual-role users land on the correct dashboard.
+ */
+function jobsActivityHref(roles: ProfileRole[], activeRole: ProfileRole | null) {
+  const hasLister = roles.includes("lister");
+  const hasCleaner = roles.includes("cleaner");
+  if (activeRole === "lister" && hasLister) return "/my-listings";
+  if (activeRole === "cleaner" && hasCleaner) return CLEANER_JOBS_DASHBOARD_HREF;
+  if (hasCleaner) return CLEANER_JOBS_DASHBOARD_HREF;
+  if (hasLister) return "/my-listings";
   return "/dashboard";
 }
 
 export function UserMenu({ session }: UserMenuProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [mobileSheetOpen, setMobileSheetOpen] = React.useState(false);
   useBodyScrollLock(isMobile && mobileSheetOpen);
@@ -334,7 +353,57 @@ export function UserMenu({ session }: UserMenuProps) {
                     <span>My Account</span>
                   </Link>
                 </SheetClose>
-                {hasCleanerRole && !isLister && (
+                {isLister && (
+                  <SheetClose asChild>
+                    <Link
+                      href={LISTER_DASHBOARD_HREF}
+                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                      aria-label="Lister dashboard"
+                    >
+                      <LayoutDashboard className="h-5 w-5 shrink-0" aria-hidden />
+                      <span>Dashboard</span>
+                    </Link>
+                  </SheetClose>
+                )}
+                <SheetClose asChild>
+                  <Link
+                    href={jobsActivityHref(session.roles, session.activeRole)}
+                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                    aria-label={session.activeRole === "lister" ? "My Listings" : "My Jobs"}
+                  >
+                    {session.activeRole === "lister" ? (
+                      <List className="h-5 w-5 shrink-0" aria-hidden />
+                    ) : (
+                      <Briefcase className="h-5 w-5 shrink-0" aria-hidden />
+                    )}
+                    <span>{session.activeRole === "lister" ? "My Listings" : "My Jobs"}</span>
+                  </Link>
+                </SheetClose>
+                {isLister && (
+                  <SheetClose asChild>
+                    <Link
+                      href={BROWSE_CLEANERS_HREF}
+                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                      aria-label="Browse cleaners"
+                    >
+                      <Users className="h-5 w-5 shrink-0" aria-hidden />
+                      <span>Browse Cleaners</span>
+                    </Link>
+                  </SheetClose>
+                )}
+                {isCleaner && (
+                  <SheetClose asChild>
+                    <Link
+                      href="/jobs"
+                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                      aria-label="Browse jobs near me"
+                    >
+                      <Search className="h-5 w-5 shrink-0" aria-hidden />
+                      <span>Browse Jobs Near Me</span>
+                    </Link>
+                  </SheetClose>
+                )}
+                {isCleaner && (
                   <SheetClose asChild>
                     <Link
                       href="/earnings"
@@ -348,35 +417,15 @@ export function UserMenu({ session }: UserMenuProps) {
                 )}
                 <SheetClose asChild>
                   <Link
-                    href={jobsActivityHref(isLister, hasCleanerRole)}
-                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                    aria-label={isLister ? "My Listings" : "My Jobs"}
-                  >
-                    {isLister ? (
-                      <List className="h-5 w-5 shrink-0" aria-hidden />
-                    ) : (
-                      <Briefcase className="h-5 w-5 shrink-0" aria-hidden />
-                    )}
-                    <span>{isLister ? "My Listings" : "My Jobs"}</span>
-                  </Link>
-                </SheetClose>
-                {isCleaner && (
-                  <SheetClose asChild>
-                    <Link
-                      href="/jobs"
-                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                      aria-label="Browse jobs near me"
-                    >
-                      <Search className="h-5 w-5 shrink-0" aria-hidden />
-                      <span>Browse Jobs Near Me</span>
-                    </Link>
-                  </SheetClose>
-                )}
-                <SheetClose asChild>
-                  <Link
                     href="/messages"
                     className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
                     aria-label="Messages"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      await clearMessagesUnreadForNav(queryClient, session.user.id);
+                      setMobileSheetOpen(false);
+                      router.push("/messages");
+                    }}
                   >
                     <MessageSquare className="h-5 w-5 shrink-0" aria-hidden />
                     <span>Messages</span>
@@ -476,11 +525,14 @@ export function UserMenu({ session }: UserMenuProps) {
           <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
             Account
           </div>
-          <DropdownMenuItem asChild>
-            <Link href="/profile" className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800">
-              <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span>My Account</span>
-            </Link>
+          <DropdownMenuItem
+            onSelect={() => {
+              router.push("/profile");
+            }}
+            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+          >
+            <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>My Account</span>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator className="my-1" />
@@ -488,56 +540,92 @@ export function UserMenu({ session }: UserMenuProps) {
           <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
             Jobs &amp; activity
           </div>
-          <DropdownMenuItem asChild>
-            <Link
-              href={jobsActivityHref(isLister, hasCleanerRole)}
+          {isLister && (
+            <DropdownMenuItem
+              onSelect={() => {
+                router.push(LISTER_DASHBOARD_HREF);
+              }}
+              className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+              aria-label="Lister dashboard"
+            >
+              <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span>Dashboard</span>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            onSelect={() => {
+              router.push(jobsActivityHref(session.roles, session.activeRole));
+            }}
+            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+          >
+            {session.activeRole === "lister" ? (
+              <List className="h-4 w-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+            <span>{session.activeRole === "lister" ? "My Listings" : "My Jobs"}</span>
+          </DropdownMenuItem>
+          {isLister && (
+            <DropdownMenuItem
+              onSelect={() => {
+                router.push(BROWSE_CLEANERS_HREF);
+              }}
+              className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+              aria-label="Browse cleaners"
+            >
+              <Users className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span>Browse Cleaners</span>
+            </DropdownMenuItem>
+          )}
+          {isCleaner && (
+            <DropdownMenuItem
+              onSelect={() => {
+                router.push("/jobs");
+              }}
+              className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+              aria-label="Browse jobs near me"
+            >
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span>Browse Jobs Near Me</span>
+            </DropdownMenuItem>
+          )}
+          {isCleaner && (
+            <DropdownMenuItem
+              onSelect={() => {
+                router.push("/earnings");
+              }}
               className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
             >
-              {isLister ? (
-                <List className="h-4 w-4 shrink-0 text-muted-foreground" />
-              ) : (
-                <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
-              )}
-              <span>{isLister ? "My Listings" : "My Jobs"}</span>
-            </Link>
-          </DropdownMenuItem>
-          {isCleaner && (
-            <DropdownMenuItem asChild>
-              <Link
-                href="/jobs"
-                className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
-                aria-label="Browse jobs near me"
-              >
-                <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                <span>Browse Jobs Near Me</span>
-              </Link>
+              <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span>My Earnings</span>
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem asChild>
-            <Link href="/messages" className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800">
-              <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span>Messages</span>
-            </Link>
+          <DropdownMenuItem
+            onSelect={() => {
+              void (async () => {
+                await clearMessagesUnreadForNav(queryClient, session.user.id);
+                router.push("/messages");
+              })();
+            }}
+            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+          >
+            <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>Messages</span>
           </DropdownMenuItem>
-          {hasCleanerRole && !isLister && (
-            <DropdownMenuItem asChild>
-              <Link href="/earnings" className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800">
-                <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span>My Earnings</span>
-              </Link>
-            </DropdownMenuItem>
-          )}
 
           <DropdownMenuSeparator className="my-1" />
 
           <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
             Support
           </div>
-          <DropdownMenuItem asChild>
-            <Link href="/help" className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800">
-              <HelpCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span>Help &amp; Support</span>
-            </Link>
+          <DropdownMenuItem
+            onSelect={() => {
+              router.push("/help");
+            }}
+            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+          >
+            <HelpCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>Help &amp; Support</span>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator className="my-1" />
@@ -549,22 +637,22 @@ export function UserMenu({ session }: UserMenuProps) {
           {isAdmin && (
             <>
               <DropdownMenuSeparator className="my-1" />
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/admin/dashboard"
-                  className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-900/20 dark:focus:text-red-300"
-                >
-                  <ShieldAlert className="h-4 w-4 shrink-0" />
-                  <span className="flex items-center gap-1">
+              <DropdownMenuItem
+                onSelect={() => {
+                  router.push("/admin/dashboard");
+                }}
+                className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-900/20 dark:focus:text-red-300"
+              >
+                <ShieldAlert className="h-4 w-4 shrink-0" />
+                <span className="flex items-center gap-1">
+                  Admin
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] font-semibold uppercase tracking-wide"
+                  >
                     Admin
-                    <Badge
-                      variant="outline"
-                      className="text-[9px] font-semibold uppercase tracking-wide"
-                    >
-                      Admin
-                    </Badge>
-                  </span>
-                </Link>
+                  </Badge>
+                </span>
               </DropdownMenuItem>
             </>
           )}

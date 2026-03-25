@@ -810,6 +810,13 @@ export interface Database {
         Args: Record<string, never>;
         Returns: { listing_id: string }[];
       };
+      count_unread_notifications_for_role: {
+        Args: {
+          p_user_id: string;
+          p_active_role: string | null;
+        };
+        Returns: number;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

@@ -211,6 +211,24 @@ The **tutorial email** (“Your Quick Start Guide as a [Lister/Cleaner]”) is s
 - **Resend errors:**  
   Check Resend dashboard for bounces, complaints, or API errors. Verify domain if using custom `RESEND_FROM`.
 
+- **Confirmation email after sign-up (Supabase):**  
+  That message is sent by **Supabase Auth**, not by the app’s `sendEmail` / Resend integration. If it never arrives, check Supabase → Authentication → email templates and rate limits; optionally enable **Custom SMTP** with Resend (see §3b). The app’s `RESEND_API_KEY` does **not** automatically power Supabase confirmation until SMTP is configured in the Supabase Dashboard.
+
+### Server logs (Vercel / local)
+
+Search runtime logs for:
+
+| Prefix | Meaning |
+|--------|--------|
+| `[email:resend-env]` | Logged once per server instance: whether `RESEND_API_KEY` is set, `RESEND_FROM`, `RESEND_REPLY_TO` |
+| `[email:resend]` | Every `sendEmail` call: `outcome` sent / failed / skipped, masked `to`, `subject`, `kind`, errors |
+| `[email:welcome]` | Welcome email after `completeOnboardingFromSignup` (not on raw sign-up alone) |
+| `[email:tutorial-cron]` | Daily cron: tutorial batch start/end and counts |
+| `[email:tutorial]` | Per-user tutorial send failure |
+| `[email:notification]` | Transactional emails from `createNotification` |
+| `[email:payment_receipt]` | Payment / payout receipts |
+| `[email:cron]` | HTTP hit on `/api/cron/send-tutorial-emails` |
+
 ### Preference check code
 
 Before any transactional email is sent, the flow is:

@@ -83,6 +83,7 @@ const PUSH_NOTIFICATION_TYPES = new Set([
   "job_completed",
   "payment_released",
   "dispute_opened",
+  "dispute_resolved",
 ]);
 
 /** Get email, phone, and notification preferences for a user (server-only). Used when sending notification emails and SMS. */

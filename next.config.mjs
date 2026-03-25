@@ -47,6 +47,10 @@ const nextConfig = {
   experimental: {
     // Reduces lucide-react barrel / HMR issues (e.g. stale icon chunks after removing imports)
     optimizePackageImports: ["lucide-react"],
+    /** Larger multipart bodies for server actions (e.g. profile photo uploads). Must live under `experimental` in Next 16 — top-level `serverActions` is not applied. Default is 1 MB. */
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
   },
   images: {
     /** Cache optimized `/_next/image` derivatives (reduces repeat work on mobile revisits). */

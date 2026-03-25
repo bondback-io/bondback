@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -35,7 +36,17 @@ import {
   filterNotificationsForActiveRole,
 } from "@/lib/notifications/notification-role-filter";
 import { useNotificationsInfinite } from "@/hooks/use-notifications-infinite";
-import { getNotificationBody, getNotificationTitle } from "@/lib/notifications/display";
+import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
+import {
+  decrementUnreadCountCache,
+  invalidateUnreadCountsForUser,
+  setUnreadCountCacheZero,
+} from "@/lib/notifications/unread-count-cache";
+import {
+  getNotificationBody,
+  getNotificationTitle,
+  getNotificationHref,
+} from "@/lib/notifications/display";
 
 const PEEK = 15;
 
@@ -96,9 +107,12 @@ export function NotificationBell({
   variant = "icon",
 }: NotificationBellProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const toastRef = useRef(toast);
-  toastRef.current = toast;
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
 
   const {
     flat,
@@ -107,6 +121,9 @@ export function NotificationBell({
     optimisticMarkAllRead,
     refetch,
   } = useNotificationsInfinite(userId);
+
+  const role = activeRole ?? null;
+  const { data: unreadFromServer = 0 } = useUnreadNotificationCount(userId, role);
 
   const displayedNotifications = useMemo(
     () => filterNotificationsForActiveRole(flat, activeRole ?? null),
@@ -118,10 +135,7 @@ export function NotificationBell({
     [displayedNotifications]
   );
 
-  const unreadCount = useMemo(
-    () => displayedNotifications.filter((n) => !n.is_read).length,
-    [displayedNotifications]
-  );
+  const unreadCount = unreadFromServer;
 
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
@@ -137,9 +151,21 @@ export function NotificationBell({
         },
         (payload) => {
           const row = payload.new as NotificationRow;
+          if (process.env.NODE_ENV === "development") {
+            console.info("[notifications:toast-channel]", {
+              id: row.id,
+              type: row.type,
+              userId: row.user_id,
+            });
+          }
           const visibleForRole =
             filterNotificationsForActiveRole([row], activeRole ?? null).length > 0;
-          if (!visibleForRole) return;
+          if (!visibleForRole) {
+            if (process.env.NODE_ENV === "development") {
+              console.info("[notifications:toast-skip-role]", { id: row.id, type: row.type });
+            }
+            return;
+          }
           const isDisputeNotif = row.type === "dispute_opened" || row.type === "dispute_resolved";
           const title =
             getNotificationTitle(row) ||
@@ -151,16 +177,16 @@ export function NotificationBell({
                   ? `Job #${row.job_id} marked complete`
                   : labelForType(row.type));
           const msg = getNotificationBody(row);
+          const href = getNotificationHref(row);
           toastRef.current({
             title,
             description: msg.length > 80 ? `${msg.slice(0, 77)}…` : msg || "You have a new notification.",
-            action:
-              row.job_id != null
-                ? {
-                    label: "View",
-                    href: isDisputeNotif ? `/jobs/${row.job_id}#dispute` : `/jobs/${row.job_id}`,
-                  }
-                : undefined,
+            action: href
+              ? {
+                  label: "View",
+                  href,
+                }
+              : undefined,
           });
         }
       )
@@ -174,20 +200,38 @@ export function NotificationBell({
   const handleClickNotification = async (n: NotificationRow) => {
     if (!n.is_read) {
       optimisticMarkRead(n.id);
+      decrementUnreadCountCache(queryClient, userId, role);
       const res = await markNotificationRead(n.id);
-      if (!res.ok) void refetch();
+      if (res.ok && process.env.NODE_ENV === "development") {
+        console.info("[notifications:bell-mark-read]", { id: n.id });
+      }
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          title: "Couldn’t mark read",
+          description: res.error,
+        });
+        void refetch();
+        void invalidateUnreadCountsForUser(queryClient, userId);
+      }
     }
-    if (n.job_id) {
-      const isDispute = n.type === "dispute_opened" || n.type === "dispute_resolved";
-      router.push(isDispute ? `/jobs/${n.job_id}#dispute` : `/jobs/${n.job_id}`);
-    } else {
-      router.push("/dashboard");
-    }
+    const href = getNotificationHref(n);
+    router.push(href ?? "/dashboard");
   };
 
   const handleMarkAll = async () => {
     optimisticMarkAllRead();
-    await markAllNotificationsRead();
+    setUnreadCountCacheZero(queryClient, userId, role);
+    const res = await markAllNotificationsRead();
+    if (!res.ok) {
+      toast({
+        variant: "destructive",
+        title: "Couldn’t update",
+        description: res.error,
+      });
+      void refetch();
+      void invalidateUnreadCountsForUser(queryClient, userId);
+    }
   };
 
   const triggerContent =
@@ -213,7 +257,13 @@ export function NotificationBell({
     );
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open && unreadCount > 0) {
+          void handleMarkAll();
+        }
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -224,7 +274,11 @@ export function NotificationBell({
             "relative shrink-0 cursor-pointer",
             variant !== "row" && "mr-0.5 sm:mr-1"
           )}
-          aria-label="Notifications"
+          aria-label={
+            unreadCount > 0
+              ? `Notifications, ${unreadCount > 9 ? "9+" : unreadCount} unread`
+              : "Notifications"
+          }
           aria-haspopup="menu"
         >
           {triggerContent}

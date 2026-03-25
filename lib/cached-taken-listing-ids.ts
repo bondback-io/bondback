@@ -17,11 +17,12 @@ export async function getCachedTakenListingIds(): Promise<(string | number)[]> {
     return fetchTakenListingIds(supabase, null);
   }
 
+  /** `unstable_cache` cannot call `cookies()`/`createServerSupabaseClient()`. Admin-only path uses service role only. */
   return unstable_cache(
     async () => {
-      const supabase = await createServerSupabaseClient();
       const a = createSupabaseAdminClient();
-      return fetchTakenListingIds(supabase, a);
+      if (!a) return [];
+      return fetchTakenListingIds(a, a);
     },
     ["taken-listing-ids-v1"],
     { revalidate: 45, tags: [CACHE_TAGS.takenListingIds, CACHE_TAGS.jobsBrowse] }

@@ -7,6 +7,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft } from "lucide-react";
 
+/** Article body — ISR aligned with help index. */
+export const revalidate = 300;
+
 export async function generateMetadata({
   params,
 }: {

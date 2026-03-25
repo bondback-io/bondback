@@ -49,6 +49,7 @@ import {
 import {
   CalendarIcon,
   CheckCircle2,
+  CircleHelp,
   ImagePlus,
   MapPin,
   Hash,
@@ -61,7 +62,13 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { Skeleton } from "@/components/ui/skeleton";
-import { resizeImageFileForUpload } from "@/lib/client-image-resize";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { compressImage } from "@/lib/utils/compressImage";
 import { NEXT_IMAGE_SIZES_LISTING_PREVIEW, NEXT_IMAGE_SIZES_UPLOAD_TILE } from "@/lib/next-image-sizes";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -408,17 +415,25 @@ export function NewListingForm({
       const withHeaderCheck: File[] = [];
       try {
         for (const f of validFiles) {
-          const resized = await resizeImageFileForUpload(f);
-          const header = await checkImageHeader(resized);
-          if (!header.valid) {
+          try {
+            const compressed = await compressImage(f);
+            const header = await checkImageHeader(compressed);
+            if (!header.valid) {
+              toast({
+                variant: "destructive",
+                title: "Photo validation",
+                description: `${f.name}: ${header.error}`,
+              });
+              continue;
+            }
+            withHeaderCheck.push(compressed);
+          } catch {
             toast({
               variant: "destructive",
-              title: "Photo validation",
-              description: `${f.name}: ${header.error}`,
+              title: "Couldn’t prepare photo",
+              description: `${f.name}: try another image.`,
             });
-            continue;
           }
-          withHeaderCheck.push(resized);
         }
         if (withHeaderCheck.length > 0) {
           const previews = withHeaderCheck.map((f) => URL.createObjectURL(f));
@@ -627,7 +642,7 @@ export function NewListingForm({
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button asChild variant="outline" size="lg" className="w-full min-h-12 sm:w-auto md:min-h-0">
-              <Link href="/dashboard">Go to dashboard</Link>
+              <Link href="/lister/dashboard">Go to dashboard</Link>
             </Button>
             <Button asChild size="lg" className="w-full min-h-12 sm:w-auto md:min-h-0">
               <Link
@@ -857,10 +872,13 @@ export function NewListingForm({
                     </FieldHelp>
                   </div>
                   <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
+                    <MapPin
+                      className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4"
+                      aria-hidden
+                    />
                     <Input
                       id="suburb"
-                      className="pl-9 dark:bg-gray-800 dark:border-gray-700"
+                      className="pl-10 pr-4 md:pl-10 md:pr-3 dark:bg-gray-800 dark:border-gray-700"
                       placeholder="e.g. LITTLE MOUNTAIN"
                       value={suburbQuery || form.watch("suburb")}
                       onChange={(e) => {
@@ -915,10 +933,13 @@ export function NewListingForm({
                 <div className="space-y-2">
                   <Label htmlFor="postcode">Postcode</Label>
                   <div className="relative">
-                    <Hash className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4" />
+                    <Hash
+                      className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground dark:text-gray-500 md:h-4 md:w-4"
+                      aria-hidden
+                    />
                     <Input
                       id="postcode"
-                      className="pl-9 dark:bg-gray-800 dark:border-gray-700"
+                      className="pl-10 pr-4 md:pl-10 md:pr-3 dark:bg-gray-800 dark:border-gray-700"
                       placeholder="e.g. 4551"
                       maxLength={4}
                       inputMode="numeric"
@@ -1273,21 +1294,22 @@ export function NewListingForm({
 
           {/* Step 5: Auction settings */}
           {step === 5 && (
-            <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <CardHeader>
-                <CardTitle className="text-lg dark:text-gray-100">
-                  Auction settings
-                </CardTitle>
-                <CardDescription className="dark:text-gray-400">
-                  Set your starting price and how long cleaners can bid.
-                </CardDescription>
-                {initialPhotoFiles.length < 1 && (
-                  <p className="mt-2 text-base text-amber-600 dark:text-amber-400 md:text-sm">
-                    Add at least 1 initial condition photo in step 3 to publish.
-                  </p>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
+            <TooltipProvider delayDuration={300}>
+              <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <CardHeader>
+                  <CardTitle className="text-lg dark:text-gray-100">
+                    Auction settings
+                  </CardTitle>
+                  <CardDescription className="dark:text-gray-400">
+                    Set your starting price and how long cleaners can bid.
+                  </CardDescription>
+                  {initialPhotoFiles.length < 1 && (
+                    <p className="mt-2 text-base text-amber-600 dark:text-amber-400 md:text-sm">
+                      Add at least 1 initial condition photo in step 3 to publish.
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
                 <div className="space-y-2">
                   <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <Label htmlFor="reservePrice" className="shrink-0">
@@ -1333,7 +1355,7 @@ export function NewListingForm({
                         role="status"
                         aria-live="polite"
                       >
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+                        <p className="border-l-2 border-emerald-500/45 pl-2.5 text-sm font-semibold uppercase tracking-wide text-foreground dark:border-emerald-400/40 dark:text-gray-100">
                           Payment breakdown
                         </p>
                         <dl className="mt-2 space-y-2 text-sm">
@@ -1354,9 +1376,22 @@ export function NewListingForm({
                           <div className="border-t border-border pt-2 dark:border-gray-600">
                             <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                               <dt className="font-semibold text-foreground dark:text-gray-100 sm:max-w-[min(100%,20rem)]">
-                                Amount paid to cleaner + fee{" "}
-                                <span className="font-normal italic text-destructive">
-                                  - note this reduces with bids
+                                <span className="inline-flex items-center gap-1">
+                                  Amount paid to cleaner + fee
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                                        aria-label="How fee and total price change with bids"
+                                      >
+                                        <CircleHelp className="h-3.5 w-3.5" aria-hidden />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-[260px] text-left">
+                                      {"Fee & total price will be less with more bids"}
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </span>
                               </dt>
                               <dd className="text-xl font-semibold tabular-nums text-primary dark:text-blue-300 sm:text-2xl">
@@ -1447,9 +1482,22 @@ export function NewListingForm({
                         <div className="border-t border-border pt-2 dark:border-gray-600">
                           <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                             <dt className="font-semibold text-foreground dark:text-gray-100 sm:max-w-[min(100%,20rem)]">
-                              Amount paid to cleaner + fee{" "}
-                              <span className="font-normal italic text-destructive">
-                                - note this reduces with bids
+                              <span className="inline-flex items-center gap-1">
+                                Amount paid to cleaner + fee
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                                      aria-label="How fee and total price change with bids"
+                                    >
+                                      <CircleHelp className="h-3.5 w-3.5" aria-hidden />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-[260px] text-left">
+                                    {"Fee & total price will be less with more bids"}
+                                  </TooltipContent>
+                                </Tooltip>
                               </span>
                             </dt>
                             <dd className="text-xl font-semibold tabular-nums text-primary dark:text-blue-300 sm:text-2xl">
@@ -1464,8 +1512,9 @@ export function NewListingForm({
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </TooltipProvider>
           )}
 
           {submitError && (

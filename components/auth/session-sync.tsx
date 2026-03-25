@@ -1,33 +1,73 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { scheduleRouterAction } from "@/lib/deferred-router";
 
+/** Debounce rapid auth events (OAuth emits several); one coalesced RSC refresh. */
+const SIGN_IN_DEBOUNCE_MS = 450;
+
 /**
- * Keeps Next.js Server Components in sync with Supabase auth in the browser.
- * Without this, client sign-in/out can leave the shell (header, layout) showing
- * a stale session until a full reload.
+ * Keeps server-rendered shell (header, layout) aligned with Supabase auth cookies.
+ * - **SIGNED_OUT**: refresh immediately so logged-out UI shows at once.
+ * - **SIGNED_IN** / **USER_UPDATED**: debounced refresh so the top nav shows the user again
+ *   after email/password login (client navigation alone can leave RSC cache stale).
+ * Skips **INITIAL_SESSION** so normal page loads don’t trigger an extra refresh.
+ * Does **not** refresh on `TOKEN_REFRESHED` (too frequent).
  */
 export function SessionSync() {
   const router = useRouter();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    const runRefresh = () => {
+      scheduleRouterAction(() => {
+        try {
+          router.refresh();
+        } catch {
+          /* ignore — router may be tearing down */
+        }
+      });
+    };
+
+    const scheduleSignInRefresh = () => {
+      if (debounceRef.current != null) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null;
+        runRefresh();
+      }, SIGN_IN_DEBOUNCE_MS);
+    };
+
     const supabase = createBrowserSupabaseClient();
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      if (
-        event === "SIGNED_IN" ||
-        event === "SIGNED_OUT" ||
-        event === "USER_UPDATED" ||
-        event === "PASSWORD_RECOVERY"
-      ) {
-        scheduleRouterAction(() => router.refresh());
+      /** First hydration with existing session — RSC already matched; skip to avoid extra refresh. */
+      if (event === "INITIAL_SESSION") return;
+
+      if (event === "SIGNED_OUT") {
+        if (debounceRef.current != null) {
+          clearTimeout(debounceRef.current);
+          debounceRef.current = null;
+        }
+        scheduleRouterAction(() => {
+          try {
+            router.refresh();
+          } catch {
+            /* ignore */
+          }
+        });
+        return;
+      }
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        scheduleSignInRefresh();
       }
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (debounceRef.current != null) clearTimeout(debounceRef.current);
+    };
   }, [router]);
 
   return null;

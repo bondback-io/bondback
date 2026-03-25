@@ -100,7 +100,7 @@ export async function getRequireAbnForValidation(): Promise<boolean> {
     }
     if (lastError && process.env.NODE_ENV !== "production") {
       if (!isPostgrestSchemaCacheError(lastError)) {
-        // eslint-disable-next-line no-console
+         
         console.error("[getRequireAbnForValidation] admin read failed", lastError);
       }
     }
@@ -162,12 +162,12 @@ export async function getGlobalSettings(): Promise<GlobalSettingsRow | null> {
     if (lastError && process.env.NODE_ENV !== "production") {
       if (isPostgrestSchemaCacheError(lastError)) {
         loggedSchemaCacheHint = true;
-        // eslint-disable-next-line no-console
+         
         console.warn(
           "[getGlobalSettings] Supabase schema cache not ready (PGRST002); using fallbacks. Retry or check project is active."
         );
       } else {
-        // eslint-disable-next-line no-console
+         
         console.error(
           "[getGlobalSettings] admin read failed",
           lastError.message,
@@ -201,13 +201,13 @@ export async function getGlobalSettings(): Promise<GlobalSettingsRow | null> {
   if (sessionError && process.env.NODE_ENV !== "production") {
     if (isPostgrestSchemaCacheError(sessionError)) {
       if (!loggedSchemaCacheHint) {
-        // eslint-disable-next-line no-console
+         
         console.warn(
           "[getGlobalSettings] Supabase schema cache not ready (PGRST002); using fallbacks."
         );
       }
     } else {
-      // eslint-disable-next-line no-console
+       
       console.error(
         "[getGlobalSettings] session read failed (expected for non-admins without service role)",
         sessionError.message,

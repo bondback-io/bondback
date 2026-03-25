@@ -1,11 +1,28 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { Star } from "lucide-react";
+import Link from "next/link";
+import {
+  Star,
+  ChevronRight,
+  MapPin,
+  FileCheck,
+  Shield,
+  Briefcase,
+  Car,
+  Wrench,
+  Camera,
+  Sparkles,
+} from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { OptimizedImage } from "@/components/ui/optimized-image";
+import { VerificationBadges } from "@/components/shared/verification-badges";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
+import { cn } from "@/lib/utils";
+import { CleanerReviewCountPreview } from "@/components/features/cleaner-review-count-preview";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -59,16 +76,26 @@ export default async function CleanerProfilePage({
     notFound();
   }
 
-  const profileRow = profile as ProfileRow;
+  const profileRow = profile as ProfileRow & {
+    cleaner_avg_rating?: number | string | null;
+    cleaner_total_reviews?: number | string | null;
+    verification_badges?: string[] | null;
+  };
 
   const cleanerAvg =
-    (profile as any).cleaner_avg_rating != null
-      ? Number((profile as any).cleaner_avg_rating)
+    profileRow.cleaner_avg_rating != null
+      ? Number(profileRow.cleaner_avg_rating)
       : null;
   const cleanerCount =
-    (profile as any).cleaner_total_reviews != null
-      ? Number((profile as any).cleaner_total_reviews)
+    profileRow.cleaner_total_reviews != null
+      ? Number(profileRow.cleaner_total_reviews)
       : 0;
+
+  const { count: completedJobsCount } = await client
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("winner_id", id)
+    .eq("status", "completed");
 
   const { data: reviews } = await client
     .from("reviews")
@@ -94,6 +121,14 @@ export default async function CleanerProfilePage({
 
   const reviewsSafe = (reviews ?? []) as any[];
 
+  const reviewSnippets = reviewsSafe
+    .slice(0, 4)
+    .map((r: { id: string; review_text?: string | null }) => ({
+      id: String(r.id),
+      text: String(r.review_text ?? "").trim(),
+    }))
+    .filter((x: { text: string }) => x.text.length > 0);
+
   const avg = cleanerAvg ?? (() => {
     if (!reviewsSafe.length) return null;
     const total = reviewsSafe.reduce(
@@ -103,11 +138,32 @@ export default async function CleanerProfilePage({
     return total / reviewsSafe.length;
   })();
 
-  const fullName = (profile as any).full_name as string | null;
-  const suburb = (profile as any).suburb as string | null;
-  const postcode = (profile as any).postcode as string | null;
-  const years = (profile as any).years_experience as number | null;
+  const fullName = profileRow.full_name as string | null;
+  const businessName = profileRow.business_name as string | null;
+  const suburb = profileRow.suburb as string | null;
+  const postcode = profileRow.postcode as string | null;
+  const state = profileRow.state as string | null;
+  const years = profileRow.years_experience as number | null;
+  const bio = profileRow.bio as string | null;
+  const vehicleType = profileRow.vehicle_type as string | null;
+  const equipmentNotes = profileRow.equipment_notes as string | null;
+  const specialties = Array.isArray(profileRow.specialties)
+    ? (profileRow.specialties as string[])
+    : [];
+  const portfolioUrls = Array.isArray(profileRow.portfolio_photo_urls)
+    ? (profileRow.portfolio_photo_urls as string[]).filter(
+        (u): u is string => typeof u === "string" && u.length > 0
+      )
+    : [];
+  const profilePhotoUrl = profileRow.profile_photo_url?.trim() || null;
+  const verificationBadges = profileRow.verification_badges;
+  const abnDigits = (profileRow.abn ?? "").replace(/\D/g, "");
+  const hasAbn = abnDigits.length === 11;
+  const hasInsurance =
+    ((profileRow.insurance_policy_number ?? "") as string).trim().length > 0;
 
+  const displayName =
+    fullName?.trim() || businessName?.trim() || "Cleaner";
   const starValue = avg ? Math.round(avg * 10) / 10 : null;
 
   const makePhotoUrl = (path: string) => {
@@ -116,14 +172,238 @@ export default async function CleanerProfilePage({
     return `${base}/storage/v1/object/public/review-photos/${path}`;
   };
 
-  return (
-    <section className="page-inner space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-        {fullName ?? "Cleaner profile"}
-      </h1>
+  const locationLine = [suburb, postcode].filter(Boolean).join(" ");
+  const locationFull = [locationLine, state].filter(Boolean).join(" · ");
 
-      <Card>
-        <CardHeader>
+  return (
+    <section className="page-inner space-y-8 pb-12">
+      <nav
+        aria-label="Breadcrumb"
+        className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground dark:text-gray-400"
+      >
+        <Link
+          href="/"
+          className="font-medium text-foreground/80 underline-offset-4 hover:text-emerald-600 hover:underline dark:text-gray-200 dark:hover:text-emerald-400"
+        >
+          Home
+        </Link>
+        <ChevronRight className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
+        <Link
+          href="/cleaners"
+          className="font-medium text-foreground/80 underline-offset-4 hover:text-emerald-600 hover:underline dark:text-gray-200 dark:hover:text-emerald-400"
+        >
+          Browse cleaners
+        </Link>
+        <ChevronRight className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
+        <span className="max-w-[min(100%,14rem)] truncate font-semibold text-foreground dark:text-gray-100">
+          {displayName}
+        </span>
+      </nav>
+
+      <div className="overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-emerald-950/40 via-background to-sky-950/25 shadow-lg ring-1 ring-emerald-500/10 dark:from-emerald-950/50 dark:via-gray-950 dark:to-sky-950/20 dark:border-gray-800">
+        <div className="flex flex-col gap-6 p-6 sm:p-8 md:flex-row md:items-start md:gap-10">
+          <div className="relative mx-auto shrink-0 md:mx-0">
+            <div
+              className={cn(
+                "relative h-36 w-36 overflow-hidden rounded-2xl border-2 border-emerald-500/30 bg-muted shadow-md sm:h-44 sm:w-44",
+                "ring-4 ring-emerald-500/10 dark:border-emerald-600/40 dark:bg-gray-900"
+              )}
+            >
+              <OptimizedImage
+                src={profilePhotoUrl ?? "/placeholder-listing.png"}
+                alt=""
+                width={176}
+                height={176}
+                sizes="(max-width: 768px) 144px, 176px"
+                className="h-full w-full object-cover"
+                priority
+              />
+            </div>
+            {completedJobsCount != null && completedJobsCount > 0 && (
+              <div className="absolute -bottom-2 -right-2 rounded-full border border-emerald-600/50 bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md dark:bg-emerald-500">
+                {completedJobsCount} job{completedJobsCount === 1 ? "" : "s"} done
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-4 text-center md:text-left">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                Professional cleaner
+              </p>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground dark:text-gray-50 sm:text-3xl">
+                {displayName}
+              </h1>
+              {businessName && fullName?.trim() && (
+                <p className="text-base font-medium text-muted-foreground dark:text-gray-400">
+                  {businessName}
+                </p>
+              )}
+            </div>
+
+            {locationFull && (
+              <p className="inline-flex items-center justify-center gap-1.5 text-sm text-muted-foreground md:justify-start dark:text-gray-400">
+                <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                {locationFull}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
+              <VerificationBadges
+                badges={verificationBadges}
+                showLabel
+                size="lg"
+              />
+            </div>
+
+            <ul className="grid gap-2 sm:grid-cols-2">
+              <li className="flex min-h-[44px] items-center gap-2 rounded-xl border border-border/80 bg-background/60 px-3 py-2.5 text-left dark:border-gray-800 dark:bg-gray-900/60">
+                <FileCheck
+                  className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                  aria-hidden
+                />
+                <span className="text-sm font-medium text-foreground dark:text-gray-100">
+                  {hasAbn ? "ABN on file & verified" : "No ABN on file"}
+                </span>
+              </li>
+              <li className="flex min-h-[44px] items-center gap-2 rounded-xl border border-border/80 bg-background/60 px-3 py-2.5 text-left dark:border-gray-800 dark:bg-gray-900/60">
+                <Shield
+                  className="h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400"
+                  aria-hidden
+                />
+                <span className="text-sm font-medium text-foreground dark:text-gray-100">
+                  {hasInsurance
+                    ? "Insurance policy on file"
+                    : "No insurance listed"}
+                </span>
+              </li>
+              {years != null && years > 0 && (
+                <li className="flex min-h-[44px] items-center gap-2 rounded-xl border border-border/80 bg-background/60 px-3 py-2.5 text-left dark:border-gray-800 dark:bg-gray-900/60">
+                  <Briefcase
+                    className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400"
+                    aria-hidden
+                  />
+                  <span className="text-sm font-medium text-foreground dark:text-gray-100">
+                    {years}+ years experience
+                  </span>
+                </li>
+              )}
+              {vehicleType && (
+                <li className="flex min-h-[44px] items-center gap-2 rounded-xl border border-border/80 bg-background/60 px-3 py-2.5 text-left dark:border-gray-800 dark:bg-gray-900/60">
+                  <Car
+                    className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+                    aria-hidden
+                  />
+                  <span className="text-sm font-medium text-foreground dark:text-gray-100">
+                    Vehicle: {vehicleType}
+                  </span>
+                </li>
+              )}
+            </ul>
+
+            <div className="pt-1">
+              <Link
+                href="/cleaners"
+                className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400"
+              >
+                ← Back to all cleaners
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {bio && bio.trim().length > 0 && (
+        <Card className="border-border/80 dark:border-gray-800 dark:bg-gray-950/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              About
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground dark:text-gray-300">
+              {bio.trim()}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {(specialties.length > 0 || equipmentNotes?.trim()) && (
+        <Card className="border-border/80 dark:border-gray-800 dark:bg-gray-950/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Wrench className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+              Professional profile
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {specialties.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-500">
+                  Specialties
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {specialties.map((s) => (
+                    <Badge
+                      key={s}
+                      variant="secondary"
+                      className="rounded-full px-3 py-1 text-xs font-medium"
+                    >
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {equipmentNotes && equipmentNotes.trim().length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-500">
+                  Equipment &amp; approach
+                </p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground dark:text-gray-300">
+                  {equipmentNotes.trim()}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {portfolioUrls.length > 0 && (
+        <Card className="border-border/80 dark:border-gray-800 dark:bg-gray-950/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Camera className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              Portfolio &amp; past work
+            </CardTitle>
+            <p className="text-sm font-normal text-muted-foreground dark:text-gray-400">
+              Photos from this cleaner&apos;s profile — bond cleans and end-of-lease work.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {portfolioUrls.map((url, i) => (
+                <div
+                  key={`${url}-${i}`}
+                  className="relative aspect-[4/3] overflow-hidden rounded-xl border border-border bg-muted dark:border-gray-800"
+                >
+                  <OptimizedImage
+                    src={url}
+                    alt=""
+                    fill
+                    sizes="(max-width: 640px) 50vw, 200px"
+                    className="object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-border/80 dark:border-gray-800 dark:bg-gray-950/50">
+        <CardHeader className="pb-2">
           <CardTitle className="text-lg">Rating &amp; reputation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -131,7 +411,7 @@ export default async function CleanerProfilePage({
             <div className="flex items-center gap-2">
               {starValue != null ? (
                 <>
-                  <span className="text-3xl font-semibold">
+                  <span className="text-3xl font-semibold tabular-nums">
                     {starValue.toFixed(1)}
                   </span>
                   <div className="flex items-center gap-0.5 text-amber-400">
@@ -154,28 +434,24 @@ export default async function CleanerProfilePage({
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {cleanerCount} review{cleanerCount === 1 ? "" : "s"}
+              <CleanerReviewCountPreview
+                count={cleanerCount}
+                snippets={reviewSnippets}
+              />
+              {completedJobsCount != null && completedJobsCount > 0 && (
+                <>
+                  {" "}
+                  · {completedJobsCount} completed job
+                  {completedJobsCount === 1 ? "" : "s"}
+                </>
+              )}
             </p>
           </div>
-
-          {(suburb || profileRow.abn || years != null) && (
-            <p className="text-xs text-muted-foreground">
-              {suburb && <>Based in {suburb} {postcode ?? ""}</>}
-              {suburb && (profileRow.abn || years != null) && " · "}
-              {profileRow.abn && (
-                <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                  ABN verified
-                </span>
-              )}
-              {profileRow.abn && years != null && " · "}
-              {years != null && `${years} years experience`}
-            </p>
-          )}
         </CardContent>
       </Card>
 
       {reviewsSafe.length > 0 && (
-        <Card>
+        <Card className="border-border/80 dark:border-gray-800 dark:bg-gray-950/50">
           <CardHeader>
             <CardTitle className="text-lg">Recent reviews</CardTitle>
           </CardHeader>
@@ -183,7 +459,7 @@ export default async function CleanerProfilePage({
             {reviewsSafe.map((r) => (
               <div
                 key={r.id}
-                className="space-y-1 rounded-md border bg-background/70 px-3 py-2 text-xs"
+                className="space-y-1 rounded-md border border-border/80 bg-background/70 px-3 py-2 text-xs dark:border-gray-800 dark:bg-gray-900/40"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div>
@@ -238,4 +514,3 @@ export default async function CleanerProfilePage({
     </section>
   );
 }
-

@@ -7,7 +7,10 @@ import type {
   SessionWithProfile,
   ThemePreference,
 } from "@/lib/types";
-import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
+import {
+  normalizeProfileRolesFromDb,
+  resolveActiveRoleFromProfile,
+} from "@/lib/profile-roles";
 import type { NotificationPreferences } from "@/lib/notification-preferences";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -55,12 +58,8 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
     !!row
   );
 
-  let activeRole: ProfileRole | null =
-    roles.length === 0
-      ? null
-      : (row?.active_role === "lister" || row?.active_role === "cleaner"
-          ? row.active_role
-          : null) ?? (roles[0] ?? null);
+  const activeRole: ProfileRole | null =
+    roles.length === 0 ? null : resolveActiveRoleFromProfile(row);
 
   const parseThemePref = (v: unknown): ThemePreference =>
     v === "light" || v === "dark" || v === "system" ? v : "system";
@@ -68,7 +67,7 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
 
   if (process.env.NODE_ENV !== "production") {
     // Server-side debug log for admin/roles issues
-    // eslint-disable-next-line no-console
+     
     console.log("[getSessionWithProfile]", {
       userId: user.id,
       email: user.email,

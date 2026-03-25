@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { Database } from "@/types/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +25,10 @@ interface AdminJobsPageProps {
   searchParams: Promise<{
     status?: string;
   }>;
+}
+
+function listingIdKey(id: string | number): string {
+  return String(id);
 }
 
 export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps) {
@@ -46,22 +53,27 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
     redirect("/dashboard");
   }
 
-  const { data: jobsData } = await supabase
+  /** Service role bypasses RLS so admin sees all jobs, listings, and profile names. */
+  const db = (createSupabaseAdminClient() ?? supabase) as SupabaseClient<Database>;
+
+  const { data: jobsData } = await db
     .from("jobs")
     .select(JOB_ADMIN_TABLE_SELECT)
     .order("created_at", { ascending: false });
 
   const jobs = (jobsData ?? []) as any[];
 
-  const listingIds = Array.from(new Set(jobs.map((j) => j.listing_id).filter(Boolean))) as string[];
+  const listingIds = Array.from(
+    new Set(jobs.map((j) => j.listing_id).filter((id) => id != null))
+  ) as string[];
   let listingsMap = new Map<string, { current_lowest_bid_cents: number | null }>();
   if (listingIds.length > 0) {
-    const { data: listingsForJobs } = await supabase
+    const { data: listingsForJobs } = await db
       .from("listings")
       .select("id, current_lowest_bid_cents")
       .in("id", listingIds);
     (listingsForJobs ?? []).forEach((l: { id: string; current_lowest_bid_cents: number | null }) => {
-      listingsMap.set(l.id, { current_lowest_bid_cents: l.current_lowest_bid_cents ?? null });
+      listingsMap.set(listingIdKey(l.id), { current_lowest_bid_cents: l.current_lowest_bid_cents ?? null });
     });
   }
 
@@ -74,12 +86,9 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
 
   let profilesMap = new Map<string, { full_name: string | null }>();
   if (allUserIds.length > 0) {
-    const { data: profilesForJobs } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .in("id", allUserIds);
+    const { data: profilesForJobs } = await db.from("profiles").select("id, full_name").in("id", allUserIds);
 
-    (profilesForJobs ?? []).forEach((p: any) => {
+    (profilesForJobs ?? []).forEach((p: { id: string; full_name: string | null }) => {
       profilesMap.set(p.id, { full_name: p.full_name });
     });
   }
@@ -256,7 +265,9 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                     </TableCell>
                     <TableCell className="text-right text-[11px] tabular-nums text-foreground dark:text-gray-100">
                       {(() => {
-                        const cents = job.listing_id ? listingsMap.get(job.listing_id)?.current_lowest_bid_cents : null;
+                        const cents = job.listing_id
+                          ? listingsMap.get(listingIdKey(job.listing_id))?.current_lowest_bid_cents
+                          : null;
                         return cents != null ? `$${(cents / 100).toFixed(0)}` : "—";
                       })()}
                     </TableCell>

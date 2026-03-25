@@ -20,10 +20,10 @@ import { PushPermissionBanner } from "@/components/pwa/push-permission-banner";
 import { ExpoPushDeepLinkHandler } from "@/components/pwa/expo-push-deep-link";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ContextualFab } from "@/components/contextual-fab";
-import { SessionSync } from "@/components/auth/session-sync";
 import { UserPreferencesHydration } from "@/components/providers/user-preferences-hydration";
 import { QueryClientProviderWrapper } from "@/components/providers/query-client-provider";
 import { NotificationsRealtimeSync } from "@/components/notifications/notifications-realtime-sync";
+import { SessionSync } from "@/components/auth/session-sync";
 
 const site = getSiteUrl();
 

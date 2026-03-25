@@ -62,7 +62,10 @@ import {
   checkImageHeader,
 } from "@/lib/photo-validation";
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
-import { resizeImageFileForUpload } from "@/lib/client-image-resize";
+import {
+  compressImage,
+  formatPhotoUploadError,
+} from "@/lib/utils/compressImage";
 import { NEXT_IMAGE_SIZES_AVATAR_80 } from "@/lib/next-image-sizes";
 import {
   clampRadiusKm,
@@ -136,8 +139,13 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       ? profile.portfolio_photo_urls
       : []
   );
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [profilePhotoPhase, setProfilePhotoPhase] = useState<
+    "idle" | "compressing" | "uploading"
+  >("idle");
   const [uploadingPortfolio, setUploadingPortfolio] = useState(false);
+  const [portfolioUploadPhase, setPortfolioUploadPhase] = useState<
+    "idle" | "compressing" | "uploading"
+  >("idle");
   const [, startPhotoTransition] = useTransition();
   const [portfolioPendingSlots, setPortfolioPendingSlots] = useState(0);
   const [availability, setAvailability] = useState<Record<string, boolean>>(
@@ -217,9 +225,23 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       e.target.value = "";
       return;
     }
-    const resized = await resizeImageFileForUpload(file);
-    const header = await checkImageHeader(resized);
+    setProfilePhotoPhase("compressing");
+    let compressed: File;
+    try {
+      compressed = await compressImage(file);
+    } catch {
+      setProfilePhotoPhase("idle");
+      toast({
+        variant: "destructive",
+        title: "Couldn’t prepare photo",
+        description: "Try another image or take a new photo.",
+      });
+      e.target.value = "";
+      return;
+    }
+    const header = await checkImageHeader(compressed);
     if (!header.valid) {
+      setProfilePhotoPhase("idle");
       toast({
         variant: "destructive",
         title: "Photo validation",
@@ -229,15 +251,15 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       return;
     }
     const revertUrl = profilePhotoUrl;
-    const optimisticUrl = URL.createObjectURL(resized);
+    const optimisticUrl = URL.createObjectURL(compressed);
     startPhotoTransition(() => {
       setProfilePhotoUrl(optimisticUrl);
-      setUploadingPhoto(true);
+      setProfilePhotoPhase("uploading");
     });
     setSubmitError(null);
     try {
       const fd = new FormData();
-      fd.append("file", resized);
+      fd.append("file", compressed);
       const { results, error: actionError } = await uploadProcessedPhotos(fd, {
         bucket: "profile-photos",
         pathPrefix: String(profile.id),
@@ -246,7 +268,9 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       });
       const res = results[0];
       if (actionError || !res?.url) {
-        const err = res?.error ?? actionError ?? "Upload failed";
+        const err = formatPhotoUploadError(
+          res?.error ?? actionError ?? "Upload failed"
+        );
         startPhotoTransition(() => setProfilePhotoUrl(revertUrl));
         URL.revokeObjectURL(optimisticUrl);
         setSubmitError(err);
@@ -258,13 +282,13 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       const updateResult = await updateProfile({ profile_photo_url: res.url });
       if (!updateResult.ok) setSubmitError(updateResult.error);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to upload profile photo.";
+      const msg = formatPhotoUploadError(err);
       startPhotoTransition(() => setProfilePhotoUrl(revertUrl));
       URL.revokeObjectURL(optimisticUrl);
       setSubmitError(msg);
       toast({ variant: "destructive", title: "Upload failed", description: msg });
     } finally {
-      setUploadingPhoto(false);
+      setProfilePhotoPhase("idle");
       e.target.value = "";
     }
   };
@@ -288,26 +312,38 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       e.target.value = "";
       return;
     }
+    setPortfolioUploadPhase("compressing");
+    setUploadingPortfolio(true);
     const withHeaderCheck: File[] = [];
     for (const f of validFiles) {
-      const resized = await resizeImageFileForUpload(f);
-      const header = await checkImageHeader(resized);
-      if (!header.valid) {
+      try {
+        const compressed = await compressImage(f);
+        const header = await checkImageHeader(compressed);
+        if (!header.valid) {
+          toast({
+            variant: "destructive",
+            title: "Photo validation",
+            description: `${f.name}: ${header.error}`,
+          });
+          continue;
+        }
+        withHeaderCheck.push(compressed);
+      } catch {
         toast({
           variant: "destructive",
-          title: "Photo validation",
-          description: `${f.name}: ${header.error}`,
+          title: "Couldn’t prepare photo",
+          description: `${f.name}: try another image.`,
         });
-        continue;
       }
-      withHeaderCheck.push(resized);
     }
     if (withHeaderCheck.length === 0) {
+      setPortfolioUploadPhase("idle");
+      setUploadingPortfolio(false);
       e.target.value = "";
       return;
     }
     setPortfolioPendingSlots(withHeaderCheck.length);
-    setUploadingPortfolio(true);
+    setPortfolioUploadPhase("uploading");
     setSubmitError(null);
     try {
       const fd = new FormData();
@@ -320,7 +356,11 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
         generateThumb: true,
       });
       if (actionError) {
-        toast({ variant: "destructive", title: "Upload failed", description: actionError });
+        toast({
+          variant: "destructive",
+          title: "Upload failed",
+          description: formatPhotoUploadError(actionError),
+        });
       }
       const newUrls: string[] = [];
       results.forEach((r, i) => {
@@ -328,7 +368,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
           toast({
             variant: "destructive",
             title: "Upload failed",
-            description: `${r.fileName}: ${r.error}`,
+            description: `${r.fileName}: ${formatPhotoUploadError(r.error)}`,
           });
         } else if (r.url) {
           newUrls.push(r.url);
@@ -343,10 +383,11 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
         });
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to upload portfolio photos.";
+      const msg = formatPhotoUploadError(err);
       setSubmitError(msg);
       toast({ variant: "destructive", title: "Upload failed", description: msg });
     } finally {
+      setPortfolioUploadPhase("idle");
       setPortfolioPendingSlots(0);
       setUploadingPortfolio(false);
       e.target.value = "";
@@ -485,10 +526,14 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                     accept={PHOTO_VALIDATION.ACCEPT}
                     className="hidden"
                     onChange={handleProfilePhoto}
-                    disabled={uploadingPhoto}
+                    disabled={profilePhotoPhase !== "idle"}
                   />
                   <ImagePlus className="h-4 w-4" />
-                  {uploadingPhoto ? "Uploading photo…" : "Upload / replace photo (max 1)"}
+                  {profilePhotoPhase === "compressing"
+                    ? "Optimizing photo…"
+                    : profilePhotoPhase === "uploading"
+                      ? "Uploading photo…"
+                      : "Upload / replace photo (max 1)"}
                 </label>
               </div>
             </div>
@@ -922,7 +967,9 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                     disabled={uploadingPortfolio || (Array.isArray(portfolioUrls) ? portfolioUrls : []).length >= PHOTO_LIMITS.PORTFOLIO}
                   />
                   {uploadingPortfolio ? (
-                    "Uploading…"
+                    portfolioUploadPhase === "compressing"
+                      ? "Optimizing…"
+                      : "Uploading…"
                   ) : (
                     <div className="flex flex-col items-center gap-1">
                       <ImagePlus className="h-5 w-5" />
@@ -1044,10 +1091,14 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                   accept={PHOTO_VALIDATION.ACCEPT}
                   className="hidden"
                   onChange={handleProfilePhoto}
-                  disabled={uploadingPhoto}
+                  disabled={profilePhotoPhase !== "idle"}
                 />
                 <ImagePlus className="h-4 w-4" />
-                {uploadingPhoto ? "Uploading photo…" : "Upload / replace photo (max 1)"}
+                {profilePhotoPhase === "compressing"
+                  ? "Optimizing photo…"
+                  : profilePhotoPhase === "uploading"
+                    ? "Uploading photo…"
+                    : "Upload / replace photo (max 1)"}
               </label>
             </div>
           </div>

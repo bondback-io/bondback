@@ -126,7 +126,10 @@ export function AdminUserActions({ user }: AdminUserActionsProps) {
       setDeleteStep2Open(false);
       setDeleteConfirm("");
       if (result.ok) {
-        toast({ title: "User deleted", description: "Soft delete applied." });
+        toast({
+          title: "User deleted",
+          description: "All related data was removed and the auth account was deleted.",
+        });
         router.refresh();
       } else {
         toast({ variant: "destructive", title: "Error", description: result.error });
@@ -209,18 +212,14 @@ export function AdminUserActions({ user }: AdminUserActionsProps) {
               Unban user
             </DropdownMenuItem>
           )}
-          {!isDeleted && (
-            <>
-              <DropdownMenuSeparator className="dark:bg-gray-800" />
-              <DropdownMenuItem
-                className="flex items-center gap-2 text-red-600 dark:text-red-400"
-                onClick={() => setDeleteStep1Open(true)}
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete user
-              </DropdownMenuItem>
-            </>
-          )}
+          <DropdownMenuSeparator className="dark:bg-gray-800" />
+          <DropdownMenuItem
+            className="flex items-center gap-2 text-red-600 dark:text-red-400"
+            onClick={() => setDeleteStep1Open(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete user
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -347,13 +346,14 @@ export function AdminUserActions({ user }: AdminUserActionsProps) {
       <Dialog open={deleteStep1Open} onOpenChange={setDeleteStep1Open}>
         <DialogContent className="dark:bg-gray-900 dark:border-gray-800">
           <DialogHeader>
-            <DialogTitle className="dark:text-gray-100">Delete user?</DialogTitle>
+            <DialogTitle className="dark:text-gray-100">Permanently delete user?</DialogTitle>
             <DialogDescription className="dark:text-gray-400">
-              This will soft-delete the user (set is_deleted = true). They will be hidden from the main list. Auth account is not removed.
+              This removes listings, jobs, bids, messages, notifications, and other data tied to this account,
+              then deletes the user from Supabase Auth. It cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <Alert variant="destructive" className="text-xs">
-            This action can be reversed by an admin (set is_deleted = false in the database).
+            Admin accounts cannot be deleted here — demote the user first. You cannot delete your own account.
           </Alert>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteStep1Open(false)} className="dark:border-gray-700 dark:hover:bg-gray-800">
@@ -380,7 +380,7 @@ export function AdminUserActions({ user }: AdminUserActionsProps) {
           <DialogHeader>
             <DialogTitle className="dark:text-gray-100">Final confirmation</DialogTitle>
             <DialogDescription className="dark:text-gray-400">
-              Type <strong>DELETE</strong> to confirm soft-delete for <strong>{name}</strong>.
+              Type <strong>DELETE</strong> to permanently remove <strong>{name}</strong> and their data.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

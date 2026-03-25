@@ -44,6 +44,9 @@ export type CreateNotificationOptions = {
   listingTitle?: string | null;
   /** For SMS: payment amount in cents (e.g. payment released) */
   amountCents?: number | null;
+  persistTitle?: string;
+  persistBody?: string;
+  adminTest?: boolean;
 };
 
 export async function createNotification(
@@ -81,6 +84,16 @@ export async function createNotification(
     return;
   }
 
+  if (process.env.NODE_ENV === "development") {
+    console.info("[notifications:insert]", {
+      userId,
+      type,
+      jobId,
+      title: row.title,
+    });
+  }
+
+  revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/profile");
   revalidatePath("/notifications");
@@ -91,7 +104,6 @@ export async function createNotification(
 
   // Email: respect global toggle, per-type toggle, then notification_preferences and email_force_disabled
   let sendEmailThisTime = Boolean(
-    type !== "job_approved_to_start" &&
     globalSettings?.emails_enabled !== false &&
     (await getEmailTemplateOverrides()).email_type_enabled?.[type] !== false &&
     prefs.email &&
@@ -118,7 +130,27 @@ export async function createNotification(
     const result = await sendEmail(prefs.email!, subject, html, {
       log: { userId, kind: `notification:${type}` },
     });
-    if (!result.ok) console.error("[notifications] email send failed", { userId, type, error: result.error });
+    if (result.skipped) {
+      console.info("[email:notification]", {
+        outcome: "skipped",
+        type,
+        userId,
+        reason: "global_emails_disabled",
+      });
+    } else if (!result.ok) {
+      console.error("[email:notification]", {
+        outcome: "failed",
+        type,
+        userId,
+        error: result.error,
+      });
+    } else {
+      console.info("[email:notification]", {
+        outcome: "sent",
+        type,
+        userId,
+      });
+    }
   }
 
   // SMS: critical, high-value events only; max 5 per user per day (via sendSmsToUser)
@@ -163,8 +195,68 @@ export async function createNotification(
       senderName: options?.senderName ?? undefined,
     });
     const result = await sendPushToUser(userId, prefs.expoPushToken, payload);
-    if (!result.ok) console.error("[notifications] push send failed", { userId, type, error: result.error });
+    if (!result.ok) {
+      console.error("[notifications] push send failed", { userId, type, error: result.error });
+    } else if (result.sent) {
+      console.info("[push:notification]", { outcome: "sent", type, userId });
+    }
   }
+}
+
+/** Admin only: inserts an in-app test row (no email/SMS/push). For Global Settings QA. */
+export async function sendAdminTestNotification(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return { ok: false, error: "Not authenticated" };
+  }
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  if (!profile || !(profile as { is_admin?: boolean }).is_admin) {
+    return { ok: false, error: "Not authorised" };
+  }
+
+  const messageText =
+    "If you see this, in-app notifications are working. Sent from Admin → Global Settings.";
+  const persist = buildNotificationPersistFields("new_message", null, messageText, {
+    persistTitle: "Test notification",
+    persistBody: messageText,
+    adminTest: true,
+  });
+  const row = {
+    user_id: session.user.id,
+    type: "new_message" as const,
+    job_id: null,
+    message_text: messageText,
+    title: persist.title,
+    body: persist.body,
+    data: persist.data,
+  } as NotificationInsert;
+
+  const admin = createSupabaseAdminClient();
+  const client = (admin ?? supabase) as SupabaseClient<Database>;
+  const { error } = await client.from("notifications").insert(row as never);
+  if (error) {
+    console.error("[notifications] admin test insert failed", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/profile");
+  revalidatePath("/notifications");
+  if (process.env.NODE_ENV === "development") {
+    console.info("[notifications:admin-test-insert]", { userId: session.user.id });
+  }
+  return { ok: true };
 }
 
 /** Send payment receipt emails to lister and cleaner (on release). Respects global send_payment_receipt_emails and user receipt_emails pref. */
@@ -198,7 +290,11 @@ export async function sendPaymentReceiptEmails(params: {
     const result = await sendEmail(prefsLister.email, subject, html, {
       log: { userId: params.listerId, kind: "payment_receipt" },
     });
-    if (!result.ok) console.error("[notifications] receipt email to lister failed", { jobId: params.jobId, error: result.error });
+    if (result.ok && !result.skipped) {
+      console.info("[email:payment_receipt]", { outcome: "sent", variant: "lister", jobId: params.jobId, userId: params.listerId });
+    } else if (!result.ok) {
+      console.error("[email:payment_receipt]", { outcome: "failed", variant: "lister", jobId: params.jobId, error: result.error });
+    }
   }
   if (params.cleanerId && prefsCleaner?.email && prefsCleaner.shouldSendEmail("payment_receipt")) {
     const { subject, html } = await buildPaymentReceiptEmail({
@@ -214,7 +310,11 @@ export async function sendPaymentReceiptEmails(params: {
     const result = await sendEmail(prefsCleaner.email, subject, html, {
       log: { userId: params.cleanerId, kind: "payment_receipt" },
     });
-    if (!result.ok) console.error("[notifications] receipt email to cleaner failed", { jobId: params.jobId, error: result.error });
+    if (result.ok && !result.skipped) {
+      console.info("[email:payment_receipt]", { outcome: "sent", variant: "cleaner", jobId: params.jobId, userId: params.cleanerId });
+    } else if (!result.ok) {
+      console.error("[email:payment_receipt]", { outcome: "failed", variant: "cleaner", jobId: params.jobId, error: result.error });
+    }
   }
 }
 
@@ -269,6 +369,12 @@ export async function markNotificationRead(
     return { ok: false, error: error.message };
   }
 
+  if (process.env.NODE_ENV === "development") {
+    console.info("[notifications:mark-read]", { id, userId: session.user.id });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/dashboard");
   revalidatePath("/notifications");
   return { ok: true };
 }
@@ -297,12 +403,49 @@ export async function markAllNotificationsRead(): Promise<{
     return { ok: false, error: error.message };
   }
 
+  if (process.env.NODE_ENV === "development") {
+    console.info("[notifications:mark-all-read]", { userId: session.user.id });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/dashboard");
   revalidatePath("/notifications");
   return { ok: true };
 }
 
-// Stub for future email integration (Resend / Nodemailer).
-// async function sendNotificationEmail(to: string, subject: string, body: string) {
-//   // Integrate with Resend/Nodemailer here.
-// }
+/** Marks every unread `new_message` notification for the current user (messages tab badge). */
+export async function markAllNewMessageNotificationsRead(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const supabase = await createServerSupabaseClient();
 
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  const { error } = await supabase
+    .from("notifications")
+    .update({ is_read: true } as Database["public"]["Tables"]["notifications"]["Update"] as never)
+    .eq("user_id", session.user.id)
+    .eq("type", "new_message")
+    .eq("is_read", false);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    console.info("[notifications:mark-all-new-message-read]", { userId: session.user.id });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/messages");
+  revalidatePath("/notifications");
+  return { ok: true };
+}

@@ -209,7 +209,7 @@ export function ChatPanelProvider({
 
     load().catch((err) => {
       if (!cancelled && process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
+         
         console.warn("[ChatPanelProvider] Failed to load conversations:", err?.message ?? err);
       }
       if (!cancelled) setConversations([]);

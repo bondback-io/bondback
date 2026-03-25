@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getSuburbLatLon } from "@/lib/geo/suburb-lat-lon";
+import { getLatLonForCleanerProfile } from "@/lib/geo/suburb-lat-lon";
 import { haversineKm } from "@/lib/geo/haversine-km";
 import {
   computeCleanerBrowseTier,
@@ -44,11 +44,41 @@ type RawProfile = {
   abn: string | null;
   insurance_policy_number: string | null;
   portfolio_photo_urls: string[] | null;
-  roles: string[] | null;
+  /** `text[]` in Postgres, or legacy `text` / JSON string — see `normalizeProfileRoles` */
+  roles: unknown;
   is_deleted: boolean | null;
   cleaner_avg_rating?: number | string | null;
   cleaner_total_reviews?: number | string | null;
 };
+
+/**
+ * Normalize `profiles.roles` whether the DB column is `text[]`, `text` holding JSON, or comma-separated text.
+ * (`.contains("roles", …)` requires `text[]` and fails with `text @> unknown` on a plain `text` column.)
+ */
+function normalizeProfileRoles(roles: unknown): string[] {
+  if (Array.isArray(roles)) {
+    return roles.filter((r): r is string => typeof r === "string");
+  }
+  if (typeof roles === "string") {
+    const t = roles.trim();
+    if (!t) return [];
+    if (t.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(t) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((r): r is string => typeof r === "string");
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    return t
+      .split(/[,]+/)
+      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+  }
+  return [];
+}
 
 function numOrNull(v: unknown): number | null {
   if (v == null) return null;
@@ -79,8 +109,7 @@ export async function loadBrowseCleaners(params: {
     .from("profiles")
     .select(
       "id, full_name, business_name, profile_photo_url, suburb, postcode, state, bio, years_experience, verification_badges, abn, insurance_policy_number, portfolio_photo_urls, roles, is_deleted, cleaner_avg_rating, cleaner_total_reviews"
-    )
-    .contains("roles", ["cleaner"]);
+    );
 
   if (error) {
     console.error("browse-cleaners profiles", error.message);
@@ -88,13 +117,10 @@ export async function loadBrowseCleaners(params: {
   }
 
   const raw = (profileRows ?? []) as RawProfile[];
-  const cleanersOnly = raw.filter(
-    (p) =>
-      p.is_deleted !== true &&
-      p.id !== params.viewerUserId &&
-      Array.isArray(p.roles) &&
-      p.roles.includes("cleaner")
-  );
+  const cleanersOnly = raw.filter((p) => {
+    if (p.is_deleted === true || p.id === params.viewerUserId) return false;
+    return normalizeProfileRoles(p.roles).includes("cleaner");
+  });
 
   const winnerIds = cleanersOnly.map((p) => p.id);
   const completedCountByWinner = new Map<string, number>();
@@ -112,17 +138,16 @@ export async function loadBrowseCleaners(params: {
     }
   }
 
-  const postcodeCache = new Map<string, { lat: number; lon: number } | null>();
+  const geoCache = new Map<string, { lat: number; lon: number } | null>();
 
-  async function latLonForPostcode(postcode: string | null): Promise<{
+  async function latLonForCleaner(p: RawProfile): Promise<{
     lat: number;
     lon: number;
   } | null> {
-    const key = (postcode ?? "").replace(/\D/g, "").slice(0, 4);
-    if (!key) return null;
-    if (postcodeCache.has(key)) return postcodeCache.get(key) ?? null;
-    const ll = await getSuburbLatLon(client, key);
-    postcodeCache.set(key, ll);
+    const key = `${(p.suburb ?? "").trim().toLowerCase()}|${(p.postcode ?? "").replace(/\D/g, "").slice(0, 4)}`;
+    if (geoCache.has(key)) return geoCache.get(key) ?? null;
+    const ll = await getLatLonForCleanerProfile(client, p.suburb, p.postcode);
+    geoCache.set(key, ll);
     return ll;
   }
 
@@ -137,7 +162,7 @@ export async function loadBrowseCleaners(params: {
 
   const centerResolved = hasCenter;
 
-  const radius = Math.min(200, Math.max(5, params.radiusKm));
+  const radius = Math.min(200, Math.max(5, Math.round(params.radiusKm)));
 
   const mapped: BrowseCleanerRow[] = [];
 
@@ -165,7 +190,7 @@ export async function loadBrowseCleaners(params: {
 
     let distanceKm: number | null = null;
     if (hasCenter && viewerLat != null && viewerLon != null) {
-      const c = await latLonForPostcode(p.postcode);
+      const c = await latLonForCleaner(p);
       if (c) {
         distanceKm = haversineKm(viewerLat, viewerLon, c.lat, c.lon);
       }

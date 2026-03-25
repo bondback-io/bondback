@@ -30,6 +30,12 @@ create policy "Cleaners can insert own bid"
 create policy "Anyone can read bids for listings"
   on public.bids for select using (true);
 
+-- Required for “Revert last bid” / cancelLastBid (app also uses service role when set)
+create policy "Cleaners can delete own bid"
+  on public.bids for delete
+  to authenticated
+  using (auth.uid() = cleaner_id);
+
 -- Optional: listers can read bids on their listings (if you restrict select above)
 -- create policy "Lister can see bids on their listings"
 --   on public.bids for select using (

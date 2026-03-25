@@ -73,7 +73,7 @@ export function AdminUsersFilters({
       });
     }, 300);
     return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [search]);
 
   const handleRoleChange = (value: string) => {

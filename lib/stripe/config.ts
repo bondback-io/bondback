@@ -38,9 +38,10 @@ export async function getStripeConfig(): Promise<StripeConfig> {
 
   cachedConfig = { mode, publishableKey, secretKey };
 
-  // One-time debug log
-  // eslint-disable-next-line no-console
-  console.log("[Stripe] Mode:", stripeTestMode ? "TEST" : "LIVE");
+  if (process.env.NODE_ENV !== "production") {
+     
+    console.log("[Stripe] Mode:", stripeTestMode ? "TEST" : "LIVE");
+  }
 
   return cachedConfig;
 }

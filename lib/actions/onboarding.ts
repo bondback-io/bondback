@@ -497,9 +497,27 @@ export async function completeOnboardingFromSignup(
         const firstName = details.full_name?.trim()?.split(" ")[0];
         const signupRole = role === "both" ? "both" : role === "lister" ? "lister" : "cleaner";
         const { subject, html } = await buildWelcomeEmail(firstName, signupRole);
-        await sendEmail(email, subject, html, {
+        const welcomeResult = await sendEmail(email, subject, html, {
           log: { userId: session.user.id, kind: "welcome" },
         });
+        if (welcomeResult.skipped) {
+          console.info("[email:welcome]", {
+            outcome: "skipped",
+            userId: session.user.id,
+            reason: "global_emails_disabled",
+          });
+        } else if (!welcomeResult.ok) {
+          console.error("[email:welcome]", {
+            outcome: "failed",
+            userId: session.user.id,
+            error: welcomeResult.error ?? "unknown",
+          });
+        } else {
+          console.info("[email:welcome]", {
+            outcome: "sent",
+            userId: session.user.id,
+          });
+        }
       }
     }
   }

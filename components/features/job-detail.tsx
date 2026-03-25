@@ -47,6 +47,7 @@ import {
   acceptBid,
   extendListerReview24h,
 } from "@/lib/actions/jobs";
+import { cancelLastBid } from "@/lib/actions/bids";
 import {
   Select,
   SelectContent,
@@ -63,7 +64,7 @@ import {
   checkImageHeader,
 } from "@/lib/photo-validation";
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
-import { resizeImageFileForUpload } from "@/lib/client-image-resize";
+import { compressImage } from "@/lib/utils/compressImage";
 import { NEXT_IMAGE_SIZES_THUMB_GRID } from "@/lib/next-image-sizes";
 import { getStateFromPostcode, formatLocationWithState } from "@/lib/state-from-postcode";
 import { getBondGuidelineForState } from "@/lib/bond-cleaning-guidelines";
@@ -189,6 +190,51 @@ export function JobDetail({
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
+
+  // Keep client state in sync when the server page refreshes (e.g. after placeBid → router.refresh()).
+  // `useState(initial*)` only applies on mount; without this, lowest bid / bid history stay stale.
+  useEffect(() => {
+    setListing(initialListing);
+  }, [initialListing]);
+
+  useEffect(() => {
+    setBids((prev) => {
+      // After a failed placeBid, Next can refetch RSC with an empty `bids` payload while the
+      // listing row still shows a price below starting (real bids exist). Don't wipe history.
+      if (initialBids.length === 0 && prev.length > 0) {
+        const auctionHasBids =
+          initialListing.current_lowest_bid_cents < initialListing.starting_price_cents;
+        if (auctionHasBids) {
+          return prev;
+        }
+      }
+      return initialBids;
+    });
+  }, [
+    initialBids,
+    initialListing.current_lowest_bid_cents,
+    initialListing.starting_price_cents,
+  ]);
+
+  /** Prefer min(bids) when `listings.current_lowest_bid_cents` is stale (e.g. RLS blocked updates). */
+  const effectiveCurrentLowestCents = useMemo(() => {
+    const fromBids =
+      bids.length > 0
+        ? Math.min(...bids.map((b) => Number(b.amount_cents ?? 0)))
+        : null;
+    const fromListing = listing.current_lowest_bid_cents;
+    if (fromBids == null) return fromListing;
+    return Math.min(fromListing, fromBids);
+  }, [bids, listing.current_lowest_bid_cents]);
+
+  const listingForBid = useMemo(
+    () => ({
+      ...listing,
+      current_lowest_bid_cents: effectiveCurrentLowestCents,
+    }),
+    [listing, effectiveCurrentLowestCents]
+  );
+
   const [localJobStatus, setLocalJobStatus] = useState<string | null>(
     jobStatus ?? (hasActiveJob ? "accepted" : null)
   );
@@ -348,12 +394,46 @@ export function JobDetail({
     isLive && !hasActiveJob && !hideCleanerCancelledAuctionUi;
   const isSold = !!hasActiveJob;
 
+  const showRevertLastBidInHistory =
+    isCleaner &&
+    isLive &&
+    !hasActiveJob &&
+    Boolean(
+      currentUserId &&
+        bids.some((b) => b.cleaner_id === currentUserId)
+    );
+
+  const handleRevertLastBid = useCallback(async () => {
+    try {
+      const result = await cancelLastBid(listingId);
+      if (!result.ok) {
+        toast({
+          variant: "destructive",
+          title: "Could not revert bid",
+          description: result.error,
+        });
+        return;
+      }
+      toast({
+        title: "Bid removed",
+        description: "Your last bid on this listing was withdrawn.",
+      });
+      router.refresh();
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Could not revert bid",
+        description: e instanceof Error ? e.message : "Something went wrong.",
+      });
+    }
+  }, [listingId, toast, router]);
+
   /** Platform fee on current lowest bid amount (lister view; updates with listing realtime). */
   const platformFeeOnCurrentBidCents = useMemo(() => {
-    const jobCents = Number(listing.current_lowest_bid_cents ?? 0);
+    const jobCents = Number(effectiveCurrentLowestCents ?? 0);
     if (!Number.isFinite(jobCents) || jobCents <= 0 || !Number.isFinite(feePercentage)) return 0;
     return Math.round((jobCents * feePercentage) / 100);
-  }, [listing.current_lowest_bid_cents, feePercentage]);
+  }, [effectiveCurrentLowestCents, feePercentage]);
 
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -1249,7 +1329,7 @@ export function JobDetail({
                     <p className="mt-1 text-xl font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-2xl">
                       {formatCents(listing.buy_now_cents)}
                     </p>
-                    {listing.current_lowest_bid_cents < listing.buy_now_cents && (
+                    {effectiveCurrentLowestCents < listing.buy_now_cents && (
                       <p className="mt-3 max-w-md rounded-xl bg-amber-50 px-3 py-2 text-left text-sm leading-snug text-amber-900 dark:bg-amber-900/30 dark:text-amber-100 sm:ml-auto sm:text-right">
                         Current bid is below the fixed price. Securing at this price may no longer be available.
                       </p>
@@ -1262,7 +1342,7 @@ export function JobDetail({
                   Current lowest bid
                 </p>
                 <p className="mt-2 text-3xl font-bold tabular-nums leading-none tracking-tight text-primary sm:text-4xl md:text-5xl">
-                  {formatCents(listing.current_lowest_bid_cents)}
+                  {formatCents(effectiveCurrentLowestCents)}
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 dark:border-gray-600 dark:bg-gray-800/70">
@@ -1318,7 +1398,7 @@ export function JobDetail({
                     detailUiBoost ? "text-3xl sm:text-4xl" : "text-2xl sm:text-3xl"
                   )}
                 >
-                  {formatCents(listing.current_lowest_bid_cents)}
+                  {formatCents(effectiveCurrentLowestCents)}
                 </p>
               </div>
               {listing.buy_now_cents != null && listing.buy_now_cents > 0 && (
@@ -1339,7 +1419,7 @@ export function JobDetail({
                   >
                     {formatCents(listing.buy_now_cents)}
                   </p>
-                  {listing.current_lowest_bid_cents < listing.buy_now_cents && (
+                  {effectiveCurrentLowestCents < listing.buy_now_cents && (
                     <p
                       className={cn(
                         "mt-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
@@ -1983,17 +2063,25 @@ export function JobDetail({
                             }
                             const withHeaderCheck: File[] = [];
                             for (const f of validFiles) {
-                              const resized = await resizeImageFileForUpload(f);
-                              const header = await checkImageHeader(resized);
-                              if (!header.valid) {
+                              try {
+                                const compressed = await compressImage(f);
+                                const header = await checkImageHeader(compressed);
+                                if (!header.valid) {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Photo validation",
+                                    description: `${f.name}: ${header.error}`,
+                                  });
+                                  continue;
+                                }
+                                withHeaderCheck.push(compressed);
+                              } catch {
                                 toast({
                                   variant: "destructive",
-                                  title: "Photo validation",
-                                  description: `${f.name}: ${header.error}`,
+                                  title: "Couldn’t prepare photo",
+                                  description: `${f.name}: try another image.`,
                                 });
-                                continue;
                               }
-                              withHeaderCheck.push(resized);
                             }
                             if (withHeaderCheck.length === 0) {
                               event.target.value = "";
@@ -2949,17 +3037,25 @@ export function JobDetail({
                               }
                               const withHeaderCheck: File[] = [];
                               for (const f of validFiles) {
-                                const resized = await resizeImageFileForUpload(f);
-                                const header = await checkImageHeader(resized);
-                                if (!header.valid) {
+                                try {
+                                  const compressed = await compressImage(f);
+                                  const header = await checkImageHeader(compressed);
+                                  if (!header.valid) {
+                                    toast({
+                                      variant: "destructive",
+                                      title: "Photo validation",
+                                      description: `${f.name}: ${header.error}`,
+                                    });
+                                    continue;
+                                  }
+                                  withHeaderCheck.push(compressed);
+                                } catch {
                                   toast({
                                     variant: "destructive",
-                                    title: "Photo validation",
-                                    description: `${f.name}: ${header.error}`,
+                                    title: "Couldn’t prepare photo",
+                                    description: `${f.name}: try another image.`,
                                   });
-                                  continue;
                                 }
-                                withHeaderCheck.push(resized);
                               }
                               if (withHeaderCheck.length === 0) {
                                 event.target.value = "";
@@ -3035,6 +3131,10 @@ export function JobDetail({
               onAcceptBid={
                 isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
               }
+              showRevertLastBid={showRevertLastBidInHistory}
+              onRevertLastBid={
+                showRevertLastBidInHistory ? handleRevertLastBid : undefined
+              }
               largeTouch={detailUiBoost}
               defaultOpen={Boolean(showAuctionActions && isListingOwner && !isCleaner)}
               className={cn(
@@ -3070,7 +3170,10 @@ export function JobDetail({
               Place a lower bid
             </CardTitle>
             <CardDescription
-              className={cn("leading-snug", detailUiBoost ? "text-base" : "text-sm")}
+              className={cn(
+                "max-md:hidden leading-snug",
+                detailUiBoost ? "text-base" : "text-sm"
+              )}
             >
               Reverse auction: cleaners compete by bidding{" "}
               <span className="font-medium text-foreground dark:text-gray-200">below</span> the current
@@ -3082,7 +3185,7 @@ export function JobDetail({
           >
             <PlaceBidForm
               listingId={listingId}
-              listing={listing}
+              listing={listingForBid}
               isCleaner={isCleaner}
               currentUserId={currentUserId}
             />
@@ -3090,7 +3193,7 @@ export function JobDetail({
             {isCleaner &&
               listing.buy_now_cents != null &&
               listing.buy_now_cents > 0 &&
-              listing.current_lowest_bid_cents >= listing.buy_now_cents && (
+              effectiveCurrentLowestCents >= listing.buy_now_cents && (
                 <div className="rounded-2xl border border-violet-200/80 bg-violet-50/50 px-4 py-4 dark:border-violet-900/40 dark:bg-violet-950/25">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-300">
                     Or skip the auction
@@ -3155,6 +3258,8 @@ export function JobDetail({
 function BidHistorySection({
   bids,
   onAcceptBid,
+  showRevertLastBid = false,
+  onRevertLastBid,
   className,
   largeTouch = false,
   /** Lister live auction: start expanded. After auction/job won, collapsed. */
@@ -3162,12 +3267,34 @@ function BidHistorySection({
 }: {
   bids: BidWithBidder[];
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
+  /** Cleaner + live listing: withdraw most recent bid by this user. */
+  showRevertLastBid?: boolean;
+  onRevertLastBid?: () => Promise<void>;
   className?: string;
   /** Larger summary + body copy (cleaner or lister job detail). */
   largeTouch?: boolean;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [reverting, setReverting] = useState(false);
+
+  const handleRevertLastBidClick = async () => {
+    if (!onRevertLastBid) return;
+    if (
+      !window.confirm(
+        "Revert your last bid on this listing? This cannot be undone."
+      )
+    ) {
+      return;
+    }
+    setReverting(true);
+    try {
+      await onRevertLastBid();
+    } finally {
+      setReverting(false);
+    }
+  };
+
   return (
     <details
       className={className}
@@ -3183,8 +3310,22 @@ function BidHistorySection({
         View bid history
       </summary>
       {bids.length > 0 ? (
-        <div className="mt-2">
+        <div className="mt-2 space-y-3">
           <BidHistoryTable bids={bids} onAcceptBid={onAcceptBid} />
+          {showRevertLastBid && onRevertLastBid ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size={largeTouch ? "default" : "sm"}
+                className="w-full border-amber-300 font-semibold text-amber-900 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/40 sm:w-auto"
+                disabled={reverting}
+                onClick={handleRevertLastBidClick}
+              >
+                {reverting ? "Reverting…" : "Revert last bid"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : (
         <p

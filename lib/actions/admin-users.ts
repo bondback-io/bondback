@@ -127,7 +127,16 @@ export async function checkBanAfterLogin(): Promise<
   return { banned: true, reason: profile.banned_reason ?? null };
 }
 
-/** Admin only: soft delete user (set is_deleted = true). Does not delete auth user. */
+function chunkIds<T>(ids: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Admin only: permanently remove a user — public data first, then `auth.users` (service role).
+ * Does not delete another admin (demote first).
+ */
 export async function adminDeleteUser(userId: string): Promise<DeleteUserResult> {
   const supabase = await createServerSupabaseClient();
   const auth = await requireAdmin(supabase);
@@ -136,16 +145,103 @@ export async function adminDeleteUser(userId: string): Promise<DeleteUserResult>
   const db = requireServiceRole();
   if (!db.ok) return { ok: false, error: db.error };
 
-  const { error } = await db.supabaseAdmin
-    .from("profiles")
-    .update({
-      is_deleted: true,
-      updated_at: new Date().toISOString(),
-    } as Record<string, unknown>)
-    .eq("id", userId);
+  const admin = db.supabaseAdmin;
+  const dbx = admin as any;
 
-  if (error) return { ok: false, error: error.message };
-  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_deleted", targetType: "user", targetId: userId, details: { soft_delete: true } });
+  const { data: targetProfile } = await admin
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (targetProfile && (targetProfile as { is_admin?: boolean }).is_admin) {
+    return { ok: false, error: "Cannot delete an admin account. Demote the user first." };
+  }
+
+  const { data: listingRows } = await admin.from("listings").select("id").eq("lister_id", userId);
+  const listingIds = (listingRows ?? []).map((r: { id: string }) => r.id);
+
+  const { data: jLister } = await admin.from("jobs").select("id").eq("lister_id", userId);
+  const { data: jWinner } = await admin.from("jobs").select("id").eq("winner_id", userId);
+  const { data: jListing } =
+    listingIds.length > 0
+      ? await admin.from("jobs").select("id").in("listing_id", listingIds)
+      : { data: [] as { id: number }[] };
+
+  const jobIdSet = new Set<number>();
+  for (const j of jLister ?? []) jobIdSet.add((j as { id: number }).id);
+  for (const j of jWinner ?? []) jobIdSet.add((j as { id: number }).id);
+  for (const j of jListing ?? []) jobIdSet.add((j as { id: number }).id);
+  const jobIds = [...jobIdSet];
+
+  async function deleteForJobBatch(batch: number[]) {
+    if (batch.length === 0) return;
+    await dbx.from("referral_rewards").delete().in("job_id", batch);
+    await admin.from("reviews").delete().in("job_id", batch);
+    await admin.from("notifications").delete().in("job_id", batch);
+    await dbx.from("notification_email_rate_limit").delete().in("job_id", batch);
+    await dbx.from("last_job_view").delete().in("job_id", batch);
+    await dbx.from("job_checklist_items").delete().in("job_id", batch);
+    await admin.from("job_messages").delete().in("job_id", batch);
+    await admin.from("jobs").delete().in("id", batch);
+  }
+
+  for (const batch of chunkIds(jobIds, 80)) {
+    await deleteForJobBatch(batch);
+  }
+
+  await admin.from("reviews").delete().eq("reviewer_id", userId);
+  await admin.from("reviews").delete().eq("reviewee_id", userId);
+
+  await dbx.from("referral_rewards").delete().eq("referred_user_id", userId);
+  await dbx.from("referral_rewards").delete().eq("referrer_id", userId);
+
+  await admin.from("notifications").delete().eq("user_id", userId);
+  await admin.from("bids").delete().eq("cleaner_id", userId);
+  if (listingIds.length > 0) {
+    for (const batch of chunkIds(listingIds, 80)) {
+      await admin.from("bids").delete().in("listing_id", batch);
+    }
+  }
+
+  if (listingIds.length > 0) {
+    for (const batch of chunkIds(listingIds, 80)) {
+      await admin.from("listings").delete().in("id", batch);
+    }
+  }
+
+  await admin.from("email_logs").delete().eq("user_id", userId);
+  await admin.from("support_tickets").delete().eq("user_id", userId);
+  await dbx.from("notification_email_rate_limit").delete().eq("user_id", userId);
+  await dbx.from("last_job_view").delete().eq("user_id", userId);
+  await dbx.from("admin_email_test_sends").delete().eq("admin_id", userId);
+
+  await admin
+    .from("profiles")
+    .update({ banned_by: null } as Record<string, unknown>)
+    .eq("banned_by", userId);
+  await admin
+    .from("profiles")
+    .update({ referred_by: null } as Record<string, unknown>)
+    .eq("referred_by", userId);
+
+  await dbx.from("global_settings").update({ updated_by: null }).eq("updated_by", userId);
+
+  await dbx.from("admin_activity_log").delete().eq("admin_id", userId);
+  await dbx.from("admin_activity_log").delete().eq("target_type", "user").eq("target_id", userId);
+
+  const { error: authErr } = await admin.auth.admin.deleteUser(userId);
+  if (authErr) {
+    return { ok: false, error: authErr.message ?? "Failed to delete auth user." };
+  }
+
+  await logAdminActivity({
+    adminId: auth.adminId!,
+    actionType: "user_deleted",
+    targetType: "user",
+    targetId: userId,
+    details: { permanent: true },
+  });
   revalidatePath("/admin/users");
   revalidatePath("/admin/dashboard");
   return { ok: true };

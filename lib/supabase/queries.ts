@@ -58,8 +58,12 @@ export const PROFILE_ADMIN_TABLE_SELECT = PROFILE_TYPED_FULL_SELECT;
 export const PROFILE_LISTER_DASHBOARD_SELECT =
   "id, roles, active_role, full_name, phone, suburb, created_at";
 
-/** Cleaner dashboard — full typed row (append `cleaner_avg_rating` after regenerating types if the column exists). */
-export const PROFILE_CLEANER_DASHBOARD_SELECT = PROFILE_TYPED_FULL_SELECT;
+/**
+ * Cleaner dashboard — same columns as lister dashboard.
+ * Avoids requesting the full profile row so PostgREST does not 400 when optional columns lag migrations.
+ * Average rating uses `cleaner_avg_rating` when present in DB; append `, cleaner_avg_rating` here after the column exists.
+ */
+export const PROFILE_CLEANER_DASHBOARD_SELECT = PROFILE_LISTER_DASHBOARD_SELECT;
 
 /** Activity feed on dashboards. */
 export const NOTIFICATION_FEED_SELECT =

@@ -12,6 +12,7 @@ export const EMAIL_TEMPLATE_TYPES = [
   "new_message",
   "job_created",
   "job_accepted",
+  "job_approved_to_start",
   "job_completed",
   "job_cancelled_by_lister",
   "payment_released",
@@ -30,7 +31,8 @@ const LABELS: Record<string, string> = {
   new_bid: "New bid on listing",
   new_message: "New message in job",
   job_created: "Job created",
-  job_accepted: "Job accepted / approved to start",
+  job_accepted: "Job accepted / job created (coordination)",
+  job_approved_to_start: "Lister approved — start work (cleaner)",
   job_completed: "Job marked complete",
   job_cancelled_by_lister: "Job cancelled by lister",
   payment_released: "Payment released",
@@ -84,6 +86,11 @@ export const SAMPLE_DATA: Record<string, SampleData> = {
   },
   job_accepted: {
     messageText: "The lister has approved you. You can now start the job.",
+    jobId: 10042,
+  },
+  job_approved_to_start: {
+    messageText:
+      "The lister has approved the job — you can start the bond clean. Check the job for address and checklist.",
     jobId: 10042,
   },
   job_completed: {

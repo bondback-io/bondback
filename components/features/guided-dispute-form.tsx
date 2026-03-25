@@ -492,9 +492,6 @@ export function GuidedDisputeForm({
                 errorPhotos && "border-red-500 dark:border-red-500"
               )}
               aria-label="Upload evidence photos. Drag and drop or tap to select. At least one photo required."
-              aria-required="true"
-              aria-invalid={!!errorPhotos}
-              aria-errormessage={errorPhotos ? "dispute-photos-error" : undefined}
             >
               <input
                 ref={fileInputRef}
@@ -504,6 +501,9 @@ export function GuidedDisputeForm({
                 className="sr-only"
                 onChange={handleFileChange}
                 aria-label="Choose evidence photo files"
+                aria-required
+                aria-invalid={!!errorPhotos}
+                aria-errormessage={errorPhotos ? "dispute-photos-error" : undefined}
               />
               <Upload className="h-8 w-8 text-muted-foreground dark:text-gray-400" aria-hidden />
               <span className="text-sm text-muted-foreground dark:text-gray-400 text-center">

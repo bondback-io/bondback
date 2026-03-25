@@ -27,10 +27,12 @@ import {
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { getListingCoverUrl } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
-import { getProfileCompletion } from "@/lib/profile-completion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
+import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
+import {
+  normalizeProfileRolesFromDb,
+  resolveActiveRoleFromProfile,
+} from "@/lib/profile-roles";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -64,8 +66,13 @@ export default async function ListerDashboardPage() {
   if (profileError || !profileData) redirect("/onboarding/role-choice");
 
   const profile = profileData as ProfileRow;
-  const roles = (profile.roles as string[] | null) ?? [];
+  const roles = normalizeProfileRolesFromDb(profile.roles, true);
   if (!roles.includes("lister")) redirect("/dashboard");
+
+  const resolvedActive = resolveActiveRoleFromProfile(profile);
+  if (resolvedActive === "cleaner" && roles.includes("cleaner")) {
+    redirect("/cleaner/dashboard");
+  }
 
   const [listingsRes, jobsRes, notificationsRes, globalSettings] = await Promise.all([
     supabase
@@ -231,8 +238,16 @@ export default async function ListerDashboardPage() {
       icon: "plus" as const,
     },
     { label: "Browse Cleaners", href: "/cleaners", icon: "search" as const },
-    { label: "My Active Jobs", href: "/my-listings?tab=active_listings", icon: "briefcase" as const },
-    { label: "My Completed Jobs", href: "/my-listings?tab=completed_jobs", icon: "check-circle" as const },
+    {
+      label: "My Active Jobs",
+      href: "/lister/dashboard#active-jobs",
+      icon: "briefcase" as const,
+    },
+    {
+      label: "My Completed Jobs",
+      href: "/lister/dashboard#completed-jobs",
+      icon: "check-circle" as const,
+    },
   ];
 
   const activityItems = notifications.map((n) => ({
@@ -250,12 +265,6 @@ export default async function ListerDashboardPage() {
   const welcomeWithinMs = 7 * 24 * 60 * 60 * 1000;
   const showWelcomeBanner =
     createdAtMs > 0 && nowMs - createdAtMs < welcomeWithinMs;
-
-  const completion = getProfileCompletion({
-    ...profile,
-    active_role: "lister",
-  } as ProfileRow);
-  const showProfileProgressNudge = completion.percent < 100;
 
   return (
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
@@ -288,31 +297,6 @@ export default async function ListerDashboardPage() {
               You&apos;re set up as a lister — create a listing with clear photos so cleaners can bid with confidence.
             </CardDescription>
           </CardHeader>
-        </Card>
-      )}
-
-      {showProfileProgressNudge && (
-        <Card className="border-amber-200/90 bg-amber-50/50 dark:border-amber-800/60 dark:bg-amber-950/25">
-          <CardContent className="space-y-4 pt-5 sm:pt-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <p className="text-lg font-semibold text-foreground dark:text-gray-100 sm:text-base">
-                  75% complete — add photos to win more jobs
-                </p>
-                <p className="text-sm text-muted-foreground dark:text-gray-400">
-                  Finish your profile and use great photos on listings — listers with complete profiles get more bids.
-                </p>
-              </div>
-              <Button
-                asChild
-                size="lg"
-                className="h-12 w-full shrink-0 px-6 text-base font-semibold sm:h-11 sm:w-auto"
-              >
-                <Link href="/profile">Complete profile</Link>
-              </Button>
-            </div>
-            <Progress value={75} className="h-3" />
-          </CardContent>
         </Card>
       )}
 
@@ -368,7 +352,11 @@ export default async function ListerDashboardPage() {
       </div>
 
       {/* Active jobs */}
-      <div className="rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:rounded-xl md:border">
+      <ScrollToHash anchorId="active-jobs" />
+      <div
+        id="active-jobs"
+        className="scroll-mt-[calc(6rem+env(safe-area-inset-top,0px))] rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:scroll-mt-24 md:rounded-xl md:border"
+      >
         <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
           <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
             Active Jobs
@@ -437,7 +425,11 @@ export default async function ListerDashboardPage() {
       </div>
 
       {/* Completed jobs — vertical list (no horizontal swipe) */}
-      <div className="rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:rounded-xl md:border">
+      <ScrollToHash anchorId="completed-jobs" />
+      <div
+        id="completed-jobs"
+        className="scroll-mt-[calc(6rem+env(safe-area-inset-top,0px))] rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:scroll-mt-24 md:rounded-xl md:border"
+      >
         <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
           <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
             Completed Jobs

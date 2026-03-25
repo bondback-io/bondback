@@ -22,6 +22,7 @@ import {
   filterNotificationsForActiveRole,
   prependNotificationDeduped,
 } from "@/lib/notifications/notification-role-filter";
+import { getNotificationHref } from "@/lib/notifications/display";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
@@ -83,16 +84,25 @@ export function NotificationsList({
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "notifications",
           filter: `user_id=eq.${currentUserId}`,
         },
         (payload) => {
-          const row = payload.new as NotificationRow;
-          setNotifications((prev) =>
-            prependNotificationDeduped(prev, row, 200)
-          );
+          if (payload.eventType === "INSERT") {
+            const row = payload.new as NotificationRow;
+            setNotifications((prev) =>
+              prependNotificationDeduped(prev, row, 200)
+            );
+            return;
+          }
+          if (payload.eventType === "UPDATE") {
+            const row = payload.new as NotificationRow;
+            setNotifications((prev) =>
+              prev.map((x) => (x.id === row.id ? row : x))
+            );
+          }
         }
       )
       .subscribe();
@@ -108,10 +118,8 @@ export function NotificationsList({
         prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x))
       );
     }
-    if (n.job_id) {
-      const isDispute = n.type === "dispute_opened" || n.type === "dispute_resolved";
-      router.push(isDispute ? `/jobs/${n.job_id}#dispute` : `/jobs/${n.job_id}`);
-    } else router.push("/dashboard");
+    const href = getNotificationHref(n);
+    router.push(href ?? "/dashboard");
   };
 
   if (displayedNotifications.length === 0) {

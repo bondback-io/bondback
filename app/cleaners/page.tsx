@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getSuburbLatLon } from "@/lib/geo/suburb-lat-lon";
+import { resolveBrowseCleanersSearchCenter } from "@/lib/geo/suburb-lat-lon";
 import { loadBrowseCleaners } from "@/lib/data/browse-cleaners";
 import { CLEANER_TIER_META } from "@/lib/cleaner-browse-tier";
 import { BrowseCleanerCard } from "@/components/features/browse-cleaner-card";
@@ -94,28 +94,28 @@ export default async function BrowseCleanersPage({
   const radiusParsed = radiusFilter ? Number(radiusFilter) : NaN;
   const radiusKm = Number.isFinite(radiusParsed) && radiusParsed > 0
     ? Math.min(100, Math.max(5, Math.round(radiusParsed)))
-    : defaultRadiusKm;
+    : Math.min(100, Math.max(5, Math.round(defaultRadiusKm)));
 
-  let centerLat: number | null = resolved.center_lat ? Number(resolved.center_lat) : null;
-  let centerLon: number | null = resolved.center_lon ? Number(resolved.center_lon) : null;
+  const centerLatRaw = resolved.center_lat ? Number(resolved.center_lat) : null;
+  const centerLonRaw = resolved.center_lon ? Number(resolved.center_lon) : null;
 
-  if (
-    centerLat == null ||
-    centerLon == null ||
-    !Number.isFinite(centerLat) ||
-    !Number.isFinite(centerLon)
-  ) {
-    const pcRaw =
-      (postcodeFilter || (profile?.postcode ?? "")).replace(/\D/g, "").slice(0, 4) || "";
-    if (pcRaw.length >= 4) {
-      const admin = createSupabaseAdminClient();
-      const ll = await getSuburbLatLon((admin ?? supabase) as Parameters<typeof getSuburbLatLon>[0], pcRaw);
-      if (ll) {
-        centerLat = ll.lat;
-        centerLon = ll.lon;
-      }
-    }
-  }
+  const adminClient = createSupabaseAdminClient();
+  const supabaseForGeo = (adminClient ?? supabase) as Parameters<
+    typeof resolveBrowseCleanersSearchCenter
+  >[0];
+
+  const resolvedCenter = await resolveBrowseCleanersSearchCenter(supabaseForGeo, {
+    centerLat:
+      centerLatRaw != null && Number.isFinite(centerLatRaw) ? centerLatRaw : null,
+    centerLon:
+      centerLonRaw != null && Number.isFinite(centerLonRaw) ? centerLonRaw : null,
+    suburbFilter,
+    postcodeFilter,
+    profilePostcode: profile?.postcode ?? null,
+  });
+
+  const centerLat = resolvedCenter?.lat ?? null;
+  const centerLon = resolvedCenter?.lon ?? null;
 
   const hasCenter =
     centerLat != null &&

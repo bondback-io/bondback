@@ -54,6 +54,7 @@ export function notificationTypeToPreferenceKey(
     case "new_message":
       return "new_message";
     case "job_accepted":
+    case "job_approved_to_start":
     case "job_created":
       return "job_accepted";
     case "job_completed":

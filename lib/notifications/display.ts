@@ -2,6 +2,43 @@ import type { Database } from "@/types/supabase";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
+function numFromData(v: unknown): number | null {
+  if (typeof v === "number" && !Number.isNaN(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (!Number.isNaN(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * Deep link for a notification row. Uses `job_id`, then `data.job_id` / `data.listing_id`
+ * (e.g. new bid stores listing id in `data` only). Dispute types append `#dispute`.
+ * Returns null when there is no in-app destination; otherwise a path starting with `/`.
+ */
+export function getNotificationHref(row: NotificationRow): string | null {
+  const data = row.data as Record<string, unknown> | null;
+  if (data?.admin_test === true) return "/notifications";
+
+  const listingFromData = data?.listing_id != null ? numFromData(data.listing_id) : null;
+  const jobFromData = data?.job_id != null ? numFromData(data.job_id) : null;
+  const jobFromRow = row.job_id != null ? Number(row.job_id) : null;
+  const targetId = jobFromRow ?? jobFromData ?? listingFromData;
+  if (targetId != null && !Number.isNaN(targetId)) {
+    const base = `/jobs/${targetId}`;
+    if (row.type === "dispute_opened" || row.type === "dispute_resolved") {
+      return `${base}#dispute`;
+    }
+    return base;
+  }
+  return null;
+}
+
+/** Same as {@link getNotificationHref} but falls back to `/dashboard` when nothing matches. */
+export function getNotificationHrefOrDashboard(row: NotificationRow): string {
+  return getNotificationHref(row) ?? "/dashboard";
+}
+
 function labelForType(type: NotificationRow["type"]): string {
   switch (type) {
     case "job_accepted":

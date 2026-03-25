@@ -46,6 +46,24 @@ function buildTemplates(): Record<EmailTemplateType, DefaultTemplate> {
       subject: "You're approved to start – Job #[JobId] – " + APP_NAME,
       body: "Hi {name},\n\nThe lister has approved the job. You can start the bond clean.\n\n**Job:** {listingTitle}\n**Job #:** [JobId]\n\n**What to do:**\n- Check the job for the address and cleaning checklist.\n- Use the chat to confirm the time and any access details.\n- Complete the checklist and upload after-photos when you're done.\n\n[View job and checklist](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
     },
+    job_approved_to_start: {
+      subject: "Go ahead — start Job #[JobId] – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "The lister has **approved the job to start**. You’re cleared to begin the bond clean.\n\n" +
+        "**Job:** {listingTitle}\n**Job #:** [JobId]\n\n" +
+        "**Next steps:**\n" +
+        "- Open the job for the property address and checklist.\n" +
+        "- Confirm timing in chat if needed.\n" +
+        "- Complete the work and upload after-photos when finished.\n\n" +
+        "[Start job & checklist](" +
+        APP_URL +
+        "/jobs/" +
+        PH_JOB +
+        ")\n\nThe " +
+        APP_NAME +
+        " team",
+    },
     job_completed: {
       subject: "Job #[JobId] complete – review & approve & release funds – " + APP_NAME,
       body: "Hi {name},\n\nThe cleaner has marked **Job #[JobId]** as complete and uploaded after-photos.\n\n**Next step:** Review the checklist and photos. If everything looks good, approve & release funds from escrow. You have 48 hours to review or open a dispute if needed.\n\n[View job & approve & release funds](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",

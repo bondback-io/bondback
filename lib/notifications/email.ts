@@ -17,13 +17,32 @@ import { Welcome } from "@/emails/Welcome";
 import { ListerTutorial } from "@/emails/ListerTutorial";
 import { CleanerTutorial } from "@/emails/CleanerTutorial";
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
+const resend = process.env.RESEND_API_KEY?.trim()
+  ? new Resend(process.env.RESEND_API_KEY.trim())
   : null;
 
 const FROM = process.env.RESEND_FROM ?? "Bond Back <onboarding@resend.dev>";
 const REPLY_TO = process.env.RESEND_REPLY_TO?.trim() || undefined;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+
+/** Log once per server process: Resend env (no secrets). Helps diagnose Vercel/local “no emails”. */
+let loggedResendEnvSnapshot = false;
+function logResendEnvSnapshotOnce(): void {
+  if (loggedResendEnvSnapshot) return;
+  loggedResendEnvSnapshot = true;
+  const hasKey = Boolean(process.env.RESEND_API_KEY?.trim());
+  console.info("[email:resend-env]", {
+    hasResendApiKey: hasKey,
+    from: FROM,
+    replyTo: REPLY_TO ?? null,
+    ...(hasKey
+      ? {}
+      : {
+          hint:
+            "Set RESEND_API_KEY in server env (Vercel → Project → Settings → Environment Variables). Without it, sendEmail returns ok:false for every attempt.",
+        }),
+  });
+}
 
 function maskEmailForLog(to: string): string {
   const at = to.indexOf("@");
@@ -31,8 +50,37 @@ function maskEmailForLog(to: string): string {
   return `${to.slice(0, Math.min(2, at))}***${to.slice(at)}`;
 }
 
+/** Structured console log for every Resend attempt (success, failure, or skip). Visible on Vercel runtime logs. */
+function logEmailAttempt(params: {
+  outcome: "sent" | "failed" | "skipped";
+  to: string;
+  subject: string;
+  kind?: string;
+  error?: string;
+  resendId?: string;
+  skipReason?: string;
+}): void {
+  const payload = {
+    outcome: params.outcome,
+    kind: params.kind ?? "—",
+    to: maskEmailForLog(params.to),
+    subject: params.subject.slice(0, 100),
+    from: FROM,
+    replyTo: REPLY_TO ?? null,
+    ...(params.resendId ? { resendId: params.resendId } : {}),
+    ...(params.error ? { error: params.error } : {}),
+    ...(params.skipReason ? { skipReason: params.skipReason } : {}),
+  };
+  if (params.outcome === "failed") {
+    console.error("[email:resend]", payload);
+  } else {
+    console.info("[email:resend]", payload);
+  }
+}
+
 export type NotificationType =
   | "job_accepted"
+  | "job_approved_to_start"
   | "new_message"
   | "job_completed"
   | "payment_released"
@@ -50,9 +98,13 @@ export type SendEmailOptions = {
 
 /**
  * Send a single email via Resend.
+ *
+ * **Env:** `RESEND_API_KEY` (required to send). `RESEND_FROM` — full From header, default
+ * `Bond Back <onboarding@resend.dev>` (Resend sandbox). `RESEND_REPLY_TO` — optional Reply-To.
+ * Every attempt logs to console as `[email:resend]` with outcome, kind, masked recipient, from/replyTo.
+ *
  * Skips sending (returns ok: true, skipped) if global_settings.emails_enabled is false.
  * No-op if RESEND_API_KEY is not set (returns ok: false).
- * Uses RESEND_FROM and optional RESEND_REPLY_TO.
  */
 export async function sendEmail(
   to: string,
@@ -60,11 +112,18 @@ export async function sendEmail(
   htmlContent: string,
   options?: SendEmailOptions
 ): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
+  logResendEnvSnapshotOnce();
   const { logEmailDelivery } = await import("@/lib/supabase/admin");
 
   if (!resend) {
     const err = "Resend not configured (missing RESEND_API_KEY)";
-    console.error("[email]", err, { to: maskEmailForLog(to), subject: subject.slice(0, 60) });
+    logEmailAttempt({
+      outcome: "failed",
+      to,
+      subject,
+      kind: options?.log?.kind,
+      error: err,
+    });
     if (options?.log) {
       await logEmailDelivery({
         userId: options.log.userId,
@@ -81,9 +140,12 @@ export async function sendEmail(
   const { getGlobalSettings } = await import("@/lib/actions/global-settings");
   const globalSettings = await getGlobalSettings();
   if (globalSettings?.emails_enabled === false) {
-    console.info("[email] skipped (emails_enabled=false)", {
-      to: maskEmailForLog(to),
-      kind: options?.log?.kind,
+    logEmailAttempt({
+      outcome: "skipped",
+      to,
+      subject,
+      kind: options?.log?.kind ?? "transactional",
+      skipReason: "global_settings.emails_enabled=false (Admin → Global settings)",
     });
     return { ok: true, skipped: true };
   }
@@ -105,7 +167,13 @@ export async function sendEmail(
 
     const { data, error } = await resend.emails.send(payload);
     if (error) {
-      console.error("[email] Resend error", error.message, { to: maskEmailForLog(to) });
+      logEmailAttempt({
+        outcome: "failed",
+        to,
+        subject,
+        kind: options?.log?.kind,
+        error: error.message,
+      });
       if (options?.log) {
         await logEmailDelivery({
           userId: options.log.userId,
@@ -118,9 +186,14 @@ export async function sendEmail(
       }
       return { ok: false, error: error.message };
     }
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[email] sent", { id: (data as { id?: string } | undefined)?.id, to: maskEmailForLog(to) });
-    }
+    const resendId = (data as { id?: string } | undefined)?.id;
+    logEmailAttempt({
+      outcome: "sent",
+      to,
+      subject,
+      kind: options?.log?.kind,
+      resendId,
+    });
     if (options?.log) {
       await logEmailDelivery({
         userId: options.log.userId,
@@ -133,7 +206,13 @@ export async function sendEmail(
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[email] send threw", msg, { to: maskEmailForLog(to) });
+    logEmailAttempt({
+      outcome: "failed",
+      to,
+      subject,
+      kind: options?.log?.kind,
+      error: msg,
+    });
     if (options?.log) {
       await logEmailDelivery({
         userId: options.log.userId,
@@ -238,6 +317,7 @@ export async function buildNotificationEmail(
     new_bid: `New bid on your listing – Bond Back`,
     job_created: `Your job has been accepted – start coordinating! – Bond Back`,
     job_accepted: `Lister approved – time to clean! – Bond Back`,
+    job_approved_to_start: `Go ahead — start Job #${id} – Bond Back`,
     job_completed: `Cleaner marked job complete – review & approve – Bond Back`,
     payment_released: (() => {
       const amt = parseAmountFromMessage(messageText);
@@ -268,6 +348,9 @@ export async function buildNotificationEmail(
       });
       break;
     case "job_accepted":
+      element = React.createElement(JobApproved, { jobId: idStr, messageText });
+      break;
+    case "job_approved_to_start":
       element = React.createElement(JobApproved, { jobId: idStr, messageText });
       break;
     case "job_completed":

@@ -8,7 +8,7 @@ export type ListerCardData = {
  * Batch-load lister profiles for live listing cards (Find Jobs feed, load-more).
  */
 export async function buildListerCardDataByListingId(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SSR vs admin Supabase clients use incompatible generics
+   
   supabase: any,
   listings: { id: string; lister_id: string }[]
 ): Promise<Record<string, ListerCardData>> {

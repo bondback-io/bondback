@@ -54,11 +54,6 @@ export default async function AdminUserDetailPage({
         .eq("id", session.user.id)
         .maybeSingle();
 
-  // eslint-disable-next-line no-console
-  console.log("Admin users query", {
-    isAdmin: (viewerProfile as { is_admin?: boolean } | null)?.is_admin,
-  });
-
   if (!viewerProfile || !(viewerProfile as { is_admin?: boolean }).is_admin) {
     redirect("/dashboard");
   }

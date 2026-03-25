@@ -76,9 +76,6 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
         .eq("id", session.user.id)
         .maybeSingle();
 
-  // eslint-disable-next-line no-console
-  console.log("Admin users query", { isAdmin: (profile as { is_admin?: boolean } | null)?.is_admin });
-
   if (!profile || !(profile as { is_admin?: boolean }).is_admin) {
     redirect("/dashboard");
   }
@@ -100,7 +97,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   ]);
 
   if (process.env.NODE_ENV !== "production") {
-    // eslint-disable-next-line no-console
+     
     console.log("[AdminUsersPage] profiles query", {
       error: profilesRes.error,
       errorCode: (profilesRes.error as { code?: string } | null)?.code,

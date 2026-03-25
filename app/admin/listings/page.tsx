@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +24,11 @@ import { LISTING_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
+
+/** PostgREST may return `listings.id` as string or number; normalize for consistent joins. */
+function listingIdKey(id: string | number): string {
+  return String(id);
+}
 
 interface AdminListingsPageProps {
   searchParams?: Promise<{
@@ -61,30 +68,36 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
   const q = (sp.q ?? "").trim().toLowerCase();
   const statusFilter = (sp.status ?? "all").toLowerCase();
 
-  const { data: listingsData } = await supabase
+  /** Service role bypasses RLS so admin can see all listings and lister names. */
+  const db = (createSupabaseAdminClient() ?? supabase) as SupabaseClient<Database>;
+
+  const { data: listingsData } = await db
     .from("listings")
     .select(LISTING_ADMIN_TABLE_SELECT)
     .order("created_at", { ascending: false });
 
-  const listings = (listingsData ?? []) as ListingRow[];
+  const rawListings = (listingsData ?? []) as ListingRow[];
+  const listings = Array.from(
+    new Map(rawListings.map((l) => [listingIdKey(l.id as string | number), l])).values()
+  );
 
   // Determine which listings have already been converted into jobs (assigned to a cleaner).
   const listingIds = listings.map((l) => l.id).filter((id) => id != null);
-  const assignedListingIds = new Set<string | number>();
-  const bidCountByListingId = new Map<string | number, number>();
+  const assignedListingIds = new Set<string>();
+  const bidCountByListingId = new Map<string, number>();
 
   if (listingIds.length > 0) {
     const [jobsRes, bidsRes] = await Promise.all([
-      supabase.from("jobs").select("listing_id").in("listing_id", listingIds),
-      supabase.from("bids").select("listing_id").in("listing_id", listingIds),
+      db.from("jobs").select("listing_id").in("listing_id", listingIds),
+      db.from("bids").select("listing_id").in("listing_id", listingIds),
     ]);
 
     (jobsRes.data ?? []).forEach((job: { listing_id: string | number | null }) => {
-      if (job.listing_id != null) assignedListingIds.add(job.listing_id);
+      if (job.listing_id != null) assignedListingIds.add(listingIdKey(job.listing_id));
     });
 
     (bidsRes.data ?? []).forEach((row: { listing_id: string | number }) => {
-      const lid = row.listing_id;
+      const lid = listingIdKey(row.listing_id);
       bidCountByListingId.set(lid, (bidCountByListingId.get(lid) ?? 0) + 1);
     });
   }
@@ -93,18 +106,15 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
   const profilesMap = new Map<string, { full_name: string | null }>();
 
   if (listerIds.length > 0) {
-    const { data: listers } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .in("id", listerIds);
-    (listers ?? []).forEach((p: any) => {
+    const { data: listers } = await db.from("profiles").select("id, full_name").in("id", listerIds);
+    (listers ?? []).forEach((p: { id: string; full_name: string | null }) => {
       profilesMap.set(p.id, { full_name: p.full_name });
     });
   }
 
   const filtered = listings.filter((listing) => {
     // Once a listing has an associated job (assigned to a cleaner), it appears in Jobs, not here.
-    if (assignedListingIds.has(listing.id)) {
+    if (assignedListingIds.has(listingIdKey(listing.id as string | number))) {
       return false;
     }
 
@@ -254,7 +264,7 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell text-right text-xs tabular-nums text-muted-foreground dark:text-gray-400">
-                          {bidCountByListingId.get(listing.id) ?? 0}
+                          {bidCountByListingId.get(listingIdKey(listing.id as string | number)) ?? 0}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-xs text-muted-foreground dark:text-gray-400 whitespace-nowrap">
                           {listing.created_at

@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { House, Briefcase, MessageCircle, User, List, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUnreadNewMessageCount } from "@/hooks/use-unread-new-message-count";
+import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
+import { clearMessagesUnreadForNav } from "@/lib/messages/clear-messages-unread-nav";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
 
@@ -94,6 +97,8 @@ function MessagesTabLink({
   userId: string | null;
   activeRole: Role;
 }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const unread = useUnreadNewMessageCount(userId, activeRole);
   const showBadge = unread > 0;
 
@@ -112,6 +117,12 @@ function MessagesTabLink({
           ? `Messages, ${unread} unread`
           : "Messages"
       }
+      onClick={async (e) => {
+        if (!userId?.trim()) return;
+        e.preventDefault();
+        await clearMessagesUnreadForNav(queryClient, userId);
+        router.push("/messages");
+      }}
     >
       <span className="relative inline-flex">
         <MessageCircle
@@ -234,14 +245,27 @@ export function MobileBottomNav({
     refreshActiveRole();
   }, [pathname, refreshActiveRole]);
 
+  const authRoleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      refreshActiveRole();
+      if (authRoleDebounceRef.current != null) {
+        clearTimeout(authRoleDebounceRef.current);
+      }
+      authRoleDebounceRef.current = setTimeout(() => {
+        authRoleDebounceRef.current = null;
+        void refreshActiveRole();
+      }, 280);
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (authRoleDebounceRef.current != null) {
+        clearTimeout(authRoleDebounceRef.current);
+      }
+    };
   }, [refreshActiveRole]);
 
   useEffect(() => {
@@ -273,6 +297,10 @@ export function MobileBottomNav({
 
   const effectiveRole =
     activeRole ?? storedRoleFallback ?? initialActiveRole ?? null;
+  const { data: notificationUnread = 0 } = useUnreadNotificationCount(
+    userId,
+    effectiveRole
+  );
   const inferred = inferSecondaryTabFromPath(currentPath);
   const secondaryTabHref =
     effectiveRole === "lister"
@@ -324,14 +352,26 @@ export function MobileBottomNav({
                 : "text-muted-foreground hover:text-foreground dark:hover:text-gray-200"
             )}
             aria-current={isItemActive(currentPath, "/dashboard") ? "page" : undefined}
+            aria-label={
+              notificationUnread > 0
+                ? `Dashboard, ${notificationUnread > 9 ? "9+" : notificationUnread} notifications`
+                : "Dashboard"
+            }
           >
-            <House
-              className={cn(
-                "h-7 w-7 shrink-0",
-                isItemActive(currentPath, "/dashboard") ? "stroke-[2.5]" : "stroke-[2]"
+            <span className="relative inline-flex">
+              <House
+                className={cn(
+                  "h-7 w-7 shrink-0",
+                  isItemActive(currentPath, "/dashboard") ? "stroke-[2.5]" : "stroke-[2]"
+                )}
+                aria-hidden
+              />
+              {notificationUnread > 0 && (
+                <span className="absolute -right-1 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-destructive-foreground shadow-sm ring-2 ring-background dark:ring-gray-950">
+                  {notificationUnread > 9 ? "9+" : notificationUnread}
+                </span>
               )}
-              aria-hidden
-            />
+            </span>
             <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
               Dashboard
             </span>

@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
-import { LandingHero } from "@/components/features/landing-hero";
-import { HowItWorks } from "@/components/features/how-it-works";
-import { FindJobsSearch } from "@/components/features/find-jobs-search";
+import Link from "next/link";
+import {
+  ArrowRight,
+  CheckCircle2,
+  ClipboardList,
+  HandCoins,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { AdminOnlyToast } from "@/components/admin/admin-only-toast";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Bond cleaning & end of lease cleaning marketplace",
@@ -19,90 +26,191 @@ export const metadata: Metadata = {
   },
 };
 
+const STEPS = [
+  {
+    title: "Post or discover",
+    body: "Renters list a bond clean; cleaners browse live jobs across Australia.",
+    icon: ClipboardList,
+  },
+  {
+    title: "Compare bids",
+    body: "Reverse-auction pricing — watch bids drop so you know you’re getting a fair deal.",
+    icon: HandCoins,
+  },
+  {
+    title: "Book with confidence",
+    body: "Choose your cleaner, coordinate in-app, and track the job to completion.",
+    icon: CheckCircle2,
+  },
+  {
+    title: "Pay securely",
+    body: "Stripe-backed payments with verified cleaners — built for peace of mind.",
+    icon: ShieldCheck,
+  },
+] as const;
+
 type HomePageProps = { searchParams?: Promise<{ error?: string }> };
 
 const HomePage = async ({ searchParams }: HomePageProps) => {
   const params = searchParams ? await searchParams : {};
   const showAdminOnlyToast = params.error === "admin_only";
   const supabase = await createServerSupabaseClient();
-
   const {
     data: { session },
   } = await supabase.auth.getSession();
-
   const isLoggedIn = !!session;
 
   return (
-    <main className="space-y-10 pb-16">
+    <main className="min-h-[85vh] bg-background pb-20 pt-6 dark:bg-gray-950 sm:pb-24 sm:pt-10 md:pt-14">
       {showAdminOnlyToast && <AdminOnlyToast />}
-      {/* 1. Hero */}
-      <section>
-        <LandingHero />
-      </section>
 
-      {/* 1.5 Search section */}
-      <section className="container">
-        <Card className="overflow-hidden border border-emerald-200/50 bg-gradient-to-br from-emerald-50/90 via-white to-sky-50/70 shadow-lg dark:border-gray-800 dark:from-gray-900 dark:via-gray-900 dark:to-gray-950">
-          <CardHeader className="gap-1 pb-2">
-            <CardTitle className="text-lg font-bold leading-snug md:text-2xl dark:text-gray-100">
-              {isLoggedIn
-                ? "Find bond cleans near you"
-                : "Login to browse jobs"}
-            </CardTitle>
-            <CardDescription className="text-sm dark:text-gray-400">
-              Suburb, distance, then search — like Airtasker.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-0">
-            <FindJobsSearch variant="home" defaultRadiusKm={20} />
-            <p className="text-xs text-muted-foreground dark:text-gray-400">
-              Or{" "}
-              <a
-                href="/listings/new"
-                className="font-semibold text-primary underline-offset-4 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
+      <div className="container max-w-5xl px-4 sm:px-6">
+        {/* Hero */}
+        <section
+          className={cn(
+            "relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-emerald-50/80 via-background to-background px-5 py-10 shadow-sm sm:rounded-3xl sm:px-10 sm:py-14 md:px-14 md:py-16",
+            "dark:border-gray-700/90 dark:bg-gradient-to-b dark:from-emerald-950/50 dark:via-gray-900/80 dark:to-gray-950 dark:shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
+          )}
+        >
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-950/90 dark:text-emerald-100">
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden />
+              Australia&apos;s bond clean marketplace
+            </p>
+            <h1 className="text-balance text-3xl font-bold leading-[1.15] tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl md:text-5xl">
+              Get your bond back with cleaner bids you can trust
+            </h1>
+            <p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-lg">
+              Post a bond clean or find paid work — simple pricing, verified cleaners, and secure
+              payments. Built for renters and cleaners, not clutter.
+            </p>
+
+            {/* Primary CTAs — large tap targets, vertical on narrow screens */}
+            <div className="mt-10 flex w-full flex-col gap-3 sm:mx-auto sm:max-w-lg sm:flex-row sm:items-stretch sm:justify-center sm:gap-4">
+              <Button
+                asChild
+                size="lg"
+                className="h-14 min-h-[52px] w-full rounded-xl text-base font-semibold shadow-sm sm:h-12 sm:min-h-[48px] sm:flex-1 sm:max-w-xs dark:shadow-emerald-900/40"
               >
-                list your clean →
-              </a>
+                <Link href="/listings/new">
+                  Post a Bond Clean
+                  <ArrowRight className="ml-2 h-5 w-5 shrink-0 opacity-90" aria-hidden />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className={cn(
+                  "h-14 min-h-[52px] w-full rounded-xl border-2 text-base font-semibold bg-background/80 backdrop-blur-sm sm:h-12 sm:min-h-[48px] sm:flex-1 sm:max-w-xs",
+                  "dark:border-emerald-500/45 dark:bg-gray-900/70 dark:text-gray-50 dark:hover:border-emerald-400/55 dark:hover:bg-emerald-950/40"
+                )}
+              >
+                <Link href="/jobs">
+                  Find Cleaning Jobs
+                  <ArrowRight className="ml-2 h-5 w-5 shrink-0 opacity-90" aria-hidden />
+                </Link>
+              </Button>
+            </div>
+
+            {/* Auth shortcuts */}
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+              {isLoggedIn ? (
+                <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                  You&apos;re signed in — ready when you are.
+                </p>
+              ) : (
+                <>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    className="h-12 min-h-[48px] w-full max-w-xs rounded-xl text-base font-medium text-foreground sm:w-auto sm:max-w-none dark:text-gray-100 dark:hover:bg-white/10 dark:hover:text-white"
+                  >
+                    <Link href="/login">Log in</Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="secondary"
+                    className="h-12 min-h-[48px] w-full max-w-xs rounded-xl text-base font-semibold sm:w-auto sm:max-w-none dark:border dark:border-gray-600 dark:bg-gray-800 dark:text-gray-50 dark:hover:bg-gray-700"
+                  >
+                    <Link href="/signup">Sign up</Link>
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <p className="mt-10 text-center text-xs leading-relaxed text-zinc-500 dark:text-zinc-400 sm:text-sm">
+              Secure payments · Verified cleaners · Australia-wide
             </p>
-            <p className="text-[11px] text-muted-foreground sm:text-xs dark:text-gray-500">
-              Secure payments • Verified cleaners • 48-hour protection
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section className="mt-16 sm:mt-20 md:mt-24" aria-labelledby="how-it-works-heading">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2
+              id="how-it-works-heading"
+              className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl"
+            >
+              How Bond Back works
+            </h2>
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300 sm:text-base">
+              Four steps from listing to payout — no noise, no jargon.
             </p>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* 1.5 Trust bar */}
-      <section className="border-y bg-muted/40 dark:border-gray-800 dark:bg-gray-900/50">
-        <div className="container flex flex-wrap items-center justify-between gap-4 py-4 text-xs text-muted-foreground sm:text-sm dark:text-gray-400">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
-              $
-            </span>
-            <span className="font-medium text-foreground dark:text-gray-100">Secure payments (Stripe-ready)</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-50 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300">
-              ✓
-            </span>
-            <span className="font-medium text-foreground dark:text-gray-100">Verified cleaners with ABNs</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
-              ★
-            </span>
-            <span className="font-medium text-foreground dark:text-gray-100">Ratings &amp; reviews coming soon</span>
-          </div>
-        </div>
-      </section>
 
-      {/* 2. How Bond Back Works */}
-      <section className="container">
-        <HowItWorks />
-      </section>
+          <ol className="mt-10 grid gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4 lg:gap-6">
+            {STEPS.map((step, i) => {
+              const Icon = step.icon;
+              return (
+                <li key={step.title}>
+                  <div
+                    className={cn(
+                      "flex h-full flex-col rounded-2xl border border-border/70 bg-card/50 p-4 sm:p-5",
+                      "dark:border-gray-700/70 dark:bg-gray-900/70 dark:shadow-sm dark:shadow-black/20"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-emerald-950/70 dark:text-emerald-300"
+                        aria-hidden
+                      >
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-emerald-400/90">
+                          Step {i + 1}
+                        </span>
+                        <h3 className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                          {step.title}
+                        </h3>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+                      {step.body}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
 
+        {/* Bottom trust strip — subtle, not busy */}
+        <section
+          className="mt-16 rounded-2xl border border-dashed border-border/80 bg-muted/30 px-5 py-6 text-center sm:mt-20 md:mt-24 dark:border-gray-600/60 dark:bg-gray-900/55"
+          aria-label="Trust and coverage"
+        >
+          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+            Built for Australian bond cleans
+          </p>
+          <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300 sm:text-sm">
+            Secure payments · Verified cleaners · Australia-wide
+          </p>
+        </section>
+      </div>
     </main>
   );
 };
 
 export default HomePage;
-

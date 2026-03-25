@@ -8,6 +8,7 @@ import { sendScheduledTutorialEmails } from "@/lib/actions/send-tutorial-emails"
  * When CRON_SECRET is unset (e.g. local dev), the endpoint runs without auth.
  */
 export async function GET(request: Request) {
+  console.info("[email:cron]", { route: "send-tutorial-emails", phase: "request" });
   const secret = process.env.CRON_SECRET;
   if (secret) {
     const authHeader = request.headers.get("authorization");

@@ -16,7 +16,7 @@ export default function GlobalError({
   const router = useRouter();
 
   useEffect(() => {
-    // eslint-disable-next-line no-console
+     
     console.error("Global app error:", error);
   }, [error]);
 

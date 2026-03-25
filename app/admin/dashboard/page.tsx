@@ -24,6 +24,7 @@ import {
   type AdminRevenueSummary,
 } from "@/components/admin/admin-revenue-chart";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminSendTestNotificationButton } from "@/components/admin/admin-send-test-notification-button";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getEffectivePayoutSchedule } from "@/lib/payout-schedule";
 import {
@@ -287,6 +288,19 @@ export default async function AdminDashboardPage() {
             disputes.
           </p>
         </CardHeader>
+      </Card>
+
+      <Card className="border-dashed border-amber-500/30 bg-amber-50/40 dark:border-amber-800/50 dark:bg-amber-950/20">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Notifications QA</CardTitle>
+          <p className="text-xs text-muted-foreground dark:text-gray-400">
+            Temporary: send a test in-app notification to your account (check bell and unread
+            count).
+          </p>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <AdminSendTestNotificationButton />
+        </CardContent>
       </Card>
 
       {error && (

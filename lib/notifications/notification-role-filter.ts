@@ -17,14 +17,21 @@ const CLEANER_ONLY_TYPES = new Set<NotificationRow["type"]>([
   "job_cancelled_by_lister",
 ]);
 
+/** Prefer `body` (persisted) then legacy `message_text` — must match SQL unread RPC. */
+export function notificationTextForRoleFilter(n: NotificationRow): string {
+  const b = (n.body ?? "").trim();
+  if (b) return b;
+  return (n.message_text ?? "").trim();
+}
+
 /**
  * `job_completed` is used for both parties; cleaner copy is only the lister-extended review message.
  */
 function jobCompletedVisibleForRole(
-  message: string,
+  n: NotificationRow,
   activeRole: "lister" | "cleaner"
 ): boolean {
-  const m = (message || "").toLowerCase();
+  const m = notificationTextForRoleFilter(n).toLowerCase();
   const isCleanerCopy = m.includes("the lister extended");
   if (activeRole === "cleaner") return isCleanerCopy;
   return !isCleanerCopy;
@@ -44,7 +51,7 @@ export function filterNotificationsForActiveRole(
     if (activeRole === "lister") {
       if (CLEANER_ONLY_TYPES.has(n.type)) return false;
       if (n.type === "job_completed") {
-        return jobCompletedVisibleForRole(n.message_text ?? "", "lister");
+        return jobCompletedVisibleForRole(n, "lister");
       }
       return true;
     }
@@ -52,7 +59,7 @@ export function filterNotificationsForActiveRole(
     if (LISTER_ONLY_TYPES.has(n.type)) return false;
     if (CLEANER_ONLY_TYPES.has(n.type)) return true;
     if (n.type === "job_completed") {
-      return jobCompletedVisibleForRole(n.message_text ?? "", "cleaner");
+      return jobCompletedVisibleForRole(n, "cleaner");
     }
     return true;
   });

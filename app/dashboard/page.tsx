@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
+import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -36,24 +37,5 @@ export default async function DashboardPage() {
 
   if (error || !profileData) redirect("/onboarding/role-choice");
 
-  const profile = profileData as ProfileRow;
-  const roles = (profile.roles as string[] | null) ?? [];
-  if (roles.length === 0) redirect("/onboarding/role-choice");
-
-  const activeRole =
-    (profile.active_role as string | null) ?? roles[0] ?? "lister";
-
-  if (roles.length === 1) {
-    if (roles.includes("cleaner")) redirect("/cleaner/dashboard");
-    redirect("/lister/dashboard");
-  }
-
-  // Dual-role: follow active role (same as header switcher)
-  if (activeRole === "cleaner" && roles.includes("cleaner")) {
-    redirect("/cleaner/dashboard");
-  }
-  if (roles.includes("lister")) {
-    redirect("/lister/dashboard");
-  }
-  redirect("/cleaner/dashboard");
+  redirect(getPostLoginDashboardPath(profileData as ProfileRow));
 }

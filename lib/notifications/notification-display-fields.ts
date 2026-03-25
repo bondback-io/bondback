@@ -4,6 +4,12 @@ export type NotificationPersistOptions = {
   listingId?: number;
   listingTitle?: string | null;
   amountCents?: number | null;
+  /** Override generated title (e.g. admin test notification). */
+  persistTitle?: string;
+  /** Override message_text-based body when persisting. */
+  persistBody?: string;
+  /** Marks row as an admin test; used for deep links and filtering. */
+  adminTest?: boolean;
 };
 
 /**
@@ -22,8 +28,9 @@ export function buildNotificationPersistFields(
   if (options?.listingTitle != null) data.listing_title = options.listingTitle;
   if (options?.amountCents != null) data.amount_cents = options.amountCents;
   if (options?.senderName != null) data.sender_name = options.senderName;
+  if (options?.adminTest) data.admin_test = true;
 
-  const body = messageText ?? "";
+  let body = messageText ?? "";
 
   let title: string;
   switch (type) {
@@ -66,6 +73,9 @@ export function buildNotificationPersistFields(
     default:
       title = "Update";
   }
+
+  if (options?.persistTitle?.trim()) title = options.persistTitle.trim();
+  if (options?.persistBody != null) body = String(options.persistBody);
 
   return { title, body, data };
 }

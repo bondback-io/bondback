@@ -393,7 +393,7 @@ export async function adminResetAllJobs(formData: FormData): Promise<void> {
     const fd = new FormData();
     fd.set("jobId", String(id));
     try {
-      // eslint-disable-next-line no-await-in-loop
+       
       await adminDeleteJob(fd);
     } catch {
       /* continue bulk reset */
