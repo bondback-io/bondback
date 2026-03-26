@@ -472,7 +472,8 @@ export function ChatWindow({
         ) : (
           messages.map((m, i) => {
             const isMe = m.sender_id === currentUserId;
-            const isListerSender = listerId && m.sender_id === listerId;
+            const isListerSender = Boolean(listerId && m.sender_id === listerId);
+            const senderRole = isListerSender ? "lister" : "cleaner";
             const senderLabel =
               (isListerSender
                 ? (listerName ?? "Lister").split(" ")[0]
@@ -498,9 +499,9 @@ export function ChatWindow({
                 showAvatar={showAvatar}
                 avatarUrl={avatarUrl}
                 senderLabel={senderLabel}
+                senderRole={senderRole}
                 isDelivered={isDelivered}
                 isRead={isRead}
-                accentRole={currentUserRole}
               />
             );
           })

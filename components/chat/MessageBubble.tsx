@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { Avatar } from "@/components/ui/avatar";
 import { Check, CheckCheck } from "lucide-react";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/types/supabase";
 
@@ -13,18 +14,19 @@ export type MessageBubbleProps = {
   isMe: boolean;
   showAvatar: boolean;
   avatarUrl: string | null;
+  /** First name (or short label) of the person who sent this message. */
   senderLabel: string;
+  /** Who sent this message — drives bubble colour (lister = blue, cleaner = green). */
+  senderRole: "lister" | "cleaner";
   /** Persisted on server (not optimistic). */
   isDelivered: boolean;
   /** Other party read this outgoing message. */
   isRead?: boolean;
-  /** Outgoing bubble: lister = blue, cleaner = green (matches chat shell). */
-  accentRole?: "lister" | "cleaner" | null;
 };
 
 /**
- * Messenger-style bubbles: theirs left + avatar, mine right + blue bubble.
- * Read receipts: single tick (sending) → double gray (delivered) → double blue (read).
+ * Lister messages = blue bubble, cleaner messages = green bubble.
+ * Read receipts: single tick (sending) → double (delivered) → double lighter (read).
  */
 export function MessageBubble({
   message,
@@ -32,12 +34,24 @@ export function MessageBubble({
   showAvatar,
   avatarUrl,
   senderLabel,
+  senderRole,
   isDelivered,
   isRead,
-  accentRole = null,
 }: MessageBubbleProps) {
   const imgUrl = message.image_url?.trim() || null;
-  const meGreen = accentRole === "cleaner";
+  const senderIsLister = senderRole === "lister";
+  const timeStr = format(new Date(message.created_at), "h:mm a");
+  const roleHint = senderIsLister ? "Lister" : "Cleaner";
+  const bubbleRounded = isMe ? "rounded-br-[6px]" : "rounded-bl-[6px]";
+  const bubbleColor = senderIsLister
+    ? cn(
+        bubbleRounded,
+        "bg-[#0084ff] text-white shadow-blue-500/20 dark:bg-sky-600"
+      )
+    : cn(
+        bubbleRounded,
+        "bg-emerald-600 text-white shadow-emerald-500/25 dark:bg-emerald-600"
+      );
 
   return (
     <div
@@ -53,7 +67,7 @@ export function MessageBubble({
         )}
       >
         {!isMe && showAvatar && (
-          <Avatar className="mt-1 h-10 w-10 shrink-0 border border-border/40 bg-muted shadow-sm dark:border-gray-600 sm:h-11 sm:w-11">
+          <Avatar className="mt-6 h-10 w-10 shrink-0 border border-border/40 bg-muted shadow-sm dark:border-gray-600 sm:h-11 sm:w-11">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -72,18 +86,41 @@ export function MessageBubble({
 
         <div
           className={cn(
-            "flex min-w-0 max-w-[88%] flex-col gap-0.5 sm:gap-1",
+            "flex min-w-0 max-w-[88%] flex-col gap-1 sm:gap-1.5",
             isMe ? "items-end" : "items-start"
           )}
         >
           <div
             className={cn(
+              "flex w-full max-w-full flex-wrap items-baseline gap-x-1.5 gap-y-0.5 px-0.5",
+              isMe ? "justify-end" : "justify-start"
+            )}
+          >
+            <span className="min-w-0 max-w-[min(100%,12rem)] truncate text-[11px] font-semibold leading-tight text-[#65676b] dark:text-gray-400 sm:max-w-[14rem]">
+              {isMe ? (
+                <>
+                  You
+                  <span className="ml-1 font-normal opacity-80">({roleHint})</span>
+                </>
+              ) : (
+                <>
+                  {senderLabel}
+                  <span className="ml-1 font-normal opacity-80">({roleHint})</span>
+                </>
+              )}
+            </span>
+            <time
+              dateTime={message.created_at}
+              className="shrink-0 text-[10px] tabular-nums text-[#8a8d91] dark:text-gray-500"
+            >
+              {timeStr}
+            </time>
+          </div>
+
+          <div
+            className={cn(
               "rounded-[20px] px-3.5 py-2.5 text-[15px] leading-snug shadow-sm sm:rounded-[24px] sm:px-[18px] sm:py-3",
-              isMe
-                ? meGreen
-                  ? "rounded-br-[6px] bg-emerald-600 text-white shadow-emerald-500/20 dark:bg-emerald-600"
-                  : "rounded-br-[6px] bg-[#0084ff] text-white shadow-blue-500/15"
-                : "rounded-bl-[6px] bg-[#e4e6eb] text-[#050505] dark:bg-[#303030] dark:text-[#f0f0f0]"
+              bubbleColor
             )}
           >
             {imgUrl && (
@@ -121,22 +158,17 @@ export function MessageBubble({
             )}
           </div>
 
-          <div
-            className={cn(
-              "flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground dark:text-gray-500",
-              isMe && "justify-end"
-            )}
-          >
-            {!isMe && (
-              <span className="font-medium text-foreground/80 dark:text-gray-400">
-                {senderLabel}
-              </span>
-            )}
-            {isMe && (
+          {isMe && (
+            <div
+              className={cn(
+                "flex items-center gap-1 px-0.5 text-[11px] text-[#65676b] dark:text-gray-500",
+                "justify-end"
+              )}
+            >
               <span className="inline-flex items-center gap-0.5" aria-hidden>
                 {!isDelivered ? (
                   <Check
-                    className="h-3.5 w-3.5 text-white/85"
+                    className="h-3.5 w-3.5 text-[#65676b] dark:text-gray-400"
                     strokeWidth={2.5}
                     aria-label="Sending"
                   />
@@ -144,21 +176,21 @@ export function MessageBubble({
                   <CheckCheck
                     className={cn(
                       "h-4 w-4",
-                      meGreen ? "text-emerald-200" : "text-sky-200"
+                      senderIsLister ? "text-sky-500 dark:text-sky-400" : "text-emerald-600 dark:text-emerald-400"
                     )}
                     strokeWidth={2.5}
                     aria-label="Read"
                   />
                 ) : (
                   <CheckCheck
-                    className="h-4 w-4 text-white/65"
+                    className="h-4 w-4 text-[#65676b] dark:text-gray-400"
                     strokeWidth={2.5}
                     aria-label="Delivered"
                   />
                 )}
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
