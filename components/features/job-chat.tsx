@@ -3,6 +3,7 @@
 import { Lock } from "lucide-react";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { cn } from "@/lib/utils";
+import { isPaymentReleasedForJob } from "@/lib/chat-unlock";
 
 export type JobChatMessengerProps = {
   jobTitle: string;
@@ -26,6 +27,8 @@ export type JobChatProps = {
   variant?: "default" | "compact";
   /** Extra classes on outer wrapper (e.g. full-bleed on mobile) */
   className?: string;
+  /** Set when `jobs.payment_released_at` is set — chat history visible, sending disabled. */
+  paymentReleasedAt?: string | null;
 };
 
 /**
@@ -46,7 +49,9 @@ export function JobChat({
   messenger,
   variant = "default",
   className,
+  paymentReleasedAt = null,
 }: JobChatProps) {
+  const readOnly = isPaymentReleasedForJob(paymentReleasedAt);
   const m = messenger ?? {
     jobTitle: "Bond clean job",
     agreedPriceLabel: "—",
@@ -97,6 +102,7 @@ export function JobChat({
         agreedPriceLabel={m.agreedPriceLabel}
         statusPillLabel={m.statusPillLabel}
         variant={variant}
+        readOnly={readOnly}
       />
     </section>
   );

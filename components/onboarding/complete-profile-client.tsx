@@ -2,52 +2,100 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { completeOnboardingFromSignup, type OnboardingDetailsInput } from "@/lib/actions/onboarding";
-import { getOnboardingRole, getOnboardingDetails, clearOnboarding } from "./onboarding-storage";
+import {
+  completeOnboardingFromSignup,
+  upsertMinimalProfileAfterSignup,
+  type OnboardingDetailsInput,
+} from "@/lib/actions/onboarding";
+import {
+  getOnboardingRole,
+  getOnboardingDetails,
+  clearOnboarding,
+  PENDING_MINIMAL_PROFILE_KEY,
+} from "./onboarding-storage";
 
+/**
+ * After email confirmation:
+ * 1) Main `/signup` pending minimal profile → upsert → `/onboarding/role-choice` (same as desktop; mobile-friendly).
+ * 2) `/onboarding/*` flow with role+details → `completeOnboardingFromSignup` → `/dashboard`.
+ * 3) Otherwise → `/onboarding/role-choice` immediately (no 2s delay).
+ */
 export function CompleteProfileClient() {
   const router = useRouter();
-  const [status, setStatus] = useState<"loading" | "done" | "missing">("loading");
+  const [hint, setHint] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
+      // 1) Airtasker-style signup: name/postcode in localStorage (may be missing on mobile in-app browsers)
+      try {
+        const raw =
+          typeof window !== "undefined" ? window.localStorage.getItem(PENDING_MINIMAL_PROFILE_KEY) : null;
+        if (raw) {
+          const payload = JSON.parse(raw) as {
+            full_name?: string;
+            postcode?: string | null;
+            referralCode?: string | null;
+          };
+          if (payload?.full_name?.trim()) {
+            const result = await upsertMinimalProfileAfterSignup({
+              full_name: payload.full_name,
+              postcode: payload.postcode ?? null,
+              referralCode: payload.referralCode ?? null,
+            });
+            if (!cancelled && result.ok) {
+              try {
+                window.localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
+              } catch {
+                /* ignore */
+              }
+              router.replace("/onboarding/role-choice");
+              return;
+            }
+            if (!cancelled && !result.ok) {
+              setHint(result.error ?? null);
+            }
+          }
+        }
+      } catch {
+        try {
+          window.localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
+
       const role = getOnboardingRole();
       const details = getOnboardingDetails();
-      if (!role || !details?.full_name?.trim()) {
-        if (!cancelled) setStatus("missing");
-        return;
+      if (role && details?.full_name?.trim()) {
+        const result = await completeOnboardingFromSignup(role, details as OnboardingDetailsInput);
+        if (!cancelled && result.ok) {
+          clearOnboarding();
+          router.replace("/dashboard");
+          return;
+        }
+        if (!cancelled && !result.ok) {
+          setHint(result.error ?? null);
+        }
       }
-      const result = await completeOnboardingFromSignup(role, details as OnboardingDetailsInput);
-      if (!cancelled && result.ok) {
-        clearOnboarding();
-        router.replace("/dashboard");
-        return;
+
+      if (!cancelled) {
+        router.replace("/onboarding/role-choice");
       }
-      if (!cancelled) setStatus("missing");
     })();
     return () => {
       cancelled = true;
     };
   }, [router]);
 
-  useEffect(() => {
-    if (status !== "missing") return;
-    const t = setTimeout(() => router.replace("/onboarding/role-choice"), 2000);
-    return () => clearTimeout(t);
-  }, [status, router]);
-
-  if (status === "missing") {
-    return (
-      <p className="text-center text-sm text-muted-foreground dark:text-gray-400">
-        No onboarding data found. Redirecting to role choice…
-      </p>
-    );
-  }
-
   return (
-    <p className="text-center text-sm text-muted-foreground dark:text-gray-400">
-      Completing your profile…
-    </p>
+    <div className="mx-auto max-w-md space-y-2 text-center">
+      <p className="text-sm text-muted-foreground dark:text-gray-400">
+        Completing sign-in…
+      </p>
+      {hint ? (
+        <p className="text-xs text-destructive dark:text-red-300">{hint}</p>
+      ) : null}
+    </div>
   );
 }

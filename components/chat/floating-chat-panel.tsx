@@ -151,6 +151,7 @@ export function FloatingChatPanel() {
                         autoReleaseAt: selected.autoReleaseAt,
                       }),
                     }}
+                    paymentReleasedAt={selected.paymentReleasedAt}
                   />
                 )}
               </div>

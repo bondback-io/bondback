@@ -34,8 +34,8 @@ import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
-
-const PENDING_PROFILE_KEY = "bondback_pending_minimal_profile";
+import { useToast } from "@/components/ui/use-toast";
+import { PENDING_MINIMAL_PROFILE_KEY } from "@/components/onboarding/onboarding-storage";
 
 const signupSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -53,6 +53,7 @@ type SignupValues = z.infer<typeof signupSchema>;
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const refParam = searchParams.get("ref")?.trim() || null;
 
   const [error, setError] = useState<string | null>(null);
@@ -122,14 +123,18 @@ function SignupForm() {
       }
 
       try {
-        localStorage.setItem(PENDING_PROFILE_KEY, JSON.stringify(pendingPayload));
+        localStorage.setItem(PENDING_MINIMAL_PROFILE_KEY, JSON.stringify(pendingPayload));
       } catch {
         /* ignore quota */
       }
 
-      setInfo(
-        "We sent a confirmation link. After you verify your email and log in, continue to choose Lister or Cleaner."
-      );
+      const confirmMsg =
+        "We sent a confirmation link. After you verify your email and log in, continue to choose Lister or Cleaner.";
+      setInfo(confirmMsg);
+      toast({
+        title: "Check your email",
+        description: confirmMsg,
+      });
     } finally {
       setSubmitting(false);
     }

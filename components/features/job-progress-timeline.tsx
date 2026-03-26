@@ -64,7 +64,7 @@ export function JobProgressTimeline({
       title: "Work in progress",
       done: inProgressOrLater,
       hintLister:
-        "The cleaner is working through the checklist. Coordinate on Messages if needed.",
+        "The cleaner will be required to work through a checklist. Coordinate on Messages if needed.",
       hintCleaner:
         "Work through the checklist on this page. Upload photos as you go.",
     },

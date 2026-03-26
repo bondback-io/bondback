@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, useCallback, useMemo, type ChangeEvent } from "react";
+import { useEffect, useState, useRef, useTransition, useCallback, useMemo, type ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { scheduleRouterAction } from "@/lib/deferred-router";
@@ -238,6 +238,18 @@ export function JobDetail({
   const [localJobStatus, setLocalJobStatus] = useState<string | null>(
     jobStatus ?? (hasActiveJob ? "accepted" : null)
   );
+  /**
+   * `useState` only uses the initial value on mount. After "Accept bid", `router.refresh()`
+   * delivers `hasActiveJob` + `jobStatus` from the server but `localJobStatus` stayed null,
+   * so Pay & Start Job never appeared until a full reload. Sync when a job first appears.
+   */
+  const prevHasActiveJobRef = useRef(hasActiveJob);
+  useEffect(() => {
+    if (prevHasActiveJobRef.current === false && hasActiveJob === true) {
+      setLocalJobStatus(jobStatus ?? "accepted");
+    }
+    prevHasActiveJobRef.current = hasActiveJob;
+  }, [hasActiveJob, jobStatus]);
   const [cancellingJob, setCancellingJob] = useState(false);
   const [showCancelJobDialog, setShowCancelJobDialog] = useState(false);
   const [showCancelListingDialog, setShowCancelListingDialog] = useState(false);
@@ -292,6 +304,7 @@ export function JobDetail({
     async (bid: BidWithBidder) => {
       const result = await acceptBid(listingId, bid.cleaner_id, bid.amount_cents);
       if (result.ok) {
+        setLocalJobStatus("accepted");
         toast({ title: "Bid accepted", description: "Job created. Pay & Start Job to hold funds in escrow and start the job." });
         scheduleRouterAction(() => router.refresh());
       } else {

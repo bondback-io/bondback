@@ -38,6 +38,7 @@ type Conversation = {
   autoReleaseAt: string | null;
   cleanerConfirmedComplete: boolean;
   hasPaymentHold: boolean;
+  paymentReleasedAt: string | null;
 };
 
 type ChatPanelState = {
@@ -168,6 +169,7 @@ export function ChatPanelProvider({
           auto_release_at?: string | null;
           cleaner_confirmed_complete?: boolean | null;
           payment_intent_id?: string | null;
+          payment_released_at?: string | null;
         };
         return {
           jobId: job.id as number,
@@ -197,6 +199,7 @@ export function ChatPanelProvider({
           autoReleaseAt: jr.auto_release_at ?? null,
           cleanerConfirmedComplete: jr.cleaner_confirmed_complete === true,
           hasPaymentHold: !!jr.payment_intent_id?.trim(),
+          paymentReleasedAt: jr.payment_released_at?.trim() ?? null,
         };
       });
 

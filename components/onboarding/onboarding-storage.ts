@@ -4,6 +4,8 @@
 
 export const ONBOARDING_ROLE_KEY = "bondback_onboarding_role";
 export const ONBOARDING_DETAILS_KEY = "bondback_onboarding_details";
+/** Main `/signup` flow: name + postcode before email confirm (synced on role-choice or complete-profile). */
+export const PENDING_MINIMAL_PROFILE_KEY = "bondback_pending_minimal_profile";
 /** Referral code from ?ref= (stored before signup). */
 export const ONBOARDING_REFERRAL_KEY = "bondback_referral_code";
 

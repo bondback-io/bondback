@@ -18,6 +18,8 @@ export type MessageBubbleProps = {
   isDelivered: boolean;
   /** Other party read this outgoing message. */
   isRead?: boolean;
+  /** Outgoing bubble: lister = blue, cleaner = green (matches chat shell). */
+  accentRole?: "lister" | "cleaner" | null;
 };
 
 /**
@@ -32,8 +34,10 @@ export function MessageBubble({
   senderLabel,
   isDelivered,
   isRead,
+  accentRole = null,
 }: MessageBubbleProps) {
   const imgUrl = message.image_url?.trim() || null;
+  const meGreen = accentRole === "cleaner";
 
   return (
     <div
@@ -68,15 +72,17 @@ export function MessageBubble({
 
         <div
           className={cn(
-            "flex min-w-0 max-w-[88%] flex-col gap-1",
+            "flex min-w-0 max-w-[88%] flex-col gap-0.5 sm:gap-1",
             isMe ? "items-end" : "items-start"
           )}
         >
           <div
             className={cn(
-              "rounded-[22px] px-4 py-3 text-[15px] leading-snug shadow-sm sm:rounded-[24px] sm:px-[18px] sm:py-[14px]",
+              "rounded-[20px] px-3.5 py-2.5 text-[15px] leading-snug shadow-sm sm:rounded-[24px] sm:px-[18px] sm:py-3",
               isMe
-                ? "rounded-br-[6px] bg-[#0084ff] text-white shadow-blue-500/15"
+                ? meGreen
+                  ? "rounded-br-[6px] bg-emerald-600 text-white shadow-emerald-500/20 dark:bg-emerald-600"
+                  : "rounded-br-[6px] bg-[#0084ff] text-white shadow-blue-500/15"
                 : "rounded-bl-[6px] bg-[#e4e6eb] text-[#050505] dark:bg-[#303030] dark:text-[#f0f0f0]"
             )}
           >
@@ -136,7 +142,10 @@ export function MessageBubble({
                   />
                 ) : isRead ? (
                   <CheckCheck
-                    className="h-4 w-4 text-sky-200"
+                    className={cn(
+                      "h-4 w-4",
+                      meGreen ? "text-emerald-200" : "text-sky-200"
+                    )}
                     strokeWidth={2.5}
                     aria-label="Read"
                   />

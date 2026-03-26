@@ -3,7 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { createNotification } from "@/lib/actions/notifications";
-import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
+import { canSendJobChatMessages } from "@/lib/chat-unlock";
 
 type JobMessageInsert =
   Database["public"]["Tables"]["job_messages"]["Insert"];
@@ -174,7 +174,7 @@ export async function sendJobMessage(
   // Ensure the user is a participant on the job (lister or winner)
   const { data: job } = await supabase
     .from("jobs")
-    .select("id, lister_id, winner_id, status, payment_intent_id")
+    .select("id, lister_id, winner_id, status, payment_intent_id, payment_released_at")
     .eq("id", jobId)
     .maybeSingle();
 
@@ -190,6 +190,7 @@ export async function sendJobMessage(
     winner_id: string | null;
     status: string;
     payment_intent_id?: string | null;
+    payment_released_at?: string | null;
   };
 
   if (![j.lister_id, j.winner_id].includes(session.user.id)) {
@@ -199,10 +200,20 @@ export async function sendJobMessage(
     };
   }
 
-  // Chat unlocks only after lister has paid into escrow and work is underway or later
-  // (in_progress or higher — not while job is merely accepted).
-  const status = j.status ?? "";
-  if (!isChatUnlockedForJobStatus(status)) {
+  // Messaging stops once payment has been released to the cleaner (read-only thread after that).
+  if (
+    !canSendJobChatMessages({
+      status: j.status,
+      payment_released_at: j.payment_released_at ?? null,
+    })
+  ) {
+    if (j.payment_released_at?.trim()) {
+      return {
+        ok: false,
+        error:
+          "Payment has been released for this job. The chat is read-only — you can still read the history above.",
+      };
+    }
     return {
       ok: false,
       error:

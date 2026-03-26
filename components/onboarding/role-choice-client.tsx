@@ -37,12 +37,11 @@ import { useRouter } from "next/navigation";
 import { Home, Brush } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { saveRoleChoice, upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
+import { PENDING_MINIMAL_PROFILE_KEY } from "@/components/onboarding/onboarding-storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
 import { cn } from "@/lib/utils";
-
-const PENDING_PROFILE_KEY = "bondback_pending_minimal_profile";
 
 export function RoleChoiceClient() {
   const router = useRouter();
@@ -68,7 +67,7 @@ export function RoleChoiceClient() {
 
       let raw: string | null = null;
       try {
-        raw = localStorage.getItem(PENDING_PROFILE_KEY);
+        raw = localStorage.getItem(PENDING_MINIMAL_PROFILE_KEY);
       } catch {
         if (!cancelled) setSyncing(false);
         return;
@@ -88,14 +87,14 @@ export function RoleChoiceClient() {
               referralCode: payload.referralCode ?? null,
             });
             try {
-              localStorage.removeItem(PENDING_PROFILE_KEY);
+              localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
             } catch {
               /* ignore */
             }
           }
         } catch {
           try {
-            localStorage.removeItem(PENDING_PROFILE_KEY);
+            localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
           } catch {
             /* ignore */
           }

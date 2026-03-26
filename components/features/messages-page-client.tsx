@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/types/supabase";
@@ -16,6 +17,8 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 export type Conversation = {
   jobId: number;
+  /** Listing id for `/jobs/[id]` (job detail accepts listing or job id). */
+  listingId: string | null;
   jobStatus: string | null;
   listingTitle: string | null;
   listingSuburb: string | null;
@@ -34,6 +37,8 @@ export type Conversation = {
   autoReleaseAt: string | null;
   cleanerConfirmedComplete: boolean;
   hasPaymentHold: boolean;
+  /** When set, chat is read-only (funds released to cleaner). */
+  paymentReleasedAt: string | null;
 };
 
 type MessagesPageClientProps = {
@@ -98,9 +103,13 @@ export function MessagesPageClient({
           auto_release_at?: string | null;
           cleaner_confirmed_complete?: boolean | null;
           payment_intent_id?: string | null;
+          payment_released_at?: string | null;
         };
         return {
           jobId: job.id as number,
+          listingId:
+            (job.listing_id != null ? String(job.listing_id) : null) ??
+            (listing?.id != null ? String(listing.id) : null),
           jobStatus: job.status ?? null,
           listingTitle: listing?.title ?? null,
           listingSuburb: listing?.suburb ?? null,
@@ -127,6 +136,7 @@ export function MessagesPageClient({
           autoReleaseAt: jr.auto_release_at ?? null,
           cleanerConfirmedComplete: jr.cleaner_confirmed_complete === true,
           hasPaymentHold: !!jr.payment_intent_id?.trim(),
+          paymentReleasedAt: jr.payment_released_at?.trim() ?? null,
         };
       }),
     [jobs, listingById, latestByJob, profileById, currentUserId]
@@ -143,19 +153,19 @@ export function MessagesPageClient({
   const selected = conversations.find((c) => c.jobId === selectedJobId) ?? null;
 
   return (
-    <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+    <div className="flex flex-col gap-2.5 lg:flex-row lg:gap-3">
       {/* Conversation list — compact, mobile-first */}
-      <div className="flex w-full max-h-[min(42vh,320px)] flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-gradient-to-b from-slate-50/95 to-white shadow-sm dark:border-slate-800 dark:from-slate-950 dark:to-slate-900/95 lg:max-h-none lg:w-[min(100%,20rem)] lg:shrink-0 xl:w-[22rem]">
-        <div className="shrink-0 border-b border-slate-200/80 px-3 py-2 dark:border-slate-800">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <div className="flex w-full max-h-[min(38vh,300px)] flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-gradient-to-b from-slate-50/95 to-white shadow-sm dark:border-slate-800 dark:from-slate-950 dark:to-slate-900/95 lg:max-h-none lg:w-[min(100%,19rem)] lg:shrink-0 xl:w-[21rem]">
+        <div className="shrink-0 border-b border-slate-200/80 px-3 py-1.5 dark:border-slate-800">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Chats
           </p>
           <p className="hidden text-[10px] leading-snug text-slate-500 dark:text-slate-500 sm:block">
-            Tap a job to open messages. Completed jobs are in the section below.
+            Tap a thread to message. Completed jobs are below.
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2 py-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 py-1.5 sm:px-2">
           {activeConvos.length > 0 && (
             <div className="space-y-1">
               <p className="px-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-400/90">
@@ -203,68 +213,75 @@ export function MessagesPageClient({
                   }
                 }
 
-                let progressLabel: string | null = null;
-                if (c.jobStatus === "accepted") progressLabel = "1/5";
-                else if (c.jobStatus === "in_progress") progressLabel = "2/5";
-                else if (c.jobStatus === "completed") progressLabel = "5/5";
-
                 const initial = (titleLine.trim().charAt(0) || "?").toUpperCase();
+                const jobHref = `/jobs/${encodeURIComponent(c.listingId ?? String(c.jobId))}`;
 
                 return (
-                  <button
+                  <div
                     key={c.jobId}
-                    type="button"
-                    onClick={() => setSelectedJobId(c.jobId)}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition",
+                      "overflow-hidden rounded-lg border transition",
                       isSelected
                         ? "border-sky-400/80 bg-sky-50 dark:border-sky-500/50 dark:bg-sky-950/50"
                         : "border-transparent bg-white/50 hover:bg-slate-100/90 dark:bg-transparent dark:hover:bg-slate-800/70"
                     )}
                   >
-                    <div
-                      className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white shadow-sm",
-                        isSelected
-                          ? "bg-gradient-to-br from-sky-500 to-blue-600"
-                          : "bg-gradient-to-br from-slate-400 to-slate-600 dark:from-slate-500 dark:to-slate-700"
-                      )}
-                      aria-hidden
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJobId(c.jobId)}
+                      className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
                     >
-                      {initial}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-1">
-                        <p className="truncate text-[13px] font-semibold leading-tight text-slate-900 dark:text-slate-100">
-                          {titleLine}
-                          {roleLabel ? (
-                            <span className="font-normal text-slate-500 dark:text-slate-400">
-                              {" "}
-                              · {roleLabel}
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-sm sm:h-9 sm:w-9 sm:text-[11px]",
+                          isSelected
+                            ? "bg-gradient-to-br from-sky-500 to-blue-600"
+                            : "bg-gradient-to-br from-slate-400 to-slate-600 dark:from-slate-500 dark:to-slate-700"
+                        )}
+                        aria-hidden
+                      >
+                        {initial}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-1">
+                          <p className="truncate text-[12px] font-semibold leading-tight text-slate-900 dark:text-slate-100 sm:text-[13px]">
+                            {titleLine}
+                            {roleLabel ? (
+                              <span className="font-normal text-slate-500 dark:text-slate-400">
+                                {" "}
+                                · {roleLabel}
+                              </span>
+                            ) : null}
+                          </p>
+                          {relativeLabel && (
+                            <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
+                              {relativeLabel}
                             </span>
-                          ) : null}
-                        </p>
-                        {relativeLabel && (
-                          <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
-                            {relativeLabel}
-                          </span>
+                          )}
+                        </div>
+                        <p className="truncate text-[10px] text-slate-600 dark:text-slate-400 sm:text-[11px]">{jobLine}</p>
+                        {loc && (
+                          <p className="truncate text-[9px] text-slate-400 dark:text-slate-500 sm:text-[10px]">{loc}</p>
+                        )}
+                        {c.lastMessageText && (
+                          <p className="mt-0.5 line-clamp-1 text-[10px] italic text-slate-500 dark:text-slate-400">
+                            {c.lastMessageText}
+                          </p>
                         )}
                       </div>
-                      <p className="truncate text-[11px] text-slate-600 dark:text-slate-400">{jobLine}</p>
-                      {loc && (
-                        <p className="truncate text-[10px] text-slate-400 dark:text-slate-500">{loc}</p>
+                    </button>
+                    <Link
+                      href={jobHref}
+                      className={cn(
+                        "flex min-h-[40px] touch-manipulation items-center justify-center border-t px-2 py-1.5 text-[11px] font-semibold no-underline transition active:bg-black/[0.04] dark:active:bg-white/[0.06]",
+                        isCurrentUserLister
+                          ? "border-sky-200/80 bg-sky-100/60 text-sky-800 hover:bg-sky-100 dark:border-sky-800/60 dark:bg-sky-950/40 dark:text-sky-200 dark:hover:bg-sky-950/70"
+                          : "border-emerald-200/80 bg-emerald-50/70 text-emerald-900 hover:bg-emerald-100/80 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-100 dark:hover:bg-emerald-950/50"
                       )}
-                      {(progressLabel || c.lastMessageText) && (
-                        <p className="mt-0.5 line-clamp-1 text-[10px] text-sky-600 dark:text-sky-400/90">
-                          {progressLabel && <span>Progress {progressLabel}</span>}
-                          {progressLabel && c.lastMessageText && " · "}
-                          {c.lastMessageText && (
-                            <span className="italic text-slate-500 dark:text-slate-400">{c.lastMessageText}</span>
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  </button>
+                    >
+                      View job
+                    </Link>
+                  </div>
                 );
               })}
             </div>
@@ -355,6 +372,7 @@ export function MessagesPageClient({
                 autoReleaseAt: selected.autoReleaseAt,
               }),
             }}
+            paymentReleasedAt={selected.paymentReleasedAt}
           />
         )}
       </div>

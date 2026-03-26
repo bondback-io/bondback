@@ -16,9 +16,11 @@ import {
   getPendingReferralCode,
   setPendingReferralCode,
 } from "@/components/onboarding/onboarding-storage";
+import { useToast } from "@/components/ui/use-toast";
 
 function OnboardingSignupInner() {
   const router = useRouter();
+  const { toast } = useToast();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -94,7 +96,7 @@ function OnboardingSignupInner() {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?flow=onboarding`,
         },
       });
 
@@ -125,9 +127,13 @@ function OnboardingSignupInner() {
         return;
       }
 
-      setMessage(
-        "Check your email to confirm your account. After confirming, you'll be signed in and taken to your dashboard."
-      );
+      const confirmMsg =
+        "Check your email to confirm your account. After confirming, you'll be signed in and we'll finish your profile.";
+      setMessage(confirmMsg);
+      toast({
+        title: "Check your email",
+        description: confirmMsg,
+      });
     } finally {
       setLoading(false);
     }

@@ -16,7 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { MyListingsList } from "@/components/features/my-listings-list";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Briefcase } from "lucide-react";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -250,25 +250,25 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
 
   const tabPill = (isActive: boolean) =>
     cn(
-      "inline-flex min-h-[44px] shrink-0 snap-start items-center justify-center whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-[0.98] sm:min-h-0 sm:px-3.5 sm:py-2 sm:text-sm",
+      "touch-manipulation inline-flex min-h-[48px] shrink-0 snap-start items-center justify-center whitespace-nowrap rounded-full px-3.5 py-2.5 text-[13px] font-semibold leading-tight transition-all duration-200 active:scale-[0.98] sm:min-h-0 sm:px-3.5 sm:py-2 sm:text-sm",
       isActive
-        ? "bg-background text-foreground shadow-md ring-1 ring-emerald-500/25 dark:bg-gray-800 dark:text-gray-100 dark:ring-emerald-500/20"
+        ? "bg-background text-foreground shadow-md ring-2 ring-emerald-500/35 dark:bg-gray-800 dark:text-gray-100 dark:ring-emerald-500/25"
         : "border border-transparent bg-muted/80 text-muted-foreground hover:border-emerald-500/30 hover:bg-emerald-50/90 hover:text-foreground dark:bg-gray-800/80 dark:text-gray-400 dark:hover:border-emerald-500/25 dark:hover:bg-gray-800 dark:hover:text-gray-100"
     );
 
   return (
-    <section className="page-inner space-y-6 pb-28 sm:pb-8 md:space-y-6">
-      {/* Mobile: sticky title row + thumb-sized primary action; aligns with lister dashboard / browse-cleaners */}
-      <div className="sticky top-0 z-30 -mx-4 space-y-3 border-b border-border bg-background/95 px-4 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+    <section className="page-inner space-y-5 pb-28 pt-4 sm:space-y-6 sm:pb-8 sm:pt-8 md:space-y-6">
+      {/* Mobile: sticky chrome + safe-area; desktop: static */}
+      <div className="sticky top-0 z-30 -mx-4 space-y-3 border-b border-border bg-background/95 px-4 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur supports-[backdrop-filter]:bg-background/85 dark:border-gray-800 dark:bg-gray-950/95 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:pt-0 md:backdrop-blur-none">
         <Link
           href={dashboardHref}
-          className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-100"
+          className="inline-flex min-h-[44px] touch-manipulation items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-100"
         >
           <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
           Back to dashboard
         </Link>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div className="min-w-0 space-y-1">
+          <div className="min-w-0 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-balance text-xl font-bold tracking-tight text-foreground dark:text-gray-50 sm:text-2xl md:text-3xl">
                 My listings
@@ -283,71 +283,103 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
               </Badge>
             </div>
             <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground dark:text-gray-400 sm:text-base">
+              Auctions, jobs, payments and history — optimised for phone use.
+            </p>
+            <p className="hidden text-sm text-muted-foreground sm:block dark:text-gray-400">
               Manage bond clean auctions, active jobs, payments and history in one place.
             </p>
+            <Link
+              href="/my-listings/jobs"
+              className="inline-flex min-h-[40px] touch-manipulation items-center gap-2 rounded-lg text-sm font-semibold text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400 sm:hidden"
+            >
+              <Briefcase className="h-4 w-4 shrink-0" aria-hidden />
+              Open job list view
+            </Link>
           </div>
           <Button
             asChild
             size="lg"
-            className="h-12 min-h-[48px] w-full shrink-0 rounded-2xl text-base font-semibold shadow-md sm:h-11 sm:w-auto sm:rounded-lg"
+            className="h-12 min-h-[48px] w-full shrink-0 touch-manipulation rounded-2xl text-base font-semibold shadow-md sm:h-11 sm:w-auto sm:rounded-lg"
           >
             <Link href="/listings/new">New listing</Link>
           </Button>
         </div>
       </div>
 
-      <Card className="overflow-hidden border-emerald-200/60 bg-gradient-to-br from-emerald-50/90 via-white to-sky-50/50 shadow-md dark:border-gray-800 dark:from-emerald-950/30 dark:via-gray-950 dark:to-sky-950/20">
-        <CardHeader className="space-y-1 pb-2 pt-5 sm:pt-4">
-          <CardTitle className="text-lg font-bold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
-            Listings &amp; jobs
-          </CardTitle>
-          <CardDescription className="text-base leading-relaxed dark:text-gray-400 sm:text-sm">
-            Choose a tab — swipe sideways on your phone to see every filter.
+      <Card className="overflow-hidden border-emerald-200/60 bg-gradient-to-br from-emerald-50/90 via-white to-sky-50/50 shadow-md dark:border-gray-800 dark:from-emerald-950/30 dark:via-gray-950 dark:to-sky-950/20 sm:rounded-xl">
+        <CardHeader className="space-y-2 px-4 pb-2 pt-4 sm:px-6 sm:pt-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <CardTitle className="text-lg font-bold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
+              Listings &amp; jobs
+            </CardTitle>
+            <Link
+              href="/my-listings/jobs"
+              className="hidden shrink-0 touch-manipulation items-center gap-1.5 text-sm font-semibold text-emerald-700 underline-offset-4 hover:underline sm:inline-flex dark:text-emerald-400"
+            >
+              <Briefcase className="h-4 w-4" aria-hidden />
+              Job list view
+            </Link>
+          </div>
+          <CardDescription className="text-sm leading-relaxed dark:text-gray-400 sm:text-sm">
+            <span className="md:hidden">Swipe the tabs below — more filters off-screen.</span>
+            <span className="hidden md:inline">Choose a tab to filter your listings and jobs.</span>
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5 pt-0 sm:space-y-6">
-          <nav
-            className="-mx-1 flex gap-2 overflow-x-auto scroll-pl-3 pb-1 pt-0.5 [scrollbar-width:none] snap-x snap-mandatory sm:snap-none [&::-webkit-scrollbar]:hidden"
-            aria-label="Listings and jobs"
-          >
-            <Link
-              href="/my-listings?tab=active_listings"
-              className={tabPill(tab === "active_listings")}
-              scroll={false}
+        <CardContent className="space-y-4 px-0 pt-0 sm:space-y-6 sm:px-6">
+          <div className="relative px-4 sm:px-0">
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-8 bg-gradient-to-r from-emerald-50 via-emerald-50/95 to-transparent dark:from-gray-950 dark:via-gray-950/95 sm:hidden"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-8 bg-gradient-to-l from-emerald-50 via-emerald-50/95 to-transparent dark:from-gray-950 dark:via-gray-950/95 sm:hidden"
+              aria-hidden
+            />
+            <nav
+              className="-mx-1 flex gap-2 overflow-x-auto scroll-pl-4 scroll-pr-4 pb-1 pt-0.5 [scrollbar-width:none] snap-x snap-mandatory sm:snap-none sm:scroll-pl-0 sm:scroll-pr-0 [&::-webkit-scrollbar]:hidden"
+              aria-label="Listings and jobs"
             >
-              Active ({activeCount})
-            </Link>
-            <Link
-              href="/my-listings?tab=completed_jobs"
-              className={tabPill(tab === "completed_jobs")}
-              scroll={false}
-            >
-              Completed ({completedCount})
-            </Link>
-            <Link
-              href="/my-listings?tab=pending_payments"
-              className={tabPill(tab === "pending_payments")}
-              scroll={false}
-            >
-              Pending pay ({pendingPaymentsCount})
-            </Link>
-            <Link
-              href="/my-listings?tab=cancelled_listings"
-              className={tabPill(tab === "cancelled_listings")}
-              scroll={false}
-            >
-              History ({completedCancelledExpiredTabCount})
-            </Link>
-            <Link
-              href="/my-listings?tab=disputes"
-              className={tabPill(tab === "disputes")}
-              scroll={false}
-            >
-              Disputes ({disputesCount})
-            </Link>
-          </nav>
+              <Link
+                href="/my-listings?tab=active_listings"
+                className={tabPill(tab === "active_listings")}
+                scroll={false}
+              >
+                Active ({activeCount})
+              </Link>
+              <Link
+                href="/my-listings?tab=completed_jobs"
+                className={tabPill(tab === "completed_jobs")}
+                scroll={false}
+              >
+                <span className="sm:hidden">Done ({completedCount})</span>
+                <span className="hidden sm:inline">Completed ({completedCount})</span>
+              </Link>
+              <Link
+                href="/my-listings?tab=pending_payments"
+                className={tabPill(tab === "pending_payments")}
+                scroll={false}
+              >
+                <span className="sm:hidden">Pay ({pendingPaymentsCount})</span>
+                <span className="hidden sm:inline">Pending pay ({pendingPaymentsCount})</span>
+              </Link>
+              <Link
+                href="/my-listings?tab=cancelled_listings"
+                className={tabPill(tab === "cancelled_listings")}
+                scroll={false}
+              >
+                History ({completedCancelledExpiredTabCount})
+              </Link>
+              <Link
+                href="/my-listings?tab=disputes"
+                className={tabPill(tab === "disputes")}
+                scroll={false}
+              >
+                Disputes ({disputesCount})
+              </Link>
+            </nav>
+          </div>
 
-          <div className="rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm dark:border-gray-800 dark:bg-gray-950/60 sm:p-4 md:p-5">
+          <div className="mx-4 rounded-2xl border border-border/60 bg-background/90 p-3 shadow-sm dark:border-gray-800 dark:bg-gray-950/70 sm:mx-0 sm:rounded-xl sm:p-4 md:p-5">
             <MyListingsList
               initialListings={initialListings}
               listerId={session.user.id}

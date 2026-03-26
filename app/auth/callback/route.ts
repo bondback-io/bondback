@@ -9,6 +9,8 @@ export const GET = async (request: NextRequest) => {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
   const next = sanitizeInternalNextPath(searchParams.get("next"), "/dashboard");
+  /** `airtasker` = main `/signup`; `onboarding` = `/onboarding/signup` (role+details before account). */
+  const signupFlow = searchParams.get("flow");
 
   if (code) {
     const supabase = await createServerSupabaseClient();
@@ -19,7 +21,14 @@ export const GET = async (request: NextRequest) => {
         const provider = session.user.app_metadata?.provider;
         if (provider === "google") {
           const meta = session.user.user_metadata ?? {};
+          const givenName =
+            typeof meta.given_name === "string" ? meta.given_name.trim() : "";
+          const familyName =
+            typeof meta.family_name === "string" ? meta.family_name.trim() : "";
+          const combinedGivenFamily =
+            `${givenName} ${familyName}`.trim();
           const fullName =
+            combinedGivenFamily ||
             (typeof meta.full_name === "string" && meta.full_name.trim()) ||
             (typeof meta.name === "string" && meta.name.trim()) ||
             session.user.email?.split("@")[0] ||
@@ -55,10 +64,13 @@ export const GET = async (request: NextRequest) => {
         const hasNoRole = roles.length === 0;
         let redirectTo = next;
         if (hasNoRole && (next === "/dashboard" || next === "/onboarding/role-choice")) {
+          // Main signup (email confirm): go straight to role choice — matches Google OAuth and avoids
+          // complete-profile when mobile email clients open the link in a context without localStorage.
+          // Legacy `/onboarding/signup` (details already filled) uses ?flow=onboarding → complete-profile.
           redirectTo =
-            provider === "google"
-              ? "/onboarding/role-choice"
-              : "/onboarding/complete-profile";
+            signupFlow === "onboarding"
+              ? "/onboarding/complete-profile"
+              : "/onboarding/role-choice";
         } else if (!hasNoRole && next === "/dashboard") {
           /** Skip extra `/dashboard` hop — go straight to lister/cleaner home (faster, fewer full reloads). */
           redirectTo = getPostLoginDashboardPath(p);

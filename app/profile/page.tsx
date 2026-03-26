@@ -373,13 +373,13 @@ const ProfilePage = async ({
       )}
 
       <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100">
-        <CardHeader className="space-y-1 !p-0 px-3 pt-6 pb-2 sm:px-6">
-          <CardTitle className="text-xl dark:text-gray-100">Account settings</CardTitle>
-          <CardDescription className="text-base dark:text-gray-400">
+        <CardHeader className="space-y-2.5 !p-0 px-4 pt-7 pb-4 sm:px-6 sm:pt-6 sm:pb-5">
+          <CardTitle className="text-xl leading-snug dark:text-gray-100">Account settings</CardTitle>
+          <CardDescription className="text-base leading-relaxed text-muted-foreground dark:text-gray-400">
             Personal details, roles, notifications, payments, security, and help — all in one place.
           </CardDescription>
         </CardHeader>
-        <CardContent className="px-3 pb-4 pt-0 sm:p-6">
+        <CardContent className="px-4 pb-6 pt-0 sm:px-6 sm:pb-6">
           <MyAccountSections
             initialAccordion={initialAccordion}
             profile={profile}

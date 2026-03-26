@@ -10,7 +10,8 @@ import { VerificationBadges } from "@/components/shared/verification-badges";
 import { Flame, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const HERO = "relative h-[200px] w-full min-h-[180px] max-h-[220px] overflow-hidden bg-muted dark:bg-gray-800";
+const HERO =
+  "relative h-[min(46vw,220px)] w-full min-h-[150px] max-h-[220px] overflow-hidden bg-muted sm:h-[200px] sm:min-h-[180px] dark:bg-gray-800";
 
 export type MyListingsCardMobileProps = {
   listingId: string | number;
@@ -76,7 +77,7 @@ export function MyListingsCardMobile({
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-md dark:border-gray-700 dark:bg-gray-950",
+        "flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-lg ring-1 ring-black/[0.04] dark:border-gray-700 dark:bg-gray-950 dark:ring-white/[0.06]",
         cardClassName
       )}
     >
@@ -119,10 +120,21 @@ export function MyListingsCardMobile({
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 border-t border-border px-4 pb-5 pt-4 dark:border-gray-800">
+      <div className="flex flex-col gap-3.5 border-t border-border px-4 pb-5 pt-4 dark:border-gray-800 sm:gap-4">
         {showCountdown && endTime && (
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
-            <CountdownTimer endTime={endTime} expiredLabel="Ended" className="tabular-nums" />
+          <div
+            className="flex items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2.5 text-sm font-semibold text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="text-xs font-bold uppercase tracking-wide text-amber-800/90 dark:text-amber-200/90">
+              Auction ends
+            </span>
+            <CountdownTimer
+              endTime={endTime}
+              expiredLabel="Ended"
+              className="tabular-nums text-base font-bold text-amber-900 dark:text-amber-50"
+            />
           </div>
         )}
 
@@ -130,12 +142,12 @@ export function MyListingsCardMobile({
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
             {priceLabel}
           </p>
-          <p className="text-4xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
+          <p className="text-3xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400 sm:text-4xl">
             {priceDisplay}
           </p>
           <div
             className={cn(
-              "inline-flex max-w-full flex-wrap items-center gap-2 rounded-xl border-2 px-3 py-2 text-base font-bold leading-tight",
+              "inline-flex max-w-full flex-wrap items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm font-bold leading-snug sm:text-base",
               statusPillClassName
             )}
           >
@@ -143,25 +155,31 @@ export function MyListingsCardMobile({
           </div>
         </div>
 
-        <p className="line-clamp-2 text-base font-semibold leading-snug text-foreground dark:text-gray-100">{title}</p>
-        <p className="text-base text-muted-foreground dark:text-gray-400">{locationLine}</p>
-        <p className="text-base text-muted-foreground dark:text-gray-500">{bedsBathsLine}</p>
+        <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-foreground dark:text-gray-100 sm:text-base">
+          {title}
+        </p>
+        <p className="text-sm text-muted-foreground dark:text-gray-400 sm:text-base">{locationLine}</p>
+        <p className="text-sm text-muted-foreground dark:text-gray-500 sm:text-base">{bedsBathsLine}</p>
 
         {children}
 
-        <div className="flex flex-col gap-3 pt-1">
+        <div className="flex flex-col gap-2.5 pt-1 sm:gap-3">
           {showRelist && onRelist && (
             <Button
               type="button"
               size="lg"
-              className="min-h-12 w-full rounded-xl text-base font-semibold shadow-md"
+              className="min-h-[48px] w-full touch-manipulation rounded-xl text-base font-semibold shadow-md active:scale-[0.98]"
               disabled={relistLoading}
               onClick={onRelist}
             >
               {relistLoading ? "Relisting…" : "Relist"}
             </Button>
           )}
-          <Button asChild size="lg" className="min-h-12 w-full rounded-xl text-base font-semibold shadow-md">
+          <Button
+            asChild
+            size="lg"
+            className="min-h-[48px] w-full touch-manipulation rounded-xl text-base font-semibold shadow-md active:scale-[0.98]"
+          >
             <Link href={primaryHref} className="flex items-center justify-center gap-2">
               <Eye className="h-5 w-5 shrink-0" aria-hidden />
               {primaryLabel}
@@ -171,8 +189,8 @@ export function MyListingsCardMobile({
             <Button
               asChild
               size="lg"
-              variant="secondary"
-              className="min-h-12 w-full rounded-xl text-base font-semibold dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+              variant="outline"
+              className="min-h-[48px] w-full touch-manipulation rounded-xl border-2 text-base font-semibold active:scale-[0.98] dark:border-gray-600 dark:bg-transparent dark:hover:bg-gray-800"
             >
               <Link href={secondaryHref}>{secondaryLabel}</Link>
             </Button>
@@ -182,7 +200,7 @@ export function MyListingsCardMobile({
               type="button"
               variant="outline"
               size="lg"
-              className="min-h-12 w-full rounded-xl border-2 border-amber-400/60 text-base font-semibold text-amber-900 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-100 dark:hover:bg-amber-950/40"
+              className="min-h-[48px] w-full touch-manipulation rounded-xl border-2 border-amber-400/60 text-base font-semibold text-amber-900 hover:bg-amber-50 active:scale-[0.98] dark:border-amber-600 dark:text-amber-100 dark:hover:bg-amber-950/40"
               onClick={onCancel}
             >
               Cancel listing

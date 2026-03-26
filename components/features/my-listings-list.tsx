@@ -3,7 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Briefcase, ImagePlus, MessageCircle, Gavel } from "lucide-react";
+import {
+  Briefcase,
+  ImagePlus,
+  MessageCircle,
+  Gavel,
+  ChevronDown,
+  ClipboardList,
+  Inbox,
+} from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
   Card,
@@ -152,6 +160,7 @@ export function MyListingsList({
   const [cancelListingTarget, setCancelListingTarget] = useState<ListingRow | null>(null);
   const [cancellingListing, setCancellingListing] = useState(false);
   const [relistingId, setRelistingId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const openedForEditIdRef = useRef<string | null>(null);
 
   const supabase = createBrowserSupabaseClient();
@@ -886,7 +895,11 @@ export function MyListingsList({
             coverUrl={coverUrl}
             listerVerificationBadges={listerVerificationBadges}
             showHot={showHotMobile}
-            showCountdown={false}
+            showCountdown={
+              isLive &&
+              listing.status === "live" &&
+              parseUtcTimestamp(String(listing.end_time ?? "")) > Date.now()
+            }
             endTime={listing.end_time}
             statusPill={mobileStatusPill}
             statusPillClassName={mobileStatusPillClass}
@@ -1348,36 +1361,42 @@ export function MyListingsList({
   return (
     <>
       {listings.length === 0 ? (
-        <Card className="mx-auto max-w-xl border-dashed bg-card/80 text-center shadow-md">
-          <CardHeader className="space-y-3">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/40">
-              <ImagePlus className="h-6 w-6 text-emerald-600 dark:text-emerald-200" />
+        <Card className="mx-auto max-w-xl overflow-hidden border-dashed border-emerald-200/80 bg-gradient-to-b from-emerald-50/50 to-card text-center shadow-md dark:border-emerald-900/40 dark:from-emerald-950/30 dark:to-card">
+          <CardHeader className="space-y-4 px-5 pb-2 pt-8 sm:px-6">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 shadow-inner dark:bg-emerald-900/50">
+              <ImagePlus className="h-8 w-8 text-emerald-700 dark:text-emerald-200" />
             </div>
-            <CardTitle className="text-lg dark:text-gray-100">
-              Start listing your bond cleans today!
+            <CardTitle className="text-balance text-xl font-bold tracking-tight dark:text-gray-100">
+              Start listing your bond cleans
             </CardTitle>
-            <CardDescription>
-              Create your first listing in a few quick steps and let cleaners bid to help you get your bond back.
+            <CardDescription className="text-base leading-relaxed sm:text-sm">
+              Create a listing in minutes — cleaners bid, you choose, and you track the job here.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Button asChild size="sm" className="rounded-full px-6 text-sm font-semibold">
-              <Link href="/listings/new">Create your first bond clean listing</Link>
+          <CardContent className="space-y-4 px-5 pb-8 sm:px-6">
+            <Button
+              asChild
+              size="lg"
+              className="min-h-12 w-full touch-manipulation rounded-xl text-base font-semibold shadow-md sm:w-auto sm:rounded-full sm:px-8"
+            >
+              <Link href="/listings/new">Create your first listing</Link>
             </Button>
-            <p className="text-xs text-muted-foreground">
-              You can manage all your future listings and jobs from this dashboard.
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Everything you post appears under Active — jobs, payments and history use the tabs above.
             </p>
           </CardContent>
         </Card>
       ) : (
         <>
           {viewTab === "active_listings" && liveListingsWithBids.length > 0 && (
-            <div className="space-y-2">
-              <h2 className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50/80 px-3 py-1.5 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
-                <Gavel className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
-                Live Listing Auctions
+            <div className="space-y-3">
+              <h2 className="flex items-center gap-2.5 rounded-xl border border-amber-200/90 bg-gradient-to-r from-amber-50 to-amber-50/40 px-4 py-3 text-sm font-bold tracking-tight text-amber-950 shadow-sm dark:border-amber-800/80 dark:from-amber-950/50 dark:to-amber-950/20 dark:text-amber-50 sm:py-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 dark:bg-amber-400/10">
+                  <Gavel className="h-4 w-4 text-amber-800 dark:text-amber-200" aria-hidden />
+                </span>
+                <span className="min-w-0 leading-snug">Live auctions (bids in)</span>
               </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                 {liveListingsWithBids.map((listing) => renderCard(listing, "live"))}
               </div>
             </div>
@@ -1394,11 +1413,11 @@ export function MyListingsList({
                 aria-labelledby="lister-active-jobs-heading"
                 className="overflow-hidden rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/95 via-white to-sky-50/55 shadow-md ring-1 ring-emerald-500/15 dark:border-emerald-800/70 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25"
               >
-                <header className="border-b border-emerald-200/70 bg-emerald-600/[0.07] px-4 py-3.5 sm:px-5 sm:py-4 dark:border-emerald-800/55 dark:bg-emerald-500/10">
+                <header className="border-b border-emerald-200/70 bg-emerald-600/[0.07] px-4 py-4 sm:px-5 sm:py-4 dark:border-emerald-800/55 dark:bg-emerald-500/10">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <div className="flex min-w-0 gap-3">
+                    <div className="flex min-w-0 gap-3.5">
                       <div
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm dark:bg-emerald-500"
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md ring-2 ring-emerald-500/25 dark:bg-emerald-500"
                         aria-hidden
                       >
                         <Briefcase className="h-5 w-5" />
@@ -1407,7 +1426,7 @@ export function MyListingsList({
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <h2
                             id="lister-active-jobs-heading"
-                            className="text-base font-bold tracking-tight text-emerald-950 dark:text-emerald-50 sm:text-lg"
+                            className="text-lg font-bold tracking-tight text-emerald-950 dark:text-emerald-50 sm:text-lg"
                           >
                             Active jobs
                           </h2>
@@ -1417,7 +1436,10 @@ export function MyListingsList({
                           </span>
                         </div>
                         <p className="text-sm leading-relaxed text-emerald-900/85 dark:text-emerald-200/90">
-                          Purchased or won — track progress, message your cleaner, and finish any payment steps.
+                          <span className="md:hidden">Track progress, message your cleaner, pay when ready.</span>
+                          <span className="hidden md:inline">
+                            Purchased or won — track progress, message your cleaner, and finish any payment steps.
+                          </span>
                         </p>
                       </div>
                     </div>
@@ -1434,39 +1456,76 @@ export function MyListingsList({
             </div>
           )}
           {viewTab === "active_listings" && noBidLiveListings.length > 0 && (
-            <div className="mt-6 space-y-2">
-              <h2 className="text-sm font-semibold text-muted-foreground">
+            <div className="mt-6 space-y-3">
+              <h2 className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm font-bold text-foreground dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-100 sm:py-2">
+                <ClipboardList className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                 New listings (no bids yet)
               </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                 {noBidLiveListings.map((listing) => renderCard(listing, "live"))}
               </div>
             </div>
           )}
           {viewTab === "active_listings" && endedListingsForHistory.length > 0 && (
-            <div className="mt-6 space-y-2">
-              <details className="space-y-2">
-                <summary className="cursor-pointer text-sm font-semibold text-muted-foreground">
-                  Completed/Cancelled/Expired (history)
-                </summary>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {endedListingsForHistory.map((listing) =>
-                    renderCard(listing, "ended")
-                  )}
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((o) => !o)}
+                className="flex w-full touch-manipulation items-center justify-between gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3.5 text-left transition-colors hover:bg-muted/70 active:scale-[0.99] dark:border-gray-800 dark:bg-gray-900/30 dark:hover:bg-gray-900/50 sm:hidden"
+                aria-expanded={historyOpen}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-foreground dark:text-gray-100">
+                    History on this tab
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground dark:text-gray-400">
+                    {endedListingsForHistory.length} older listing
+                    {endedListingsForHistory.length === 1 ? "" : "s"} — tap to expand
+                  </div>
                 </div>
-              </details>
+                <ChevronDown
+                  className={cn(
+                    "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
+                    historyOpen && "rotate-180"
+                  )}
+                  aria-hidden
+                />
+              </button>
+              <h2 className="hidden items-center gap-2 text-sm font-bold text-muted-foreground sm:flex">
+                <ClipboardList className="h-4 w-4 shrink-0" aria-hidden />
+                Older listings &amp; ended auctions
+              </h2>
+              <div
+                className={cn(
+                  "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3",
+                  !historyOpen && "hidden sm:grid"
+                )}
+              >
+                {endedListingsForHistory.map((listing) =>
+                  renderCard(listing, "ended")
+                )}
+              </div>
+              <p className="px-0.5 text-xs text-muted-foreground dark:text-gray-500 sm:hidden">
+                Tip: full cancelled &amp; expired history is under the History tab.
+              </p>
             </div>
           )}
           {viewTab === "completed_jobs" && (
             <div className="space-y-2">
               {completedListings.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/30 py-8 text-center dark:bg-gray-800/30">
-                  <p className="text-sm font-medium text-foreground dark:text-gray-100">
-                    No completed jobs yet.
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-12 text-center dark:border-gray-800 dark:bg-gray-900/25">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/15">
+                    <Inbox className="h-7 w-7 text-emerald-700 dark:text-emerald-300" aria-hidden />
+                  </div>
+                  <p className="text-base font-semibold text-foreground dark:text-gray-100">
+                    No completed jobs yet
+                  </p>
+                  <p className="max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                    When a cleaner finishes and payment clears, completed jobs appear here.
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                   {completedListings.map((listing) =>
                     renderCard(listing, "completed")
                   )}
@@ -1477,13 +1536,19 @@ export function MyListingsList({
           {viewTab === "pending_payments" && (
             <div className="space-y-2">
               {pendingPaymentsListings.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/30 py-8 text-center dark:bg-gray-800/30">
-                  <p className="text-sm font-medium text-foreground dark:text-gray-100">
-                    No pending payments.
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-12 text-center dark:border-gray-800 dark:bg-gray-900/25">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 dark:bg-amber-500/15">
+                    <ClipboardList className="h-7 w-7 text-amber-800 dark:text-amber-200" aria-hidden />
+                  </div>
+                  <p className="text-base font-semibold text-foreground dark:text-gray-100">
+                    Nothing waiting for payment
+                  </p>
+                  <p className="max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                    When a cleaner marks work complete, review and pay from the job or here.
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                   {pendingPaymentsListings.map((listing) =>
                     renderCard(listing, "active")
                   )}
@@ -1494,13 +1559,19 @@ export function MyListingsList({
           {viewTab === "disputes" && (
             <div className="space-y-2">
               {disputedListings.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/30 py-8 text-center dark:bg-gray-800/30">
-                  <p className="text-sm font-medium text-foreground dark:text-gray-100">
-                    No disputes.
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-12 text-center dark:border-gray-800 dark:bg-gray-900/25">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-500/10 dark:bg-sky-500/15">
+                    <Briefcase className="h-7 w-7 text-sky-800 dark:text-sky-200" aria-hidden />
+                  </div>
+                  <p className="text-base font-semibold text-foreground dark:text-gray-100">
+                    No open disputes
+                  </p>
+                  <p className="max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                    If something goes wrong on a job, resolution tools live on the job page.
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                   {disputedListings.map((listing) =>
                     renderCard(listing, "active")
                   )}
@@ -1511,13 +1582,19 @@ export function MyListingsList({
           {viewTab === "cancelled_listings" && (
             <div className="space-y-2">
               {cancelledListings.length === 0 && expiredListingsOnly.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/30 py-8 text-center dark:bg-gray-800/30">
-                  <p className="text-sm font-medium text-foreground dark:text-gray-100">
-                    No completed, cancelled or expired listings yet.
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-12 text-center dark:border-gray-800 dark:bg-gray-900/25">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-500/10 dark:bg-slate-500/15">
+                    <ClipboardList className="h-7 w-7 text-slate-700 dark:text-slate-200" aria-hidden />
+                  </div>
+                  <p className="text-base font-semibold text-foreground dark:text-gray-100">
+                    No history yet
+                  </p>
+                  <p className="max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                    Cancelled jobs, expired auctions and past listings show up here.
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                   {expiredListingsOnly.map((listing) =>
                     renderCard(listing, "ended")
                   )}

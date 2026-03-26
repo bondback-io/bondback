@@ -29,6 +29,8 @@ export type ChatWindowProps = {
   statusPillLabel: string;
   /** Compact height for floating panel */
   variant?: "default" | "compact";
+  /** After payment released to cleaner — history visible, composer disabled. */
+  readOnly?: boolean;
 };
 
 function isOptimisticId(id: number): boolean {
@@ -92,6 +94,7 @@ export function ChatWindow({
   agreedPriceLabel,
   statusPillLabel,
   variant = "default",
+  readOnly = false,
 }: ChatWindowProps) {
   const supabase = createBrowserSupabaseClient();
   const { toast } = useToast();
@@ -260,6 +263,7 @@ export function ChatWindow({
   }, [currentUserId, currentUserRole, cleanerName, listerName]);
 
   const handleSend = async () => {
+    if (readOnly) return;
     setError(null);
     if (isOffline) {
       toast({
@@ -302,6 +306,7 @@ export function ChatWindow({
   };
 
   const handlePhotoSelected = async (files: FileList | null) => {
+    if (readOnly) return;
     const file = files?.[0];
     if (!file || isOffline) {
       if (isOffline) {
@@ -379,39 +384,81 @@ export function ChatWindow({
 
   const heightClass =
     variant === "compact"
-      ? "min-h-[280px] max-h-[55vh] sm:max-h-[60vh]"
-      : "min-h-[min(100dvh,800px)] sm:min-h-[560px]";
+      ? "min-h-[260px] max-h-[52vh] sm:max-h-[58vh]"
+      : "min-h-[min(92dvh,720px)] sm:min-h-[520px]";
+
+  const isListerRole = currentUserRole === "lister";
+  const isCleanerRole = currentUserRole === "cleaner";
+  const shellBg = isListerRole
+    ? "bg-gradient-to-b from-sky-100/90 via-sky-50/50 to-[#e0edff] dark:from-slate-950 dark:via-slate-950 dark:to-slate-900"
+    : isCleanerRole
+      ? "bg-gradient-to-b from-emerald-100/85 via-emerald-50/40 to-[#d8f5e5]/90 dark:from-emerald-950/50 dark:via-slate-950 dark:to-emerald-950/20"
+      : "bg-[#f0f2f5] dark:bg-[#18191a]";
+  const headerBar = isListerRole
+    ? "border-sky-200/90 bg-white/95 dark:border-sky-900/50 dark:bg-slate-900/95"
+    : isCleanerRole
+      ? "border-emerald-200/80 bg-white/95 dark:border-emerald-900/40 dark:bg-emerald-950/35"
+      : "border-[#e5e5e5] bg-white dark:border-slate-800 dark:bg-[#242526]";
+  const priceAccent = isCleanerRole
+    ? "text-emerald-700 dark:text-emerald-300"
+    : "text-[#0084ff] dark:text-sky-400";
+  const pillAccent = isCleanerRole
+    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200"
+    : "bg-[#e7f3ff] text-[#0084ff] dark:bg-sky-950/80 dark:text-sky-300";
 
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden bg-[#f0f2f5] shadow-lg",
-        "dark:bg-[#18191a] dark:shadow-black/40",
-        "sm:rounded-2xl sm:border sm:border-[#e5e5e5] dark:sm:border-slate-800",
+        "flex flex-col overflow-hidden shadow-lg dark:shadow-black/40",
+        shellBg,
+        "sm:rounded-2xl sm:border dark:sm:border-slate-800",
+        isListerRole && "sm:border-sky-200/70 dark:sm:border-sky-800/60",
+        isCleanerRole && "sm:border-emerald-200/70 dark:sm:border-emerald-800/50",
+        !isListerRole && !isCleanerRole && "sm:border-[#e5e5e5]",
         heightClass
       )}
     >
-      {/* Job header — Messenger-style top bar */}
-      <header className="sticky top-0 z-10 shrink-0 border-b border-[#e5e5e5] bg-white px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-[#242526] sm:px-4 sm:py-3.5">
-        <div className="mx-auto flex max-w-3xl items-start justify-between gap-3">
+      {/* Job header — compact top bar */}
+      <header
+        className={cn(
+          "sticky top-0 z-10 shrink-0 border-b px-3 py-2 shadow-sm sm:px-4 sm:py-2.5",
+          headerBar
+        )}
+      >
+        <div className="mx-auto flex max-w-3xl items-start justify-between gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="line-clamp-2 text-base font-bold leading-tight tracking-tight text-[#050505] dark:text-gray-100 sm:text-[17px]">
+            <h2 className="line-clamp-2 text-[15px] font-bold leading-tight tracking-tight text-[#050505] dark:text-gray-100 sm:text-[17px]">
               {jobTitle}
             </h2>
-            <p className="mt-1 text-[15px] font-semibold text-[#0084ff] dark:text-sky-400">
+            <p className={cn("mt-0.5 text-[14px] font-semibold sm:text-[15px]", priceAccent)}>
               {agreedPriceLabel}
             </p>
           </div>
-          <span className="max-w-[42%] shrink-0 rounded-full bg-[#e7f3ff] px-2.5 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-[#0084ff] dark:bg-sky-950/80 dark:text-sky-300 sm:max-w-none sm:px-3 sm:text-[11px] sm:normal-case sm:tracking-normal">
+          <span
+            className={cn(
+              "max-w-[44%] shrink-0 rounded-full px-2 py-1 text-center text-[9px] font-semibold uppercase tracking-wide sm:max-w-none sm:px-2.5 sm:text-[10px] sm:normal-case sm:tracking-normal",
+              pillAccent
+            )}
+          >
             {statusPillLabel}
           </span>
         </div>
       </header>
 
+      {readOnly && (
+        <div
+          className="shrink-0 border-b border-amber-200/90 bg-amber-50 px-3 py-2 text-center text-[11px] font-medium leading-snug text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100 sm:px-4 sm:text-xs"
+          role="status"
+        >
+          Payment has been released for this job. This chat is read-only — you can still read the
+          message history.
+        </div>
+      )}
+
       {/* Message list */}
       <div
         ref={scrollRef}
-        className="chat-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-y-contain px-2 py-3 [-webkit-overflow-scrolling:touch] sm:gap-1.5 sm:px-4 sm:py-4"
+        className="chat-scrollbar flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-y-contain px-2 py-2 [-webkit-overflow-scrolling:touch] sm:gap-1 sm:px-3 sm:py-3"
       >
         {messages.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
@@ -453,6 +500,7 @@ export function ChatWindow({
                 senderLabel={senderLabel}
                 isDelivered={isDelivered}
                 isRead={isRead}
+                accentRole={currentUserRole}
               />
             );
           })
@@ -471,6 +519,9 @@ export function ChatWindow({
         sending={sending || uploadingImage}
         isOffline={isOffline}
         onPhotoSelected={(files) => void handlePhotoSelected(files)}
+        accentRole={currentUserRole}
+        disabled={readOnly}
+        placeholder={readOnly ? "Read-only chat" : "Aa"}
       />
       {error && (
         <p className="border-t border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-[11px] text-destructive dark:bg-destructive/15">
