@@ -46,11 +46,11 @@ export function MessageBubble({
   const bubbleColor = senderIsLister
     ? cn(
         bubbleRounded,
-        "bg-[#0084ff] text-white shadow-blue-500/20 dark:bg-sky-600"
+        "bg-[#1877f2] text-white shadow-blue-600/25 ring-1 ring-white/10 dark:bg-[#2563eb]"
       )
     : cn(
         bubbleRounded,
-        "bg-emerald-600 text-white shadow-emerald-500/25 dark:bg-emerald-600"
+        "bg-emerald-500 text-white shadow-emerald-700/20 ring-1 ring-white/10 dark:bg-emerald-500"
       );
 
   return (
@@ -96,7 +96,7 @@ export function MessageBubble({
               isMe ? "justify-end" : "justify-start"
             )}
           >
-            <span className="min-w-0 max-w-[min(100%,12rem)] truncate text-[11px] font-semibold leading-tight text-[#65676b] dark:text-gray-400 sm:max-w-[14rem]">
+            <span className="min-w-0 max-w-[min(100%,12rem)] truncate text-[11px] font-semibold leading-tight text-[#65676b] dark:text-gray-300 sm:max-w-[14rem]">
               {isMe ? (
                 <>
                   You
@@ -111,7 +111,7 @@ export function MessageBubble({
             </span>
             <time
               dateTime={message.created_at}
-              className="shrink-0 text-[10px] tabular-nums text-[#8a8d91] dark:text-gray-500"
+              className="shrink-0 text-[10px] tabular-nums text-[#8a8d91] dark:text-gray-400"
             >
               {timeStr}
             </time>

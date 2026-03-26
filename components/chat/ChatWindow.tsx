@@ -37,6 +37,41 @@ function isOptimisticId(id: number): boolean {
   return id < 0;
 }
 
+/** Compare auth/job UUIDs from DB vs client (case, hyphen formatting). */
+function normalizeUid(id: string | null | undefined): string {
+  if (id == null) return "";
+  return String(id).trim().toLowerCase().replace(/-/g, "");
+}
+
+/**
+ * Bubble colour is lister=blue, cleaner=green. Prefer matching sender to job roles;
+ * if IDs fail to match (format drift), fall back to the viewer's role for own messages.
+ */
+function resolveSenderRole(
+  senderId: string | null | undefined,
+  listerId: string | null,
+  cleanerId: string | null,
+  currentUserId: string,
+  currentUserRole: "lister" | "cleaner" | null
+): "lister" | "cleaner" {
+  const s = normalizeUid(senderId);
+  const l = normalizeUid(listerId);
+  const c = normalizeUid(cleanerId);
+  const me = normalizeUid(currentUserId);
+
+  const matchesLister = Boolean(l && s === l);
+  const matchesCleaner = Boolean(c && s === c);
+
+  if (matchesLister && matchesCleaner) {
+    if (s === me && currentUserRole) return currentUserRole;
+    return "lister";
+  }
+  if (matchesLister) return "lister";
+  if (matchesCleaner) return "cleaner";
+  if (s === me && currentUserRole) return currentUserRole;
+  return "cleaner";
+}
+
 function mergeIncomingMessage(
   prev: JobMessageRow[],
   incoming: JobMessageRow
@@ -471,9 +506,15 @@ export function ChatWindow({
           </div>
         ) : (
           messages.map((m, i) => {
-            const isMe = m.sender_id === currentUserId;
-            const isListerSender = Boolean(listerId && m.sender_id === listerId);
-            const senderRole = isListerSender ? "lister" : "cleaner";
+            const isMe = normalizeUid(m.sender_id) === normalizeUid(currentUserId);
+            const senderRole = resolveSenderRole(
+              m.sender_id,
+              listerId,
+              cleanerId,
+              currentUserId,
+              currentUserRole
+            );
+            const isListerSender = senderRole === "lister";
             const senderLabel =
               (isListerSender
                 ? (listerName ?? "Lister").split(" ")[0]
@@ -483,7 +524,7 @@ export function ChatWindow({
             const showAvatar =
               !isMe &&
               (!prev ||
-                prev.sender_id !== m.sender_id ||
+                normalizeUid(prev.sender_id) !== normalizeUid(m.sender_id) ||
                 new Date(m.created_at).getTime() -
                   new Date(prev.created_at).getTime() >
                   5 * 60 * 1000);
