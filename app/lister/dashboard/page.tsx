@@ -52,15 +52,16 @@ export const metadata: Metadata = {
 export default async function ListerDashboardPage() {
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) redirect("/login");
+  if (authError || !user) redirect("/login");
 
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
     .select(PROFILE_LISTER_DASHBOARD_SELECT)
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .maybeSingle();
 
   if (profileError || !profileData) redirect("/onboarding/role-choice");
@@ -78,18 +79,18 @@ export default async function ListerDashboardPage() {
     supabase
       .from("listings")
       .select(LISTING_FULL_SELECT)
-      .eq("lister_id", session.user.id)
+      .eq("lister_id", user.id)
       .order("created_at", { ascending: false }),
     supabase
       .from("jobs")
       .select(
         "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete"
       )
-      .eq("lister_id", session.user.id),
+      .eq("lister_id", user.id),
     supabase
       .from("notifications")
       .select(NOTIFICATION_FEED_SELECT)
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(8),
     getCachedGlobalSettingsForPages(),

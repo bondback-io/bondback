@@ -97,8 +97,12 @@ function LoginForm() {
             return;
           }
           const next = sanitizeInternalNextPath(searchParams.get("next"));
-          // Defer navigation so App Router is initialized (avoids double dispatch with refresh+replace).
-          scheduleRouterAction(() => router.replace(next));
+          /**
+           * Ensure SSR-readable cookies are flushed before the next document load. Client-only
+           * `router.replace` can race the first RSC request and surface a broken shell on Vercel.
+           */
+          await supabase.auth.getSession();
+          window.location.assign(next);
           return;
         }
       }

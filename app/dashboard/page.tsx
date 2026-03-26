@@ -23,16 +23,18 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient();
+  /** Prefer getUser() so the JWT is validated server-side (avoids stale cookie-only session after login). */
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  if (!session) redirect("/login");
+  if (userError || !user) redirect("/login");
 
   const { data: profileData, error } = await supabase
     .from("profiles")
     .select("roles, active_role")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .maybeSingle();
 
   if (error || !profileData) redirect("/onboarding/role-choice");

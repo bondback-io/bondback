@@ -6,7 +6,10 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { scheduleRouterAction } from "@/lib/deferred-router";
 
 /** Debounce rapid auth events (OAuth emits several); one coalesced RSC refresh. */
-const SIGN_IN_DEBOUNCE_MS = 450;
+const SIGN_IN_DEBOUNCE_MS = 600;
+
+/** Avoid stacking `router.refresh()` calls (can race with navigation and surface “page couldn’t load” on Vercel). */
+const MIN_REFRESH_GAP_MS = 2800;
 
 /**
  * Keeps server-rendered shell (header, layout) aligned with Supabase auth cookies.
@@ -19,9 +22,15 @@ const SIGN_IN_DEBOUNCE_MS = 450;
 export function SessionSync() {
   const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRefreshAtRef = useRef(0);
 
   useEffect(() => {
     const runRefresh = () => {
+      const now = Date.now();
+      if (now - lastRefreshAtRef.current < MIN_REFRESH_GAP_MS) {
+        return;
+      }
+      lastRefreshAtRef.current = now;
       scheduleRouterAction(() => {
         try {
           router.refresh();
@@ -51,6 +60,7 @@ export function SessionSync() {
           clearTimeout(debounceRef.current);
           debounceRef.current = null;
         }
+        lastRefreshAtRef.current = 0;
         scheduleRouterAction(() => {
           try {
             router.refresh();

@@ -57,15 +57,16 @@ export const metadata: Metadata = {
 export default async function CleanerDashboardPage() {
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) redirect("/login");
+  if (authError || !user) redirect("/login");
 
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
     .select(PROFILE_CLEANER_DASHBOARD_SELECT)
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .maybeSingle();
 
   if (profileError || !profileData) redirect("/onboarding/role-choice");
@@ -82,7 +83,7 @@ export default async function CleanerDashboardPage() {
   const { data: jobsData } = await supabase
     .from("jobs")
     .select("id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete")
-    .eq("winner_id", session.user.id)
+    .eq("winner_id", user.id)
     .in("status", ["accepted", "in_progress", "completed", "completed_pending_approval", "cancelled"])
     .order("created_at", { ascending: false });
 
@@ -130,7 +131,7 @@ export default async function CleanerDashboardPage() {
   const { data: notificationsData } = await supabase
     .from("notifications")
     .select(NOTIFICATION_FEED_SELECT)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(8);
 
@@ -184,7 +185,7 @@ export default async function CleanerDashboardPage() {
   const { data: bidsRaw } = await supabase
     .from("bids")
     .select("listing_id, amount_cents")
-    .eq("cleaner_id", session.user.id)
+    .eq("cleaner_id", user.id)
     .or("status.eq.active,status.is.null");
 
   const bidRows = (bidsRaw ?? []) as {
