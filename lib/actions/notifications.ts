@@ -242,12 +242,48 @@ export async function sendAdminTestNotification(): Promise<{
   } as NotificationInsert;
 
   const admin = createSupabaseAdminClient();
-  const client = (admin ?? supabase) as SupabaseClient<Database>;
-  const { error } = await client.from("notifications").insert(row as never);
-  if (error) {
-    console.error("[notifications] admin test insert failed", error.message);
-    return { ok: false, error: error.message };
+  if (!admin) {
+    return {
+      ok: false,
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is not set on the server. The admin test must insert via the service role (RLS has no INSERT policy for clients). Add the key in Vercel → Project → Settings → Environment Variables.",
+    };
   }
+  const client = admin as SupabaseClient<Database>;
+  const { error: errFull } = await client.from("notifications").insert(row as never);
+  if (!errFull) {
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+    revalidatePath("/profile");
+    revalidatePath("/notifications");
+    if (process.env.NODE_ENV === "development") {
+      console.info("[notifications:admin-test-insert]", { userId: session.user.id });
+    }
+    return { ok: true };
+  }
+
+  const minimalRow = {
+    user_id: session.user.id,
+    type: "new_message" as const,
+    job_id: null,
+    message_text: messageText,
+  } as NotificationInsert;
+  const { error: errMinimal } = await client.from("notifications").insert(minimalRow as never);
+  if (errMinimal) {
+    console.error("[notifications] admin test insert failed", {
+      full: errFull,
+      minimal: errMinimal,
+    });
+    return {
+      ok: false,
+      error: errMinimal.message || errFull.message,
+    };
+  }
+
+  console.warn(
+    "[notifications] admin test insert succeeded with legacy columns only (apply notifications title/body/data migration or reload PostgREST schema if rich rows are required)",
+    { firstError: errFull.message, code: errFull.code }
+  );
 
   revalidatePath("/");
   revalidatePath("/dashboard");
