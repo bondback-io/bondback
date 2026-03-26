@@ -352,7 +352,6 @@ export function NewListingForm({
   useEffect(() => {
     const sub = form.getValues("suburb");
     if (sub) setSuburbQuery(sub);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Suburb autocomplete fetch

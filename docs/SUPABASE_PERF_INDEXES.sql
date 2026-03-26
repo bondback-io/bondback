@@ -4,7 +4,8 @@
 --
 -- Notes:
 -- - `jobs.winner_id` is the assigned cleaner (no `cleaner_id` column on jobs).
--- - `abn_verified` is modeled as a `verification_badges` entry, not a separate column — GIN on `verification_badges` covers it.
+-- - `abn_verified` is modeled as a `verification_badges` entry, not a separate column.
+-- - Use btree on roles/verification_badges unless columns are text[] and you add GIN(array_ops); GIN on plain text needs pg_trgm.
 -- - Notifications use `is_read` (not `read`).
 
 -- ========== Core (browse, dashboards, bids, messaging) ==========
@@ -25,8 +26,9 @@ CREATE INDEX IF NOT EXISTS idx_jobs_completed_at ON public.jobs (completed_at DE
 CREATE INDEX IF NOT EXISTS idx_bids_listing_id ON public.bids (listing_id);
 CREATE INDEX IF NOT EXISTS idx_bids_cleaner_listing ON public.bids (cleaner_id, listing_id);
 
-CREATE INDEX IF NOT EXISTS idx_profiles_is_admin ON public.profiles (is_admin) WHERE is_admin = true;
-CREATE INDEX IF NOT EXISTS idx_profiles_roles_gin ON public.profiles USING GIN (roles);
+CREATE INDEX IF NOT EXISTS idx_profiles_is_admin ON public.profiles (is_admin)
+  WHERE lower(trim(COALESCE(is_admin::text, ''))) IN ('true', 't', '1', 'yes');
+CREATE INDEX IF NOT EXISTS idx_profiles_roles ON public.profiles (roles);
 
 CREATE INDEX IF NOT EXISTS idx_job_messages_job_created ON public.job_messages (job_id, created_at ASC);
 
@@ -50,6 +52,6 @@ CREATE INDEX IF NOT EXISTS idx_bids_listing_created ON public.bids (listing_id, 
 CREATE INDEX IF NOT EXISTS idx_bids_cleaner_created ON public.bids (cleaner_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_profiles_created_at_desc ON public.profiles (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_profiles_verification_badges_gin ON public.profiles USING GIN (verification_badges);
+CREATE INDEX IF NOT EXISTS idx_profiles_verification_badges ON public.profiles (verification_badges);
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read_created ON public.notifications (user_id, is_read, created_at DESC);

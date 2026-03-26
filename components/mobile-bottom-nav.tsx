@@ -293,14 +293,16 @@ export function MobileBottomNav({
     return () => clearTimeout(tid);
   }, [currentPath, router]);
 
-  if (!isBottomNavRoute(currentPath)) return null;
-
   const effectiveRole =
     activeRole ?? storedRoleFallback ?? initialActiveRole ?? null;
+  const bottomNavVisible = isBottomNavRoute(currentPath);
   const { data: notificationUnread = 0 } = useUnreadNotificationCount(
     userId,
-    effectiveRole
+    effectiveRole,
+    { enabled: bottomNavVisible }
   );
+
+  if (!bottomNavVisible) return null;
   const inferred = inferSecondaryTabFromPath(currentPath);
   const secondaryTabHref =
     effectiveRole === "lister"

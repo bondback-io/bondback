@@ -33,8 +33,7 @@ function ForgotPasswordForm() {
   useEffect(() => {
     const q = searchParams.get("email")?.trim();
     if (q) form.setValue("email", q);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run when query changes
-  }, [searchParams]);
+  }, [searchParams, form]);
 
   const onSubmit = async (values: ForgotValues) => {
     setError(null);

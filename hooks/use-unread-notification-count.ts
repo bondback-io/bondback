@@ -11,14 +11,16 @@ import type { ActiveRole } from "@/lib/notifications/notification-role-filter";
  */
 export function useUnreadNotificationCount(
   userId: string | null | undefined,
-  activeRole: ActiveRole
+  activeRole: ActiveRole,
+  options?: { enabled?: boolean }
 ) {
+  const allow = options?.enabled !== false;
   return useQuery({
     queryKey: notificationQueryKeys.unread(userId ?? "", activeRole),
     queryFn: async () => {
       return fetchUnreadNotificationCount(userId!, activeRole);
     },
-    enabled: Boolean(userId?.trim()),
+    enabled: Boolean(userId?.trim()) && allow,
     /** Realtime invalidation drives freshness; keep count reactive after inserts/reads. */
     staleTime: 0,
     gcTime: 1000 * 60 * 30,
