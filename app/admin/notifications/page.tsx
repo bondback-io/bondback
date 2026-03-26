@@ -19,6 +19,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminEmailDiagnosticsCard } from "@/components/admin/admin-email-diagnostics-card";
+import { getEmailDiagnostics } from "@/lib/actions/admin-email-diagnostics";
 import {
   Bell,
   Mail,
@@ -61,6 +63,7 @@ export default async function AdminNotificationsPage() {
   const { profile, supabase } = await requireAdmin();
   const admin = createSupabaseAdminClient();
   const globalSettings = await getGlobalSettings();
+  const emailDiagnostics = await getEmailDiagnostics();
   const emailsEnabled = globalSettings?.emails_enabled !== false;
 
   const now = new Date();
@@ -118,6 +121,10 @@ export default async function AdminNotificationsPage() {
             Monitor in-app notifications, email delivery, and manage templates. {profile.full_name ?? "Admin"}
           </p>
         </div>
+
+        {emailDiagnostics.ok && (
+          <AdminEmailDiagnosticsCard data={emailDiagnostics.data} />
+        )}
 
         {/* Stats row */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

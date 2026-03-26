@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
+import { shouldSendEmailForType } from "@/lib/notification-preferences";
 
 /**
  * Server-only. Use only for admin operations (e.g. resolving user email for notifications).
@@ -86,39 +87,18 @@ const PUSH_NOTIFICATION_TYPES = new Set([
   "dispute_resolved",
 ]);
 
-/** Get email, phone, and notification preferences for a user (server-only). Used when sending notification emails and SMS. */
-export async function getNotificationPrefs(userId: string): Promise<NotificationPrefsResult> {
-  const admin = createSupabaseAdminClient();
-  const noSend = (): NotificationPrefsResult => ({
-    email: null,
-    phone: null,
-    emailNotifications: false,
-    shouldSendEmail: () => false,
-    shouldSendSms: () => false,
-    shouldSendSmsNewJob: () => false,
-    expoPushToken: null,
-    shouldSendPush: () => false,
-    shouldSendPushNewJob: () => false,
-    notificationPreferences: null,
-    emailForceDisabled: true,
-  });
-  if (!admin) return noSend();
+let loggedMissingServiceRoleForPrefs = false;
 
-  const [authRes, profileRes] = await Promise.all([
-    admin.auth.admin.getUserById(userId),
-    admin
-      .from("profiles")
-      .select("notification_preferences, email_force_disabled, phone, expo_push_token")
-      .eq("id", userId)
-      .maybeSingle(),
-  ]);
-  const email = authRes.data?.user?.email ?? null;
-  const profile = profileRes.data as {
+function buildNotificationPrefsResult(params: {
+  email: string | null;
+  profile: {
     notification_preferences?: Record<string, boolean> | null;
     email_force_disabled?: boolean | null;
     phone?: string | null;
     expo_push_token?: string | null;
   } | null;
+}): NotificationPrefsResult {
+  const { email, profile } = params;
   const notificationPreferences = profile?.notification_preferences ?? null;
   const emailForceDisabled = profile?.email_force_disabled === true;
   const phone = (profile?.phone ?? "").trim() || null;
@@ -128,7 +108,6 @@ export async function getNotificationPrefs(userId: string): Promise<Notification
   const pushNewJobEnabled = notificationPreferences?.push_new_job === true;
   const expoPushToken = (profile?.expo_push_token ?? "").trim() || null;
 
-  const { shouldSendEmailForType } = await import("@/lib/notification-preferences");
   const shouldSendEmail = (type: string) =>
     !!email && shouldSendEmailForType(notificationPreferences, type, emailForceDisabled);
 
@@ -139,7 +118,6 @@ export async function getNotificationPrefs(userId: string): Promise<Notification
 
   const shouldSendPushNewJob = () => !!expoPushToken && pushNewJobEnabled;
 
-  /** Non–new-job push types require master push_enabled. New job alerts use shouldSendPushNewJob only. */
   const shouldSendPush = (type: string) =>
     !!expoPushToken && pushEnabled && PUSH_NOTIFICATION_TYPES.has(type);
 
@@ -156,6 +134,78 @@ export async function getNotificationPrefs(userId: string): Promise<Notification
     notificationPreferences,
     emailForceDisabled,
   };
+}
+
+/** Get email, phone, and notification preferences for a user (server-only). Used when sending notification emails and SMS. */
+export async function getNotificationPrefs(userId: string): Promise<NotificationPrefsResult> {
+  const noSend = (): NotificationPrefsResult => ({
+    email: null,
+    phone: null,
+    emailNotifications: false,
+    shouldSendEmail: () => false,
+    shouldSendSms: () => false,
+    shouldSendSmsNewJob: () => false,
+    expoPushToken: null,
+    shouldSendPush: () => false,
+    shouldSendPushNewJob: () => false,
+    notificationPreferences: null,
+    emailForceDisabled: true,
+  });
+
+  type ProfileRow = {
+    notification_preferences?: Record<string, boolean> | null;
+    email_force_disabled?: boolean | null;
+    phone?: string | null;
+    expo_push_token?: string | null;
+  };
+
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    const [authRes, profileRes] = await Promise.all([
+      admin.auth.admin.getUserById(userId),
+      admin
+        .from("profiles")
+        .select("notification_preferences, email_force_disabled, phone, expo_push_token")
+        .eq("id", userId)
+        .maybeSingle(),
+    ]);
+    const email = authRes.data?.user?.email ?? null;
+    return buildNotificationPrefsResult({
+      email,
+      profile: profileRes.data as ProfileRow | null,
+    });
+  }
+
+  /**
+   * Without service role we cannot read another user’s auth email. Fallback: only the
+   * signed-in user (same `userId`) so local/dev misconfigs still send self-targeted tests.
+   * Production must set SUPABASE_SERVICE_ROLE_KEY so lister↔cleaner notification emails work.
+   */
+  const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user?.id !== userId || !user.email) {
+    if (!loggedMissingServiceRoleForPrefs) {
+      loggedMissingServiceRoleForPrefs = true;
+      console.warn(
+        "[getNotificationPrefs] SUPABASE_SERVICE_ROLE_KEY is missing or invalid. Transactional notification emails cannot be sent to recipients (no auth email lookup). Set SUPABASE_SERVICE_ROLE_KEY in server env (e.g. Vercel → Environment Variables). See docs/EMAIL_SETUP.md."
+      );
+    }
+    return noSend();
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("notification_preferences, email_force_disabled, phone, expo_push_token")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return buildNotificationPrefsResult({
+    email: user.email,
+    profile: profile as ProfileRow | null,
+  });
 }
 
 const RATE_LIMIT_HOURS = 1;

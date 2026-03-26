@@ -193,11 +193,16 @@ The **tutorial email** (“Your Quick Start Guide as a [Lister/Cleaner]”) is s
 ## 7. Troubleshooting
 
 - **No emails at all:**  
-  Check `RESEND_API_KEY`; if missing, `sendEmail` returns without sending.  
-  Check Admin → Global settings → “Allow all email notifications” is on.
+  Check `RESEND_API_KEY`; if missing, `sendEmail` logs `[email:resend]` with `outcome: failed` and error `Resend not configured (missing RESEND_API_KEY)`.  
+  Check Admin → Global settings → “Allow all email notifications” is on (when off, logs show `skipped` with `global_settings.emails_enabled=false`).
+
+- **Transactional emails (bid, message, job, payment) never arrive, but you see `[email:resend-env] hasResendApiKey: true`:**  
+  Ensure **`SUPABASE_SERVICE_ROLE_KEY`** is set on the server (same as in Supabase Dashboard → Settings → API → `service_role`). The app uses the Admin API to read **each recipient’s** login email from Auth. Without it, `getNotificationPrefs` cannot resolve other users’ addresses and those emails are skipped. You’ll see a **one-time** console warning: `[getNotificationPrefs] SUPABASE_SERVICE_ROLE_KEY is missing or invalid`.  
+  After fixing env, redeploy / restart the dev server.
 
 - **Welcome email missing:**  
-  Same as above; welcome is only sent when global emails are enabled.
+  The welcome email is sent in **`completeOnboardingFromSignup`** (after role + profile details on the onboarding flow), **not** on the raw Supabase sign-up click alone. It needs: global emails on, `RESEND_API_KEY`, and user preference `email_welcome` not turned off.  
+  Onboarding profile creation also requires **`SUPABASE_SERVICE_ROLE_KEY`**; if that key is missing, onboarding returns “Server configuration error” before any welcome send.
 
 - **New-bid email link wrong:**  
   We now pass `listingId` into the new_bid email so the CTA goes to `/listings/{id}`. Ensure you’re on the latest code.
