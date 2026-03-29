@@ -12,6 +12,7 @@ import {
   Wrench,
   Camera,
   Sparkles,
+  ArrowLeft,
 } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -176,26 +177,40 @@ export default async function CleanerProfilePage({
   const locationFull = [locationLine, state].filter(Boolean).join(" · ");
 
   return (
-    <section className="page-inner space-y-8 pb-12">
+    <section className="page-inner space-y-4 pb-12 pt-1 md:space-y-8 md:pt-0">
+      {/* Mobile: one line back — avoids a long crumb row beside the hero */}
+      <div className="md:hidden">
+        <Link
+          href="/cleaners"
+          className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-muted-foreground -ml-1 px-1 hover:text-foreground dark:text-gray-400 dark:hover:text-gray-100"
+        >
+          <ArrowLeft className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+          Browse cleaners
+        </Link>
+      </div>
+
       <nav
         aria-label="Breadcrumb"
-        className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground dark:text-gray-400"
+        className="hidden flex-wrap items-center gap-1 text-[13px] leading-tight text-muted-foreground md:flex md:gap-1.5 dark:text-gray-400"
       >
         <Link
           href="/"
-          className="font-medium text-foreground/80 underline-offset-4 hover:text-emerald-600 hover:underline dark:text-gray-200 dark:hover:text-emerald-400"
+          className="rounded-md font-medium text-foreground/80 underline-offset-4 hover:text-emerald-600 hover:underline dark:text-gray-200 dark:hover:text-emerald-400"
         >
           Home
         </Link>
-        <ChevronRight className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
         <Link
           href="/cleaners"
-          className="font-medium text-foreground/80 underline-offset-4 hover:text-emerald-600 hover:underline dark:text-gray-200 dark:hover:text-emerald-400"
+          className="rounded-md font-medium text-foreground/80 underline-offset-4 hover:text-emerald-600 hover:underline dark:text-gray-200 dark:hover:text-emerald-400"
         >
           Browse cleaners
         </Link>
-        <ChevronRight className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
-        <span className="max-w-[min(100%,14rem)] truncate font-semibold text-foreground dark:text-gray-100">
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
+        <span
+          className="max-w-[min(100%,20rem)] truncate font-medium text-foreground dark:text-gray-100"
+          aria-current="page"
+        >
           {displayName}
         </span>
       </nav>

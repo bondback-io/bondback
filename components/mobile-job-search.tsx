@@ -228,7 +228,7 @@ export function CleanersPageMobileChrome({
 
   return (
     <JobsSearchCountContext.Provider value={value}>
-      <div className="mx-auto w-full max-w-6xl px-3 pt-2 md:px-4 md:pt-4">
+      <div className="mx-auto w-full max-w-6xl px-2 pt-1 sm:px-3 md:px-4 md:pt-4">
         <MobileJobSearchBar variant="cleaners" resultCount={count} {...barProps} />
       </div>
       {children}
@@ -263,6 +263,7 @@ export function MobileJobSearchBar({
   const { toast } = useToast();
   const distanceUnit = useDistanceUnit();
   const mdUp = useMdUp();
+  const cleanersSuburbListId = React.useId();
 
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const skipRadiusFromUrlOnceRef = React.useRef(false);
@@ -363,10 +364,10 @@ export function MobileJobSearchBar({
     if (!initialSuburb && lsSub) setQuery(lsSub);
   }, [initialSuburb, initialPostcode]);
 
+  /** Sync geo from URL — do not set `query` here so typing isn't wiped when the URL updates. */
   React.useEffect(() => {
     setSuburb(initialSuburb);
     setPostcode(initialPostcode);
-    setQuery(initialSuburb);
     setCenterLat(initialCenterLat);
     setCenterLon(initialCenterLon);
   }, [
@@ -526,9 +527,31 @@ export function MobileJobSearchBar({
   };
 
   const handleMainInput = (value: string) => {
+    const trimmed = value.trim();
     setQuery(value);
+
+    if (variant === "cleaners") {
+      if (trimmed === "") {
+        setSuburb("");
+        setPostcode("");
+        setCenterLat(null);
+        setCenterLon(null);
+        setStoredSearchSuburb("");
+        setStoredSearchPostcode("");
+        debouncedNavigateSuburb("", "", undefined, undefined);
+        return;
+      }
+      if (suburb && trimmed !== suburb.trim()) {
+        setSuburb("");
+        setPostcode("");
+        setCenterLat(null);
+        setCenterLon(null);
+      }
+      return;
+    }
+
     setSuburb(value);
-    if (value.trim() === "") {
+    if (trimmed === "") {
       setPostcode("");
       setCenterLat(null);
       setCenterLon(null);
@@ -659,27 +682,44 @@ export function MobileJobSearchBar({
       propertyType !== "any");
   const pillLabel = `${formatRadiusBannerLabel(radiusKm, distanceUnit)} (${suburbLabel})`;
 
+  /** Hide suggestions once a suburb is chosen (query matches locked suburb); show again when editing. */
+  const showCleanersSuburbSuggestions =
+    variant === "cleaners" &&
+    query.trim().length >= 2 &&
+    (suburb.trim() === "" ||
+      query.trim().toLowerCase() !== suburb.trim().toLowerCase());
+
   return (
     <div
       className={cn(
         sticky
           ? "sticky top-0 z-[35] border-b border-border/80 bg-background/95 pb-3 pt-2 shadow-sm backdrop-blur-md dark:border-gray-800 dark:bg-gray-950/95 md:pb-4"
           : "relative border-0 bg-transparent pb-2 pt-0 shadow-none",
+        sticky && variant === "cleaners" && "pb-2 pt-1.5 md:pb-4 md:pt-2",
         className
       )}
     >
       <div className="flex items-center gap-2 md:gap-3">
-        <div className="relative min-h-[44px] min-w-0 flex-1 md:min-h-[44px]">
+        <div className="relative z-[45] min-h-[44px] min-w-0 flex-1 md:min-h-[44px]">
           <Input
             type="search"
             enterKeyHint="search"
             placeholder={
               variant === "cleaners"
-                ? "Search cleaners near me…"
+                ? "Type a suburb — pick from suggestions"
                 : "Search jobs near me…"
             }
             value={query}
             onChange={(e) => handleMainInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (variant !== "cleaners") return;
+              if (e.key !== "Enter") return;
+              if (!showCleanersSuburbSuggestions) return;
+              const first = results[0];
+              if (pending || !first) return;
+              e.preventDefault();
+              selectSuburbRow(first);
+            }}
             className={cn(
               "h-11 min-h-[44px] min-w-0 rounded-2xl border border-border bg-card pl-4 pr-4 text-base text-foreground shadow-sm",
               "truncate",
@@ -693,7 +733,55 @@ export function MobileJobSearchBar({
                 ? "Search cleaners by suburb"
                 : "Search jobs by suburb"
             }
+            aria-autocomplete={variant === "cleaners" ? "list" : undefined}
+            aria-expanded={
+              variant === "cleaners" ? showCleanersSuburbSuggestions : undefined
+            }
+            aria-controls={
+              variant === "cleaners" && showCleanersSuburbSuggestions
+                ? cleanersSuburbListId
+                : undefined
+            }
           />
+          {showCleanersSuburbSuggestions && (
+            <div
+              className="absolute left-0 right-0 top-full mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg dark:border-gray-700 dark:bg-gray-900"
+              id={cleanersSuburbListId}
+            >
+              {pending && (
+                <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground dark:text-gray-400">
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                  Searching suburbs…
+                </div>
+              )}
+              {!pending && results.length === 0 && (
+                <p className="px-3 py-2.5 text-sm text-muted-foreground dark:text-gray-400">
+                  No suburbs match — check spelling or try nearby
+                </p>
+              )}
+              {!pending && results.length > 0 && (
+                <ul className="max-h-60 overflow-y-auto py-1" role="listbox" aria-label="Matching suburbs">
+                  {results.map((row) => (
+                    <li key={`main-${row.suburb}-${row.postcode}`}>
+                      <button
+                        type="button"
+                        role="option"
+                        className="flex w-full min-h-[44px] items-center px-3 py-2.5 text-left text-base hover:bg-muted dark:hover:bg-gray-800"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectSuburbRow(row)}
+                      >
+                        <span className="font-medium">{row.suburb}</span>
+                        <span className="ml-2 text-muted-foreground dark:text-gray-400">
+                          {row.postcode}
+                          {row.state ? ` ${row.state}` : ""}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetTrigger asChild>
@@ -785,11 +873,7 @@ export function MobileJobSearchBar({
                 </label>
                 <Input
                   value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setSuburb(e.target.value);
-                    if (e.target.value.trim().length < 2) setResults([]);
-                  }}
+                  onChange={(e) => handleMainInput(e.target.value)}
                   placeholder="Type a suburb"
                   className="h-12 min-h-[48px] text-base"
                 />
@@ -1082,7 +1166,12 @@ export function MobileJobSearchBar({
 
       {(variant === "jobs" || variant === "cleaners") && (
         <p
-          className="mt-2 px-0.5 text-sm font-medium leading-snug text-foreground dark:text-gray-200 md:text-sm"
+          className={cn(
+            "mt-2 px-0.5 font-medium leading-snug text-foreground dark:text-gray-200 md:text-sm",
+            variant === "cleaners"
+              ? "mt-1.5 text-xs text-muted-foreground dark:text-gray-400 md:mt-2 md:text-sm md:text-foreground md:dark:text-gray-200"
+              : "text-sm"
+          )}
           aria-live="polite"
         >
           {resultCount === 0 ? (

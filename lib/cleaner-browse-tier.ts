@@ -81,11 +81,22 @@ export function tierSortRank(tier: CleanerBrowseTier): number {
 
 export const CLEANER_TIER_META: Record<
   CleanerBrowseTier,
-  { label: string; short: string; className: string; ringClass: string }
+  {
+    label: string;
+    short: string;
+    /** One short line for compact / mobile tier legend. */
+    compactLine: string;
+    /** Full sentence for desktop tier legend. */
+    description: string;
+    className: string;
+    ringClass: string;
+  }
 > = {
   elite: {
     label: "Elite cleaner",
     short: "Elite",
+    compactLine: "Strong ratings & trust",
+    description: "Strong history, ratings & trust signals",
     className:
       "border-amber-300/90 bg-gradient-to-br from-amber-50 to-amber-100/90 text-amber-950 dark:border-amber-600/80 dark:from-amber-950/80 dark:to-amber-900/50 dark:text-amber-50",
     ringClass: "ring-amber-400/35 dark:ring-amber-500/30",
@@ -93,6 +104,8 @@ export const CLEANER_TIER_META: Record<
   pro: {
     label: "Pro cleaner",
     short: "Pro",
+    compactLine: "Solid track record",
+    description: "Established track record or solid profile",
     className:
       "border-emerald-300/90 bg-gradient-to-br from-emerald-50 to-teal-50/90 text-emerald-950 dark:border-emerald-600/70 dark:from-emerald-950/70 dark:to-teal-950/40 dark:text-emerald-50",
     ringClass: "ring-emerald-400/30 dark:ring-emerald-500/25",
@@ -100,6 +113,8 @@ export const CLEANER_TIER_META: Record<
   rising: {
     label: "Rising cleaner",
     short: "Rising",
+    compactLine: "Newer on the platform",
+    description: "Newer on the platform — still building history",
     className:
       "border-sky-300/90 bg-gradient-to-br from-sky-50 to-slate-50/80 text-sky-950 dark:border-sky-700/60 dark:from-sky-950/50 dark:to-slate-900/50 dark:text-sky-50",
     ringClass: "ring-sky-400/25 dark:ring-sky-500/20",

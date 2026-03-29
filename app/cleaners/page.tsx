@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Info, SearchX } from "lucide-react";
 import { JobsPageMobileShell } from "@/components/features/jobs-page-mobile-shell";
 import { CleanersPageMobileChrome } from "@/components/mobile-job-search";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -149,6 +150,13 @@ export default async function BrowseCleanersPage({
     <JobsPageMobileShell>
       <Suspense fallback={null}>
         <CleanersPageMobileChrome
+          key={[
+            suburbFilter,
+            postcodeFilter,
+            hasCenter && centerLat != null && centerLon != null
+              ? `${Math.round(centerLat * 1e6)}_${Math.round(centerLon * 1e6)}`
+              : "nocenter",
+          ].join("|")}
           initialResultCount={cleaners.length}
           defaultRadiusKm={defaultRadiusKm}
           profileSuburb={profile?.suburb ?? null}
@@ -158,25 +166,29 @@ export default async function BrowseCleanersPage({
           initialCenterLat={hasCenter ? centerLat : null}
           initialCenterLon={hasCenter ? centerLon : null}
         >
-          <main className="page-inner space-y-6 pb-16">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <Link
-                  href={dashboardHref}
-                  className="mb-2 inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-100"
-                >
-                  <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
-                  Back to dashboard
-                </Link>
-                <h1 className="text-balance text-2xl font-bold tracking-tight text-foreground dark:text-gray-50 sm:text-3xl">
+          <main className="page-inner space-y-4 pb-16 pt-0 sm:space-y-6">
+            <header className="space-y-3 sm:space-y-4">
+              <Link
+                href={dashboardHref}
+                className="inline-flex min-h-[40px] w-fit items-center gap-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-100 sm:min-h-[44px] sm:text-sm"
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="sm:hidden">Back</span>
+                <span className="hidden sm:inline">Back to dashboard</span>
+              </Link>
+              <div className="min-w-0">
+                <h1 className="text-balance text-xl font-bold leading-tight tracking-tight text-foreground dark:text-gray-50 sm:text-3xl">
                   Browse cleaners
                 </h1>
-                <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground dark:text-gray-400 sm:text-lg">
+                <p className="mt-1.5 text-xs leading-snug text-muted-foreground dark:text-gray-400 sm:hidden">
+                  Verified professionals near you — filter with the search bar above.
+                </p>
+                <p className="mt-2 hidden max-w-2xl text-base leading-relaxed text-muted-foreground dark:text-gray-400 sm:block sm:text-lg">
                   Compare verified professionals near you — use the search bar above to filter by
                   distance, same as Find Jobs.
                 </p>
               </div>
-            </div>
+            </header>
 
             {!centerResolved && (
               <div
@@ -193,7 +205,7 @@ export default async function BrowseCleanersPage({
             )}
 
             {centerResolved && (
-              <p className="text-sm text-muted-foreground dark:text-gray-400 sm:text-base">
+              <p className="hidden text-sm text-muted-foreground dark:text-gray-400 md:block md:text-base">
                 Showing cleaners within{" "}
                 <span className="font-semibold text-foreground dark:text-gray-200">{radiusKm} km</span>{" "}
                 of your search area ({cleaners.length}{" "}
@@ -205,7 +217,7 @@ export default async function BrowseCleanersPage({
               <h2 id="tier-legend-heading" className="sr-only">
                 Cleaner levels
               </h2>
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
+              <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-row sm:flex-wrap sm:gap-3">
                 {(Object.keys(CLEANER_TIER_META) as Array<keyof typeof CLEANER_TIER_META>).map(
                   (key) => {
                     const m = CLEANER_TIER_META[key];
@@ -213,13 +225,18 @@ export default async function BrowseCleanersPage({
                       <Badge
                         key={key}
                         variant="outline"
-                        className={`min-h-[40px] justify-center px-3 py-1.5 text-sm font-semibold ${m.className}`}
+                        className={cn(
+                          "flex min-h-[4.5rem] flex-col items-stretch justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-center text-[10px] font-semibold leading-tight sm:min-h-0 sm:flex-row sm:items-center sm:justify-center sm:gap-0 sm:rounded-md sm:px-3 sm:py-1.5 sm:text-sm",
+                          m.className
+                        )}
                       >
-                        <span className="mr-1.5 font-bold">{m.short}:</span>
-                        <span className="font-normal opacity-90">
-                          {key === "elite" && "Strong history, ratings & trust signals"}
-                          {key === "pro" && "Established track record or solid profile"}
-                          {key === "rising" && "Newer on the platform — still building history"}
+                        <span className="flex flex-col gap-0.5 sm:hidden">
+                          <span className="font-bold">{m.short}</span>
+                          <span className="font-normal opacity-90">{m.compactLine}</span>
+                        </span>
+                        <span className="hidden text-center font-normal opacity-90 sm:inline">
+                          <span className="font-bold">{m.short}: </span>
+                          {m.description}
                         </span>
                       </Badge>
                     );
