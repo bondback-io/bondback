@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,11 @@ import { checkBanAfterLogin } from "@/lib/actions/admin-users";
 import { scheduleRouterAction } from "@/lib/deferred-router";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
+import {
+  fetchPostLoginDestination,
+  shouldUseRoleBasedPostLogin,
+  waitForSupabaseSessionReady,
+} from "@/lib/auth/client-post-login";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -41,6 +47,40 @@ function LoginForm() {
       ? `Account banned. ${bannedReason ? `Reason: ${decodeURIComponent(bannedReason)}. ` : ""}Contact support@bondback.com.`
       : null
   );
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  const sanitizedNext = sanitizeInternalNextPath(searchParams.get("next"));
+  /** OAuth callback applies `getPostLoginDashboardPath` when `next` is `/dashboard`; avoid `next=/login` loops. */
+  const googleOAuthNext = shouldUseRoleBasedPostLogin(sanitizedNext) ? "/dashboard" : sanitizedNext;
+
+  /** Already signed in (e.g. back button, bookmark) — send to role dashboard or preserved `next`. */
+  useEffect(() => {
+    let cancelled = false;
+    const sb = createBrowserSupabaseClient();
+
+    async function run() {
+      const {
+        data: { session },
+      } = await sb.auth.getSession();
+      if (cancelled || !session?.user) return;
+
+      setIsRedirecting(true);
+      try {
+        const path = await fetchPostLoginDestination(sb, session.user.id);
+        const next = sanitizeInternalNextPath(searchParams.get("next"));
+        const dest = shouldUseRoleBasedPostLogin(next) ? path : next;
+        await sb.auth.getSession();
+        window.location.assign(dest);
+      } catch {
+        if (!cancelled) setIsRedirecting(false);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -59,6 +99,8 @@ function LoginForm() {
     const email = values.email.trim();
     const password = values.password;
 
+    let didRedirect = false;
+
     try {
       if (values.useMagicLink) {
         const { error: otpError } = await supabase.auth.signInWithOtp({
@@ -76,7 +118,7 @@ function LoginForm() {
           );
         }
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password
         });
@@ -96,20 +138,63 @@ function LoginForm() {
             );
             return;
           }
-          const next = sanitizeInternalNextPath(searchParams.get("next"));
+
+          didRedirect = true;
+          setIsRedirecting(true);
+
+          if (!signInData.session) {
+            try {
+              await waitForSupabaseSessionReady(supabase);
+            } catch {
+              setError("Could not establish a session. Please try again.");
+              setIsRedirecting(false);
+              didRedirect = false;
+              return;
+            }
+          }
+
+          const {
+            data: { session: established },
+          } = await supabase.auth.getSession();
+          const userId = established?.user?.id;
+          if (!userId) {
+            setError("Could not establish a session. Please try again.");
+            setIsRedirecting(false);
+            didRedirect = false;
+            return;
+          }
+
+          const path = await fetchPostLoginDestination(supabase, userId);
+          const dest = shouldUseRoleBasedPostLogin(sanitizedNext) ? path : sanitizedNext;
+
           /**
            * Ensure SSR-readable cookies are flushed before the next document load. Client-only
            * `router.replace` can race the first RSC request and surface a broken shell on Vercel.
            */
           await supabase.auth.getSession();
-          window.location.assign(next);
+          window.location.assign(dest);
           return;
         }
       }
     } finally {
-      setIsSubmitting(false);
+      if (!didRedirect) {
+        setIsSubmitting(false);
+      }
     }
   };
+
+  if (isRedirecting) {
+    return (
+      <section className="page-inner flex justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center gap-4 py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+            <p className="text-sm text-muted-foreground">Signing you in…</p>
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
 
   return (
     <section className="page-inner flex justify-center">
@@ -122,7 +207,7 @@ function LoginForm() {
         </CardHeader>
         <CardContent className="space-y-6">
           <GoogleSignInButton
-            nextPath={sanitizeInternalNextPath(searchParams.get("next"))}
+            nextPath={googleOAuthNext}
           />
           <div className="relative">
             <div className="absolute inset-0 flex items-center" aria-hidden>
