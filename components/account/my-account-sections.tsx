@@ -86,8 +86,23 @@ export type MyAccountSectionsProps = {
   distanceUnitPref: DistanceUnitPref;
 };
 
+function defaultOpenSections(showPaymentsTab: boolean): string[] {
+  return [
+    "personal",
+    "roles",
+    "notifications",
+    ...(showPaymentsTab ? ["payments"] : []),
+    "security",
+    "help",
+  ];
+}
+
+function ensureSection(open: string[], value: string): string[] {
+  return open.includes(value) ? open : [...open, value];
+}
+
 export function MyAccountSections({
-  initialAccordion,
+  initialAccordion: _initialAccordion,
   profile,
   user,
   roles,
@@ -103,7 +118,9 @@ export function MyAccountSections({
   themePreference,
   distanceUnitPref,
 }: MyAccountSectionsProps) {
-  const [openSection, setOpenSection] = React.useState<string | undefined>(initialAccordion);
+  const [openSections, setOpenSections] = React.useState<string[]>(() =>
+    defaultOpenSections(showPaymentsTab)
+  );
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -118,24 +135,24 @@ export function MyAccountSections({
       const params = new URLSearchParams(window.location.search);
       const payments = params.get("payments");
       if (payments === "success" || payments === "cancelled") {
-        setOpenSection("payments");
+        setOpenSections((prev) => ensureSection(prev, "payments"));
       }
       const hash = window.location.hash.replace("#", "");
       if (hash === "section-personal" || hash === "personal") {
-        setOpenSection("personal");
+        setOpenSections((prev) => ensureSection(prev, "personal"));
       }
       if (hash === "portfolio-photos") {
-        setOpenSection("personal");
+        setOpenSections((prev) => ensureSection(prev, "personal"));
         scrollToId("portfolio-photos", 380);
       }
       if (hash === "my-roles") {
-        setOpenSection("roles");
+        setOpenSections((prev) => ensureSection(prev, "roles"));
         requestAnimationFrame(() => {
           document.getElementById("my-roles")?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       }
       if (hash === "support") {
-        setOpenSection("help");
+        setOpenSections((prev) => ensureSection(prev, "help"));
         requestAnimationFrame(() => {
           document.getElementById("support")?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
@@ -152,10 +169,9 @@ export function MyAccountSections({
   return (
     <div className="space-y-4">
       <Accordion
-        type="single"
-        collapsible
-        value={openSection}
-        onValueChange={setOpenSection}
+        type="multiple"
+        value={openSections}
+        onValueChange={setOpenSections}
         className="w-full space-y-2"
       >
         {/* 1. Personal info */}

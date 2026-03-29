@@ -681,7 +681,8 @@ export function MobileJobSearchBar({
             value={query}
             onChange={(e) => handleMainInput(e.target.value)}
             className={cn(
-              "h-11 min-h-[44px] rounded-2xl border border-border bg-card pl-4 pr-4 text-base text-foreground shadow-sm",
+              "h-11 min-h-[44px] min-w-0 rounded-2xl border border-border bg-card pl-4 pr-4 text-base text-foreground shadow-sm",
+              "truncate",
               "placeholder:text-muted-foreground",
               "focus-visible:ring-2 focus-visible:ring-primary/30",
               "dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100",
@@ -698,9 +699,9 @@ export function MobileJobSearchBar({
           <SheetTrigger asChild>
             <button
               type="button"
+              title={pillLabel}
               className={cn(
-                "inline-flex h-11 min-h-[44px] shrink-0 items-center justify-center rounded-2xl border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary",
-                "max-w-[38vw] truncate sm:max-w-[min(280px,32vw)] dark:border-primary/50 dark:bg-primary/15 dark:text-primary",
+                "inline-flex h-11 min-h-[44px] min-w-0 max-w-[min(42vw,11rem)] shrink items-center justify-start gap-1 overflow-hidden rounded-2xl border border-primary/40 bg-primary/10 px-2.5 text-left text-sm font-semibold text-primary sm:max-w-[min(280px,34vw)] md:max-w-[min(280px,32vw)] dark:border-primary/50 dark:bg-primary/15 dark:text-primary",
                 hasExtraFilters && "ring-2 ring-primary/30"
               )}
               aria-label={
@@ -709,7 +710,7 @@ export function MobileJobSearchBar({
                   : "Open search area, radius, and filters"
               }
             >
-              {pillLabel}
+              <span className="min-w-0 flex-1 truncate">{pillLabel}</span>
             </button>
           </SheetTrigger>
           <SheetContent

@@ -948,35 +948,6 @@ export function EarningsPageClient({
           For your records — your earnings only.
         </p>
       </div>
-
-      {/* Payout method */}
-      <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
-        <CardHeader>
-          <CardTitle className="text-base dark:text-gray-100 md:text-lg">
-            Payout Method
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <Badge
-              variant="outline"
-              className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
-            >
-              Not Connected
-            </Badge>
-            <span className="text-sm text-muted-foreground dark:text-gray-400">
-              Stripe Connect will be available soon for payouts to your bank.
-            </span>
-          </div>
-          <Button
-            variant="outline"
-            disabled
-            className="dark:border-gray-600 dark:hover:bg-gray-800"
-          >
-            Connect Payout Details (coming soon)
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   );
 }
