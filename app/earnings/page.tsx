@@ -32,6 +32,14 @@ type JobRow = {
   cleaner_confirmed_at?: string | null;
 };
 
+/** Match payout history: agreed amount wins when set. */
+function jobGrossCents(job: JobRow, listing: ListingRow | undefined): number {
+  const agreed = job.agreed_amount_cents;
+  if (typeof agreed === "number" && agreed > 0) return agreed;
+  const low = listing?.current_lowest_bid_cents;
+  return typeof low === "number" && low > 0 ? low : 0;
+}
+
 export default async function EarningsPage() {
   const sessionData = await getSessionWithProfile();
   if (!sessionData) redirect("/login");
@@ -66,7 +74,12 @@ export default async function EarningsPage() {
     .from("jobs")
     .select("id, listing_id, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at")
     .eq("winner_id", sessionData.user.id)
-    .in("status", ["in_progress", "completed", "completed_pending_approval"])
+    .in("status", [
+      "accepted",
+      "in_progress",
+      "completed",
+      "completed_pending_approval",
+    ])
     .order("created_at", { ascending: false });
 
   const jobs = (jobsData ?? []) as JobRow[];
@@ -99,10 +112,7 @@ export default async function EarningsPage() {
   );
   for (const job of completedWithRelease) {
     const listing = listingsMap.get(job.listing_id);
-    const grossCents =
-      job.agreed_amount_cents ??
-      listing?.current_lowest_bid_cents ??
-      0;
+    const grossCents = jobGrossCents(job, listing);
     if (grossCents <= 0) continue;
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
     const netCents = grossCents;
@@ -128,8 +138,9 @@ export default async function EarningsPage() {
   const completedJobs = jobs.filter((j) => j.status === "completed");
   const pendingJobs = jobs.filter(
     (j) =>
-      (j.status === "in_progress" || j.status === "completed_pending_approval") &&
-      j.cleaner_confirmed_complete === true
+      j.status === "accepted" ||
+      j.status === "in_progress" ||
+      j.status === "completed_pending_approval"
   );
 
   type TxRow = {
@@ -147,7 +158,7 @@ export default async function EarningsPage() {
 
   for (const job of jobs) {
     const listing = listingsMap.get(job.listing_id);
-    const grossCents = listing?.current_lowest_bid_cents ?? 0;
+    const grossCents = jobGrossCents(job, listing);
     if (grossCents <= 0) continue;
 
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
@@ -181,13 +192,12 @@ export default async function EarningsPage() {
 
   const totalEarningsCents = completedJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    const c = listing?.current_lowest_bid_cents ?? 0;
-    return sum + c;
+    return sum + jobGrossCents(j, listing);
   }, 0);
 
   const thisMonthCents = completedJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    const c = listing?.current_lowest_bid_cents ?? 0;
+    const c = jobGrossCents(j, listing);
     const jobDate = new Date(j.updated_at || j.created_at);
     if (jobDate >= monthStart && jobDate <= now) return sum + c;
     return sum;
@@ -195,7 +205,7 @@ export default async function EarningsPage() {
 
   const pendingPayoutsCents = pendingJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    return sum + (listing?.current_lowest_bid_cents ?? 0);
+    return sum + jobGrossCents(j, listing);
   }, 0);
 
   const paidCount = completedJobs.length;
@@ -213,7 +223,7 @@ export default async function EarningsPage() {
 
   completedJobs.forEach((j) => {
     const listing = listingsMap.get(j.listing_id);
-    const grossCents = listing?.current_lowest_bid_cents ?? 0;
+    const grossCents = jobGrossCents(j, listing);
     if (grossCents <= 0) return;
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
     const netCents = grossCents; // Cleaner receives full bid amount; platform fee is paid by the lister
@@ -247,10 +257,11 @@ export default async function EarningsPage() {
     jobId: number;
     title: string;
     netCents: number;
-    status: "pending_review" | "processing" | "paid";
+    status: "pending_review" | "processing" | "paid" | "in_progress";
     expectedReleaseAt: string | null;
     payoutDate: string | null;
     progressHoursRemaining: number | null;
+    listSortKey?: number;
   };
 
   const upcomingPayoutsRaw: PayoutItem[] = [];
@@ -258,9 +269,8 @@ export default async function EarningsPage() {
 
   for (const job of jobs) {
     const listing = listingsMap.get(job.listing_id);
-    const grossCents = listing?.current_lowest_bid_cents ?? 0;
+    const grossCents = jobGrossCents(job, listing);
     if (grossCents <= 0) continue;
-    const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
     const netCents = grossCents; // Cleaner receives full bid amount; platform fee is paid by the lister
     const title = listing?.title ?? `Job #${job.id}`;
 
@@ -269,6 +279,26 @@ export default async function EarningsPage() {
       ? new Date(job.cleaner_confirmed_at).getTime()
       : updatedAt;
     const nowMs = now.getTime();
+
+    if (
+      job.status !== "completed" &&
+      (job.status === "accepted" ||
+        job.status === "in_progress" ||
+        job.status === "completed_pending_approval") &&
+      !job.cleaner_confirmed_complete
+    ) {
+      upcomingPayoutsRaw.push({
+        jobId: job.id,
+        title,
+        netCents,
+        status: "in_progress",
+        expectedReleaseAt: null,
+        payoutDate: null,
+        progressHoursRemaining: null,
+        listSortKey: updatedAt || nowMs,
+      });
+      continue;
+    }
 
     if (
       (job.status === "in_progress" ||
@@ -341,16 +371,20 @@ export default async function EarningsPage() {
   const upcomingPayouts = [...upcomingPayoutsRaw, ...recentPaid];
 
   upcomingPayouts.sort((a, b) => {
-    const dateA = a.expectedReleaseAt
-      ? new Date(a.expectedReleaseAt).getTime()
-      : a.payoutDate
-        ? new Date(a.payoutDate).getTime()
-        : 0;
-    const dateB = b.expectedReleaseAt
-      ? new Date(b.expectedReleaseAt).getTime()
-      : b.payoutDate
-        ? new Date(b.payoutDate).getTime()
-        : 0;
+    const dateA =
+      a.listSortKey ??
+      (a.expectedReleaseAt
+        ? new Date(a.expectedReleaseAt).getTime()
+        : a.payoutDate
+          ? new Date(a.payoutDate).getTime()
+          : 0);
+    const dateB =
+      b.listSortKey ??
+      (b.expectedReleaseAt
+        ? new Date(b.expectedReleaseAt).getTime()
+        : b.payoutDate
+          ? new Date(b.payoutDate).getTime()
+          : 0);
     return dateB - dateA;
   });
 

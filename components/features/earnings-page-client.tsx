@@ -54,10 +54,11 @@ export type UpcomingPayoutItem = {
   jobId: number;
   title: string;
   netCents: number;
-  status: "pending_review" | "processing" | "paid";
+  status: "pending_review" | "processing" | "paid" | "in_progress";
   expectedReleaseAt: string | null;
   payoutDate: string | null;
   progressHoursRemaining: number | null;
+  listSortKey?: number;
 };
 
 export type PayoutHistoryItem = {
@@ -415,7 +416,7 @@ export function EarningsPageClient({
             Upcoming &amp; Recent Payouts
           </CardTitle>
           <p className="text-xs text-muted-foreground dark:text-gray-400">
-            Jobs in review, processing, or recently paid — sorted by expected or paid date.
+            Jobs in progress, in review, processing, or recently paid — sorted by expected or paid date.
           </p>
         </CardHeader>
         <CardContent>
@@ -452,6 +453,11 @@ export function EarningsPageClient({
                         Pending Review
                       </Badge>
                     )}
+                    {item.status === "in_progress" && (
+                      <Badge variant="secondary" className="bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-200">
+                        In progress
+                      </Badge>
+                    )}
                     {item.status === "processing" && (
                       <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
                         Processing
@@ -461,6 +467,11 @@ export function EarningsPageClient({
                       <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
                         Paid
                       </Badge>
+                    )}
+                    {item.status === "in_progress" && (
+                      <span className="text-xs text-muted-foreground dark:text-gray-400">
+                        Mark the job complete to start the review window
+                      </span>
                     )}
                     {item.expectedReleaseAt && (
                       <TooltipProvider delayDuration={200}>
