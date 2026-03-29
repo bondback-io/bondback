@@ -320,8 +320,13 @@ export function MyAccountSections({
           <AccordionContent className="space-y-6 px-0 pb-4 pt-0 sm:px-2">
             <div className={sectionClass} id="privacy-settings">
               <SectionHeader icon={Lock} title="Privacy &amp; data" />
-              <SettingsPrivacyForm profilePublic={profilePublic} />
-              <div className="mt-4 space-y-2 border-t border-border pt-4 dark:border-gray-700">
+              {isCleaner && <SettingsPrivacyForm profilePublic={profilePublic} />}
+              <div
+                className={cn(
+                  "space-y-2",
+                  isCleaner && "mt-4 border-t border-border pt-4 dark:border-gray-700"
+                )}
+              >
                 <Button size="lg" variant="outline" className={cn("min-h-[48px] w-full sm:w-auto", settingsOutlineBtn)} asChild>
                   <Link href="/profile?export=1">Download my data</Link>
                 </Button>
