@@ -52,7 +52,7 @@ export function DashboardEmptyState({
           {description}
         </p>
       )}
-      <Button asChild size="sm" className="mt-4 rounded-full">
+      <Button asChild size="sm" variant="success" className="mt-4 rounded-full">
         <Link href={actionHref}>{actionLabel}</Link>
       </Button>
     </div>

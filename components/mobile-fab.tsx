@@ -23,11 +23,11 @@ export function MobileDashboardFab({
     <Link
       href={href}
       className={cn(
-        "fixed left-4 right-[4.75rem] z-[55] flex items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-semibold text-white shadow-2xl transition active:scale-[0.98] sm:text-base md:hidden",
+        "fixed left-4 right-[4.75rem] z-[55] flex items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-semibold !text-white shadow-2xl transition active:scale-[0.98] no-underline hover:!text-white sm:text-base md:hidden",
         "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))]",
         isLister
-          ? "bg-emerald-600 ring-2 ring-emerald-400/40 hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-          : "bg-blue-600 ring-2 ring-blue-400/40 hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+          ? "bg-emerald-600 ring-2 ring-emerald-400/40 hover:bg-emerald-500 dark:bg-emerald-600 dark:!text-white dark:hover:bg-emerald-500 dark:hover:!text-white"
+          : "bg-blue-600 ring-2 ring-blue-400/40 hover:bg-blue-500 dark:bg-blue-600 dark:!text-white dark:hover:bg-blue-500 dark:hover:!text-white"
       )}
       aria-label={label}
     >

@@ -62,11 +62,9 @@ export function QuickActionsRow({ actions, className }: QuickActionsRowProps) {
           <Button
             asChild
             size="default"
-            variant={action.primary ? "default" : "outline"}
+            variant={action.primary ? "success" : "outline"}
             className={cn(
-              "min-w-[140px] shrink-0 sm:min-w-0 transition-transform active:scale-[0.98] sm:hover:scale-[1.02]",
-              action.primary &&
-                "bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-primary dark:hover:bg-primary/90"
+              "min-w-[140px] shrink-0 sm:min-w-0 transition-transform active:scale-[0.98] sm:hover:scale-[1.02]"
             )}
           >
             <Link href={action.href} className="inline-flex items-center justify-center gap-2">
