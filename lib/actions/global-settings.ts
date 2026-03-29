@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { revalidateGlobalSettingsCache } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
 
 /** When to send the email. instant = immediately; 5m, 1h, 1d etc. = delayed (requires worker); on_dob = on user's date of birth (birthday template only). */
 export type SendAfterOption = "instant" | "5m" | "15m" | "30m" | "1h" | "2h" | "1d" | "2d" | "3d" | "5d" | "7d" | "10d" | "14d" | "21d" | "30d" | "60d" | "on_dob";
@@ -49,6 +50,25 @@ type GlobalSettingsRow = {
   enable_sms_alerts_new_jobs?: boolean;
   max_sms_per_user_per_day?: number | null;
   max_push_per_user_per_day?: number | null;
+  /** AUD; default aligns with lib/pricing-modifiers legacy fit */
+  pricing_base_rate_per_bedroom_aud?: number | null;
+  /** Scales (rate × beds × condition × levels); default 1 */
+  pricing_base_multiplier?: number | null;
+  pricing_condition_excellent_very_good_pct?: number | null;
+  pricing_condition_good_pct?: number | null;
+  pricing_condition_fair_average_pct?: number | null;
+  pricing_condition_poor_bad_pct?: number | null;
+  pricing_levels_two_pct?: number | null;
+  pricing_carpet_steam_per_bedroom_aud?: number | null;
+  pricing_walls_per_bedroom_aud?: number | null;
+  pricing_windows_per_bedroom_aud?: number | null;
+  pricing_addon_oven_aud?: number | null;
+  pricing_addon_balcony_aud?: number | null;
+  pricing_addon_garage_aud?: number | null;
+  pricing_addon_laundry_aud?: number | null;
+  pricing_addon_patio_aud?: number | null;
+  pricing_addon_fridge_aud?: number | null;
+  pricing_addon_blinds_aud?: number | null;
 };
 
 /** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
@@ -273,6 +293,23 @@ export type SaveGlobalSettingsInput = {
   enableSmsAlertsNewJobs?: boolean;
   maxSmsPerUserPerDay?: number | null;
   maxPushPerUserPerDay?: number | null;
+  pricingBaseRatePerBedroomAud?: number;
+  pricingBaseMultiplier?: number;
+  pricingConditionExcellentVeryGoodPct?: number;
+  pricingConditionGoodPct?: number;
+  pricingConditionFairAveragePct?: number;
+  pricingConditionPoorBadPct?: number;
+  pricingLevelsTwoPct?: number;
+  pricingCarpetSteamPerBedroomAud?: number;
+  pricingWallsPerBedroomAud?: number;
+  pricingWindowsPerBedroomAud?: number;
+  pricingAddonOvenAud?: number;
+  pricingAddonBalconyAud?: number;
+  pricingAddonGarageAud?: number;
+  pricingAddonLaundryAud?: number;
+  pricingAddonPatioAud?: number;
+  pricingAddonFridgeAud?: number;
+  pricingAddonBlindsAud?: number;
 };
 
 export type SaveGlobalSettingsResult =
@@ -314,6 +351,75 @@ export async function saveGlobalSettings(
     enable_sms_alerts_new_jobs: typeof data.enableSmsAlertsNewJobs === "boolean" ? data.enableSmsAlertsNewJobs : true,
     max_sms_per_user_per_day: data.maxSmsPerUserPerDay ?? null,
     max_push_per_user_per_day: data.maxPushPerUserPerDay ?? null,
+    pricing_base_rate_per_bedroom_aud:
+      typeof data.pricingBaseRatePerBedroomAud === "number" && Number.isFinite(data.pricingBaseRatePerBedroomAud)
+        ? Math.max(1, data.pricingBaseRatePerBedroomAud)
+        : DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud,
+    pricing_base_multiplier:
+      typeof data.pricingBaseMultiplier === "number" && Number.isFinite(data.pricingBaseMultiplier)
+        ? Math.max(0.01, data.pricingBaseMultiplier)
+        : DEFAULT_PRICING_MODIFIERS.baseMultiplier,
+    pricing_condition_excellent_very_good_pct:
+      typeof data.pricingConditionExcellentVeryGoodPct === "number" && Number.isFinite(data.pricingConditionExcellentVeryGoodPct)
+        ? Math.max(0, data.pricingConditionExcellentVeryGoodPct)
+        : 0,
+    pricing_condition_good_pct:
+      typeof data.pricingConditionGoodPct === "number" && Number.isFinite(data.pricingConditionGoodPct)
+        ? Math.max(0, data.pricingConditionGoodPct)
+        : 12,
+    pricing_condition_fair_average_pct:
+      typeof data.pricingConditionFairAveragePct === "number" && Number.isFinite(data.pricingConditionFairAveragePct)
+        ? Math.max(0, data.pricingConditionFairAveragePct)
+        : 25,
+    pricing_condition_poor_bad_pct:
+      typeof data.pricingConditionPoorBadPct === "number" && Number.isFinite(data.pricingConditionPoorBadPct)
+        ? Math.max(0, data.pricingConditionPoorBadPct)
+        : 40,
+    pricing_levels_two_pct:
+      typeof data.pricingLevelsTwoPct === "number" && Number.isFinite(data.pricingLevelsTwoPct)
+        ? Math.max(0, data.pricingLevelsTwoPct)
+        : 15,
+    pricing_carpet_steam_per_bedroom_aud:
+      typeof data.pricingCarpetSteamPerBedroomAud === "number" &&
+      Number.isFinite(data.pricingCarpetSteamPerBedroomAud)
+        ? Math.max(0, data.pricingCarpetSteamPerBedroomAud)
+        : DEFAULT_PRICING_MODIFIERS.carpetSteamPerBedroomAud,
+    pricing_walls_per_bedroom_aud:
+      typeof data.pricingWallsPerBedroomAud === "number" && Number.isFinite(data.pricingWallsPerBedroomAud)
+        ? Math.max(0, data.pricingWallsPerBedroomAud)
+        : DEFAULT_PRICING_MODIFIERS.wallsPerBedroomAud,
+    pricing_windows_per_bedroom_aud:
+      typeof data.pricingWindowsPerBedroomAud === "number" && Number.isFinite(data.pricingWindowsPerBedroomAud)
+        ? Math.max(0, data.pricingWindowsPerBedroomAud)
+        : DEFAULT_PRICING_MODIFIERS.windowsPerBedroomAud,
+    pricing_addon_oven_aud:
+      typeof data.pricingAddonOvenAud === "number" && Number.isFinite(data.pricingAddonOvenAud)
+        ? Math.max(0, data.pricingAddonOvenAud)
+        : DEFAULT_PRICING_MODIFIERS.addonOvenAud,
+    pricing_addon_balcony_aud:
+      typeof data.pricingAddonBalconyAud === "number" && Number.isFinite(data.pricingAddonBalconyAud)
+        ? Math.max(0, data.pricingAddonBalconyAud)
+        : DEFAULT_PRICING_MODIFIERS.addonBalconyAud,
+    pricing_addon_garage_aud:
+      typeof data.pricingAddonGarageAud === "number" && Number.isFinite(data.pricingAddonGarageAud)
+        ? Math.max(0, data.pricingAddonGarageAud)
+        : DEFAULT_PRICING_MODIFIERS.addonGarageAud,
+    pricing_addon_laundry_aud:
+      typeof data.pricingAddonLaundryAud === "number" && Number.isFinite(data.pricingAddonLaundryAud)
+        ? Math.max(0, data.pricingAddonLaundryAud)
+        : DEFAULT_PRICING_MODIFIERS.addonLaundryAud,
+    pricing_addon_patio_aud:
+      typeof data.pricingAddonPatioAud === "number" && Number.isFinite(data.pricingAddonPatioAud)
+        ? Math.max(0, data.pricingAddonPatioAud)
+        : DEFAULT_PRICING_MODIFIERS.addonPatioAud,
+    pricing_addon_fridge_aud:
+      typeof data.pricingAddonFridgeAud === "number" && Number.isFinite(data.pricingAddonFridgeAud)
+        ? Math.max(0, data.pricingAddonFridgeAud)
+        : DEFAULT_PRICING_MODIFIERS.addonFridgeAud,
+    pricing_addon_blinds_aud:
+      typeof data.pricingAddonBlindsAud === "number" && Number.isFinite(data.pricingAddonBlindsAud)
+        ? Math.max(0, data.pricingAddonBlindsAud)
+        : DEFAULT_PRICING_MODIFIERS.addonBlindsAud,
   };
 
   const { error } = admin
@@ -351,6 +457,7 @@ export async function saveGlobalSettings(
   revalidatePath("/admin/emails");
   revalidatePath("/");
   revalidatePath("/", "layout");
+  revalidatePath("/listings/new");
   revalidateGlobalSettingsCache();
 
   // Clear Stripe config/server cache so next request uses the new test/live mode

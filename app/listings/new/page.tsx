@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { resolvePricingModifiersFromGlobal } from "@/lib/pricing-modifiers";
 import { NewListingFormLazy } from "./new-listing-form-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -99,12 +100,17 @@ const NewListingPage = async () => {
       settings.fee_percentage) ||
     12;
 
+  const pricingModifiers = resolvePricingModifiersFromGlobal(
+    settings as Record<string, unknown> | null
+  );
+
   return (
     <NewListingFormLazy
       listerId={session.user.id}
       listerSuburb={profile.suburb ?? undefined}
       listerPostcode={profile.postcode ?? ""}
       feePercentage={feePercentage}
+      pricingModifiers={pricingModifiers}
     />
   );
 };

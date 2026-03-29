@@ -28,6 +28,8 @@ import {
 } from "@/lib/actions/global-settings";
 import { sendGlobalSettingsTestEmail } from "@/lib/actions/admin-email-templates";
 import { sendAdminTestNotification } from "@/lib/actions/notifications";
+import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
+import { getListingAddonLabel } from "@/lib/listing-addon-prices";
 
 export type AdminGlobalSettingsFormProps = {
   initial: Partial<SaveGlobalSettingsInput> | null;
@@ -114,6 +116,60 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
     "daily" | "weekly" | "monthly"
   >(initial?.payoutSchedule ?? "weekly");
 
+  const [pricingBaseRatePerBedroomAud, setPricingBaseRatePerBedroomAud] = React.useState(
+    initial?.pricingBaseRatePerBedroomAud ?? DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud
+  );
+  const [pricingBaseMultiplier, setPricingBaseMultiplier] = React.useState(
+    initial?.pricingBaseMultiplier ?? DEFAULT_PRICING_MODIFIERS.baseMultiplier
+  );
+  const [pricingConditionExcellentVeryGoodPct, setPricingConditionExcellentVeryGoodPct] =
+    React.useState(
+      initial?.pricingConditionExcellentVeryGoodPct ??
+        DEFAULT_PRICING_MODIFIERS.conditionExcellentVeryGoodPct
+    );
+  const [pricingConditionGoodPct, setPricingConditionGoodPct] = React.useState(
+    initial?.pricingConditionGoodPct ?? DEFAULT_PRICING_MODIFIERS.conditionGoodPct
+  );
+  const [pricingConditionFairAveragePct, setPricingConditionFairAveragePct] = React.useState(
+    initial?.pricingConditionFairAveragePct ?? DEFAULT_PRICING_MODIFIERS.conditionFairAveragePct
+  );
+  const [pricingConditionPoorBadPct, setPricingConditionPoorBadPct] = React.useState(
+    initial?.pricingConditionPoorBadPct ?? DEFAULT_PRICING_MODIFIERS.conditionPoorBadPct
+  );
+  const [pricingLevelsTwoPct, setPricingLevelsTwoPct] = React.useState(
+    initial?.pricingLevelsTwoPct ?? DEFAULT_PRICING_MODIFIERS.levelsTwoPct
+  );
+  const [pricingCarpetSteamPerBedroomAud, setPricingCarpetSteamPerBedroomAud] = React.useState(
+    initial?.pricingCarpetSteamPerBedroomAud ?? DEFAULT_PRICING_MODIFIERS.carpetSteamPerBedroomAud
+  );
+  const [pricingWallsPerBedroomAud, setPricingWallsPerBedroomAud] = React.useState(
+    initial?.pricingWallsPerBedroomAud ?? DEFAULT_PRICING_MODIFIERS.wallsPerBedroomAud
+  );
+  const [pricingWindowsPerBedroomAud, setPricingWindowsPerBedroomAud] = React.useState(
+    initial?.pricingWindowsPerBedroomAud ?? DEFAULT_PRICING_MODIFIERS.windowsPerBedroomAud
+  );
+  const [pricingAddonOvenAud, setPricingAddonOvenAud] = React.useState(
+    initial?.pricingAddonOvenAud ?? DEFAULT_PRICING_MODIFIERS.addonOvenAud
+  );
+  const [pricingAddonBalconyAud, setPricingAddonBalconyAud] = React.useState(
+    initial?.pricingAddonBalconyAud ?? DEFAULT_PRICING_MODIFIERS.addonBalconyAud
+  );
+  const [pricingAddonGarageAud, setPricingAddonGarageAud] = React.useState(
+    initial?.pricingAddonGarageAud ?? DEFAULT_PRICING_MODIFIERS.addonGarageAud
+  );
+  const [pricingAddonLaundryAud, setPricingAddonLaundryAud] = React.useState(
+    initial?.pricingAddonLaundryAud ?? DEFAULT_PRICING_MODIFIERS.addonLaundryAud
+  );
+  const [pricingAddonPatioAud, setPricingAddonPatioAud] = React.useState(
+    initial?.pricingAddonPatioAud ?? DEFAULT_PRICING_MODIFIERS.addonPatioAud
+  );
+  const [pricingAddonFridgeAud, setPricingAddonFridgeAud] = React.useState(
+    initial?.pricingAddonFridgeAud ?? DEFAULT_PRICING_MODIFIERS.addonFridgeAud
+  );
+  const [pricingAddonBlindsAud, setPricingAddonBlindsAud] = React.useState(
+    initial?.pricingAddonBlindsAud ?? DEFAULT_PRICING_MODIFIERS.addonBlindsAud
+  );
+
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [testEmailTo, setTestEmailTo] = React.useState("");
@@ -177,6 +233,38 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       enableSmsAlertsNewJobs,
       maxSmsPerUserPerDay: maxSmsPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxSmsPerUserPerDay, 10) || 5)) : undefined,
       maxPushPerUserPerDay: maxPushPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxPushPerUserPerDay, 10) || 5)) : undefined,
+      pricingBaseRatePerBedroomAud: Math.max(1, Number(pricingBaseRatePerBedroomAud) || DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud),
+      pricingBaseMultiplier: Math.max(
+        0.01,
+        Number(pricingBaseMultiplier) || DEFAULT_PRICING_MODIFIERS.baseMultiplier
+      ),
+      pricingConditionExcellentVeryGoodPct: Math.max(
+        0,
+        Number(pricingConditionExcellentVeryGoodPct) || 0
+      ),
+      pricingConditionGoodPct: Math.max(0, Number(pricingConditionGoodPct) || 0),
+      pricingConditionFairAveragePct: Math.max(0, Number(pricingConditionFairAveragePct) || 0),
+      pricingConditionPoorBadPct: Math.max(0, Number(pricingConditionPoorBadPct) || 0),
+      pricingLevelsTwoPct: Math.max(0, Number(pricingLevelsTwoPct) || 0),
+      pricingCarpetSteamPerBedroomAud: Math.max(
+        0,
+        Number(pricingCarpetSteamPerBedroomAud) || DEFAULT_PRICING_MODIFIERS.carpetSteamPerBedroomAud
+      ),
+      pricingWallsPerBedroomAud: Math.max(
+        0,
+        Number(pricingWallsPerBedroomAud) || DEFAULT_PRICING_MODIFIERS.wallsPerBedroomAud
+      ),
+      pricingWindowsPerBedroomAud: Math.max(
+        0,
+        Number(pricingWindowsPerBedroomAud) || DEFAULT_PRICING_MODIFIERS.windowsPerBedroomAud
+      ),
+      pricingAddonOvenAud: Math.max(0, Number(pricingAddonOvenAud) || DEFAULT_PRICING_MODIFIERS.addonOvenAud),
+      pricingAddonBalconyAud: Math.max(0, Number(pricingAddonBalconyAud) || DEFAULT_PRICING_MODIFIERS.addonBalconyAud),
+      pricingAddonGarageAud: Math.max(0, Number(pricingAddonGarageAud) || DEFAULT_PRICING_MODIFIERS.addonGarageAud),
+      pricingAddonLaundryAud: Math.max(0, Number(pricingAddonLaundryAud) || DEFAULT_PRICING_MODIFIERS.addonLaundryAud),
+      pricingAddonPatioAud: Math.max(0, Number(pricingAddonPatioAud) || DEFAULT_PRICING_MODIFIERS.addonPatioAud),
+      pricingAddonFridgeAud: Math.max(0, Number(pricingAddonFridgeAud) || DEFAULT_PRICING_MODIFIERS.addonFridgeAud),
+      pricingAddonBlindsAud: Math.max(0, Number(pricingAddonBlindsAud) || DEFAULT_PRICING_MODIFIERS.addonBlindsAud),
     };
 
     startTransition(async () => {
@@ -304,6 +392,216 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </div>
           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
             Leave blank for defaults (5 SMS / 5 push). Triggers from listing publish: <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">notifyNearbyCleanersOfNewListing</code>.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold dark:text-gray-100">
+            Pricing modifiers
+          </CardTitle>
+          <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+            Used on <strong className="text-foreground dark:text-gray-200">New listing</strong> for the suggested base:{" "}
+            <span className="font-mono text-[10px] sm:text-[11px]">
+              (base rate × bedrooms) × condition × levels × base multiplier
+            </span>
+            , then selected add-ons (carpet steam, walls, and windows use rate × bedrooms; others are flat amounts below).
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Label htmlFor="pricing-base-rate" className="text-xs font-medium shrink-0">
+              Base rate per bedroom (AUD)
+            </Label>
+            <Input
+              id="pricing-base-rate"
+              type="number"
+              min={1}
+              step={1}
+              inputMode="decimal"
+              value={pricingBaseRatePerBedroomAud}
+              onChange={(e) => setPricingBaseRatePerBedroomAud(Number(e.target.value))}
+              className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
+            />
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Label htmlFor="pricing-base-multiplier" className="text-xs font-medium shrink-0">
+              Base multiplier
+            </Label>
+            <Input
+              id="pricing-base-multiplier"
+              type="number"
+              min={0.01}
+              step={0.01}
+              inputMode="decimal"
+              value={pricingBaseMultiplier}
+              onChange={(e) => setPricingBaseMultiplier(Number(e.target.value))}
+              className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
+            />
+          </div>
+          <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 dark:border-gray-700 dark:bg-gray-900/50">
+            <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+              Add-ons — per bedroom (AUD each; line total = rate × bedrooms on new listing)
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Label htmlFor="pricing-carpet-steam-pb" className="text-xs font-medium shrink-0">
+                Carpet steam per bedroom
+              </Label>
+              <Input
+                id="pricing-carpet-steam-pb"
+                type="number"
+                min={0}
+                step={1}
+                inputMode="decimal"
+                value={pricingCarpetSteamPerBedroomAud}
+                onChange={(e) => setPricingCarpetSteamPerBedroomAud(Number(e.target.value))}
+                className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
+              />
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Label htmlFor="pricing-walls-pb" className="text-xs font-medium shrink-0">
+                Walls per bedroom
+              </Label>
+              <Input
+                id="pricing-walls-pb"
+                type="number"
+                min={0}
+                step={1}
+                inputMode="decimal"
+                value={pricingWallsPerBedroomAud}
+                onChange={(e) => setPricingWallsPerBedroomAud(Number(e.target.value))}
+                className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
+              />
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Label htmlFor="pricing-windows-pb" className="text-xs font-medium shrink-0">
+                Windows per bedroom
+              </Label>
+              <Input
+                id="pricing-windows-pb"
+                type="number"
+                min={0}
+                step={1}
+                inputMode="decimal"
+                value={pricingWindowsPerBedroomAud}
+                onChange={(e) => setPricingWindowsPerBedroomAud(Number(e.target.value))}
+                className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
+              />
+            </div>
+          </div>
+          <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 dark:border-gray-700 dark:bg-gray-900/50">
+            <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+              Add-ons — flat (AUD per job when selected)
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(
+                [
+                  ["oven", pricingAddonOvenAud, setPricingAddonOvenAud] as const,
+                  ["balcony", pricingAddonBalconyAud, setPricingAddonBalconyAud] as const,
+                  ["garage", pricingAddonGarageAud, setPricingAddonGarageAud] as const,
+                  ["laundry", pricingAddonLaundryAud, setPricingAddonLaundryAud] as const,
+                  ["patio", pricingAddonPatioAud, setPricingAddonPatioAud] as const,
+                  ["fridge", pricingAddonFridgeAud, setPricingAddonFridgeAud] as const,
+                  ["blinds", pricingAddonBlindsAud, setPricingAddonBlindsAud] as const,
+                ] as const
+              ).map(([key, val, setVal]) => (
+                <div
+                  key={key}
+                  className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <Label htmlFor={`addon-flat-${key}`} className="text-xs font-medium shrink-0">
+                    {getListingAddonLabel(key)}
+                  </Label>
+                  <Input
+                    id={`addon-flat-${key}`}
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="decimal"
+                    value={val}
+                    onChange={(e) => setVal(Number(e.target.value))}
+                    className="h-9 max-w-full sm:max-w-[6rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 dark:border-gray-700 dark:bg-gray-900/50">
+            <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+              Condition surcharge (% added to base before levels)
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                <Label className="text-[11px] font-normal text-muted-foreground dark:text-gray-400">
+                  Excellent / Very Good
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={pricingConditionExcellentVeryGoodPct}
+                  onChange={(e) => setPricingConditionExcellentVeryGoodPct(Number(e.target.value))}
+                  className="h-8 w-full sm:w-20 text-right text-xs dark:bg-gray-900 dark:border-gray-700"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                <Label className="text-[11px] font-normal text-muted-foreground dark:text-gray-400">
+                  Good
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={pricingConditionGoodPct}
+                  onChange={(e) => setPricingConditionGoodPct(Number(e.target.value))}
+                  className="h-8 w-full sm:w-20 text-right text-xs dark:bg-gray-900 dark:border-gray-700"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                <Label className="text-[11px] font-normal text-muted-foreground dark:text-gray-400">
+                  Fair / Average
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={pricingConditionFairAveragePct}
+                  onChange={(e) => setPricingConditionFairAveragePct(Number(e.target.value))}
+                  className="h-8 w-full sm:w-20 text-right text-xs dark:bg-gray-900 dark:border-gray-700"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                <Label className="text-[11px] font-normal text-muted-foreground dark:text-gray-400">
+                  Poor / Bad
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={pricingConditionPoorBadPct}
+                  onChange={(e) => setPricingConditionPoorBadPct(Number(e.target.value))}
+                  className="h-8 w-full sm:w-20 text-right text-xs dark:bg-gray-900 dark:border-gray-700"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Label htmlFor="pricing-levels-two" className="text-xs font-medium shrink-0">
+              Two levels surcharge (%)
+            </Label>
+            <Input
+              id="pricing-levels-two"
+              type="number"
+              min={0}
+              step={0.5}
+              value={pricingLevelsTwoPct}
+              onChange={(e) => setPricingLevelsTwoPct(Number(e.target.value))}
+              className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+            One level uses 0%. Percentages are applied as multipliers: 1 + (pct ÷ 100). Base multiplier scales the whole estimate (e.g. 1.05 for a 5% uplift).
           </p>
         </CardContent>
       </Card>

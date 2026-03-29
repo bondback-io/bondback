@@ -7,6 +7,10 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminGlobalSettingsForm } from "@/components/admin/admin-global-settings-form";
 import { AdminEmailTemplates } from "@/components/admin/admin-email-templates";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import {
+  DEFAULT_PRICING_MODIFIERS,
+  normalizeBaseRatePerBedroomFromGlobal,
+} from "@/lib/pricing-modifiers";
 import { getEmailTemplates } from "@/lib/actions/admin-email-templates";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -78,6 +82,49 @@ export default async function AdminGlobalSettingsPage() {
         enableSmsAlertsNewJobs: (existing as { enable_sms_alerts_new_jobs?: boolean }).enable_sms_alerts_new_jobs ?? true,
         maxSmsPerUserPerDay: (existing as { max_sms_per_user_per_day?: number | null }).max_sms_per_user_per_day ?? undefined,
         maxPushPerUserPerDay: (existing as { max_push_per_user_per_day?: number | null }).max_push_per_user_per_day ?? undefined,
+        pricingBaseRatePerBedroomAud: normalizeBaseRatePerBedroomFromGlobal(
+          (existing as { pricing_base_rate_per_bedroom_aud?: number | null }).pricing_base_rate_per_bedroom_aud
+        ),
+        pricingBaseMultiplier:
+          (existing as { pricing_base_multiplier?: number | null }).pricing_base_multiplier ??
+          DEFAULT_PRICING_MODIFIERS.baseMultiplier,
+        pricingConditionExcellentVeryGoodPct:
+          (existing as { pricing_condition_excellent_very_good_pct?: number | null }).pricing_condition_excellent_very_good_pct ?? 0,
+        pricingConditionGoodPct: (existing as { pricing_condition_good_pct?: number | null }).pricing_condition_good_pct ?? 12,
+        pricingConditionFairAveragePct:
+          (existing as { pricing_condition_fair_average_pct?: number | null }).pricing_condition_fair_average_pct ?? 25,
+        pricingConditionPoorBadPct: (existing as { pricing_condition_poor_bad_pct?: number | null }).pricing_condition_poor_bad_pct ?? 40,
+        pricingLevelsTwoPct: (existing as { pricing_levels_two_pct?: number | null }).pricing_levels_two_pct ?? 15,
+        pricingCarpetSteamPerBedroomAud:
+          (existing as { pricing_carpet_steam_per_bedroom_aud?: number | null }).pricing_carpet_steam_per_bedroom_aud ??
+          DEFAULT_PRICING_MODIFIERS.carpetSteamPerBedroomAud,
+        pricingWallsPerBedroomAud:
+          (existing as { pricing_walls_per_bedroom_aud?: number | null }).pricing_walls_per_bedroom_aud ??
+          DEFAULT_PRICING_MODIFIERS.wallsPerBedroomAud,
+        pricingWindowsPerBedroomAud:
+          (existing as { pricing_windows_per_bedroom_aud?: number | null }).pricing_windows_per_bedroom_aud ??
+          DEFAULT_PRICING_MODIFIERS.windowsPerBedroomAud,
+        pricingAddonOvenAud:
+          (existing as { pricing_addon_oven_aud?: number | null }).pricing_addon_oven_aud ??
+          DEFAULT_PRICING_MODIFIERS.addonOvenAud,
+        pricingAddonBalconyAud:
+          (existing as { pricing_addon_balcony_aud?: number | null }).pricing_addon_balcony_aud ??
+          DEFAULT_PRICING_MODIFIERS.addonBalconyAud,
+        pricingAddonGarageAud:
+          (existing as { pricing_addon_garage_aud?: number | null }).pricing_addon_garage_aud ??
+          DEFAULT_PRICING_MODIFIERS.addonGarageAud,
+        pricingAddonLaundryAud:
+          (existing as { pricing_addon_laundry_aud?: number | null }).pricing_addon_laundry_aud ??
+          DEFAULT_PRICING_MODIFIERS.addonLaundryAud,
+        pricingAddonPatioAud:
+          (existing as { pricing_addon_patio_aud?: number | null }).pricing_addon_patio_aud ??
+          DEFAULT_PRICING_MODIFIERS.addonPatioAud,
+        pricingAddonFridgeAud:
+          (existing as { pricing_addon_fridge_aud?: number | null }).pricing_addon_fridge_aud ??
+          DEFAULT_PRICING_MODIFIERS.addonFridgeAud,
+        pricingAddonBlindsAud:
+          (existing as { pricing_addon_blinds_aud?: number | null }).pricing_addon_blinds_aud ??
+          DEFAULT_PRICING_MODIFIERS.addonBlindsAud,
       }
     : null;
 

@@ -17,6 +17,8 @@ export const PHOTO_VALIDATION = {
 
 /** Max number of photos per context */
 export const PHOTO_LIMITS = {
+  /** Minimum initial condition photos required to publish (users may continue the wizard with fewer). */
+  LISTING_INITIAL_MIN_PUBLISH: 3,
   LISTING_INITIAL: 15,
   JOB_AFTER: 12,
   PORTFOLIO: 12,

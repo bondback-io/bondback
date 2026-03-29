@@ -182,6 +182,10 @@ export interface Database {
           platform_fee_percentage: number;
           /** Set when lister ends auction early (cancel listing); null for natural end. */
           cancelled_early_at: string | null;
+          /** excellent_very_good | good | fair_average | poor_bad */
+          property_condition: string | null;
+          /** "1" | "2" */
+          property_levels: string | null;
         };
         Insert: {
           id?: string;
@@ -209,6 +213,8 @@ export interface Database {
           created_at?: string;
           platform_fee_percentage?: number;
           cancelled_early_at?: string | null;
+          property_condition?: string | null;
+          property_levels?: string | null;
         };
         Update: {
           title?: string;
@@ -233,6 +239,8 @@ export interface Database {
           end_time?: string;
           platform_fee_percentage?: number;
           cancelled_early_at?: string | null;
+          property_condition?: string | null;
+          property_levels?: string | null;
         };
         Relationships: [
           {

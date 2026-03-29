@@ -58,6 +58,8 @@ export type ListingInsertPayload = ListingInsert & {
   preferred_dates?: string[] | null;
   initial_photos?: string[] | null;
   property_address?: string | null;
+  property_condition?: string | null;
+  property_levels?: string | null;
 };
 
 /**
@@ -92,6 +94,8 @@ export function buildListingInsertRow(params: {
   platform_fee_percentage: number;
   preferred_dates?: string[] | null;
   initial_photos?: string[] | null;
+  property_condition: string | null;
+  property_levels: string | null;
 }): ListingInsertPayload {
   return {
     lister_id: params.lister_id,
@@ -119,6 +123,8 @@ export function buildListingInsertRow(params: {
     end_date: params.end_date,
     platform_fee_percentage: params.platform_fee_percentage,
     preferred_dates: params.preferred_dates ?? null,
+    property_condition: params.property_condition,
+    property_levels: params.property_levels,
     // initial_photos are set in a second step via updateListingInitialPhotos (not sent on insert so DB without column still works)
   };
 }

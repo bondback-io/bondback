@@ -39,6 +39,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar } from "@/components/ui/calendar";
 import { FieldHelp } from "@/components/ui/field-help";
 import {
@@ -83,6 +84,24 @@ import {
   updateListingCoverPhoto,
   triggerNewListingJobAlerts,
 } from "@/lib/actions/listings";
+import {
+  computeBaseListingPriceAud,
+  getListingAddonPriceFromModifiers,
+  PROPERTY_CONDITION_OPTIONS,
+  PROPERTY_LEVELS_OPTIONS,
+  type PricingModifiersConfig,
+  type PropertyConditionKey,
+  type PropertyLevelsKey,
+} from "@/lib/pricing-modifiers";
+import {
+  LISTING_ADDON_KEYS,
+  getListingAddonLabel,
+  type ListingAddonKey,
+} from "@/lib/listing-addon-prices";
+
+const listingAddonZodEnum = z.enum(
+  LISTING_ADDON_KEYS as unknown as [string, ...string[]]
+);
 
 const propertyTypes = ["apartment", "house", "townhouse", "studio"] as const;
 type PropertyType = (typeof propertyTypes)[number];
@@ -90,41 +109,14 @@ type PropertyType = (typeof propertyTypes)[number];
 const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
 type SpecialAreaKey = (typeof specialAreaKeys)[number];
 
-const addonKeys = [
-  "oven",
-  "carpet_steam",
-  "windows",
-  "balcony",
-  "garage",
-  "laundry",
-  "patio",
-  "fridge",
-  "walls",
-  "blinds",
-] as const;
-type AddonKey = (typeof addonKeys)[number];
-
 const durationOptions = [1, 3, 5, 7] as const;
 
-const ADDON_CONFIG: Record<AddonKey, { label: string; price: number }> = {
-  oven: { label: "Oven", price: 50 },
-  carpet_steam: { label: "Carpet steam", price: 120 },
-  windows: { label: "Windows", price: 80 },
-  balcony: { label: "Balcony", price: 40 },
-  garage: { label: "Garage", price: 50 },
-  laundry: { label: "Laundry", price: 45 },
-  patio: { label: "Patio", price: 40 },
-  fridge: { label: "Fridge", price: 30 },
-  walls: { label: "Walls", price: 60 },
-  blinds: { label: "Blinds", price: 40 },
-};
-
-const BASE_PRICES: Record<PropertyType, Record<number, number>> = {
-  apartment: { 1: 300, 2: 380, 3: 480, 4: 620, 5: 720, 6: 820 },
-  house: { 1: 340, 2: 430, 3: 550, 4: 720, 5: 840, 6: 960 },
-  townhouse: { 1: 320, 2: 400, 3: 500, 4: 650, 5: 760, 6: 880 },
-  studio: { 1: 260, 2: 320, 3: 380, 4: 440, 5: 500, 6: 560 },
-};
+const propertyConditionKeys = [
+  "excellent_very_good",
+  "good",
+  "fair_average",
+  "poor_bad",
+] as const;
 
 /** Minimum starting price (AUD) for new listings — auction settings. */
 const MIN_LISTING_STARTING_PRICE_AUD = 100;
@@ -134,6 +126,8 @@ const listingSchema = z
     propertyType: z.enum(propertyTypes),
     bedrooms: z.coerce.number().int().min(1).max(6),
     bathrooms: z.coerce.number().int().min(1).max(5),
+    propertyCondition: z.enum(propertyConditionKeys),
+    propertyLevels: z.enum(["1", "2"]),
     specialAreas: z.array(z.enum(specialAreaKeys)).default([]),
     suburb: z.string().min(1, "Select or enter your suburb"),
     postcode: z
@@ -141,7 +135,7 @@ const listingSchema = z
       .trim()
       .regex(/^\d{4}$/, "Postcode must be a 4-digit Australian postcode"),
     propertyAddress: z.string().max(200).optional(),
-    addons: z.array(z.enum(addonKeys)).default([]),
+    addons: z.array(listingAddonZodEnum).default([]),
     instructions: z.string().max(2000).optional(),
     moveOutDate: z.date({ required_error: "Select your move-out date" }),
     reservePrice: z.coerce.number().min(
@@ -171,33 +165,27 @@ const listingSchema = z
 
 type ListingFormValues = z.infer<typeof listingSchema>;
 
-/** Get price for an addon: custom price if set and valid, else default from config. */
-function getAddonPrice(
-  key: AddonKey,
-  customPrices: Record<string, string> | undefined
-): number {
-  const custom = customPrices?.[key];
-  if (custom != null && custom.trim() !== "") {
-    const n = Number(custom.trim());
-    if (!Number.isNaN(n) && n >= 0) return n;
-  }
-  return ADDON_CONFIG[key]?.price ?? 0;
-}
-
 function calculateEstimatedPrice(
   values: ListingFormValues,
-  addonCustomPrices: Record<string, string> | undefined
+  pricingModifiers: PricingModifiersConfig
 ): number {
-  const base =
-    BASE_PRICES[values.propertyType]?.[values.bedrooms] ??
-    BASE_PRICES[values.propertyType]?.[2] ??
-    380;
-  const prices = addonCustomPrices ?? {};
+  const baseAud = computeBaseListingPriceAud(pricingModifiers, {
+    bedrooms: values.bedrooms,
+    condition: values.propertyCondition as PropertyConditionKey,
+    levels: values.propertyLevels as PropertyLevelsKey,
+  });
+  const beds = values.bedrooms;
   const addonsTotal = (values.addons ?? []).reduce(
-    (sum, key) => sum + getAddonPrice(key as AddonKey, prices),
+    (sum, key) =>
+      sum +
+      getListingAddonPriceFromModifiers(
+        pricingModifiers,
+        key as ListingAddonKey,
+        beds
+      ),
     0
   );
-  return base + addonsTotal;
+  return baseAud + addonsTotal;
 }
 
 type SuburbRow = { suburb: string; postcode: string | number; state: string | null };
@@ -208,6 +196,7 @@ export type NewListingFormProps = {
   listerSuburb: string;
   listerPostcode?: string | null;
   feePercentage?: number;
+  pricingModifiers: PricingModifiersConfig;
 };
 
 function platformFeeCents(jobAmountDollars: number, feePct: number): number {
@@ -238,6 +227,7 @@ export function NewListingForm({
   listerSuburb,
   listerPostcode = "",
   feePercentage = 12,
+  pricingModifiers,
 }: NewListingFormProps) {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
@@ -269,15 +259,14 @@ export function NewListingForm({
   const [submitPhase, setSubmitPhase] = useState<"idle" | "creating" | "uploading">("idle");
   const [photoStagingCount, setPhotoStagingCount] = useState(0);
 
-  /** Optional custom price per addon key (e.g. { balcony: "45" }). Empty string = use default. */
-  const [addonCustomPrices, setAddonCustomPrices] = useState<Record<string, string>>({});
-
   const form = useForm<ListingFormValues>({
     resolver: zodResolver(listingSchema),
     defaultValues: {
       propertyType: "apartment",
       bedrooms: 2,
       bathrooms: 1,
+      propertyCondition: "excellent_very_good",
+      propertyLevels: "1",
       specialAreas: [],
       suburb: listerSuburb || "",
       postcode: listerPostcode || "",
@@ -285,7 +274,11 @@ export function NewListingForm({
       addons: [],
       instructions: "",
       moveOutDate: undefined as unknown as Date,
-      reservePrice: 380,
+      reservePrice: computeBaseListingPriceAud(pricingModifiers, {
+        bedrooms: 2,
+        condition: "excellent_very_good",
+        levels: "1",
+      }),
       durationDays: 3,
       buyNowPrice: "",
     },
@@ -317,8 +310,8 @@ export function NewListingForm({
     [buyNowNum, feePercentage]
   );
   const estimatedPrice = useMemo(
-    () => calculateEstimatedPrice(watchedValues, addonCustomPrices),
-    [watchedValues, addonCustomPrices]
+    () => calculateEstimatedPrice(watchedValues, pricingModifiers),
+    [watchedValues, pricingModifiers]
   );
   /** True when user set starting price below the live calculated estimate (property + add-ons). */
   const startingPriceBelowSuggested =
@@ -334,7 +327,7 @@ export function NewListingForm({
     const nonSpecialAddons = currentAddons.filter(
       (a) => !(specialAreaKeys as readonly string[]).includes(a)
     );
-    const merged = [...new Set([...nonSpecialAddons, ...special])] as AddonKey[];
+    const merged = [...new Set([...nonSpecialAddons, ...special])] as ListingAddonKey[];
     if (
       merged.length !== currentAddons.length ||
       merged.some((a, i) => a !== currentAddons[i])
@@ -458,7 +451,7 @@ export function NewListingForm({
       const buyNow = values.buyNowPrice?.trim()
         ? Number(values.buyNowPrice)
         : null;
-      const startingPrice = calculateEstimatedPrice(values, addonCustomPrices);
+      const startingPrice = calculateEstimatedPrice(values, pricingModifiers);
       if (buyNow != null && buyNow >= startingPrice) {
         setSubmitError("Buy-now price must be lower than the starting bid price.");
         return;
@@ -485,11 +478,11 @@ export function NewListingForm({
         });
         return;
       }
-      if (initialPhotoFiles.length < 1) {
+      if (initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH) {
         toast({
           variant: "destructive",
           title: "Initial photos required",
-          description: "Upload at least 1 initial condition photo (step 3) before publishing.",
+          description: `Upload at least ${PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} initial condition photos (step 3) before publishing.`,
         });
         return;
       }
@@ -504,7 +497,7 @@ export function NewListingForm({
         property_type: values.propertyType,
         bedrooms: values.bedrooms,
         bathrooms: values.bathrooms,
-        addons: values.addons,
+        addons: [...new Set(values.addons)],
         special_instructions: instructions,
         move_out_date: moveOutDateStr,
         photo_urls: null,
@@ -520,6 +513,8 @@ export function NewListingForm({
         end_date: endTime.slice(0, 10),
         platform_fee_percentage: Math.max(0, Math.min(30, Number(feePercentage) || 12)),
         preferred_dates: [moveOutDateStr],
+        property_condition: values.propertyCondition,
+        property_levels: values.propertyLevels,
       });
 
       const { data: inserted, error } = await supabase
@@ -745,7 +740,7 @@ export function NewListingForm({
                   <div className="flex items-center gap-2">
                     <Label htmlFor="propertyType">Property type</Label>
                     <FieldHelp label="Property type help">
-                      Property type affects base pricing. Apartments and studios typically cost less than houses.
+                      Shown on your listing and in the job title. Base price uses bedrooms, condition, and levels (set below).
                     </FieldHelp>
                   </div>
                   <Controller
@@ -815,6 +810,77 @@ export function NewListingForm({
                     {form.formState.errors.bathrooms && (
                       <p className="text-xs text-destructive">
                         {form.formState.errors.bathrooms.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2 md:col-span-1">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="propertyCondition">Condition</Label>
+                      <FieldHelp label="Condition help">
+                        Rough overall state of the property. Adjusts the suggested base before add-ons.
+                      </FieldHelp>
+                    </div>
+                    <Controller
+                      control={form.control}
+                      name="propertyCondition"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger
+                            id="propertyCondition"
+                            className="w-full dark:bg-gray-800 dark:border-gray-700"
+                          >
+                            <SelectValue placeholder="Select condition" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PROPERTY_CONDITION_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    {form.formState.errors.propertyCondition && (
+                      <p className="text-xs text-destructive">
+                        {form.formState.errors.propertyCondition.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2 sm:col-span-2 md:col-span-1">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="propertyLevels">Number of levels</Label>
+                      <FieldHelp label="Levels help">
+                        Single-storey vs two-storey. Two levels add a surcharge to the base (before add-ons).
+                      </FieldHelp>
+                    </div>
+                    <Controller
+                      control={form.control}
+                      name="propertyLevels"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger
+                            id="propertyLevels"
+                            className="w-full dark:bg-gray-800 dark:border-gray-700"
+                          >
+                            <SelectValue placeholder="Select levels" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PROPERTY_LEVELS_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    {form.formState.errors.propertyLevels && (
+                      <p className="text-xs text-destructive">
+                        {form.formState.errors.propertyLevels.message}
                       </p>
                     )}
                   </div>
@@ -974,16 +1040,30 @@ export function NewListingForm({
                   Initial condition photos
                 </CardTitle>
                 <CardDescription className="dark:text-gray-400">
-                  Upload clear before photos of the entire property. This helps cleaners bid accurately and protects you in bond disputes. You must select one photo as the cover—it will be shown on job cards.
+                  Upload clear before photos of the entire property. You need at least{" "}
+                  {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} photos to publish; you can move on and come back. Select one photo as the cover—it will be shown on job cards.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 p-5 pt-0 md:p-6 md:pt-0">
+                {initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH && (
+                  <Alert variant="warning" className="px-4 py-3">
+                    <AlertDescription className="space-y-1.5 text-xs leading-relaxed sm:text-sm">
+                      <span className="block font-semibold text-amber-950 dark:text-amber-50">
+                        {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} photos required to publish
+                      </span>
+                      <span className="block text-amber-900/95 dark:text-amber-100/95">
+                        You have {initialPhotoFiles.length} of {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH}. Add enough photos here before you can publish.
+                        You can still use <strong className="font-medium">Next</strong> to continue the form and return to this step later.
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 dark:border-gray-700 dark:bg-gray-800/50">
                   <div className="flex flex-wrap items-center gap-3">
                     <Button type="button" variant="outline" size="lg" className="min-h-12 w-full gap-2 sm:w-auto md:min-h-0" asChild>
                       <label htmlFor="photos" className="cursor-pointer">
                         <ImagePlus className="h-5 w-5 md:h-4 md:w-4" />
-                        Upload photos (3–15 recommended)
+                        Upload photos (3 to publish, max {PHOTO_LIMITS.LISTING_INITIAL})
                       </label>
                     </Button>
                     <input
@@ -1140,9 +1220,11 @@ export function NewListingForm({
                       </div>
                     </>
                   )}
-                  {initialPhotoPreviews.length < 3 && initialPhotoPreviews.length > 0 && (
-                    <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                      We recommend at least 3 photos for better bids.
+                  {initialPhotoPreviews.length > 0 &&
+                    initialPhotoPreviews.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                      Add {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH - initialPhotoPreviews.length} more photo
+                      {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH - initialPhotoPreviews.length === 1 ? "" : "s"} to meet the minimum for publishing.
                     </p>
                   )}
                 </div>
@@ -1170,62 +1252,67 @@ export function NewListingForm({
                     ${estimatedPrice} AUD
                   </p>
                   <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                    Based on {watchedValues.bedrooms} bed, {watchedValues.bathrooms} bath {watchedValues.propertyType}.
+                    Base from rate × bedrooms × condition × levels × base multiplier; then selected add-ons (carpet steam,
+                    walls, and windows scale per bedroom).{" "}
+                    {PROPERTY_CONDITION_OPTIONS.find((o) => o.value === watchedValues.propertyCondition)?.label ?? ""}
+                    {", "}
+                    {PROPERTY_LEVELS_OPTIONS.find((o) => o.value === watchedValues.propertyLevels)?.label ?? ""}.
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Add-ons (with prices)</Label>
+                  <Label>Add-ons</Label>
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
-                    Special areas selected in step 1 are added here. You can set a custom price for any add-on (leave blank to use the default).
+                    Special areas selected in step 1 are included here. Amounts follow platform pricing (admin-configurable).
+                    Use special instructions if something is unusual.
                   </p>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {addonKeys.map((key) => {
-                      const addon = ADDON_CONFIG[key];
+                    {LISTING_ADDON_KEYS.map((key) => {
                       const isChecked = watchedValues.addons.includes(key);
-                      const customPrice = addonCustomPrices[key] ?? "";
+                      const beds = watchedValues.bedrooms ?? 1;
+                      const lineAud = getListingAddonPriceFromModifiers(
+                        pricingModifiers,
+                        key,
+                        beds
+                      );
                       return (
                         <div
                           key={key}
-                          className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-4 py-3 text-sm transition-colors hover:bg-muted/30 dark:border-gray-700 dark:hover:bg-gray-800"
+                          className="flex min-w-0 flex-col gap-1 rounded-lg border border-border px-4 py-3 text-sm transition-colors hover:bg-muted/30 dark:border-gray-700 dark:hover:bg-gray-800 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                         >
-                          <Checkbox
-                            id={`addon-${key}`}
-                            checked={isChecked}
-                            onCheckedChange={(checked) => {
-                              const next = checked
-                                ? [...watchedValues.addons, key]
-                                : watchedValues.addons.filter((a) => a !== key);
-                              form.setValue("addons", next, { shouldValidate: true });
-                            }}
-                          />
-                          <label
-                            htmlFor={`addon-${key}`}
-                            className="flex-1 cursor-pointer font-medium dark:text-gray-200"
-                          >
-                            {addon.label}
-                          </label>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-muted-foreground dark:text-gray-400">+$</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step={5}
-                              placeholder={String(addon.price)}
-                              className="h-8 w-20 text-right text-xs tabular-nums"
-                              value={customPrice}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setAddonCustomPrices((prev) => ({ ...prev, [key]: v }));
+                          <div className="flex min-w-0 items-start gap-2 sm:items-center">
+                            <Checkbox
+                              id={`addon-${key}`}
+                              checked={isChecked}
+                              className="mt-0.5 sm:mt-0"
+                              onCheckedChange={(checked) => {
+                                const next = checked
+                                  ? [...watchedValues.addons, key]
+                                  : watchedValues.addons.filter((a) => a !== key);
+                                form.setValue("addons", next, { shouldValidate: true });
                               }}
-                              onClick={(e) => e.stopPropagation()}
                             />
+                            <div className="min-w-0 flex-1">
+                              <label
+                                htmlFor={`addon-${key}`}
+                                className="cursor-pointer font-medium text-foreground dark:text-gray-200"
+                              >
+                                {getListingAddonLabel(key)}
+                              </label>
+                              {(key === "windows" ||
+                                key === "carpet_steam" ||
+                                key === "walls") && (
+                                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground dark:text-gray-500">
+                                  {key === "windows"
+                                    ? "Per-bedroom rate × bedrooms (set in Global Settings)."
+                                    : "Per-bedroom rate × bedrooms."}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          {!customPrice.trim() && (
-                            <span className="text-[11px] text-muted-foreground dark:text-gray-500">
-                              default ${addon.price}
-                            </span>
-                          )}
+                          <span className="shrink-0 pl-7 text-sm font-medium tabular-nums text-muted-foreground dark:text-gray-300 sm:pl-0">
+                            +${lineAud}
+                          </span>
                         </div>
                       );
                     })}
@@ -1302,25 +1389,30 @@ export function NewListingForm({
                   <CardDescription className="dark:text-gray-400">
                     Set your starting price and how long cleaners can bid.
                   </CardDescription>
-                  {initialPhotoFiles.length < 1 && (
+                  {initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH && (
                     <p className="mt-2 text-base text-amber-600 dark:text-amber-400 md:text-sm">
-                      Add at least 1 initial condition photo in step 3 to publish.
+                      Add at least {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} initial condition photos in step 3 to publish (
+                      {initialPhotoFiles.length} of {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} so far).
                     </p>
                   )}
                 </CardHeader>
                 <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
                 <div className="space-y-2">
-                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <Label htmlFor="reservePrice" className="shrink-0">
+                  <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-3">
+                    <Label htmlFor="reservePrice" className="shrink-0 text-sm">
                       Starting price (AUD)
                     </Label>
                     {startingPriceBelowSuggested && (
                       <p
-                        className="text-xs font-medium leading-snug text-destructive sm:max-w-[min(100%,20rem)] sm:text-right"
+                        className="text-[11px] font-medium leading-tight text-destructive max-md:max-w-[min(100%,22rem)] md:shrink-0 md:text-right md:text-xs md:leading-snug md:whitespace-nowrap"
                         role="status"
                         aria-live="polite"
                       >
-                        Lower amount less than {formatAudFromCents(Math.round(estimatedPrice * 100))} AUD may receive less bids…
+                        Lower amount less than{" "}
+                        <span className="tabular-nums">
+                          {formatAudFromCents(Math.round(estimatedPrice * 100))}
+                        </span>{" "}
+                        AUD may receive less bids…
                       </p>
                     )}
                   </div>
@@ -1545,7 +1637,13 @@ export function NewListingForm({
                 onClick={async () => {
                   let ok = true;
                   if (step === 1) {
-                    ok = await form.trigger(["propertyType", "bedrooms", "bathrooms"]);
+                    ok = await form.trigger([
+                      "propertyType",
+                      "bedrooms",
+                      "bathrooms",
+                      "propertyCondition",
+                      "propertyLevels",
+                    ]);
                   } else if (step === 2) {
                     ok = await form.trigger(["suburb", "postcode"]);
                   } else if (step === 4) {
@@ -1565,7 +1663,7 @@ export function NewListingForm({
                 disabled={
                   isSubmitting ||
                   uploading ||
-                  initialPhotoFiles.length < 1 ||
+                  initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH ||
                   initialPhotoFiles.length > PHOTO_LIMITS.LISTING_INITIAL
                 }
                 className="h-12 min-h-[48px] w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 md:h-10 md:min-h-0 md:w-auto"
@@ -1604,7 +1702,11 @@ export function NewListingForm({
                 <Button
                   type="button"
                   className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-                  disabled={isSubmitting || uploading}
+                  disabled={
+                    isSubmitting ||
+                    uploading ||
+                    initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH
+                  }
                   onClick={() => {
                     setPublishConfirmOpen(false);
                     void form.handleSubmit(onSubmit)();
