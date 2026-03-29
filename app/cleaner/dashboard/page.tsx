@@ -37,6 +37,7 @@ import {
   normalizeProfileRolesFromDb,
   resolveActiveRoleFromProfile,
 } from "@/lib/profile-roles";
+import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -108,6 +109,15 @@ export default async function CleanerDashboardPage() {
       j.status === "in_progress" ||
       j.status === "completed_pending_approval"
   );
+
+  const inProgressJobIds = activeJobs
+    .filter((j) => j.status === "in_progress")
+    .map((j) => Number(j.id))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  const markCompleteReadyByJobId = await getCleanerReadyToRequestPaymentByJobId(
+    supabase,
+    inProgressJobIds
+);
   const completedJobs = jobs.filter((j) => j.status === "completed");
   const cancelledJobs = jobs.filter((j) => j.status === "cancelled");
 
@@ -373,6 +383,10 @@ export default async function CleanerDashboardPage() {
                 listing,
                 daysLeft,
                 isUrgent,
+                canMarkCleanComplete:
+                  job.status === "in_progress"
+                    ? (markCompleteReadyByJobId.get(Number(job.id)) ?? false)
+                    : false,
               };
             })}
           />

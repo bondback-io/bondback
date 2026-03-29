@@ -19,6 +19,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
 import { logTimerActivity } from "@/lib/admin-activity-log";
+import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -1172,6 +1173,18 @@ export async function markJobChecklistFinished(
     };
   }
 
+  if (row.status === "in_progress") {
+    const jid = typeof row.id === "number" ? row.id : Number(row.id);
+    const readyMap = await getCleanerReadyToRequestPaymentByJobId(supabase, [jid]);
+    if (!readyMap.get(jid)) {
+      return {
+        ok: false,
+        error:
+          "Complete every checklist item and upload at least 3 after-photos before requesting payment.",
+      };
+    }
+  }
+
   const nowIso = new Date().toISOString();
   const settings = await getGlobalSettings();
   const autoReleaseHours = settings?.auto_release_hours ?? 48;
@@ -1227,6 +1240,7 @@ export async function markJobChecklistFinished(
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/cleaner/dashboard");
   revalidatePath(`/jobs/${row.id}`);
 
   return { ok: true };

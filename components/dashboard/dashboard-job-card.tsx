@@ -1,9 +1,12 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { formatCents, getListingCoverUrl } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
@@ -34,13 +37,72 @@ export type DashboardJobCardProps = {
   listing: ListingRow | null;
   daysLeft: number | null;
   isUrgent?: boolean;
+  /**
+   * When true (all checklist items done + ≥3 after-photos), show Mark Complete and call
+   * the same server action as job detail "Clean Complete — Request Payment".
+   */
+  canMarkCleanComplete?: boolean;
 };
+
+function MarkCompleteActionButton({
+  jobId,
+  className,
+  iconClassName,
+  size = "lg",
+}: {
+  jobId: number | string;
+  className: string;
+  iconClassName: string;
+  size?: React.ComponentProps<typeof Button>["size"];
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [loading, setLoading] = React.useState(false);
+
+  const onClick = async () => {
+    setLoading(true);
+    try {
+      const { markJobChecklistFinished } = await import("@/lib/actions/jobs");
+      const res = await markJobChecklistFinished(jobId);
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          title: "Could not request payment",
+          description: res.error ?? "Please try again.",
+        });
+        return;
+      }
+      toast({
+        title: "Lister notified",
+        description:
+          "They can review your work and release payment. The review timer has started.",
+      });
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      size={size}
+      disabled={loading}
+      onClick={() => void onClick()}
+      className={className}
+    >
+      <CheckCircle className={cn(iconClassName, "shrink-0")} aria-hidden />
+      {loading ? "Submitting…" : "Mark Complete"}
+    </Button>
+  );
+}
 
 export function DashboardJobCard({
   job,
   listing,
   daysLeft,
   isUrgent = false,
+  canMarkCleanComplete = false,
 }: DashboardJobCardProps) {
   const statusLabel =
     job.status === "accepted"
@@ -169,17 +231,13 @@ export function DashboardJobCard({
                 Message Lister
               </Link>
             </Button>
-            {job.status === "in_progress" && (
-              <Button
-                asChild
+            {job.status === "in_progress" && canMarkCleanComplete && (
+              <MarkCompleteActionButton
+                jobId={job.id}
                 size="lg"
                 className="min-h-14 w-full rounded-xl bg-emerald-600 text-lg font-semibold hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-              >
-                <Link href={`/jobs/${job.id}?complete=1`} className="flex items-center justify-center gap-2">
-                  <CheckCircle className="h-6 w-6" aria-hidden />
-                  Mark Complete
-                </Link>
-              </Button>
+                iconClassName="mr-2 h-6 w-6"
+              />
             )}
           </div>
         </div>
@@ -266,13 +324,13 @@ export function DashboardJobCard({
                 Message
               </Link>
             </Button>
-            {job.status === "in_progress" && (
-              <Button asChild className="min-h-11 rounded-full bg-emerald-600 px-5 text-sm font-semibold hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500">
-                <Link href={`/jobs/${job.id}?complete=1`}>
-                  <CheckCircle className="mr-1.5 h-4 w-4" />
-                  Mark Complete
-                </Link>
-              </Button>
+            {job.status === "in_progress" && canMarkCleanComplete && (
+              <MarkCompleteActionButton
+                jobId={job.id}
+                size="default"
+                className="min-h-11 rounded-full bg-emerald-600 px-5 text-sm font-semibold hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                iconClassName="mr-1.5 h-4 w-4"
+              />
             )}
           </div>
         </CardContent>
