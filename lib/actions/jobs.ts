@@ -20,6 +20,7 @@ import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
 import { logTimerActivity } from "@/lib/admin-activity-log";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
+import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -675,10 +676,10 @@ export async function fulfillJobPaymentFromSession(
 
       const rows: { job_id: number; label: string }[] = [];
       for (const addon of addons) {
-        const pretty = addon.replace(/_/g, " ");
+        const display = formatListingAddonDisplayName(addon);
         const label = isSpecialArea(addon)
-          ? `Special area: ${pretty.charAt(0).toUpperCase() + pretty.slice(1)}`
-          : `Add-on: ${pretty}`;
+          ? `Special area: ${display.charAt(0).toUpperCase() + display.slice(1)}`
+          : `Add-on: ${display}`;
         rows.push({ job_id: numericJobId, label });
       }
       for (const label of defaultLabels) {
@@ -867,10 +868,10 @@ export async function ensureJobChecklistIfEmpty(
   ];
   const rows: { job_id: number; label: string }[] = [];
   for (const addon of addons) {
-    const pretty = addon.replace(/_/g, " ");
+    const display = formatListingAddonDisplayName(addon);
     const label = isSpecialArea(addon)
-      ? `Special area: ${pretty.charAt(0).toUpperCase() + pretty.slice(1)}`
-      : `Add-on: ${pretty}`;
+      ? `Special area: ${display.charAt(0).toUpperCase() + display.slice(1)}`
+      : `Add-on: ${display}`;
     rows.push({ job_id: numericJobId, label });
   }
   for (const label of defaultLabels) {
@@ -982,10 +983,10 @@ export async function approveJobStart(
     }[] = [];
 
     for (const addon of addons) {
-      const pretty = addon.replace(/_/g, " ");
+      const display = formatListingAddonDisplayName(addon);
       const label = isSpecialArea(addon)
-        ? `Special area: ${pretty.charAt(0).toUpperCase() + pretty.slice(1)}`
-        : `Add-on: ${pretty}`;
+        ? `Special area: ${display.charAt(0).toUpperCase() + display.slice(1)}`
+        : `Add-on: ${display}`;
       rows.push({
         job_id: numericJobId,
         label,

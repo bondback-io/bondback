@@ -28,6 +28,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { ListingRow } from "@/lib/listings";
+import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
 import type { BidRow } from "@/lib/listings";
 import { Checkbox } from "@/components/ui/checkbox";
 import Image from "next/image";
@@ -2842,7 +2843,7 @@ export function JobDetail({
                   >
                     <span className="text-emerald-600 dark:text-emerald-400">✓</span>
                     <span className="capitalize">
-                      {addon.replace(/_/g, " ")}
+                      {formatListingAddonDisplayName(addon)}
                     </span>
                   </span>
                 ))}
