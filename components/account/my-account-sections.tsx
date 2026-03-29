@@ -69,7 +69,8 @@ function SectionHeader({
 }
 
 export type MyAccountSectionsProps = {
-  initialAccordion: string;
+  /** When set (e.g. `?tab=`), that section opens; otherwise all collapsed. */
+  initialAccordion: string | null;
   profile: ProfileRow;
   user: SupabaseUser;
   roles: string[];
@@ -86,23 +87,12 @@ export type MyAccountSectionsProps = {
   distanceUnitPref: DistanceUnitPref;
 };
 
-function defaultOpenSections(showPaymentsTab: boolean): string[] {
-  return [
-    "personal",
-    "roles",
-    "notifications",
-    ...(showPaymentsTab ? ["payments"] : []),
-    "security",
-    "help",
-  ];
-}
-
 function ensureSection(open: string[], value: string): string[] {
   return open.includes(value) ? open : [...open, value];
 }
 
 export function MyAccountSections({
-  initialAccordion: _initialAccordion,
+  initialAccordion,
   profile,
   user,
   roles,
@@ -119,7 +109,7 @@ export function MyAccountSections({
   distanceUnitPref,
 }: MyAccountSectionsProps) {
   const [openSections, setOpenSections] = React.useState<string[]>(() =>
-    defaultOpenSections(showPaymentsTab)
+    initialAccordion ? [initialAccordion] : []
   );
 
   React.useEffect(() => {

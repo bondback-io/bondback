@@ -172,10 +172,11 @@ const ProfilePage = async ({
   };
 
   const tabFromQuery = (sp.tab as string | undefined)?.toLowerCase();
-  const initialAccordion: string =
+  /** Only set when `?tab=` is present so account sections stay collapsed by default. */
+  const initialAccordion: string | null =
     tabFromQuery && tabFromQuery in TAB_TO_ACCORDION
       ? (TAB_TO_ACCORDION[tabFromQuery as keyof typeof TAB_TO_ACCORDION] ?? "personal")
-      : "personal";
+      : null;
 
   const notificationPrefs = (profile as { notification_preferences?: Record<string, boolean> | null })
     ?.notification_preferences ?? null;
