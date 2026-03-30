@@ -9,6 +9,7 @@ import { MainNav } from "@/components/layout/main-nav";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PendingBidsBadge } from "@/components/pwa/pending-bids-badge";
 import { ListerMobileCreateListingHeaderButton } from "@/components/layout/lister-mobile-create-header-button";
+import { getInAppNotificationFeedbackPrefs } from "@/lib/notifications/in-app-notification-prefs";
 
 export type HeaderProps = {
   className?: string;
@@ -42,6 +43,10 @@ export const Header = async ({
   const isCleaner = hasCleanerRole && activeRole === "cleaner";
   const isLister = roles.includes("lister") && activeRole === "lister";
 
+  const { inAppSoundEnabled, inAppVibrateEnabled } = session
+    ? getInAppNotificationFeedbackPrefs(session.profile?.notification_preferences)
+    : { inAppSoundEnabled: true, inAppVibrateEnabled: true };
+
   return (
     <header
       className={cn(
@@ -65,6 +70,8 @@ export const Header = async ({
               <NotificationBell
                 userId={session.user.id}
                 activeRole={session.activeRole}
+                inAppSoundEnabled={inAppSoundEnabled}
+                inAppVibrateEnabled={inAppVibrateEnabled}
               />
               <RoleSwitcher session={session} variant="compact" />
               <UserMenu session={session} />
@@ -95,6 +102,8 @@ export const Header = async ({
                 <NotificationBell
                   userId={session.user.id}
                   activeRole={session.activeRole}
+                  inAppSoundEnabled={inAppSoundEnabled}
+                  inAppVibrateEnabled={inAppVibrateEnabled}
                 />
                 <PendingBidsBadge isCleaner={isCleaner} />
                 <RoleSwitcher session={session} />

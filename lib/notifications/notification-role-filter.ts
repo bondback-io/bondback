@@ -8,6 +8,10 @@ const LISTER_ONLY_TYPES = new Set<NotificationRow["type"]>([
   "new_bid",
   "job_created",
   "funds_ready",
+  "listing_live",
+  "after_photos_uploaded",
+  "auto_release_warning",
+  "early_accept_declined",
 ]);
 
 /** Types only ever sent to the winning cleaner. */
@@ -15,6 +19,7 @@ const CLEANER_ONLY_TYPES = new Set<NotificationRow["type"]>([
   "job_accepted",
   "job_approved_to_start",
   "job_cancelled_by_lister",
+  "new_job_in_area",
 ]);
 
 /** Prefer `body` (persisted) then legacy `message_text` — must match SQL unread RPC. */
@@ -37,6 +42,19 @@ function jobCompletedVisibleForRole(
   return !isCleanerCopy;
 }
 
+function jobStatusUpdateVisibleForRole(
+  n: NotificationRow,
+  activeRole: "lister" | "cleaner"
+): boolean {
+  const m = notificationTextForRoleFilter(n).toLowerCase();
+  if (activeRole === "lister") {
+    return !m.includes("the lister extended");
+  }
+  return (
+    !m.includes("you extended") && !m.includes("payment received — escrow")
+  );
+}
+
 /**
  * When a user has both lister and cleaner roles, only show notifications relevant to the
  * active role (header role switcher).
@@ -53,6 +71,9 @@ export function filterNotificationsForActiveRole(
       if (n.type === "job_completed") {
         return jobCompletedVisibleForRole(n, "lister");
       }
+      if (n.type === "job_status_update") {
+        return jobStatusUpdateVisibleForRole(n, "lister");
+      }
       return true;
     }
 
@@ -60,6 +81,9 @@ export function filterNotificationsForActiveRole(
     if (CLEANER_ONLY_TYPES.has(n.type)) return true;
     if (n.type === "job_completed") {
       return jobCompletedVisibleForRole(n, "cleaner");
+    }
+    if (n.type === "job_status_update") {
+      return jobStatusUpdateVisibleForRole(n, "cleaner");
     }
     return true;
   });

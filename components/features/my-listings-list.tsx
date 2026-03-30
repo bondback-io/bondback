@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -63,6 +63,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CreateListingConfirmDialog } from "@/components/listing/create-listing-confirm-dialog";
+
+/** When multiple job rows exist for one listing, prefer non-cancelled then newest. */
+function preferJobRow<
+  T extends { status: string | null; updated_at?: string | null },
+>(a: T, b: T): T {
+  const ac = a.status === "cancelled";
+  const bc = b.status === "cancelled";
+  if (ac && !bc) return b;
+  if (!ac && bc) return a;
+  const ta = a.updated_at ? Date.parse(String(a.updated_at)) : 0;
+  const tb = b.updated_at ? Date.parse(String(b.updated_at)) : 0;
+  return tb >= ta ? b : a;
+}
 
 export type MyListingsListProps = {
   initialListings: ListingRow[];
@@ -110,12 +124,13 @@ export function MyListingsList({
   listerVerificationBadges = null,
 }: MyListingsListProps) {
   const [listings, setListings] = useState<ListingRow[]>(initialListings);
-  const [activeListingIds, setActiveListingIds] = useState<
-    (string | number)[]
-  >(() => initialActiveListingIds ?? []);
+  const [createListingOpen, setCreateListingOpen] = useState(false);
+  const [activeListingIds, setActiveListingIds] = useState<string[]>(() =>
+    (initialActiveListingIds ?? []).map((id) => String(id))
+  );
   const [activeJobs, setActiveJobs] = useState<
     Record<
-      string | number,
+      string,
       {
         jobId: number | string;
         winnerId: string | null;
@@ -130,7 +145,7 @@ export function MyListingsList({
     const snap = initialActiveJobsSnapshot;
     if (!snap) return {};
     const out: Record<
-      string | number,
+      string,
       {
         jobId: number | string;
         winnerId: string | null;
@@ -144,12 +159,12 @@ export function MyListingsList({
     for (const l of initialListings) {
       const row = snap[String(l.id)];
       if (row) {
-        out[l.id as string | number] = row;
+        out[String(l.id)] = row;
       }
     }
     return out;
   });
-  const [bidListingIds, setBidListingIds] = useState<(string | number)[]>([]);
+  const [bidListingIds, setBidListingIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<ListingRow | null>(null);
   const [editPhotoUrls, setEditPhotoUrls] = useState<string[]>([]);
   const [editDescription, setEditDescription] = useState("");
@@ -169,6 +184,15 @@ export function MyListingsList({
   const searchParams = useSearchParams();
   const cancelParamHandledRef = useRef(false);
 
+  const listingsDeduped = useMemo(() => {
+    const seen = new Map<string, ListingRow>();
+    for (const l of listings) {
+      const k = String(l.id);
+      if (!seen.has(k)) seen.set(k, l);
+    }
+    return Array.from(seen.values());
+  }, [listings]);
+
   useEffect(() => {
     const channel = supabase
       .channel("my-listings")
@@ -182,7 +206,13 @@ export function MyListingsList({
         },
         (payload) => {
           if (payload.eventType === "INSERT") {
-            setListings((prev) => [payload.new as ListingRow, ...prev]);
+            const row = payload.new as ListingRow;
+            setListings((prev) => {
+              if (prev.some((l) => String(l.id) === String(row.id))) {
+                return prev;
+              }
+              return [row, ...prev];
+            });
           } else if (payload.eventType === "UPDATE") {
             const row = payload.new as ListingRow;
             setListings((prev) =>
@@ -203,8 +233,8 @@ export function MyListingsList({
   // Fetch jobs for these listings so we can show an "active" status
   // when a listing has been won or purchased.
   useEffect(() => {
-    if (!listings.length) return;
-    const ids = listings.map((l) => l.id as unknown as string | number);
+    if (!listingsDeduped.length) return;
+    const ids = listingsDeduped.map((l) => l.id as unknown as string | number);
     const loadJobs = async () => {
       const { data } = await supabase
         .from("jobs")
@@ -222,11 +252,13 @@ export function MyListingsList({
         updated_at?: string | null;
       }[];
 
-      // Only treat as "taken" (active job) when status is not cancelled — cancelled jobs move back to live/ended.
-      const taken = jobs
-        .filter((j) => j.status !== "cancelled")
-        .map((j) => j.listing_id);
-      setActiveListingIds(taken);
+      const jobsByListing = new Map<string, (typeof jobs)[number][]>();
+      for (const j of jobs) {
+        const lid = String(j.listing_id);
+        const arr = jobsByListing.get(lid) ?? [];
+        arr.push(j);
+        jobsByListing.set(lid, arr);
+      }
 
       const winnerIds = Array.from(
         new Set(jobs.map((j) => j.winner_id).filter((id): id is string => !!id))
@@ -246,8 +278,9 @@ export function MyListingsList({
         );
       }
 
+      const taken = new Set<string>();
       const jobMap: Record<
-        string | number,
+        string,
         {
           jobId: number | string;
           winnerId: string | null;
@@ -258,8 +291,10 @@ export function MyListingsList({
           updatedAt?: string | null;
         }
       > = {};
-      for (const j of jobs) {
-        jobMap[j.listing_id] = {
+      for (const [lid, arr] of jobsByListing) {
+        const j = arr.reduce((best, cur) => preferJobRow(best, cur));
+        if (j.status !== "cancelled") taken.add(lid);
+        jobMap[lid] = {
           jobId: j.id,
           winnerId: j.winner_id,
           winnerName: j.winner_id ? winnerNames[j.winner_id] || "Cleaner" : "Cleaner",
@@ -269,15 +304,16 @@ export function MyListingsList({
           updatedAt: j.updated_at ?? null,
         };
       }
+      setActiveListingIds(Array.from(taken));
       setActiveJobs(jobMap);
     };
     loadJobs();
-  }, [supabase, listings]);
+  }, [supabase, listingsDeduped]);
 
   // Track listings that have at least one bid
   useEffect(() => {
-    if (!listings.length) return;
-    const ids = listings.map((l) => l.id as unknown as string | number);
+    if (!listingsDeduped.length) return;
+    const ids = listingsDeduped.map((l) => l.id as unknown as string | number);
     const loadBids = async () => {
       const { data } = await supabase
         .from("bids")
@@ -285,15 +321,15 @@ export function MyListingsList({
         .in("listing_id", ids as any);
       const withBids = Array.from(
         new Set(
-          (data ?? []).map(
-            (b: { listing_id: string | number }) => b.listing_id
+          (data ?? []).map((b: { listing_id: string | number }) =>
+            String(b.listing_id)
           )
         )
       );
       setBidListingIds(withBids);
     };
     loadBids();
-  }, [supabase, listings]);
+  }, [supabase, listingsDeduped]);
 
   const openEditor = (listing: ListingRow) => {
     setEditing(listing);
@@ -306,16 +342,16 @@ export function MyListingsList({
 
   // When navigated from /listings/[id]/edit, open the editor for that listing once it's in the list.
   useEffect(() => {
-    if (!initialEditListingId || listings.length === 0) return;
+    if (!initialEditListingId || listingsDeduped.length === 0) return;
     if (openedForEditIdRef.current === initialEditListingId) return;
-    const listing = listings.find(
+    const listing = listingsDeduped.find(
       (l) => String(l.id) === String(initialEditListingId)
     );
     if (listing) {
       openedForEditIdRef.current = initialEditListingId;
       openEditor(listing);
     }
-  }, [initialEditListingId, listings]);
+  }, [initialEditListingId, listingsDeduped]);
 
   const closeEditor = () => {
     setEditing(null);
@@ -370,7 +406,7 @@ export function MyListingsList({
     }
     if (cancelParamHandledRef.current) return;
     const targetId = String(initialOpenCancelListingId);
-    const listing = listings.find((l) => String(l.id) === targetId);
+    const listing = listingsDeduped.find((l) => String(l.id) === targetId);
     const stripCancelParam = () => {
       const params = new URLSearchParams(searchParams.toString());
       if (!params.has("cancel")) return;
@@ -392,7 +428,7 @@ export function MyListingsList({
     stripCancelParam();
   }, [
     initialOpenCancelListingId,
-    listings,
+    listingsDeduped,
     pathname,
     router,
     searchParams,
@@ -526,40 +562,35 @@ export function MyListingsList({
     closeEditor();
   };
 
-  const activeIdSet = new Set<string | number>(activeListingIds);
-  const bidIdSet = new Set<string | number>(bidListingIds);
-  const activeListings = listings.filter((l) =>
-    activeIdSet.has(l.id as unknown as string | number)
+  const activeIdSet = new Set(activeListingIds);
+  const bidIdSet = new Set(bidListingIds);
+  const activeListings = listingsDeduped.filter((l) =>
+    activeIdSet.has(String(l.id))
   );
   const completedListings = activeListings.filter((l) => {
-    const info =
-      activeJobs[l.id as unknown as string | number] ?? null;
+    const info = activeJobs[String(l.id)] ?? null;
     return info && info.status === "completed";
   });
   const activeNonCompletedListings = activeListings.filter((l) => {
-    const info =
-      activeJobs[l.id as unknown as string | number] ?? null;
+    const info = activeJobs[String(l.id)] ?? null;
     return !info || info.status !== "completed";
   });
 
-  const otherListings = listings.filter(
-    (l) => !activeIdSet.has(l.id as unknown as string | number)
+  const otherListings = listingsDeduped.filter(
+    (l) => !activeIdSet.has(String(l.id))
   );
   const nowMs = Date.now();
   // Exclude listings with a cancelled job from "live" so they don't appear under Active Listings / New listings
-  const cancelledJobListingIds = new Set<string | number>(
-    listings
-      .filter(
-        (l) =>
-          activeJobs[l.id as unknown as string | number]?.status === "cancelled"
-      )
-      .map((l) => l.id as unknown as string | number)
+  const cancelledJobListingIds = new Set<string>(
+    listingsDeduped
+      .filter((l) => activeJobs[String(l.id)]?.status === "cancelled")
+      .map((l) => String(l.id))
   );
   const liveListings = otherListings.filter(
     (l) =>
       l.status === "live" &&
       parseUtcTimestamp(l.end_time) > nowMs &&
-      !cancelledJobListingIds.has(l.id as unknown as string | number)
+      !cancelledJobListingIds.has(String(l.id))
   );
   /** History on Active tab: excludes expired (those appear under Completed/Cancelled/Expired tab). */
   const endedListingsForHistory = otherListings.filter(
@@ -567,38 +598,35 @@ export function MyListingsList({
       !(l.status === "live" && parseUtcTimestamp(l.end_time) > nowMs) &&
       String(l.status ?? "").toLowerCase() !== "expired"
   );
-  const expiredListingsOnly = listings.filter(
+  const expiredListingsOnly = listingsDeduped.filter(
     (l) => String(l.status ?? "").toLowerCase() === "expired"
   );
 
   const noBidLiveListings = liveListings.filter(
-    (l) => !bidIdSet.has(l.id as unknown as string | number)
+    (l) => !bidIdSet.has(String(l.id))
   );
   const liveListingsWithBids = liveListings.filter((l) =>
-    bidIdSet.has(l.id as unknown as string | number)
+    bidIdSet.has(String(l.id))
   );
   // Only listings whose job status is "cancelled" — completed/other jobs must not appear here
-  const cancelledListingIds = new Set<string | number>(
-    listings
-      .filter(
-        (l) =>
-          activeJobs[l.id as unknown as string | number]?.status === "cancelled"
-      )
-      .map((l) => l.id as unknown as string | number)
+  const cancelledListingIds = new Set<string>(
+    listingsDeduped
+      .filter((l) => activeJobs[String(l.id)]?.status === "cancelled")
+      .map((l) => String(l.id))
   );
-  const cancelledListings = listings.filter((l) =>
-    cancelledListingIds.has(l.id as unknown as string | number)
+  const cancelledListings = listingsDeduped.filter((l) =>
+    cancelledListingIds.has(String(l.id))
   );
 
   const DISPUTED_STATUSES = ["disputed", "in_review", "dispute_negotiating"];
   const pendingPaymentsListings = activeListings.filter((l) => {
-    const info = activeJobs[l.id as unknown as string | number] ?? null;
+    const info = activeJobs[String(l.id)] ?? null;
     return (
       info?.status === "in_progress" && info?.cleanerConfirmedComplete === true
     );
   });
-  const disputedListings = listings.filter((l) => {
-    const status = activeJobs[l.id as unknown as string | number]?.status ?? "";
+  const disputedListings = listingsDeduped.filter((l) => {
+    const status = activeJobs[String(l.id)]?.status ?? "";
     return DISPUTED_STATUSES.includes(status);
   });
 
@@ -637,9 +665,8 @@ export function MyListingsList({
     const isEndedNoBids =
       kind === "ended" &&
       !isExpiredListing &&
-      !bidIdSet.has(listing.id as unknown as string | number);
-    const jobInfo =
-      activeJobs[listing.id as unknown as string | number] ?? null;
+      !bidIdSet.has(String(listing.id));
+    const jobInfo = activeJobs[String(listing.id)] ?? null;
     const jobStatus = (jobInfo?.status as string | null) ?? null;
     const cleanerConfirmed =
       jobInfo?.cleanerConfirmedComplete === true;
@@ -721,7 +748,7 @@ export function MyListingsList({
       statusLabel = "Ended with no bids";
       statusClass += " bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200";
     } else if (kind === "ended") {
-      if (jobStatus === "cancelled" || cancelledListingIds.has(listing.id as unknown as string | number)) {
+      if (jobStatus === "cancelled" || cancelledListingIds.has(String(listing.id))) {
         statusLabel = "Cancelled";
         statusClass += " bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200";
       } else {
@@ -847,7 +874,7 @@ export function MyListingsList({
           "border-red-400/80 bg-red-500/15 text-red-900 dark:border-red-600/50 dark:bg-red-950/60 dark:text-red-100";
       } else if (
         jobStatus === "cancelled" ||
-        cancelledListingIds.has(listing.id as unknown as string | number)
+        cancelledListingIds.has(String(listing.id))
       ) {
         mobileStatusPill = "Cancelled";
         mobileStatusPillClass =
@@ -1000,7 +1027,7 @@ export function MyListingsList({
               {!isJobCard && isLive && (
                 <p className="text-sm text-muted-foreground dark:text-gray-400">
                   Starting {formatCents(listing.starting_price_cents)} ·{" "}
-                  {bidIdSet.has(listing.id as unknown as string | number)
+                  {bidIdSet.has(String(listing.id))
                     ? "1+"
                     : "0"}{" "}
                   bids
@@ -1291,7 +1318,7 @@ export function MyListingsList({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Number of bids</span>
                 <span>
-                  {bidIdSet.has(listing.id as unknown as string | number)
+                  {bidIdSet.has(String(listing.id))
                     ? "1+"
                     : "0"}
                 </span>
@@ -1360,7 +1387,11 @@ export function MyListingsList({
 
   return (
     <>
-      {listings.length === 0 ? (
+      <CreateListingConfirmDialog
+        open={createListingOpen}
+        onOpenChange={setCreateListingOpen}
+      />
+      {listingsDeduped.length === 0 ? (
         <Card className="mx-auto max-w-xl overflow-hidden border-dashed border-emerald-200/80 bg-gradient-to-b from-emerald-50/50 to-card text-center shadow-md dark:border-emerald-900/40 dark:from-emerald-950/30 dark:to-card">
           <CardHeader className="space-y-4 px-5 pb-2 pt-8 sm:px-6">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 shadow-inner dark:bg-emerald-900/50">
@@ -1375,11 +1406,12 @@ export function MyListingsList({
           </CardHeader>
           <CardContent className="space-y-4 px-5 pb-8 sm:px-6">
             <Button
-              asChild
+              type="button"
               size="lg"
               className="min-h-12 w-full touch-manipulation rounded-xl text-base font-semibold shadow-md sm:w-auto sm:rounded-full sm:px-8"
+              onClick={() => setCreateListingOpen(true)}
             >
-              <Link href="/listings/new">Create your first listing</Link>
+              Create your first listing
             </Button>
             <p className="text-xs leading-relaxed text-muted-foreground">
               Everything you post appears under Active — jobs, payments and history use the tabs above.

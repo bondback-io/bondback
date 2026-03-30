@@ -52,7 +52,7 @@ export type NotificationPrefsResult = {
   shouldSendEmail: (type: string) => boolean;
   /** Resolve whether to send SMS for this notification type (checks sms pref + phone present) */
   shouldSendSms: (type: string) => boolean;
-  /** True when user wants new-job-near-me SMS (sms_new_job + phone) */
+  /** True when user wants new-job-near-me SMS (sms_job_alerts + sms_enabled + phone) */
   shouldSendSmsNewJob: () => boolean;
   /** Expo push token (from mobile app); null if not set */
   expoPushToken: string | null;
@@ -72,6 +72,7 @@ const SMS_NOTIFICATION_TYPES = new Set([
   "job_approved_to_start",
   "payment_released",
   "dispute_opened",
+  "auto_release_warning",
 ]);
 
 /** Push-enabled notification types (same critical/high-value events + new job near you). */
@@ -85,6 +86,13 @@ const PUSH_NOTIFICATION_TYPES = new Set([
   "payment_released",
   "dispute_opened",
   "dispute_resolved",
+  "listing_live",
+  "after_photos_uploaded",
+  "auto_release_warning",
+  "checklist_all_complete",
+  "new_job_in_area",
+  "job_status_update",
+  "funds_ready",
 ]);
 
 let loggedMissingServiceRoleForPrefs = false;
@@ -103,7 +111,12 @@ function buildNotificationPrefsResult(params: {
   const emailForceDisabled = profile?.email_force_disabled === true;
   const phone = (profile?.phone ?? "").trim() || null;
   const smsEnabled = notificationPreferences?.sms_enabled === true;
-  const smsNewJobEnabled = notificationPreferences?.sms_new_job === true;
+  const smsJobAlerts =
+    typeof notificationPreferences?.sms_job_alerts === "boolean"
+      ? notificationPreferences.sms_job_alerts
+      : typeof notificationPreferences?.sms_new_job === "boolean"
+        ? notificationPreferences.sms_new_job
+        : true;
   const pushEnabled = notificationPreferences?.push_enabled === true;
   const pushNewJobEnabled = notificationPreferences?.push_new_job === true;
   const expoPushToken = (profile?.expo_push_token ?? "").trim() || null;
@@ -114,7 +127,7 @@ function buildNotificationPrefsResult(params: {
   const shouldSendSms = (type: string) =>
     !!phone && smsEnabled && SMS_NOTIFICATION_TYPES.has(type);
 
-  const shouldSendSmsNewJob = () => !!phone && smsNewJobEnabled;
+  const shouldSendSmsNewJob = () => !!phone && smsEnabled && smsJobAlerts;
 
   const shouldSendPushNewJob = () => !!expoPushToken && pushNewJobEnabled;
 

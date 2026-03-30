@@ -24,7 +24,7 @@ import {
   type AdminRevenueSummary,
 } from "@/components/admin/admin-revenue-chart";
 import { AdminShell } from "@/components/admin/admin-shell";
-import { AdminSendTestNotificationButton } from "@/components/admin/admin-send-test-notification-button";
+import { AdminSendTestNotificationGrid } from "@/components/admin/admin-send-test-notification-button";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getEffectivePayoutSchedule } from "@/lib/payout-schedule";
 import {
@@ -294,12 +294,11 @@ export default async function AdminDashboardPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Notifications QA</CardTitle>
           <p className="text-xs text-muted-foreground dark:text-gray-400">
-            Temporary: send a test in-app notification to your account (check bell and unread
-            count).
+            Send sample in-app rows per type (no email/SMS/push). Check the bell and /notifications.
           </p>
         </CardHeader>
         <CardContent className="pt-0">
-          <AdminSendTestNotificationButton />
+          <AdminSendTestNotificationGrid />
         </CardContent>
       </Card>
 

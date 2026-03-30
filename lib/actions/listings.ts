@@ -6,7 +6,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PHOTO_LIMITS } from "@/lib/photo-validation";
 import type { Database } from "@/types/supabase";
-import { createNotification } from "@/lib/actions/notifications";
+import { createNotification, notifyListerListingLive } from "@/lib/actions/notifications";
 
 type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -405,6 +405,7 @@ export async function relistExpiredListing(
   revalidatePath("/cleaner/dashboard");
 
   void triggerNewListingJobAlerts(listingId);
+  void notifyListerListingLive(listingId).catch(() => {});
 
   return { ok: true };
 }

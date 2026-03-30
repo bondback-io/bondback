@@ -37,7 +37,7 @@ export const JOB_DETAIL_PAGE_SELECT = JOB_TYPED_SELECT;
 
 /** `public.bids` row. */
 export const BID_FULL_SELECT =
-  "id, listing_id, cleaner_id, amount_cents, created_at, status";
+  "id, listing_id, cleaner_id, amount_cents, created_at, status, pending_confirmation_expires_at";
 
 /** Admin jobs table UI. */
 export const JOB_ADMIN_TABLE_SELECT =

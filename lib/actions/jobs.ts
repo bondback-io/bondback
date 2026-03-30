@@ -128,28 +128,26 @@ export type AcceptBidResult =
   | { ok: false; error: string };
 
 /**
- * Lister accepts a bid: create job with winner_id = cleanerId and agreed_amount_cents, then create payment hold.
- * When "Require Stripe Connect before bidding" is on, the cleaner must have stripe_connect_id.
+ * Lister accepts a bid: create job with winner_id = cleanerId and agreed_amount_cents.
+ * Used after the cleaner confirms an early acceptance (see `lib/actions/early-bid-acceptance.ts`).
+ * Listing is closed, other bids cancelled. Requires service role for token-based confirm flows.
  */
-export async function acceptBid(
-  listingId: string,
-  cleanerId: string,
-  acceptedAmountCents: number
-): Promise<AcceptBidResult> {
-  const supabase = await createServerSupabaseClient();
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    return { ok: false, error: "You must be logged in." };
+export async function finalizeBidAcceptanceCore(params: {
+  listingId: string;
+  listerId: string;
+  cleanerId: string;
+  acceptedAmountCents: number;
+  listingTitle: string | null;
+}): Promise<AcceptBidResult> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Server configuration error." };
   }
 
-  const { data: listing, error: fetchError } = await supabase
+  const { data: listing, error: fetchError } = await admin
     .from("listings")
     .select("id, lister_id, status, title")
-    .eq("id", listingId)
+    .eq("id", params.listingId)
     .maybeSingle();
 
   if (fetchError || !listing) {
@@ -163,8 +161,8 @@ export async function acceptBid(
     title?: string | null;
   };
 
-  if (listRow.lister_id !== session.user.id) {
-    return { ok: false, error: "Only the lister can accept a bid." };
+  if (listRow.lister_id !== params.listerId) {
+    return { ok: false, error: "Listing mismatch." };
   }
 
   if (listRow.status !== "live") {
@@ -173,10 +171,10 @@ export async function acceptBid(
 
   const settings = await getGlobalSettings();
   if (settings?.require_stripe_connect_before_bidding !== false) {
-    const { data: cleanerProfile } = await supabase
+    const { data: cleanerProfile } = await admin
       .from("profiles")
       .select("stripe_connect_id, stripe_onboarding_complete")
-      .eq("id", cleanerId)
+      .eq("id", params.cleanerId)
       .maybeSingle();
     const cp = cleanerProfile as { stripe_connect_id?: string | null; stripe_onboarding_complete?: boolean } | null;
     const stripeConnectId = cp?.stripe_connect_id;
@@ -184,33 +182,34 @@ export async function acceptBid(
     if (!stripeConnectId?.trim() || !onboardingComplete) {
       return {
         ok: false,
-        error: "This cleaner has not connected their bank account yet. They need to connect in Profile before you can accept their bid.",
+        error:
+          "You must connect your bank account in Profile before you can accept this job.",
       };
     }
   }
 
-  const { data: existingJob } = await supabase
+  const { data: existingJob } = await admin
     .from("jobs")
     .select("id")
-    .eq("id", listRow.id)
+    .eq("id", listRow.id as never)
     .maybeSingle();
 
   if (existingJob) {
     return { ok: false, error: "A job already exists for this listing." };
   }
 
-  const amountCents = Math.max(0, Math.round(Number(acceptedAmountCents)));
+  const amountCents = Math.max(0, Math.round(Number(params.acceptedAmountCents)));
   if (amountCents < 1) {
     return { ok: false, error: "Invalid bid amount." };
   }
 
-  const { data: inserted, error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await admin
     .from("jobs")
     .insert({
       id: listRow.id,
       listing_id: listRow.id,
       lister_id: listRow.lister_id,
-      winner_id: cleanerId,
+      winner_id: params.cleanerId,
       status: "accepted",
       agreed_amount_cents: amountCents,
     } as never)
@@ -227,15 +226,19 @@ export async function acceptBid(
   const jobId = (inserted as { id: number | string }).id;
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
-  const listingTitle = listRow.title ?? null;
+  await admin.from("bids").update({ status: "cancelled" } as never).eq("listing_id", params.listingId);
+
+  await admin.from("listings").update({ status: "ended" } as never).eq("id", params.listingId);
+
+  const listingTitle = params.listingTitle ?? listRow.title ?? null;
   await createNotification(
-    listRow.lister_id,
+    params.listerId,
     "job_created",
     numericJobId,
     "You accepted a bid. Pay & Start Job to hold funds in escrow and start the job."
   );
   await createNotification(
-    cleanerId,
+    params.cleanerId,
     "job_accepted",
     numericJobId,
     "The lister accepted your bid. They'll pay and start the job to hold funds in escrow; then you can begin.",
@@ -244,7 +247,7 @@ export async function acceptBid(
 
   revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
-  revalidatePath(`/jobs/${listingId}`);
+  revalidatePath(`/jobs/${params.listingId}`);
   revalidatePath("/my-listings");
   revalidatePath("/dashboard");
   revalidatePath("/lister/dashboard");
@@ -643,6 +646,17 @@ export async function fulfillJobPaymentFromSession(
       } catch (notifyErr) {
         console.error("[fulfillJobPaymentFromSession] notification failed", notifyErr);
       }
+    }
+
+    try {
+      await createNotification(
+        checkoutJob.lister_id,
+        "job_status_update",
+        numericJobId,
+        "Payment received — escrow is active. The cleaner has been notified to start the job."
+      );
+    } catch (notifyErr) {
+      console.error("[fulfillJobPaymentFromSession] lister notification failed", notifyErr);
     }
 
     // Create default cleaning checklist items (same as approveJobStart) so checklist appears
@@ -1234,9 +1248,9 @@ export async function markJobChecklistFinished(
   if (row.lister_id) {
     await createNotification(
       row.lister_id,
-      "funds_ready",
+      "job_completed",
       typeof row.id === "number" ? row.id : Number(row.id),
-      "Job complete – review photos and approve within 48 hours or funds auto-release."
+      "The cleaner marked the job complete and requested payment. Review after photos and release funds, or wait for auto-release."
     );
   }
 
@@ -1665,6 +1679,17 @@ export async function finalizeJobPayment(
       numericJobId,
       "Payment has been released. Funds are on the way to your connected bank account.",
       { amountCents: agreedCentsForSms }
+    );
+  }
+
+  if (row.lister_id) {
+    const agreedCentsLister = row.agreed_amount_cents ?? 0;
+    await createNotification(
+      row.lister_id,
+      "payment_released",
+      numericJobId,
+      "Funds have been released from escrow to the cleaner. Thank you for using Bond Back.",
+      { amountCents: agreedCentsLister }
     );
   }
 
@@ -2170,14 +2195,14 @@ export async function extendListerReview24h(
 
   await createNotification(
     row.lister_id,
-    "job_completed",
+    "job_status_update",
     jobId,
     "You extended the review window by 24 hours."
   );
   if (row.winner_id) {
     await createNotification(
       row.winner_id,
-      "job_completed",
+      "job_status_update",
       jobId,
       "The lister extended the review window by 24 hours before auto-release."
     );

@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
 import { createNotification } from "@/lib/actions/notifications";
+import { invalidatePendingEarlyAcceptIfSuperseded } from "@/lib/actions/early-bid-acceptance";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { MAX_BID_DROP_PER_BID_CENTS } from "@/lib/bidding-rules";
@@ -276,14 +277,25 @@ export async function placeBid(
   }
 
   if (row.lister_id) {
-    await createNotification(
-      row.lister_id,
-      "new_bid",
-      null,
-      `New bid of $${bidAmount.toFixed(2)} on your listing.`,
-      { listingId: Number(listingId) }
-    );
+    let cleanerName = "A cleaner";
+    const { data: bp } = await supabase
+      .from("profiles")
+      .select("display_name, full_name")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    const bpRow = bp as { display_name?: string | null; full_name?: string | null } | null;
+    const dn =
+      (bpRow?.display_name ?? "").trim() || (bpRow?.full_name ?? "").trim();
+    if (dn) cleanerName = dn;
+
+    await createNotification(row.lister_id, "new_bid", null, `${cleanerName} placed a bid of $${bidAmount.toFixed(2)} on your listing.`, {
+      listingUuid: listingId,
+      senderName: cleanerName,
+      amountCents: amountCents,
+    });
   }
+
+  await invalidatePendingEarlyAcceptIfSuperseded(listingId);
 
   await revalidateJobDetailPagesForListing(supabase, listingId);
   revalidatePath("/my-listings");
@@ -334,6 +346,7 @@ export async function cancelLastBid(
     .select("*")
     .eq("listing_id", listingId)
     .eq("cleaner_id", session.user.id)
+    .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -356,6 +369,7 @@ export async function cancelLastBid(
     .from("bids")
     .select("amount_cents")
     .eq("listing_id", listingId)
+    .eq("status", "active")
     .order("amount_cents", { ascending: true });
 
   if (remainingError) {

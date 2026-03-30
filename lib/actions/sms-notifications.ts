@@ -4,6 +4,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { sendNewJobAlert } from "@/lib/notifications/sms";
 import { sendNewJobPushAlert } from "@/lib/notifications/push";
+import { createNotification } from "@/lib/actions/notifications";
+import { hasRecentNewJobInAreaNotification } from "@/lib/notifications/notification-dedupe";
 import { haversineDistanceKm, postcodeDistanceKm } from "@/lib/geo/haversine";
 import { getSuburbLatLon } from "@/lib/geo/suburb-lat-lon";
 
@@ -41,7 +43,7 @@ export async function notifyNearbyCleanersOfNewListing(
   const { data: listing, error: listError } = await admin
     .from("listings")
     .select(
-      "id, suburb, postcode, reserve_cents, buy_now_cents, current_lowest_bid_cents, status"
+      "id, title, suburb, postcode, bedrooms, reserve_cents, buy_now_cents, current_lowest_bid_cents, status"
     )
     .eq("id", listingId)
     .maybeSingle();
@@ -51,8 +53,10 @@ export async function notifyNearbyCleanersOfNewListing(
   }
 
   const row = listing as {
+    title?: string | null;
     suburb?: string | null;
     postcode?: string | number | null;
+    bedrooms?: number | null;
     reserve_cents?: number | null;
     buy_now_cents?: number | null;
     current_lowest_bid_cents?: number | null;
@@ -119,13 +123,16 @@ export async function notifyNearbyCleanersOfNewListing(
 
     const cleanerId = (p as { id: string }).id;
 
+    const bedCount =
+      typeof row.bedrooms === "number" && row.bedrooms > 0 ? row.bedrooms : 1;
     const smsResult = await sendNewJobAlert(
       cleanerId,
       listingId,
       safeTrim(row.suburb),
       listingPostcode,
       minCents,
-      maxCents
+      maxCents,
+      bedCount
     );
     if (smsResult.sent) sent++;
 
@@ -138,6 +145,27 @@ export async function notifyNearbyCleanersOfNewListing(
       maxCents
     );
     if (pushResult.sent) sent++;
+
+    const listingTitle = (row.title ?? "").trim() || "Bond clean";
+    if (!(await hasRecentNewJobInAreaNotification(cleanerId, listingId, 48))) {
+      const loc = listingPostcode
+        ? `${safeTrim(row.suburb)} (${listingPostcode})`
+        : safeTrim(row.suburb);
+      await createNotification(
+        cleanerId,
+        "new_job_in_area",
+        null,
+        `New job in ${loc}: ${listingTitle.slice(0, 80)}. Open to review and bid.`,
+        {
+          listingUuid: listingId,
+          listingTitle,
+          suburb: safeTrim(row.suburb),
+          postcode: listingPostcode,
+          minPriceCents: minCents,
+          maxPriceCents: maxCents,
+        }
+      );
+    }
   }
 
   return { ok: true, sent };
@@ -163,6 +191,41 @@ export async function sendTestSms(): Promise<{ ok: boolean; error?: string }> {
     session.user.id,
     prefs.phone,
     "Bond Back test – SMS notifications are working."
+  );
+  if (!result.ok) return { ok: false, error: result.error ?? "Failed to send SMS." };
+  return { ok: true };
+}
+
+/**
+ * Admin only: send a one-off Twilio test to the admin profile phone (no user rate-limit table).
+ * Verifies TWILIO_* env and that the number receives SMS on the live site.
+ */
+export async function sendAdminSmsFromGlobalSettings(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "You must be logged in." };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_admin, phone")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  const row = profile as { is_admin?: boolean; phone?: string | null } | null;
+  if (!row?.is_admin) return { ok: false, error: "Admin only." };
+  const phone = (row.phone ?? "").trim();
+  if (!phone) return { ok: false, error: "Add a phone number to your profile first." };
+
+  const { sendSms } = await import("@/lib/notifications/sms");
+  const result = await sendSms(
+    phone,
+    "Bond Back admin test — Twilio SMS delivery OK. Reply STOP to opt out if required by your carrier."
   );
   if (!result.ok) return { ok: false, error: result.error ?? "Failed to send SMS." };
   return { ok: true };

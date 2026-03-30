@@ -46,8 +46,14 @@ type GlobalSettingsRow = {
   email_type_enabled?: Record<string, boolean>;
   stripe_test_mode?: boolean;
   floating_chat_enabled?: boolean;
+  /** When false, disables the scheduled daily digest email (user prefs still apply when true). */
+  daily_digest_enabled?: boolean;
   /** When false, disables new-job SMS and push alerts (cleaner prefs apply when true). */
   enable_sms_alerts_new_jobs?: boolean;
+  /** When false, no Twilio SMS is sent site-wide. */
+  enable_sms_notifications?: boolean;
+  /** Per notification type for transactional SMS; empty {} = all allowed. */
+  sms_type_enabled?: Record<string, boolean> | null;
   max_sms_per_user_per_day?: number | null;
   max_push_per_user_per_day?: number | null;
   /** AUD; default aligns with lib/pricing-modifiers legacy fit */
@@ -291,6 +297,10 @@ export type SaveGlobalSettingsInput = {
   stripeTestMode?: boolean;
   floatingChatEnabled?: boolean;
   enableSmsAlertsNewJobs?: boolean;
+  /** Master Twilio SMS switch (transactional + new-job SMS). */
+  enableSmsNotifications?: boolean;
+  /** Keys match notification types / new_job_in_area for area alerts. */
+  smsTypeEnabled?: Record<string, boolean>;
   maxSmsPerUserPerDay?: number | null;
   maxPushPerUserPerDay?: number | null;
   pricingBaseRatePerBedroomAud?: number;
@@ -310,6 +320,7 @@ export type SaveGlobalSettingsInput = {
   pricingAddonPatioAud?: number;
   pricingAddonFridgeAud?: number;
   pricingAddonBlindsAud?: number;
+  dailyDigestEnabled?: boolean;
 };
 
 export type SaveGlobalSettingsResult =
@@ -349,6 +360,11 @@ export async function saveGlobalSettings(
     stripe_test_mode: typeof data.stripeTestMode === "boolean" ? data.stripeTestMode : true,
     floating_chat_enabled: typeof data.floatingChatEnabled === "boolean" ? data.floatingChatEnabled : true,
     enable_sms_alerts_new_jobs: typeof data.enableSmsAlertsNewJobs === "boolean" ? data.enableSmsAlertsNewJobs : true,
+    enable_sms_notifications: data.enableSmsNotifications !== false,
+    sms_type_enabled:
+      data.smsTypeEnabled && typeof data.smsTypeEnabled === "object"
+        ? data.smsTypeEnabled
+        : {},
     max_sms_per_user_per_day: data.maxSmsPerUserPerDay ?? null,
     max_push_per_user_per_day: data.maxPushPerUserPerDay ?? null,
     pricing_base_rate_per_bedroom_aud:
@@ -420,6 +436,7 @@ export async function saveGlobalSettings(
       typeof data.pricingAddonBlindsAud === "number" && Number.isFinite(data.pricingAddonBlindsAud)
         ? Math.max(0, data.pricingAddonBlindsAud)
         : DEFAULT_PRICING_MODIFIERS.addonBlindsAud,
+    daily_digest_enabled: data.dailyDigestEnabled !== false,
   };
 
   const { error } = admin

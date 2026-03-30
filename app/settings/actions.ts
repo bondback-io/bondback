@@ -188,21 +188,28 @@ export async function saveUserPreferences(input: {
 }
 
 const NOTIFICATION_PREF_KEYS = [
+  "email_notifications",
   "new_bid",
   "new_message",
   "job_accepted",
   "job_completed",
+  "email_after_photos",
+  "email_checklist_updates",
   "dispute",
   "payment_released",
+  "listing_published",
   "receipt_emails",
   "weekly_tips",
+  "daily_digest",
   "receive_all_non_critical",
   "email_welcome",
   "email_tutorial",
   "sms_enabled",
-  "sms_new_job",
+  "sms_job_alerts",
   "push_enabled",
   "push_new_job",
+  "in_app_sound",
+  "in_app_vibrate",
 ] as const;
 
 export async function saveNotificationSettings(formData: FormData) {
@@ -233,6 +240,9 @@ export async function saveNotificationSettings(formData: FormData) {
   const prefs: Record<string, boolean> = { ...current };
   for (const key of NOTIFICATION_PREF_KEYS) {
     prefs[key] = formData.get(key) === "on";
+  }
+  if (typeof prefs.sms_job_alerts === "boolean") {
+    prefs.sms_new_job = prefs.sms_job_alerts;
   }
 
   const { error } = await admin

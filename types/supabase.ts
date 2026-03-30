@@ -259,7 +259,13 @@ export interface Database {
           cleaner_id: string;
           amount_cents: number;
           created_at: string;
-          status: "active" | "cancelled";
+          status:
+            | "active"
+            | "cancelled"
+            | "pending_confirmation"
+            | "declined_early";
+          pending_confirmation_expires_at: string | null;
+          early_action_token: string | null;
         };
         Insert: {
           id?: string;
@@ -267,14 +273,26 @@ export interface Database {
           cleaner_id: string;
           amount_cents: number;
           created_at?: string;
-          status?: "active" | "cancelled";
+          status?:
+            | "active"
+            | "cancelled"
+            | "pending_confirmation"
+            | "declined_early";
+          pending_confirmation_expires_at?: string | null;
+          early_action_token?: string | null;
         };
         Update: {
           listing_id?: string;
           cleaner_id?: string;
           amount_cents?: number;
           created_at?: string;
-          status?: "active" | "cancelled";
+          status?:
+            | "active"
+            | "cancelled"
+            | "pending_confirmation"
+            | "declined_early";
+          pending_confirmation_expires_at?: string | null;
+          early_action_token?: string | null;
         };
         Relationships: [
           {
@@ -466,7 +484,15 @@ export interface Database {
             | "job_approved_to_start"
             | "new_bid"
             | "job_cancelled_by_lister"
-            | "referral_reward";
+            | "referral_reward"
+            | "listing_live"
+            | "after_photos_uploaded"
+            | "auto_release_warning"
+            | "checklist_all_complete"
+            | "new_job_in_area"
+            | "job_status_update"
+            | "early_accept_declined"
+            | "daily_digest";
           job_id: number | null;
           message_text: string;
           /** Short label for lists (e.g. New bid · Job #12). */
@@ -493,7 +519,15 @@ export interface Database {
             | "job_approved_to_start"
             | "new_bid"
             | "job_cancelled_by_lister"
-            | "referral_reward";
+            | "referral_reward"
+            | "listing_live"
+            | "after_photos_uploaded"
+            | "auto_release_warning"
+            | "checklist_all_complete"
+            | "new_job_in_area"
+            | "job_status_update"
+            | "early_accept_declined"
+            | "daily_digest";
           job_id?: number | null;
           message_text: string;
           title?: string | null;
@@ -517,7 +551,15 @@ export interface Database {
             | "job_approved_to_start"
             | "new_bid"
             | "job_cancelled_by_lister"
-            | "referral_reward";
+            | "referral_reward"
+            | "listing_live"
+            | "after_photos_uploaded"
+            | "auto_release_warning"
+            | "checklist_all_complete"
+            | "new_job_in_area"
+            | "job_status_update"
+            | "early_accept_declined"
+            | "daily_digest";
           job_id?: number | null;
           message_text?: string;
           title?: string | null;

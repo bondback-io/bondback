@@ -205,6 +205,13 @@ export const PUSH_NOTIFICATION_TYPES = new Set<string>([
   "payment_released",
   "dispute_opened",
   "dispute_resolved",
+  "listing_live",
+  "after_photos_uploaded",
+  "auto_release_warning",
+  "checklist_all_complete",
+  "new_job_in_area",
+  "job_status_update",
+  "funds_ready",
 ]);
 
 /**
@@ -215,6 +222,7 @@ export function buildPushPayload(
   jobId: number | null,
   options?: {
     listingId?: number;
+    listingUuid?: string | null;
     listingTitle?: string | null;
     amountCents?: number | null;
     suburb?: string | null;
@@ -225,15 +233,31 @@ export function buildPushPayload(
   }
 ): PushPayload {
   const id = jobId != null ? String(jobId) : "";
-  const listingIdStr = options?.listingId != null ? String(options.listingId) : id;
+  const listingIdStr =
+    options?.listingUuid?.trim() ||
+    (options?.listingId != null ? String(options.listingId) : id);
 
   switch (type) {
-    case "new_bid":
+    case "new_bid": {
+      const who = (options?.senderName ?? "").trim();
+      const amt =
+        options?.amountCents != null
+          ? `$${(options.amountCents / 100).toFixed(2)}`
+          : "";
+      const body =
+        who && amt
+          ? `${who} bid ${amt}. Tap to view.`
+          : who
+            ? `${who} placed a bid. Tap to view.`
+            : amt
+              ? `New bid ${amt}. Tap to view.`
+              : "New bid on your listing. Tap to view.";
       return {
         title: "New bid",
-        body: "New bid on your listing. Tap to view.",
+        body,
         data: { jobId: listingIdStr, listingId: listingIdStr, type: "new_bid" },
       };
+    }
     case "new_message": {
       const who = (options?.senderName ?? "").trim() || "Someone";
       return {
@@ -284,6 +308,7 @@ export function buildPushPayload(
         data: { jobId: id, type: "dispute_resolved" },
       };
     case "new_job_near_you":
+    case "new_job_in_area": {
       const suburb = (options?.suburb ?? "").trim() || "Your area";
       const postcode = (options?.postcode ?? "").trim();
       const loc = postcode ? `${suburb} (${postcode})` : suburb;
@@ -294,6 +319,47 @@ export function buildPushPayload(
         title: "New Job Alert",
         body: `New bond clean job in ${loc} – ${priceRange}. Bid now!`,
         data: { jobId: listingIdStr, listingId: listingIdStr, type: "new_job" },
+      };
+    }
+    case "listing_live":
+      return {
+        title: "Listing published",
+        body: (options?.listingTitle ?? "Your listing").toString().slice(0, 80) + " is live. Tap to view.",
+        data: {
+          type: "listing_live",
+          listingId: listingIdStr || undefined,
+          jobId: listingIdStr || undefined,
+        },
+      };
+    case "after_photos_uploaded":
+      return {
+        title: "After photos ready",
+        body: `The cleaner uploaded after photos for Job #${id}. Tap to review.`,
+        data: { jobId: id, type: "after_photos_uploaded" },
+      };
+    case "auto_release_warning":
+      return {
+        title: "Auto-release soon",
+        body: `Job #${id}: funds will auto-release in about 24 hours unless you act. Tap to review.`,
+        data: { jobId: id, type: "auto_release_warning" },
+      };
+    case "checklist_all_complete":
+      return {
+        title: "Checklist complete",
+        body: `Every checklist item is done on Job #${id}. Tap to open the job.`,
+        data: { jobId: id, type: "checklist_all_complete" },
+      };
+    case "job_status_update":
+      return {
+        title: "Job update",
+        body: "There’s an update on your job. Tap to open.",
+        data: { jobId: id, type: "job_status_update" },
+      };
+    case "funds_ready":
+      return {
+        title: "Review & release",
+        body: `Job #${id}: review photos and release funds or wait for auto-release.`,
+        data: { jobId: id, type: "funds_ready" },
       };
     default:
       return {

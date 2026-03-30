@@ -22,6 +22,7 @@ import { PaymentReceipt } from "@/emails/PaymentReceipt";
 import { Welcome } from "@/emails/Welcome";
 import { ListerTutorial } from "@/emails/ListerTutorial";
 import { CleanerTutorial } from "@/emails/CleanerTutorial";
+import { GenericNotification } from "@/emails/GenericNotification";
 
 const resend = process.env.RESEND_API_KEY?.trim()
   ? new Resend(process.env.RESEND_API_KEY.trim())
@@ -95,7 +96,14 @@ export type NotificationType =
   | "dispute_resolved"
   | "job_created"
   | "new_bid"
-  | "job_cancelled_by_lister";
+  | "job_cancelled_by_lister"
+  | "listing_live"
+  | "after_photos_uploaded"
+  | "auto_release_warning"
+  | "checklist_all_complete"
+  | "new_job_in_area"
+  | "job_status_update"
+  | "early_accept_declined";
 
 export type SendEmailOptions = {
   /** When set, logs to email_logs (and always logs a masked line to console). */
@@ -285,6 +293,7 @@ export async function getNotificationEmailContent(
   options: {
     senderName?: string;
     listingId?: number | null;
+    listingUuid?: string | null;
     recipientUserId?: string;
   },
   adminOverride?: AdminEmailOverride | null
@@ -325,7 +334,8 @@ export async function getNotificationEmailContent(
     jobId,
     messageText,
     options.senderName,
-    options.listingId ?? undefined
+    options.listingId ?? undefined,
+    options.listingUuid ?? undefined
   );
 }
 
@@ -338,12 +348,15 @@ export async function buildNotificationEmail(
   jobId: number | null,
   messageText: string,
   senderName?: string,
-  listingId?: number | null
+  listingId?: number | null,
+  listingUuid?: string | null
 ): Promise<{ subject: string; html: string }> {
   const id = jobId ?? 0;
   const idStr = String(id);
   const listingIdStr = listingId != null ? String(listingId) : idStr;
   const messageSnippet = messageText.length > 100 ? `${messageText.slice(0, 97)}…` : messageText;
+  const hrefForJob =
+    id > 0 ? `/jobs/${idStr}` : listingUuid?.trim() ? `/jobs/${listingUuid.trim()}` : "/dashboard";
 
   const subjects: Record<NotificationType, string> = {
     new_message: `New message from ${senderName ?? "someone"} in Job #${id} – Bond Back`,
@@ -360,6 +373,13 @@ export async function buildNotificationEmail(
     dispute_opened: `Dispute update on Job #${id} – Bond Back`,
     dispute_resolved: `Dispute resolved – Job #${id} – Bond Back`,
     job_cancelled_by_lister: `Job #${id} cancelled by lister – Bond Back`,
+    listing_live: `Your listing is live – Bond Back`,
+    after_photos_uploaded: `After photos uploaded – Job #${id} – Bond Back`,
+    auto_release_warning: `Auto-release reminder – Job #${id} – Bond Back`,
+    checklist_all_complete: `Checklist complete – Job #${id} – Bond Back`,
+    new_job_in_area: `New job nearby – Bond Back`,
+    job_status_update: `Job update – Job #${id} – Bond Back`,
+    early_accept_declined: `Early acceptance update – Bond Back`,
   };
 
   let element: React.ReactElement;
@@ -377,13 +397,15 @@ export async function buildNotificationEmail(
       templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobCreated, { jobId: idStr, messageText });
       break;
-    case "new_bid":
-      templateProps = { listingId: listingIdStr, messageText };
+    case "new_bid": {
+      const bidLinkId = (listingUuid ?? "").trim() || listingIdStr;
+      templateProps = { listingId: bidLinkId, messageText };
       element = React.createElement(NewBid, {
-        listingId: listingIdStr,
+        listingId: bidLinkId,
         messageText: messageText || undefined,
       });
       break;
+    }
     case "job_accepted":
       templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobApproved, { jobId: idStr, messageText });
@@ -422,6 +444,39 @@ export async function buildNotificationEmail(
       templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobCancelledByLister, { jobId: idStr, messageText });
       break;
+    case "listing_live":
+      templateProps = { headline: "Listing published", messageText, hrefForJob };
+      element = React.createElement(GenericNotification, {
+        headline: "Your listing is live",
+        messageText: messageText || "Cleaners can now bid.",
+        hrefPath: hrefForJob,
+        preview: "Your listing is live on Bond Back",
+      });
+      break;
+    case "after_photos_uploaded":
+    case "auto_release_warning":
+    case "checklist_all_complete":
+    case "job_status_update":
+    case "early_accept_declined":
+    case "new_job_in_area": {
+      const headlines: Record<string, string> = {
+        after_photos_uploaded: "After photos uploaded",
+        auto_release_warning: "Auto-release reminder",
+        checklist_all_complete: "Checklist complete",
+        job_status_update: "Job update",
+        early_accept_declined: "Early acceptance",
+        new_job_in_area: "New job nearby",
+      };
+      const h = headlines[type] ?? "Update";
+      templateProps = { headline: h, messageText, hrefForJob };
+      element = React.createElement(GenericNotification, {
+        headline: h,
+        messageText: messageText || "Open Bond Back for details.",
+        hrefPath: hrefForJob,
+        preview: `${h} – Bond Back`,
+      });
+      break;
+    }
     default:
       templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobCreated, {

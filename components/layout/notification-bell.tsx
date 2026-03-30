@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Bell,
@@ -47,6 +47,7 @@ import {
   getNotificationTitle,
   getNotificationHref,
 } from "@/lib/notifications/display";
+import { triggerInAppNotificationFeedback } from "@/lib/notifications/in-app-notification-feedback";
 
 const PEEK = 15;
 
@@ -56,6 +57,9 @@ export type NotificationBellProps = {
   userId: string;
   activeRole?: ActiveRole;
   variant?: "icon" | "row";
+  /** From `profiles.notification_preferences`; default ON when omitted. */
+  inAppSoundEnabled?: boolean;
+  inAppVibrateEnabled?: boolean;
 };
 
 function iconForType(type: NotificationRow["type"]) {
@@ -105,8 +109,17 @@ export function NotificationBell({
   userId,
   activeRole = null,
   variant = "icon",
+  inAppSoundEnabled = true,
+  inAppVibrateEnabled = true,
 }: NotificationBellProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+  const bellMenuOpenRef = useRef(false);
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const toastRef = useRef(toast);
@@ -188,6 +201,16 @@ export function NotificationBell({
                 }
               : undefined,
           });
+
+          const path = pathnameRef.current;
+          const isNotificationsRoute =
+            path === "/notifications" || path.startsWith("/notifications/");
+          triggerInAppNotificationFeedback({
+            soundEnabled: inAppSoundEnabled,
+            vibrateEnabled: inAppVibrateEnabled,
+            bellMenuOpen: bellMenuOpenRef.current,
+            isNotificationsRoute,
+          });
         }
       )
       .subscribe();
@@ -195,7 +218,7 @@ export function NotificationBell({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [userId, activeRole]);
+  }, [userId, activeRole, inAppSoundEnabled, inAppVibrateEnabled]);
 
   const handleClickNotification = async (n: NotificationRow) => {
     if (!n.is_read) {
@@ -259,6 +282,7 @@ export function NotificationBell({
   return (
     <DropdownMenu
       onOpenChange={(open) => {
+        bellMenuOpenRef.current = open;
         if (open && unreadCount > 0) {
           void handleMarkAll();
         }

@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { formatCents } from "@/lib/listings";
 import type { BidRow } from "@/lib/listings";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export type BidWithBidder = BidRow & {
   bidder_email?: string | null;
@@ -14,9 +15,15 @@ export type BidHistoryTableProps = {
   bids: BidWithBidder[];
   /** When set, show Accept bid button for lister (listing owner, no job yet). */
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
+  /** True if any bid is awaiting cleaner confirmation (other rows cannot start a new early accept). */
+  hasPendingEarlyAcceptance?: boolean;
 };
 
-export function BidHistoryTable({ bids, onAcceptBid }: BidHistoryTableProps) {
+export function BidHistoryTable({
+  bids,
+  onAcceptBid,
+  hasPendingEarlyAcceptance = false,
+}: BidHistoryTableProps) {
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const sorted = [...bids].sort(
     (a, b) =>
@@ -37,6 +44,32 @@ export function BidHistoryTable({ bids, onAcceptBid }: BidHistoryTableProps) {
     } finally {
       setAcceptingId(null);
     }
+  };
+
+  const showEarlyButton = (bid: BidWithBidder) => {
+    if (!onAcceptBid) return false;
+    if (bid.status === "pending_confirmation") return false;
+    if (bid.status === "declined_early") return false;
+    if (hasPendingEarlyAcceptance) return false;
+    return bid.status === "active";
+  };
+
+  const statusLabel = (bid: BidWithBidder) => {
+    if (bid.status === "pending_confirmation") {
+      return (
+        <Badge variant="secondary" className="mt-2 font-normal">
+          Awaiting cleaner confirmation
+        </Badge>
+      );
+    }
+    if (bid.status === "declined_early") {
+      return (
+        <Badge variant="outline" className="mt-2 font-normal text-muted-foreground">
+          Declined early offer
+        </Badge>
+      );
+    }
+    return null;
   };
 
   return (
@@ -74,7 +107,14 @@ export function BidHistoryTable({ bids, onAcceptBid }: BidHistoryTableProps) {
                 </p>
               </div>
             </div>
-            {onAcceptBid && (
+            {statusLabel(bid)}
+            {onAcceptBid && hasPendingEarlyAcceptance && bid.status !== "pending_confirmation" && (
+              <p className="mt-2 text-xs text-muted-foreground dark:text-gray-500">
+                Another bid is awaiting cleaner confirmation. You can accept a different bid after that
+                request is confirmed, declined, or expires.
+              </p>
+            )}
+            {showEarlyButton(bid) && (
               <Button
                 type="button"
                 size="lg"
@@ -83,7 +123,7 @@ export function BidHistoryTable({ bids, onAcceptBid }: BidHistoryTableProps) {
                 disabled={!!acceptingId}
                 onClick={() => handleAccept(bid)}
               >
-                {acceptingId === bid.id ? "Accepting…" : "Accept bid"}
+                {acceptingId === bid.id ? "Sending…" : "Accept Bid Early"}
               </Button>
             )}
           </li>
@@ -128,16 +168,25 @@ export function BidHistoryTable({ bids, onAcceptBid }: BidHistoryTableProps) {
                 </td>
                 {onAcceptBid && (
                   <td className="px-3 py-2 text-right align-middle">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="default"
-                      className="text-xs font-semibold"
-                      disabled={!!acceptingId}
-                      onClick={() => handleAccept(bid)}
-                    >
-                      {acceptingId === bid.id ? "Accepting…" : "Accept bid"}
-                    </Button>
+                    <div className="flex flex-col items-end gap-1">
+                      {statusLabel(bid)}
+                      {showEarlyButton(bid) ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="default"
+                          className="text-xs font-semibold"
+                          disabled={!!acceptingId}
+                          onClick={() => handleAccept(bid)}
+                        >
+                          {acceptingId === bid.id ? "Sending…" : "Accept Bid Early"}
+                        </Button>
+                      ) : hasPendingEarlyAcceptance && bid.status !== "pending_confirmation" ? (
+                        <span className="max-w-[12rem] text-[11px] text-muted-foreground dark:text-gray-500">
+                          Early accept pending on another bid
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                 )}
               </tr>

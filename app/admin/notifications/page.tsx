@@ -393,7 +393,24 @@ export default async function AdminNotificationsPage() {
           </CardHeader>
           <CardContent>
             <ul className="grid gap-1.5 text-xs sm:grid-cols-2 md:grid-cols-3">
-              {["new_bid", "new_message", "job_created", "job_accepted", "job_completed", "job_cancelled_by_lister", "payment_released", "funds_ready", "dispute_opened", "dispute_resolved"].map((type) => (
+              {[
+                "new_bid",
+                "new_message",
+                "job_created",
+                "job_accepted",
+                "job_completed",
+                "job_cancelled_by_lister",
+                "payment_released",
+                "funds_ready",
+                "dispute_opened",
+                "dispute_resolved",
+                "listing_live",
+                "after_photos_uploaded",
+                "auto_release_warning",
+                "checklist_all_complete",
+                "new_job_in_area",
+                "job_status_update",
+              ].map((type) => (
                 <li key={type} className="flex items-center gap-2 rounded border border-border/60 bg-muted/30 px-2 py-1.5 dark:border-gray-800 dark:bg-gray-800/50">
                   <span className="font-mono text-[10px] uppercase text-muted-foreground">{type}</span>
                   <span className="text-muted-foreground">·</span>

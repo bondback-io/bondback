@@ -32,6 +32,7 @@ ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS maintenance_message 
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS emails_enabled boolean NOT NULL DEFAULT true;
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS updated_by uuid REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS daily_digest_enabled boolean NOT NULL DEFAULT true;
 
 -- 4) Ensure single row (id = 1); skip if row already present
 INSERT INTO public.global_settings (

@@ -84,6 +84,7 @@ import {
   updateListingCoverPhoto,
   triggerNewListingJobAlerts,
 } from "@/lib/actions/listings";
+import { notifyListerListingLive } from "@/lib/actions/notifications";
 import {
   computeBaseListingPriceAud,
   getListingAddonPriceFromModifiers,
@@ -604,6 +605,9 @@ export function NewListingForm({
       setCreated(true);
       // SMS (Twilio) + push (Expo) to cleaners within max_travel_km — fire-and-forget
       void triggerNewListingJobAlerts(listingId).catch(() => {
+        /* non-blocking */
+      });
+      void notifyListerListingLive(listingId).catch(() => {
         /* non-blocking */
       });
       toast({

@@ -80,6 +80,10 @@ export default async function AdminGlobalSettingsPage() {
         stripeTestMode: (existing as { stripe_test_mode?: boolean }).stripe_test_mode ?? true,
         floatingChatEnabled: (existing as { floating_chat_enabled?: boolean }).floating_chat_enabled ?? true,
         enableSmsAlertsNewJobs: (existing as { enable_sms_alerts_new_jobs?: boolean }).enable_sms_alerts_new_jobs ?? true,
+        enableSmsNotifications: (existing as { enable_sms_notifications?: boolean }).enable_sms_notifications ?? true,
+        smsTypeEnabled:
+          (existing as { sms_type_enabled?: Record<string, boolean> | null }).sms_type_enabled ?? {},
+        dailyDigestEnabled: (existing as { daily_digest_enabled?: boolean }).daily_digest_enabled ?? true,
         maxSmsPerUserPerDay: (existing as { max_sms_per_user_per_day?: number | null }).max_sms_per_user_per_day ?? undefined,
         maxPushPerUserPerDay: (existing as { max_push_per_user_per_day?: number | null }).max_push_per_user_per_day ?? undefined,
         pricingBaseRatePerBedroomAud: normalizeBaseRatePerBedroomFromGlobal(

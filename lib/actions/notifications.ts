@@ -17,7 +17,9 @@ import {
   type NotificationType as EmailNotificationType,
 } from "@/lib/notifications/email";
 import { getGlobalSettings, getEmailTemplateOverrides } from "@/lib/actions/global-settings";
+import { isTwilioSmsAllowedForType } from "@/lib/notifications/sms";
 import { buildNotificationPersistFields } from "@/lib/notifications/notification-display-fields";
+import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
 
 type NotificationInsert =
   Database["public"]["Tables"]["notifications"]["Insert"];
@@ -34,18 +36,34 @@ export type NotificationType =
   | "job_approved_to_start"
   | "new_bid"
   | "job_cancelled_by_lister"
-  | "referral_reward";
+  | "referral_reward"
+  | "listing_live"
+  | "after_photos_uploaded"
+  | "auto_release_warning"
+  | "checklist_all_complete"
+  | "new_job_in_area"
+  | "job_status_update"
+  | "early_accept_declined"
+  | "daily_digest";
 
 export type CreateNotificationOptions = {
   senderName?: string;
-  /** For new_bid: listing id so the email links to /listings/{id} */
+  /** Legacy numeric listing id when available (some emails). Prefer listingUuid. */
   listingId?: number;
+  /** UUID for listing-scoped links and data.listing_uuid */
+  listingUuid?: string | null;
   /** For SMS: job/listing title (e.g. bid accepted, job won) */
   listingTitle?: string | null;
   /** For SMS: payment amount in cents (e.g. payment released) */
   amountCents?: number | null;
+  /** Push: location / price for new job alerts */
+  suburb?: string | null;
+  postcode?: string | null;
+  minPriceCents?: number;
+  maxPriceCents?: number;
   persistTitle?: string;
   persistBody?: string;
+  /** When true, only persist in-app row (no email/SMS/push). */
   adminTest?: boolean;
 };
 
@@ -60,7 +78,16 @@ export async function createNotification(
   // Do not require a browser session: webhooks and background jobs call this with no auth cookie.
   // Inserts use the service role client when configured (see below).
 
-  const persist = buildNotificationPersistFields(type, jobId, messageText, options);
+  const persist = buildNotificationPersistFields(type, jobId, messageText, {
+    senderName: options?.senderName,
+    listingId: options?.listingId,
+    listingUuid: options?.listingUuid,
+    listingTitle: options?.listingTitle,
+    amountCents: options?.amountCents,
+    persistTitle: options?.persistTitle,
+    persistBody: options?.persistBody,
+    adminTest: options?.adminTest,
+  });
   const row = {
     user_id: userId,
     type,
@@ -98,6 +125,8 @@ export async function createNotification(
   revalidatePath("/profile");
   revalidatePath("/notifications");
 
+  if (options?.adminTest) return;
+
   const globalSettings = await getGlobalSettings();
   const prefs = await getNotificationPrefs(userId);
   const numericJobId = jobId != null ? Number(jobId) : null;
@@ -127,6 +156,7 @@ export async function createNotification(
       {
         senderName: options?.senderName,
         listingId: options?.listingId,
+        listingUuid: options?.listingUuid,
         recipientUserId: userId,
       },
       adminOverride
@@ -158,13 +188,21 @@ export async function createNotification(
   }
 
   // SMS: critical, high-value events only; max 5 per user per day (via sendSmsToUser)
-  if (prefs.phone && prefs.shouldSendSms(type)) {
+  if (
+    prefs.phone &&
+    prefs.shouldSendSms(type) &&
+    isTwilioSmsAllowedForType(globalSettings, type)
+  ) {
     const { sendSmsToUser } = await import("@/lib/notifications/sms");
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
     let body: string;
     if (type === "new_bid") {
-      const link = options?.listingId ? `${appUrl}/jobs/${options.listingId}` : `${appUrl}/jobs`;
-      body = `New bid on your listing. View: ${link}`;
+      const who = (options?.senderName ?? "").trim();
+      const path =
+        options?.listingUuid?.trim() ? `/jobs/${options.listingUuid.trim()}` : options?.listingId ? `/jobs/${options.listingId}` : "/jobs";
+      body = who
+        ? `New bid from ${who.slice(0, 40)} on your listing. View: ${appUrl}${path}`
+        : `New bid on your listing. View: ${appUrl}${path}`;
     } else if (type === "job_accepted" || type === "job_created") {
       const title = (options?.listingTitle ?? "").trim() || "Job";
       body = `Your bid was accepted! Job #${jobId ?? "?"} – ${title.slice(0, 40)}. View: ${appUrl}/jobs/${jobId ?? ""}`;
@@ -194,9 +232,14 @@ export async function createNotification(
     const { sendPushToUser, buildPushPayload } = await import("@/lib/notifications/push");
     const payload = buildPushPayload(type, numericJobId ?? null, {
       listingId: options?.listingId ?? undefined,
+      listingUuid: options?.listingUuid ?? undefined,
       listingTitle: options?.listingTitle ?? undefined,
       amountCents: options?.amountCents ?? undefined,
       senderName: options?.senderName ?? undefined,
+      suburb: options?.suburb ?? undefined,
+      postcode: options?.postcode ?? undefined,
+      minPriceCents: options?.minPriceCents,
+      maxPriceCents: options?.maxPriceCents,
     });
     const result = await sendPushToUser(userId, prefs.expoPushToken, payload);
     if (!result.ok) {
@@ -296,6 +339,244 @@ export async function sendAdminTestNotification(): Promise<{
   if (process.env.NODE_ENV === "development") {
     console.info("[notifications:admin-test-insert]", { userId: session.user.id });
   }
+  return { ok: true };
+}
+
+/** Lister: listing went live (call after publish). */
+export async function notifyListerListingLive(listingId: string): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+  const { data: listing } = await admin
+    .from("listings")
+    .select("lister_id, title, suburb, postcode")
+    .eq("id", listingId)
+    .maybeSingle();
+  if (!listing) return;
+  const row = listing as {
+    lister_id: string;
+    title?: string | null;
+    suburb?: string | null;
+    postcode?: string | null;
+  };
+  const title = (row.title ?? "").trim() || "Your listing";
+  const loc = [row.suburb, row.postcode].filter(Boolean).join(" ");
+  const msg = loc
+    ? `"${title}" is live in ${loc}. Cleaners can bid now.`
+    : `"${title}" is live. Cleaners can bid now.`;
+  await createNotification(row.lister_id, "listing_live", null, msg, {
+    listingUuid: listingId,
+    listingTitle: title,
+  });
+}
+
+/** Lister: cleaner uploaded enough after photos (deduped). */
+export async function notifyListerAfterPhotosReady(jobId: number): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+  const { data: job } = await admin
+    .from("jobs")
+    .select("lister_id, listing_id")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (!job) return;
+  const { lister_id, listing_id } = job as { lister_id: string; listing_id: string | null };
+  if (!lister_id) return;
+  if (await hasRecentJobNotification(lister_id, "after_photos_uploaded", jobId, 48)) return;
+  let jobTitle: string | null = null;
+  if (listing_id) {
+    const { data: l } = await admin.from("listings").select("title").eq("id", listing_id).maybeSingle();
+    jobTitle = (l as { title?: string | null } | null)?.title ?? null;
+  }
+  const addr = jobTitle ? ` — ${jobTitle}` : "";
+  await createNotification(
+    lister_id,
+    "after_photos_uploaded",
+    jobId,
+    `The cleaner uploaded after photos for this job${addr}. Review when ready.`,
+    { listingTitle: jobTitle, listingUuid: listing_id ?? undefined }
+  );
+}
+
+/** Other party: every checklist item completed while job is in progress (deduped). */
+export async function notifyChecklistAllComplete(
+  jobId: number,
+  completedByUserId: string
+): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+  const { data: job } = await admin
+    .from("jobs")
+    .select("lister_id, winner_id, listing_id, status")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (!job) return;
+  const row = job as {
+    lister_id: string;
+    winner_id: string | null;
+    listing_id: string | null;
+    status: string;
+  };
+  if (row.status !== "in_progress") return;
+  const other =
+    completedByUserId === row.lister_id
+      ? row.winner_id
+      : completedByUserId === row.winner_id
+        ? row.lister_id
+        : null;
+  if (!other) return;
+  if (await hasRecentJobNotification(other, "checklist_all_complete", jobId, 24)) return;
+  const role = completedByUserId === row.lister_id ? "Lister" : "Cleaner";
+  let jobTitle: string | null = null;
+  if (row.listing_id) {
+    const { data: l } = await admin.from("listings").select("title").eq("id", row.listing_id).maybeSingle();
+    jobTitle = (l as { title?: string | null } | null)?.title ?? null;
+  }
+  const t = jobTitle ? ` (${jobTitle})` : "";
+  await createNotification(
+    other,
+    "checklist_all_complete",
+    jobId,
+    `${role} finished every checklist item${t}.`,
+    { listingTitle: jobTitle, listingUuid: row.listing_id ?? undefined }
+  );
+}
+
+/** Admin: in-app sample for a notification type (no email/SMS/push). */
+export async function sendAdminTestNotificationByType(
+  type: NotificationType
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "Not authenticated" };
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  if (!profile || !(profile as { is_admin?: boolean }).is_admin) {
+    return { ok: false, error: "Not authorised" };
+  }
+
+  const sampleJobId = 1;
+  const samples: Partial<
+    Record<NotificationType, { jobId: number | null; message: string; options?: CreateNotificationOptions }>
+  > = {
+    new_message: {
+      jobId: sampleJobId,
+      message: "Sample: you have a new message in job chat.",
+      options: { senderName: "Sample Cleaner", adminTest: true },
+    },
+    new_bid: {
+      jobId: null,
+      message: "Sample: Sam placed a bid of $420.00 on your listing.",
+      options: {
+        listingUuid: "00000000-0000-0000-0000-000000000001",
+        senderName: "Sam",
+        amountCents: 42000,
+        adminTest: true,
+      },
+    },
+    job_created: {
+      jobId: sampleJobId,
+      message: "Sample: you accepted a bid — pay & start when ready.",
+      options: { adminTest: true },
+    },
+    job_accepted: {
+      jobId: sampleJobId,
+      message: "Sample: your bid was accepted.",
+      options: { listingTitle: "2 Bedroom Unit", adminTest: true },
+    },
+    job_approved_to_start: {
+      jobId: sampleJobId,
+      message: "Sample: lister paid — you can start the job.",
+      options: { adminTest: true },
+    },
+    job_completed: {
+      jobId: sampleJobId,
+      message: "Sample: cleaner marked the job complete — review and release.",
+      options: { adminTest: true },
+    },
+    funds_ready: {
+      jobId: sampleJobId,
+      message: "Sample: funds are ready to release after review.",
+      options: { adminTest: true },
+    },
+    payment_released: {
+      jobId: sampleJobId,
+      message: "Sample: payment released.",
+      options: { amountCents: 35000, adminTest: true },
+    },
+    dispute_opened: {
+      jobId: sampleJobId,
+      message: "Sample: a dispute was opened on this job.",
+      options: { adminTest: true },
+    },
+    dispute_resolved: {
+      jobId: sampleJobId,
+      message: "Sample: dispute resolved.",
+      options: { adminTest: true },
+    },
+    job_cancelled_by_lister: {
+      jobId: sampleJobId,
+      message: "Sample: the lister cancelled this job.",
+      options: { adminTest: true },
+    },
+    referral_reward: {
+      jobId: null,
+      message: "Sample: you earned a referral reward.",
+      options: { adminTest: true },
+    },
+    listing_live: {
+      jobId: null,
+      message: 'Sample: "2 Bed Unit" is live in Brisbane. Cleaners can bid now.',
+      options: {
+        listingUuid: "00000000-0000-0000-0000-000000000001",
+        listingTitle: "2 Bed Unit",
+        adminTest: true,
+      },
+    },
+    after_photos_uploaded: {
+      jobId: sampleJobId,
+      message: "Sample: the cleaner uploaded after photos — review when ready.",
+      options: { listingTitle: "2 Bed Unit", adminTest: true },
+    },
+    auto_release_warning: {
+      jobId: sampleJobId,
+      message: "Sample: ~24h left before funds auto-release.",
+      options: { adminTest: true },
+    },
+    checklist_all_complete: {
+      jobId: sampleJobId,
+      message: "Sample: the other party finished every checklist item.",
+      options: { adminTest: true },
+    },
+    new_job_in_area: {
+      jobId: null,
+      message: "Sample: new bond clean in your area — open to bid.",
+      options: {
+        listingUuid: "00000000-0000-0000-0000-000000000001",
+        suburb: "Brisbane",
+        postcode: "4000",
+        minPriceCents: 30000,
+        maxPriceCents: 45000,
+        adminTest: true,
+      },
+    },
+    job_status_update: {
+      jobId: sampleJobId,
+      message: "Sample: job status changed (e.g. payment secured / in progress).",
+      options: { adminTest: true },
+    },
+  };
+
+  const s = samples[type];
+  if (!s) {
+    return { ok: false, error: "No sample template for this type yet." };
+  }
+
+  await createNotification(session.user.id, type, s.jobId, s.message, s.options);
   return { ok: true };
 }
 

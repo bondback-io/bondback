@@ -28,8 +28,21 @@ import {
 } from "@/lib/actions/global-settings";
 import { sendGlobalSettingsTestEmail } from "@/lib/actions/admin-email-templates";
 import { sendAdminTestNotification } from "@/lib/actions/notifications";
+import { sendAdminSmsFromGlobalSettings } from "@/lib/actions/sms-notifications";
+import { sendTestDailyDigestEmail } from "@/lib/actions/daily-digest";
 import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
 import { getListingAddonLabel } from "@/lib/listing-addon-prices";
+
+const SMS_TYPE_CONTROLS: { key: string; label: string }[] = [
+  { key: "new_bid", label: "New bid" },
+  { key: "job_accepted", label: "Job accepted / won" },
+  { key: "job_created", label: "Job created" },
+  { key: "job_approved_to_start", label: "Approved to start" },
+  { key: "payment_released", label: "Payment released" },
+  { key: "dispute_opened", label: "Dispute opened" },
+  { key: "auto_release_warning", label: "Auto-release warning" },
+  { key: "new_job_in_area", label: "New job in area (cleaners)" },
+];
 
 export type AdminGlobalSettingsFormProps = {
   initial: Partial<SaveGlobalSettingsInput> | null;
@@ -103,9 +116,21 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
     value: initial?.floatingChatEnabled ?? true,
     saving: false,
   });
+  const [dailyDigestEnabled, setDailyDigestEnabled] = React.useState(
+    initial?.dailyDigestEnabled ?? true
+  );
   const [enableSmsAlertsNewJobs, setEnableSmsAlertsNewJobs] = React.useState(
     initial?.enableSmsAlertsNewJobs ?? true
   );
+  const [enableSmsNotifications, setEnableSmsNotifications] = React.useState(
+    initial?.enableSmsNotifications ?? true
+  );
+  const [smsTypeEnabled, setSmsTypeEnabled] = React.useState<Record<string, boolean>>(() => {
+    const base: Record<string, boolean> = {};
+    for (const { key } of SMS_TYPE_CONTROLS) base[key] = true;
+    return { ...base, ...(initial?.smsTypeEnabled ?? {}) };
+  });
+  const [testSmsPending, setTestSmsPending] = React.useState(false);
   const [maxSmsPerUserPerDay, setMaxSmsPerUserPerDay] = React.useState<string>(
     initial?.maxSmsPerUserPerDay != null ? String(initial.maxSmsPerUserPerDay) : ""
   );
@@ -175,6 +200,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [testEmailTo, setTestEmailTo] = React.useState("");
   const [testEmailPending, setTestEmailPending] = React.useState(false);
   const [testNotifPending, setTestNotifPending] = React.useState(false);
+  const [digestTestPending, setDigestTestPending] = React.useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -230,7 +256,10 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       payoutSchedule,
       stripeTestMode: stripeTestMode.value,
       floatingChatEnabled: floatingChatEnabledState.value,
+      dailyDigestEnabled,
       enableSmsAlertsNewJobs,
+      enableSmsNotifications,
+      smsTypeEnabled,
       maxSmsPerUserPerDay: maxSmsPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxSmsPerUserPerDay, 10) || 5)) : undefined,
       maxPushPerUserPerDay: maxPushPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxPushPerUserPerDay, 10) || 5)) : undefined,
       pricingBaseRatePerBedroomAud: Math.max(1, Number(pricingBaseRatePerBedroomAud) || DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud),
@@ -336,6 +365,90 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               }}
             />
             {stripeTestMode.saving && <span className="text-[11px] text-muted-foreground">Saving…</span>}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-violet-200 bg-violet-50/50 dark:border-violet-900 dark:bg-violet-950/30">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+            SMS notifications (Twilio)
+          </CardTitle>
+          <p className="text-[11px] text-violet-800/90 dark:text-violet-200/90">
+            Set <code className="rounded bg-violet-100/80 px-0.5 dark:bg-violet-900/50">TWILIO_ACCOUNT_SID</code>,{" "}
+            <code className="rounded bg-violet-100/80 px-0.5 dark:bg-violet-900/50">TWILIO_AUTH_TOKEN</code>,{" "}
+            <code className="rounded bg-violet-100/80 px-0.5 dark:bg-violet-900/50">TWILIO_PHONE_NUMBER</code> on the server.
+            When <strong>Enable SMS globally</strong> is off, no SMS is sent (including critical transactional texts).
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="enable-sms-notifications" className="text-xs font-medium text-violet-900 dark:text-violet-100">
+              Enable SMS globally
+            </Label>
+            <Switch
+              id="enable-sms-notifications"
+              checked={enableSmsNotifications}
+              onCheckedChange={(v) => setEnableSmsNotifications(Boolean(v))}
+            />
+          </div>
+          <p className="text-[11px] text-violet-800/80 dark:text-violet-200/80">
+            Per-type SMS (critical / high-priority). Empty toggles default to on until you save; turning a type off blocks that SMS only.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {SMS_TYPE_CONTROLS.map(({ key, label }) => (
+              <div
+                key={key}
+                className="flex items-center justify-between gap-2 rounded-lg border border-violet-200/80 bg-white/60 px-2 py-2 dark:border-violet-800/60 dark:bg-violet-950/20"
+              >
+                <Label htmlFor={`sms-type-${key}`} className="text-[11px] font-normal text-violet-950 dark:text-violet-100">
+                  {label}
+                </Label>
+                <Switch
+                  id={`sms-type-${key}`}
+                  checked={smsTypeEnabled[key] !== false}
+                  onCheckedChange={(v) =>
+                    setSmsTypeEnabled((prev) => ({ ...prev, [key]: Boolean(v) }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              disabled={testSmsPending}
+              onClick={() => {
+                setTestSmsPending(true);
+                void (async () => {
+                  try {
+                    const res = await sendAdminSmsFromGlobalSettings();
+                    if (res.ok) {
+                      toast({
+                        title: "Test SMS sent",
+                        description: "Check the phone number on your admin profile.",
+                      });
+                    } else {
+                      toast({
+                        variant: "destructive",
+                        title: "SMS failed",
+                        description: res.error ?? "Unknown error",
+                      });
+                    }
+                  } finally {
+                    setTestSmsPending(false);
+                  }
+                })();
+              }}
+            >
+              {testSmsPending ? "Sending…" : "Send test SMS"}
+            </Button>
+            <span className="text-[11px] text-muted-foreground dark:text-gray-400">
+              Sends one message via Twilio (not counted against user daily cap).
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -1095,6 +1208,23 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                 onCheckedChange={(v) => setEmailsEnabled(Boolean(v))}
               />
             </div>
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/60">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground dark:text-gray-300">
+                  Daily digest email
+                </Label>
+                <p className="text-[11px] text-muted-foreground dark:text-gray-400 mt-0.5">
+                  When on, the scheduled job can send a 24-hour summary (cleaners: new jobs nearby;
+                  listers: bids &amp; jobs). Users control their own copy in Settings → Notifications.
+                  Recommended schedule: 8:00 AM AEST via Vercel Cron (<code className="rounded bg-muted px-0.5">/api/cron/daily-digest</code>).
+                </p>
+              </div>
+              <Switch
+                checked={dailyDigestEnabled}
+                onCheckedChange={(v) => setDailyDigestEnabled(Boolean(v))}
+                disabled={!emailsEnabled}
+              />
+            </div>
             {!emailsEnabled && (
               <Alert variant="destructive">
                 <AlertDescription className="text-[11px]">
@@ -1174,6 +1304,32 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                     }}
                   >
                     {testNotifPending ? "Sending…" : "Send test notification"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={digestTestPending || !emailsEnabled || !dailyDigestEnabled}
+                    onClick={() => {
+                      setDigestTestPending(true);
+                      void sendTestDailyDigestEmail().then((r) => {
+                        setDigestTestPending(false);
+                        if (r.ok) {
+                          toast({
+                            title: "Sample digest sent",
+                            description: "Check your inbox (subject starts with [Test]).",
+                          });
+                        } else {
+                          toast({
+                            variant: "destructive",
+                            title: "Digest test failed",
+                            description: r.error,
+                          });
+                        }
+                      });
+                    }}
+                  >
+                    {digestTestPending ? "Sending…" : "Send test daily digest"}
                   </Button>
                 </div>
               </div>

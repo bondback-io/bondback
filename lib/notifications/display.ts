@@ -19,6 +19,15 @@ function numFromData(v: unknown): number | null {
 export function getNotificationHref(row: NotificationRow): string | null {
   const data = row.data as Record<string, unknown> | null;
   if (data?.admin_test === true) return "/notifications";
+  if (row.type === "daily_digest") return "/dashboard";
+
+  const listingUuid =
+    typeof data?.listing_uuid === "string" && data.listing_uuid.trim() !== ""
+      ? data.listing_uuid.trim()
+      : null;
+  if (listingUuid) {
+    return `/jobs/${listingUuid}`;
+  }
 
   const listingFromData = data?.listing_id != null ? numFromData(data.listing_id) : null;
   const jobFromData = data?.job_id != null ? numFromData(data.job_id) : null;
@@ -65,6 +74,22 @@ function labelForType(type: NotificationRow["type"]): string {
       return "Funds ready";
     case "referral_reward":
       return "Referral reward";
+    case "listing_live":
+      return "Listing published";
+    case "after_photos_uploaded":
+      return "After photos";
+    case "auto_release_warning":
+      return "Auto-release reminder";
+    case "checklist_all_complete":
+      return "Checklist";
+    case "new_job_in_area":
+      return "New job nearby";
+    case "job_status_update":
+      return "Job status";
+    case "early_accept_declined":
+      return "Early acceptance";
+    case "daily_digest":
+      return "Daily digest";
     default:
       return "Update";
   }

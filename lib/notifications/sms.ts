@@ -6,6 +6,7 @@
 
 import Twilio from "twilio";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getGlobalSettings } from "@/lib/actions/global-settings";
 
 const DEFAULT_MAX_SMS_PER_USER_PER_DAY = 5;
 
@@ -109,31 +110,64 @@ export async function sendSmsToUser(
   return { ...result, sent: result.ok };
 }
 
+/** Reusable server-side Twilio send (alias of {@link sendSms}). */
+export async function sendSMS(
+  to: string,
+  message: string
+): Promise<{ ok: boolean; error?: string; sid?: string }> {
+  return sendSms(to, message);
+}
+
+export type GlobalSmsSettingsSlice = {
+  enable_sms_notifications?: boolean | null;
+  sms_type_enabled?: Record<string, boolean> | null;
+};
+
+/**
+ * Master switch + optional per-type map on global_settings.
+ * Empty sms_type_enabled means all configured types may send.
+ */
+export function isTwilioSmsAllowedForType(
+  settings: GlobalSmsSettingsSlice | null | undefined,
+  type: string
+): boolean {
+  if (settings?.enable_sms_notifications === false) return false;
+  const map = settings?.sms_type_enabled;
+  if (!map || typeof map !== "object" || Object.keys(map).length === 0) {
+    return true;
+  }
+  return map[type] !== false;
+}
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
 
 /**
  * Send "new job near you" SMS to a cleaner. Uses rate limit (max 5/day unless overridden by global_settings).
- * Message: "New bond clean job in [suburb] ([postcode]) – $[min]–$[max]. Bid now: bondback.com/jobs/[listingId]"
+ * Message: "New bond clean in [Suburb]: [n] bed, $[est]. View now: [url]/jobs/[listingId]"
  */
 export async function sendNewJobAlert(
   cleanerId: string,
   listingId: string,
   suburb: string,
-  postcode: string,
+  _postcode: string,
   minPriceCents: number,
-  maxPriceCents: number
+  maxPriceCents: number,
+  bedrooms: number
 ): Promise<{ ok: boolean; sent?: boolean; error?: string }> {
+  const settings = await getGlobalSettings();
+  if (!isTwilioSmsAllowedForType(settings, "new_job_in_area")) {
+    return { ok: true, sent: false };
+  }
+
   const { getNotificationPrefs } = await import("@/lib/supabase/admin");
   const prefs = await getNotificationPrefs(cleanerId);
   if (!prefs.phone) return { ok: true, sent: false };
   if (!prefs.shouldSendSmsNewJob?.()) return { ok: true, sent: false };
 
   const suburbDisplay = (suburb ?? "").trim() || "Your area";
-  const postcodeDisplay = (postcode ?? "").trim() ? ` (${(postcode ?? "").trim()})` : "";
-  const minD = Math.round(minPriceCents / 100);
-  const maxD = Math.round(maxPriceCents / 100);
-  const priceRange = minD === maxD ? `$${minD}` : `$${minD}–$${maxD}`;
-  const message = `New bond clean job in ${suburbDisplay}${postcodeDisplay} – ${priceRange}. Bid now: ${APP_URL}/jobs/${listingId}`;
+  const beds = Math.max(1, Math.min(20, Number.isFinite(bedrooms) ? Math.floor(bedrooms) : 1));
+  const midAud = Math.round((minPriceCents + maxPriceCents) / 2 / 100);
+  const message = `New bond clean in ${suburbDisplay}: ${beds} bed, $${midAud}. View now: ${APP_URL}/jobs/${listingId}`;
 
   return sendSmsToUser(cleanerId, prefs.phone, message);
 }

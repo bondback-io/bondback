@@ -23,6 +23,7 @@ import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { scheduleRouterAction } from "@/lib/deferred-router";
 import type { SessionWithProfile } from "@/lib/types";
+import { getInAppNotificationFeedbackPrefs } from "@/lib/notifications/in-app-notification-prefs";
 export type MainNavProps = {
   isLoggedIn: boolean;
   /** User has cleaner on their profile — used for /earnings link (same gate as earnings page). */
@@ -151,6 +152,10 @@ function MobileNavContent({
     scheduleRouterAction(() => router.push("/"));
   };
 
+  const inAppPrefs = session
+    ? getInAppNotificationFeedbackPrefs(session.profile?.notification_preferences)
+    : { inAppSoundEnabled: true, inAppVibrateEnabled: true };
+
   return (
     <div className="flex flex-1 flex-col">
       {/* Logo at top */}
@@ -266,6 +271,8 @@ function MobileNavContent({
               userId={session.user.id}
               activeRole={session?.activeRole ?? null}
               variant="row"
+              inAppSoundEnabled={inAppPrefs.inAppSoundEnabled}
+              inAppVibrateEnabled={inAppPrefs.inAppVibrateEnabled}
             />
           </div>
         )}

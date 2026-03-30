@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition, useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAbnAutoSaveOnValid } from "@/hooks/use-abn-auto-save-on-valid";
 import { Input } from "@/components/ui/input";
 import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
@@ -201,26 +202,41 @@ export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
   );
 }
 
+const LISTER_ONLY_EMAIL_KEYS = new Set<NotificationPreferenceKey>([
+  "listing_published",
+  "email_after_photos",
+]);
+
 const ALL_PREF_KEYS: NotificationPreferenceKey[] = [
+  "email_notifications",
   "new_bid",
   "new_message",
   "job_accepted",
   "job_completed",
+  "email_after_photos",
+  "email_checklist_updates",
   "dispute",
   "payment_released",
+  "listing_published",
   "receipt_emails",
   "weekly_tips",
+  "daily_digest",
   "receive_all_non_critical",
   "email_welcome",
   "email_tutorial",
   "sms_enabled",
-  "sms_new_job",
+  "sms_job_alerts",
   "push_enabled",
   "push_new_job",
+  "in_app_sound",
+  "in_app_vibrate",
 ];
 
 /** Cleaners only: new-job radius alerts (SMS + push). */
-const CLEANER_NEW_JOB_KEYS = new Set<NotificationPreferenceKey>(["sms_new_job", "push_new_job"]);
+const CLEANER_NEW_JOB_KEYS = new Set<NotificationPreferenceKey>(["sms_job_alerts", "push_new_job"]);
+
+/** In-app bell chime + vibration (both roles); rendered in a separate subsection. */
+const IN_APP_PREF_KEYS: NotificationPreferenceKey[] = ["in_app_sound", "in_app_vibrate"];
 
 function buildNotificationFormData(values: Record<string, boolean>): FormData {
   const fd = new FormData();
@@ -271,29 +287,46 @@ export function SettingsNotificationsForm({
   /** When false, hides SMS/Push toggles for new job radius alerts (cleaner-only). */
   isCleaner?: boolean;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
-  const prefKeys = useMemo(
-    () =>
-      isCleaner
-        ? ALL_PREF_KEYS
-        : ALL_PREF_KEYS.filter((k) => !CLEANER_NEW_JOB_KEYS.has(k)),
-    [isCleaner]
+  const prefKeys = useMemo(() => {
+    if (isCleaner) {
+      return ALL_PREF_KEYS.filter((k) => !LISTER_ONLY_EMAIL_KEYS.has(k));
+    }
+    return ALL_PREF_KEYS.filter((k) => !CLEANER_NEW_JOB_KEYS.has(k));
+  }, [isCleaner]);
+  const emailPrefKeys = useMemo(
+    () => prefKeys.filter((k) => !IN_APP_PREF_KEYS.includes(k)),
+    [prefKeys]
   );
-  const initialValues = useMemo(
-    () =>
-      ALL_PREF_KEYS.reduce(
-        (acc, key) => ({
+  const inAppPrefKeys = useMemo(
+    () => prefKeys.filter((k) => IN_APP_PREF_KEYS.includes(k)),
+    [prefKeys]
+  );
+  const initialValues = useMemo(() => {
+    return ALL_PREF_KEYS.reduce(
+      (acc, key) => {
+        if (key === "sms_job_alerts") {
+          const v =
+            typeof prefs?.sms_job_alerts === "boolean"
+              ? prefs.sms_job_alerts
+              : typeof prefs?.sms_new_job === "boolean"
+                ? prefs.sms_new_job
+                : DEFAULT_NOTIFICATION_PREFERENCES.sms_job_alerts;
+          return { ...acc, [key]: v };
+        }
+        return {
           ...acc,
           [key]:
             typeof prefs?.[key] === "boolean"
-              ? prefs[key]
+              ? prefs[key]!
               : DEFAULT_NOTIFICATION_PREFERENCES[key],
-        }),
-        {} as Record<string, boolean>
-      ),
-    [prefs]
-  );
+        };
+      },
+      {} as Record<string, boolean>
+    );
+  }, [prefs]);
   const [values, setValues] = useState<Record<string, boolean>>(initialValues);
 
   useEffect(() => {
@@ -308,6 +341,9 @@ export function SettingsNotificationsForm({
     startTransition(async () => {
       const result = await saveNotificationSettings(buildNotificationFormData(next));
       if (result.ok) {
+        if (key === "in_app_sound" || key === "in_app_vibrate") {
+          router.refresh();
+        }
         if (key === "push_enabled" && checked) {
           try {
             const { registerExpoPushTokenAsync } = await import("@/lib/pwa/expo-push-register");
@@ -318,7 +354,7 @@ export function SettingsNotificationsForm({
             // permission denied or Expo not configured
           }
         }
-        const smsOn = next.sms_new_job;
+        const smsOn = next.sms_job_alerts;
         const pushJobOn = next.push_new_job;
         toast({
           title: "Notification preferences updated",
@@ -350,7 +386,7 @@ export function SettingsNotificationsForm({
         </div>
       )}
       <div className="space-y-1 rounded-xl border border-border/70 bg-muted/20 p-3 dark:border-gray-800 dark:bg-gray-900/40">
-        {prefKeys.map((key) => (
+        {emailPrefKeys.map((key) => (
           <div
             key={key}
             className="flex min-h-[52px] items-center justify-between gap-4 border-b border-border/50 py-2 last:border-b-0 dark:border-gray-800/80 md:min-h-0 md:py-2.5"
@@ -373,6 +409,47 @@ export function SettingsNotificationsForm({
             />
           </div>
         ))}
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+          In-app alerts
+        </p>
+        <p className="text-base text-muted-foreground dark:text-gray-400 md:text-sm">
+          When a new notification arrives in the bell, Bond Back can play a soft sound and vibrate (if your device supports it).
+        </p>
+        <div className="space-y-1 rounded-xl border border-border/70 bg-muted/20 p-3 dark:border-gray-800 dark:bg-gray-900/40">
+          {inAppPrefKeys.map((key) => (
+            <div
+              key={key}
+              className="flex min-h-[52px] items-center justify-between gap-4 border-b border-border/50 py-2 last:border-b-0 dark:border-gray-800/80 md:min-h-0 md:py-2.5"
+            >
+              <div className="min-w-0 flex-1">
+                <Label htmlFor={key} className="cursor-pointer text-base dark:text-gray-200 md:text-sm">
+                  {NOTIFICATION_LABELS[key]}
+                </Label>
+                {key === "in_app_vibrate" && (
+                  <p className="mt-0.5 text-xs text-muted-foreground dark:text-gray-500">
+                    Works best on mobile
+                  </p>
+                )}
+              </div>
+              <input
+                type="hidden"
+                name={key}
+                value={values[key] ? "on" : ""}
+                readOnly
+                aria-hidden
+              />
+              <Switch
+                id={key}
+                checked={values[key]}
+                onCheckedChange={(checked) => persistNotificationToggle(key, checked)}
+                disabled={locked || isPending}
+              />
+            </div>
+          ))}
+        </div>
       </div>
       {/* Preserve cleaner-only prefs when lister saves (fields not shown) */}
       {ALL_PREF_KEYS.filter((k) => !prefKeys.includes(k)).map((key) => (

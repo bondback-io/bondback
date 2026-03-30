@@ -126,26 +126,29 @@ export async function POST(request: Request) {
           const numericJobId = Number(jobId);
           const { data: job } = await admin
             .from("jobs")
-            .select("id, lister_id, winner_id")
+            .select("id, lister_id, winner_id, listing_id")
             .eq("payment_intent_id", pi.id)
             .maybeSingle();
-          const j = job as { lister_id: string; winner_id: string | null } | null;
-          const msg = "Payment for this job failed. Please check your payment method or contact support.";
-          if (j?.lister_id) {
-            await admin.from("notifications").insert({
-              user_id: j.lister_id,
-              type: "new_message",
-              job_id: numericJobId,
-              message_text: msg,
-            } as never);
-          }
-          if (j?.winner_id) {
-            await admin.from("notifications").insert({
-              user_id: j.winner_id,
-              type: "new_message",
-              job_id: numericJobId,
-              message_text: msg,
-            } as never);
+          const j = job as {
+            lister_id: string;
+            winner_id: string | null;
+            listing_id?: string | null;
+          } | null;
+          const msg =
+            "Payment for this job failed. Please check your payment method or contact support.";
+          const listingUuid = j?.listing_id?.trim() ? j.listing_id : undefined;
+          if (j?.lister_id || j?.winner_id) {
+            const { createNotification } = await import("@/lib/actions/notifications");
+            if (j.lister_id) {
+              await createNotification(j.lister_id, "job_status_update", numericJobId, msg, {
+                listingUuid,
+              });
+            }
+            if (j.winner_id) {
+              await createNotification(j.winner_id, "job_status_update", numericJobId, msg, {
+                listingUuid,
+              });
+            }
           }
         }
         break;
@@ -233,10 +236,11 @@ export async function POST(request: Request) {
         if (admin && paymentIntentId) {
           if (jobIdMeta) {
             const nowIso = new Date().toISOString();
-            const { data: jobAfter } = await admin
+            const numericJobId = Number(jobIdMeta);
+            const { data: jobBefore } = await admin
               .from("jobs")
-              .select("winner_id")
-              .eq("id", Number(jobIdMeta))
+              .select("winner_id, lister_id, listing_id")
+              .eq("id", numericJobId)
               .maybeSingle();
             const { error } = await admin
               .from("jobs")
@@ -245,16 +249,34 @@ export async function POST(request: Request) {
                 status: "in_progress",
                 updated_at: nowIso,
               } as never)
-              .eq("id", Number(jobIdMeta));
+              .eq("id", numericJobId);
             if (error) console.error("[stripe/webhook] checkout.session.completed set payment_intent_id by job_id failed", jobIdMeta, error);
-            else if ((jobAfter as { winner_id?: string | null })?.winner_id) {
+            else if (jobBefore) {
+              const jb = jobBefore as {
+                winner_id?: string | null;
+                lister_id?: string | null;
+                listing_id?: string | null;
+              };
+              const listingUuid = jb.listing_id?.trim() ? jb.listing_id : undefined;
               const { createNotification } = await import("@/lib/actions/notifications");
-              await createNotification(
-                (jobAfter as { winner_id: string }).winner_id,
-                "job_approved_to_start",
-                Number(jobIdMeta),
-                "Lister approved – you can start the job."
-              );
+              if (jb.winner_id) {
+                await createNotification(
+                  jb.winner_id,
+                  "job_approved_to_start",
+                  numericJobId,
+                  "Lister approved – you can start the job.",
+                  { listingUuid }
+                );
+              }
+              if (jb.lister_id) {
+                await createNotification(
+                  jb.lister_id,
+                  "job_status_update",
+                  numericJobId,
+                  "Payment received — escrow is active. The cleaner has been notified to start the job.",
+                  { listingUuid }
+                );
+              }
             }
           } else if (listingId) {
             const { error } = await admin

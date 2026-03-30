@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Full-page notification list. New-row chime/vibration is triggered from
+ * `NotificationBell` (same realtime INSERT) and skipped when `/notifications` is open.
+ */
+
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -46,7 +51,17 @@ function iconForType(type: NotificationRow["type"]) {
     case "job_accepted":
     case "job_completed":
     case "job_approved_to_start":
+    case "after_photos_uploaded":
+    case "checklist_all_complete":
+    case "job_status_update":
       return <Briefcase className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />;
+    case "listing_live":
+    case "new_job_in_area":
+      return <Megaphone className="h-4 w-4 shrink-0 text-primary" />;
+    case "daily_digest":
+      return <Bell className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />;
+    case "auto_release_warning":
+      return <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />;
     case "payment_released":
     case "funds_ready":
       return <DollarSign className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />;
@@ -55,6 +70,8 @@ function iconForType(type: NotificationRow["type"]) {
       return <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />;
     case "new_bid":
       return <Megaphone className="h-4 w-4 shrink-0 text-primary" />;
+    case "early_accept_declined":
+      return <Briefcase className="h-4 w-4 shrink-0 text-slate-600 dark:text-slate-400" />;
     default:
       return <Bell className="h-4 w-4 shrink-0 text-muted-foreground" />;
   }

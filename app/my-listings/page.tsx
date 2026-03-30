@@ -5,7 +5,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,10 +14,25 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MyListingsList } from "@/components/features/my-listings-list";
+import { MyListingsTabNav } from "@/components/features/my-listings-tab-nav";
+import { MyListingsNewListingButton } from "@/components/listing/my-listings-new-listing-button";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { ArrowLeft, Briefcase } from "lucide-react";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
+
+/** When multiple job rows exist for one listing, prefer non-cancelled then newest. */
+function preferJobRow<
+  T extends { status: string | null; updated_at?: string | null },
+>(a: T, b: T): T {
+  const ac = a.status === "cancelled";
+  const bc = b.status === "cancelled";
+  if (ac && !bc) return b;
+  if (!ac && bc) return a;
+  const ta = a.updated_at ? Date.parse(String(a.updated_at)) : 0;
+  const tb = b.updated_at ? Date.parse(String(b.updated_at)) : 0;
+  return tb >= ta ? b : a;
+}
 
 type MyListingsPageProps = {
   searchParams?: Promise<{ edit?: string; tab?: string; cancel?: string }>;
@@ -179,9 +193,17 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
       }
     }
 
-    const jobByListing: NonNullable<typeof initialActiveJobsSnapshot> = {};
+    const jobsByListing = new Map<string, (typeof jobs)[number][]>();
     for (const j of jobs) {
       const lid = String(j.listing_id);
+      const arr = jobsByListing.get(lid) ?? [];
+      arr.push(j);
+      jobsByListing.set(lid, arr);
+    }
+
+    const jobByListing: NonNullable<typeof initialActiveJobsSnapshot> = {};
+    for (const [lid, arr] of jobsByListing) {
+      const j = arr.reduce((best, cur) => preferJobRow(best, cur));
       jobByListing[lid] = {
         jobId: j.id,
         winnerId: j.winner_id,
@@ -193,28 +215,32 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
       };
     }
     initialActiveJobsSnapshot = jobByListing;
-    initialActiveListingIds = jobs
-      .filter((j) => j.status !== "cancelled")
-      .map((j) => j.listing_id);
+    initialActiveListingIds = Array.from(
+      new Set(
+        jobs
+          .filter((j) => j.status !== "cancelled")
+          .map((j) => String(j.listing_id))
+      )
+    );
 
     const nowMs = Date.now();
     const cancelledJobListingIds = new Set(
-      jobs.filter((j) => j.status === "cancelled").map((j) => j.listing_id)
+      jobs.filter((j) => j.status === "cancelled").map((j) => String(j.listing_id))
     );
-    // Listings that have any non-cancelled job (shown under "active" on client, so excluded from "live" pool)
+    // Prefer merged snapshot so duplicate job rows don’t confuse counts / live vs active split
     const listingIdsWithActiveJob = new Set(
-      jobs.filter((j) => j.status !== "cancelled").map((j) => j.listing_id)
+      Object.entries(jobByListing)
+        .filter(([, row]) => row.status !== "cancelled")
+        .map(([lid]) => lid)
     );
-    // Listings that have a job in accepted or in_progress (shown in "Active jobs" section)
     const listingIdsWithNonCompletedJob = new Set(
-      jobs
-        .filter(
-          (j) =>
-            j.status === "accepted" ||
-            j.status === "in_progress" ||
-            j.status === "completed_pending_approval"
+      Object.entries(jobByListing)
+        .filter(([, row]) =>
+          row.status === "accepted" ||
+          row.status === "in_progress" ||
+          row.status === "completed_pending_approval"
         )
-        .map((j) => j.listing_id)
+        .map(([lid]) => lid)
     );
 
     // Active Listings tab: match client exactly.
@@ -224,37 +250,44 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
       (l) =>
         l.status === "live" &&
         parseUtcTimestamp(String(l.end_time ?? "")) > nowMs &&
-        !cancelledJobListingIds.has(l.id) &&
-        !listingIdsWithActiveJob.has(l.id)
+        !cancelledJobListingIds.has(String(l.id)) &&
+        !listingIdsWithActiveJob.has(String(l.id))
     ).length;
     // Active jobs section: listings with job status accepted or in_progress (unique by listing)
     const activeNonCompletedCount = initialListings.filter((l) =>
-      listingIdsWithNonCompletedJob.has(l.id)
+      listingIdsWithNonCompletedJob.has(String(l.id))
     ).length;
     activeCount = liveCount + activeNonCompletedCount;
 
-    completedCount = jobs.filter((j) => j.status === "completed").length;
-    pendingPaymentsCount = jobs.filter(
-      (j) =>
-        (j.status === "in_progress" ||
-          j.status === "completed_pending_approval") &&
-        j.cleaner_confirmed_complete === true
-    ).length;
-    cancelledListingsCount = jobs.filter((j) => j.status === "cancelled").length;
+    const uniqueCompletedListings = new Set(
+      jobs.filter((j) => j.status === "completed").map((j) => String(j.listing_id))
+    );
+    completedCount = uniqueCompletedListings.size;
+    pendingPaymentsCount = new Set(
+      jobs
+        .filter(
+          (j) =>
+            (j.status === "in_progress" ||
+              j.status === "completed_pending_approval") &&
+            j.cleaner_confirmed_complete === true
+        )
+        .map((j) => String(j.listing_id))
+    ).size;
+    cancelledListingsCount = new Set(
+      jobs.filter((j) => j.status === "cancelled").map((j) => String(j.listing_id))
+    ).size;
     completedCancelledExpiredTabCount =
       cancelledListingsCount + expiredListingsCount;
-    disputesCount = jobs.filter((j) =>
-      ["disputed", "in_review", "dispute_negotiating"].includes(String(j.status ?? ""))
-    ).length;
+    disputesCount = new Set(
+      jobs
+        .filter((j) =>
+          ["disputed", "in_review", "dispute_negotiating"].includes(
+            String(j.status ?? "")
+          )
+        )
+        .map((j) => String(j.listing_id))
+    ).size;
   }
-
-  const tabPill = (isActive: boolean) =>
-    cn(
-      "touch-manipulation inline-flex min-h-[48px] shrink-0 snap-start items-center justify-center whitespace-nowrap rounded-full px-3.5 py-2.5 text-[13px] font-semibold leading-tight transition-all duration-200 active:scale-[0.98] sm:min-h-0 sm:px-3.5 sm:py-2 sm:text-sm",
-      isActive
-        ? "bg-background text-foreground shadow-md ring-2 ring-emerald-500/35 dark:bg-gray-800 dark:text-gray-100 dark:ring-emerald-500/25"
-        : "border border-transparent bg-muted/80 text-muted-foreground hover:border-emerald-500/30 hover:bg-emerald-50/90 hover:text-foreground dark:bg-gray-800/80 dark:text-gray-400 dark:hover:border-emerald-500/25 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-    );
 
   return (
     <section className="page-inner space-y-5 pb-28 pt-4 sm:space-y-6 sm:pb-8 sm:pt-8 md:space-y-6">
@@ -296,13 +329,12 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
               Open job list view
             </Link>
           </div>
-          <Button
-            asChild
+          <MyListingsNewListingButton
             size="lg"
             className="h-12 min-h-[48px] w-full shrink-0 touch-manipulation rounded-2xl text-base font-semibold shadow-md sm:h-11 sm:w-auto sm:rounded-lg"
           >
-            <Link href="/listings/new">New listing</Link>
-          </Button>
+            New listing
+          </MyListingsNewListingButton>
         </div>
       </div>
 
@@ -321,63 +353,21 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
             </Link>
           </div>
           <CardDescription className="text-sm leading-relaxed dark:text-gray-400 sm:text-sm">
-            <span className="md:hidden">Swipe the tabs below — more filters off-screen.</span>
+            <span className="md:hidden">
+              Use the menu below to switch views — same filters as on larger screens.
+            </span>
             <span className="hidden md:inline">Choose a tab to filter your listings and jobs.</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 px-0 pt-0 sm:space-y-6 sm:px-6">
-          <div className="relative px-4 sm:px-0">
-            <div
-              className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-8 bg-gradient-to-r from-emerald-50 via-emerald-50/95 to-transparent dark:from-gray-950 dark:via-gray-950/95 sm:hidden"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-8 bg-gradient-to-l from-emerald-50 via-emerald-50/95 to-transparent dark:from-gray-950 dark:via-gray-950/95 sm:hidden"
-              aria-hidden
-            />
-            <nav
-              className="-mx-1 flex gap-2 overflow-x-auto scroll-pl-4 scroll-pr-4 pb-1 pt-0.5 [scrollbar-width:none] snap-x snap-mandatory sm:snap-none sm:scroll-pl-0 sm:scroll-pr-0 [&::-webkit-scrollbar]:hidden"
-              aria-label="Listings and jobs"
-            >
-              <Link
-                href="/my-listings?tab=active_listings"
-                className={tabPill(tab === "active_listings")}
-                scroll={false}
-              >
-                Active ({activeCount})
-              </Link>
-              <Link
-                href="/my-listings?tab=completed_jobs"
-                className={tabPill(tab === "completed_jobs")}
-                scroll={false}
-              >
-                <span className="sm:hidden">Done ({completedCount})</span>
-                <span className="hidden sm:inline">Completed ({completedCount})</span>
-              </Link>
-              <Link
-                href="/my-listings?tab=pending_payments"
-                className={tabPill(tab === "pending_payments")}
-                scroll={false}
-              >
-                <span className="sm:hidden">Pay ({pendingPaymentsCount})</span>
-                <span className="hidden sm:inline">Pending pay ({pendingPaymentsCount})</span>
-              </Link>
-              <Link
-                href="/my-listings?tab=cancelled_listings"
-                className={tabPill(tab === "cancelled_listings")}
-                scroll={false}
-              >
-                History ({completedCancelledExpiredTabCount})
-              </Link>
-              <Link
-                href="/my-listings?tab=disputes"
-                className={tabPill(tab === "disputes")}
-                scroll={false}
-              >
-                Disputes ({disputesCount})
-              </Link>
-            </nav>
-          </div>
+          <MyListingsTabNav
+            tab={tab}
+            activeCount={activeCount}
+            completedCount={completedCount}
+            pendingPaymentsCount={pendingPaymentsCount}
+            completedCancelledExpiredTabCount={completedCancelledExpiredTabCount}
+            disputesCount={disputesCount}
+          />
 
           <div className="mx-4 rounded-2xl border border-border/60 bg-background/90 p-3 shadow-sm dark:border-gray-800 dark:bg-gray-950/70 sm:mx-0 sm:rounded-xl sm:p-4 md:p-5">
             <MyListingsList

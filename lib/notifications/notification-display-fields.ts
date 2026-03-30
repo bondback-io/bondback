@@ -2,6 +2,8 @@
 export type NotificationPersistOptions = {
   senderName?: string;
   listingId?: number;
+  /** UUID string for listings (preferred over numeric listingId for links). */
+  listingUuid?: string | null;
   listingTitle?: string | null;
   amountCents?: number | null;
   /** Override generated title (e.g. admin test notification). */
@@ -25,6 +27,8 @@ export function buildNotificationPersistFields(
   const data: Record<string, unknown> = { type };
   if (jobId != null) data.job_id = jobId;
   if (options?.listingId != null) data.listing_id = options.listingId;
+  if (options?.listingUuid != null && String(options.listingUuid).trim())
+    data.listing_uuid = String(options.listingUuid).trim();
   if (options?.listingTitle != null) data.listing_title = options.listingTitle;
   if (options?.amountCents != null) data.amount_cents = options.amountCents;
   if (options?.senderName != null) data.sender_name = options.senderName;
@@ -69,6 +73,30 @@ export function buildNotificationPersistFields(
       break;
     case "referral_reward":
       title = "Referral reward";
+      break;
+    case "listing_live":
+      title = "Listing published";
+      break;
+    case "after_photos_uploaded":
+      title = jobId != null ? `After photos · Job #${jobId}` : "After photos uploaded";
+      break;
+    case "auto_release_warning":
+      title = jobId != null ? `Auto-release soon · Job #${jobId}` : "Auto-release reminder";
+      break;
+    case "checklist_all_complete":
+      title = jobId != null ? `Checklist complete · Job #${jobId}` : "Checklist complete";
+      break;
+    case "new_job_in_area":
+      title = "New job near you";
+      break;
+    case "job_status_update":
+      title = jobId != null ? `Job update · Job #${jobId}` : "Job update";
+      break;
+    case "early_accept_declined":
+      title = "Early acceptance declined";
+      break;
+    case "daily_digest":
+      title = "Daily digest";
       break;
     default:
       title = "Update";

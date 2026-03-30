@@ -1,0 +1,531 @@
+"use server";
+
+import { randomBytes, timingSafeEqual } from "crypto";
+import { revalidatePath } from "next/cache";
+import { render } from "@react-email/render";
+import React from "react";
+import { EarlyBidConfirmationEmail } from "@/emails/EarlyBidConfirmationEmail";
+import { createNotification } from "@/lib/actions/notifications";
+import { finalizeBidAcceptanceCore } from "@/lib/actions/jobs";
+import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
+import { sendEmail } from "@/lib/notifications/email";
+const EARLY_ACCEPT_HOURS = 24;
+
+function safeEqualToken(a: string, b: string): boolean {
+  try {
+    const ba = Buffer.from(a, "utf8");
+    const bb = Buffer.from(b, "utf8");
+    if (ba.length !== bb.length) return false;
+    return timingSafeEqual(ba, bb);
+  } catch {
+    return false;
+  }
+}
+
+function formatAud(cents: number): string {
+  return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
+}
+
+export type EarlyBidRequestResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Lister: request cleaner confirmation before the bid is officially accepted.
+ * Sets bid to `pending_confirmation`, sends email with confirm/decline links.
+ */
+export async function requestEarlyBidAcceptance(
+  listingId: string,
+  bidId: string
+): Promise<EarlyBidRequestResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Server configuration error." };
+  }
+
+  const { data: listing, error: le } = await admin
+    .from("listings")
+    .select(
+      "id, lister_id, status, title, suburb, postcode, property_type, bedrooms, bathrooms, special_instructions"
+    )
+    .eq("id", listingId)
+    .maybeSingle();
+  if (le || !listing) {
+    return { ok: false, error: "Listing not found." };
+  }
+  const list = listing as {
+    lister_id: string;
+    status: string;
+    title: string | null;
+    suburb: string | null;
+    postcode: string | null;
+    property_type: string | null;
+    bedrooms: number | null;
+    bathrooms: number | null;
+    special_instructions: string | null;
+  };
+  if (list.lister_id !== session.user.id) {
+    return { ok: false, error: "Only the lister can accept a bid." };
+  }
+  if (list.status !== "live") {
+    return { ok: false, error: "This listing is no longer accepting bids." };
+  }
+
+  const { data: jobExists } = await admin
+    .from("jobs")
+    .select("id")
+    .eq("id", listingId as never)
+    .maybeSingle();
+  if (jobExists) {
+    return { ok: false, error: "A job already exists for this listing." };
+  }
+
+  const { data: bid, error: be } = await admin
+    .from("bids")
+    .select("id, listing_id, cleaner_id, amount_cents, status")
+    .eq("id", bidId)
+    .maybeSingle();
+  if (be || !bid) {
+    return { ok: false, error: "Bid not found." };
+  }
+  const b = bid as {
+    id: string;
+    listing_id: string;
+    cleaner_id: string;
+    amount_cents: number;
+    status: string;
+  };
+  if (b.listing_id !== listingId) {
+    return { ok: false, error: "This bid does not belong to this listing." };
+  }
+  if (b.status !== "active") {
+    return { ok: false, error: "This bid can no longer be selected." };
+  }
+
+  const settings = await getGlobalSettings();
+  if (settings?.require_stripe_connect_before_bidding !== false) {
+    const { data: cleanerProfile } = await admin
+      .from("profiles")
+      .select("stripe_connect_id, stripe_onboarding_complete")
+      .eq("id", b.cleaner_id)
+      .maybeSingle();
+    const cp = cleanerProfile as { stripe_connect_id?: string | null; stripe_onboarding_complete?: boolean } | null;
+    if (!cp?.stripe_connect_id?.trim() || cp?.stripe_onboarding_complete !== true) {
+      return {
+        ok: false,
+        error:
+          "This cleaner has not connected their bank account yet. They need to connect in Profile before you can accept their bid.",
+      };
+    }
+  }
+
+  const expiresAt = new Date(Date.now() + EARLY_ACCEPT_HOURS * 60 * 60 * 1000).toISOString();
+  const token = randomBytes(32).toString("hex");
+
+  await admin
+    .from("bids")
+    .update({
+      status: "active",
+      early_action_token: null,
+      pending_confirmation_expires_at: null,
+    } as never)
+    .eq("listing_id", listingId)
+    .eq("status", "pending_confirmation");
+
+  const { data: updatedBid, error: upErr } = await admin
+    .from("bids")
+    .update({
+      status: "pending_confirmation",
+      early_action_token: token,
+      pending_confirmation_expires_at: expiresAt,
+    } as never)
+    .eq("id", bidId)
+    .eq("status", "active")
+    .select("id")
+    .maybeSingle();
+
+  if (upErr || !updatedBid) {
+    return {
+      ok: false,
+      error: upErr?.message ?? "Could not reserve this bid. It may have changed—refresh and try again.",
+    };
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+  const confirmUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=confirm`;
+  const declineUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=decline`;
+
+  const jobTitle = (list.title ?? "").trim() || "Bond clean";
+  const addressLine = [list.suburb, list.postcode].filter(Boolean).join(", ") || "—";
+  const propertySizeLine = [
+    list.property_type ? `${list.property_type}` : null,
+    list.bedrooms != null ? `${list.bedrooms} bed` : null,
+    list.bathrooms != null ? `${list.bathrooms} bath` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const element = React.createElement(EarlyBidConfirmationEmail, {
+    jobTitle,
+    addressLine,
+    bidAmountDisplay: formatAud(b.amount_cents),
+    propertySizeLine: propertySizeLine || "—",
+    confirmUrl,
+    declineUrl,
+    expiresSummary: `${EARLY_ACCEPT_HOURS} hours`,
+  });
+  const html = await render(element);
+  const subject = `Your bid on ${jobTitle} has been selected \u2013 please confirm`;
+
+  const cleanerEmail = await getEmailForUserId(b.cleaner_id);
+  if (!cleanerEmail?.trim()) {
+    await admin
+      .from("bids")
+      .update({
+        status: "active",
+        early_action_token: null,
+        pending_confirmation_expires_at: null,
+      } as never)
+      .eq("id", bidId);
+    return { ok: false, error: "Could not find the cleaner’s email address." };
+  }
+
+  const sendResult = await sendEmail(cleanerEmail.trim(), subject, html, {
+    log: { userId: b.cleaner_id, kind: "early_bid_confirmation" },
+  });
+  if (!sendResult.ok || sendResult.skipped) {
+    await admin
+      .from("bids")
+      .update({
+        status: "active",
+        early_action_token: null,
+        pending_confirmation_expires_at: null,
+      } as never)
+      .eq("id", bidId);
+    return {
+      ok: false,
+      error: sendResult.skipped
+        ? "Email could not be sent (check global email settings)."
+        : sendResult.error ?? "Email could not be sent.",
+    };
+  }
+
+  revalidateJobsBrowseCaches();
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${listingId}`);
+  revalidatePath("/my-listings");
+  revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+
+  return { ok: true };
+}
+
+export type EarlyBidTokenResult =
+  | { ok: true; redirectPath: string }
+  | { ok: false; error: string };
+
+export async function confirmEarlyBidByToken(token: string): Promise<EarlyBidTokenResult> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Server configuration error." };
+  }
+
+  const { data: bid, error } = await admin
+    .from("bids")
+    .select("id, listing_id, cleaner_id, amount_cents, status, early_action_token, pending_confirmation_expires_at")
+    .eq("early_action_token", token)
+    .maybeSingle();
+
+  if (error || !bid) {
+    return { ok: false, error: "Invalid or expired link." };
+  }
+  const b = bid as {
+    id: string;
+    listing_id: string;
+    cleaner_id: string;
+    amount_cents: number;
+    status: string;
+    early_action_token: string | null;
+    pending_confirmation_expires_at: string | null;
+  };
+
+  if (!safeEqualToken(b.early_action_token ?? "", token)) {
+    return { ok: false, error: "Invalid or expired link." };
+  }
+  if (b.status !== "pending_confirmation") {
+    return { ok: false, error: "This offer is no longer pending." };
+  }
+  if (b.pending_confirmation_expires_at && new Date(b.pending_confirmation_expires_at) < new Date()) {
+    return { ok: false, error: "This offer has expired." };
+  }
+
+  const { data: listing } = await admin
+    .from("listings")
+    .select("lister_id, title, status")
+    .eq("id", b.listing_id)
+    .maybeSingle();
+  const list = listing as { lister_id: string; title: string | null; status: string } | null;
+  if (!list || list.status !== "live") {
+    return { ok: false, error: "This listing is no longer available." };
+  }
+
+  const result = await finalizeBidAcceptanceCore({
+    listingId: b.listing_id,
+    listerId: list.lister_id,
+    cleanerId: b.cleaner_id,
+    acceptedAmountCents: b.amount_cents,
+    listingTitle: list.title ?? null,
+  });
+
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  return {
+    ok: true,
+    redirectPath: `/jobs/${encodeURIComponent(String(result.jobId))}?early_confirm=success`,
+  };
+}
+
+export async function declineEarlyBidByToken(token: string): Promise<EarlyBidTokenResult> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Server configuration error." };
+  }
+
+  const { data: bid, error } = await admin
+    .from("bids")
+    .select("id, listing_id, cleaner_id, status, early_action_token, pending_confirmation_expires_at")
+    .eq("early_action_token", token)
+    .maybeSingle();
+
+  if (error || !bid) {
+    return { ok: false, error: "Invalid or expired link." };
+  }
+  const b = bid as {
+    id: string;
+    listing_id: string;
+    cleaner_id: string;
+    status: string;
+    early_action_token: string | null;
+    pending_confirmation_expires_at: string | null;
+  };
+
+  if (!safeEqualToken(b.early_action_token ?? "", token)) {
+    return { ok: false, error: "Invalid or expired link." };
+  }
+  if (b.status !== "pending_confirmation") {
+    return { ok: false, error: "This offer is no longer pending." };
+  }
+  if (b.pending_confirmation_expires_at && new Date(b.pending_confirmation_expires_at) < new Date()) {
+    return { ok: false, error: "This offer has expired." };
+  }
+
+  const { data: listing } = await admin
+    .from("listings")
+    .select("lister_id, title")
+    .eq("id", b.listing_id)
+    .maybeSingle();
+  const list = listing as { lister_id: string; title: string | null } | null;
+  if (!list) {
+    return { ok: false, error: "Listing not found." };
+  }
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("display_name, full_name")
+    .eq("id", b.cleaner_id)
+    .maybeSingle();
+  const pr = profile as { display_name?: string | null; full_name?: string | null } | null;
+  const cleanerName =
+    (pr?.display_name ?? "").trim() ||
+    (pr?.full_name ?? "").trim() ||
+    "The cleaner";
+
+  await admin
+    .from("bids")
+    .update({
+      status: "declined_early",
+      early_action_token: null,
+      pending_confirmation_expires_at: null,
+    } as never)
+    .eq("id", b.id);
+
+  await createNotification(
+    list.lister_id,
+    "early_accept_declined",
+    null,
+    `${cleanerName} declined your early acceptance.`,
+    { listingUuid: b.listing_id, listingTitle: list.title ?? null, senderName: cleanerName }
+  );
+
+  revalidateJobsBrowseCaches();
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${b.listing_id}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+
+  return {
+    ok: true,
+    redirectPath: `/jobs/${encodeURIComponent(b.listing_id)}?early_decline=1`,
+  };
+}
+
+export async function expireStaleEarlyBidAcceptances(): Promise<{
+  expired: number;
+  errors: string[];
+}> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { expired: 0, errors: ["SUPABASE_SERVICE_ROLE_KEY not configured"] };
+  }
+  const nowIso = new Date().toISOString();
+  const { data: rows, error } = await admin
+    .from("bids")
+    .select("id, listing_id, cleaner_id")
+    .eq("status", "pending_confirmation")
+    .lt("pending_confirmation_expires_at", nowIso);
+
+  if (error) {
+    return { expired: 0, errors: [error.message] };
+  }
+
+  const errors: string[] = [];
+  let expired = 0;
+
+  for (const raw of rows ?? []) {
+    const row = raw as {
+      id: string;
+      listing_id: string;
+      cleaner_id: string;
+    };
+    const { data: list } = await admin
+      .from("listings")
+      .select("lister_id")
+      .eq("id", row.listing_id)
+      .maybeSingle();
+    const listerId = (list as { lister_id: string } | null)?.lister_id;
+    if (!listerId) continue;
+
+    const { error: uErr } = await admin
+      .from("bids")
+      .update({
+        status: "active",
+        early_action_token: null,
+        pending_confirmation_expires_at: null,
+      } as never)
+      .eq("id", row.id)
+      .eq("status", "pending_confirmation");
+
+    if (uErr) {
+      errors.push(`${row.id}: ${uErr.message}`);
+      continue;
+    }
+    expired++;
+
+    await createNotification(
+      listerId,
+      "job_status_update",
+      null,
+      "Your early acceptance offer expired without a response from the cleaner. The auction continues.",
+      { listingUuid: row.listing_id }
+    );
+    await createNotification(
+      row.cleaner_id,
+      "job_status_update",
+      null,
+      "An early acceptance offer on a job you bid on has expired. You can continue bidding if the listing is still open.",
+      { listingUuid: row.listing_id }
+    );
+  }
+
+  if (expired > 0) {
+    revalidatePath("/jobs");
+    revalidatePath("/dashboard");
+  }
+
+  return { expired, errors };
+}
+
+/**
+ * After a new active bid is placed: if another bid was pending early acceptance and is no longer
+ * the best (lowest) active bid, revert it to active and notify parties.
+ */
+export async function invalidatePendingEarlyAcceptIfSuperseded(listingId: string): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+
+  const { data: pending } = await admin
+    .from("bids")
+    .select("id, amount_cents, cleaner_id")
+    .eq("listing_id", listingId)
+    .eq("status", "pending_confirmation")
+    .maybeSingle();
+
+  if (!pending) return;
+
+  const p = pending as { id: string; amount_cents: number; cleaner_id: string };
+
+  const { data: bestActive } = await admin
+    .from("bids")
+    .select("amount_cents")
+    .eq("listing_id", listingId)
+    .eq("status", "active")
+    .order("amount_cents", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!bestActive) return;
+
+  const best = bestActive as { amount_cents: number };
+
+  if (best.amount_cents < p.amount_cents) {
+    const { data: list } = await admin
+      .from("listings")
+      .select("lister_id")
+      .eq("id", listingId)
+      .maybeSingle();
+    const listerId = (list as { lister_id: string } | null)?.lister_id;
+    if (!listerId) return;
+
+    await admin
+      .from("bids")
+      .update({
+        status: "active",
+        early_action_token: null,
+        pending_confirmation_expires_at: null,
+      } as never)
+      .eq("id", p.id);
+
+    await createNotification(
+      listerId,
+      "job_status_update",
+      null,
+      "Your early acceptance was cancelled because a lower bid was placed. The auction continues.",
+      { listingUuid: listingId }
+    );
+    await createNotification(
+      p.cleaner_id,
+      "job_status_update",
+      null,
+      "An early acceptance offer is no longer valid because another cleaner placed a lower bid.",
+      { listingUuid: listingId }
+    );
+
+    revalidatePath("/jobs");
+    revalidatePath(`/jobs/${listingId}`);
+  }
+}

@@ -45,9 +45,9 @@ import {
   counterRefund,
   rejectRefund,
   acceptCounterRefund,
-  acceptBid,
   extendListerReview24h,
 } from "@/lib/actions/jobs";
+import { requestEarlyBidAcceptance } from "@/lib/actions/early-bid-acceptance";
 import { cancelLastBid } from "@/lib/actions/bids";
 import {
   Select,
@@ -303,13 +303,16 @@ export function JobDetail({
   const [showCounterDialog, setShowCounterDialog] = useState(false);
   const handleAcceptBid = useCallback(
     async (bid: BidWithBidder) => {
-      const result = await acceptBid(listingId, bid.cleaner_id, bid.amount_cents);
+      const result = await requestEarlyBidAcceptance(listingId, bid.id);
       if (result.ok) {
-        setLocalJobStatus("accepted");
-        toast({ title: "Bid accepted", description: "Job created. Pay & Start Job to hold funds in escrow and start the job." });
+        toast({
+          title: "Early acceptance requested",
+          description:
+            "We emailed the cleaner. They must confirm within 24 hours to create the job. The listing stays open until then.",
+        });
         scheduleRouterAction(() => router.refresh());
       } else {
-        toast({ variant: "destructive", title: "Could not accept bid", description: result.error });
+        toast({ variant: "destructive", title: "Could not send request", description: result.error });
       }
     },
     [listingId, toast, router]
@@ -755,6 +758,17 @@ export function JobDetail({
       .eq("job_id", numericJobId as never);
     if (error) {
       setChecklistError(error.message);
+      return;
+    }
+    const nextList = (checklist ?? []).map((it) =>
+      it.id === item.id ? { ...it, is_completed: next } : it
+    );
+    const allDone =
+      nextList.length > 0 && nextList.every((x) => x.is_completed);
+    if (allDone && currentUserId) {
+      void import("@/lib/actions/notifications").then(({ notifyChecklistAllComplete }) =>
+        notifyChecklistAllComplete(numericJobId, currentUserId)
+      );
     }
   };
 
@@ -775,6 +789,12 @@ export function JobDetail({
       .eq("job_id", numericJobId as never);
     if (error) {
       setChecklistError(error.message);
+      return;
+    }
+    if (currentUserId) {
+      void import("@/lib/actions/notifications").then(({ notifyChecklistAllComplete }) =>
+        notifyChecklistAllComplete(numericJobId, currentUserId)
+      );
     }
   };
 
@@ -2139,6 +2159,15 @@ export function JobDetail({
                                       return { name: file.name, url: publicUrl };
                                     });
                                   setAfterPhotoEntries(entries);
+                                  const newCount = entries.filter(
+                                    (file) => file.name && !file.name.startsWith("thumb_")
+                                  ).length;
+                                  if (newCount >= 3 && existingCount < 3) {
+                                    void import("@/lib/actions/notifications").then(
+                                      ({ notifyListerAfterPhotosReady }) =>
+                                        notifyListerAfterPhotosReady(numericJobId)
+                                    );
+                                  }
                                 }
                                 toast({ title: "Photos added", description: `${added} photo(s) added.` });
                               }
@@ -3142,6 +3171,9 @@ export function JobDetail({
             !listerReleaseFundsStep && (
             <BidHistorySection
               bids={bids}
+              hasPendingEarlyAcceptance={bids.some(
+                (b) => b.status === "pending_confirmation"
+              )}
               onAcceptBid={
                 isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
               }
@@ -3271,6 +3303,7 @@ export function JobDetail({
 
 function BidHistorySection({
   bids,
+  hasPendingEarlyAcceptance = false,
   onAcceptBid,
   showRevertLastBid = false,
   onRevertLastBid,
@@ -3280,6 +3313,7 @@ function BidHistorySection({
   defaultOpen = false,
 }: {
   bids: BidWithBidder[];
+  hasPendingEarlyAcceptance?: boolean;
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
   /** Cleaner + live listing: withdraw most recent bid by this user. */
   showRevertLastBid?: boolean;
@@ -3325,7 +3359,11 @@ function BidHistorySection({
       </summary>
       {bids.length > 0 ? (
         <div className="mt-2 space-y-3">
-          <BidHistoryTable bids={bids} onAcceptBid={onAcceptBid} />
+          <BidHistoryTable
+            bids={bids}
+            onAcceptBid={onAcceptBid}
+            hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
+          />
           {showRevertLastBid && onRevertLastBid ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
               <Button
