@@ -17,7 +17,8 @@ export const WELCOME_PREHEADER =
 
 export function Welcome({ firstName, role }: WelcomeProps) {
   const dashboardUrl = `${APP_URL}/dashboard`;
-  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
+  const displayName = (firstName ?? "").trim() || "there";
+  const greeting = `Hi ${displayName},`;
 
   const roleBenefits =
     role === "lister"

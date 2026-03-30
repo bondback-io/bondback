@@ -54,6 +54,10 @@ import {
 import { Sun, Moon, Monitor, Smartphone, Loader2 } from "lucide-react";
 import { markdownToHtml } from "@/lib/markdown";
 import type { SendAfterOption } from "@/lib/actions/global-settings";
+import {
+  substituteEmailTemplatePlaceholders,
+  placeholderValuesFromTestDataInput,
+} from "@/lib/email-placeholders";
 
 /** When to trigger the email. Delayed sending requires a worker/cron to be implemented. */
 const SEND_AFTER_OPTIONS: { value: SendAfterOption; label: string }[] = [
@@ -88,30 +92,10 @@ const UNSUBSCRIBE_FOOTER_HTML = `
 </div>`;
 
 function replacePlaceholdersClient(text: string, data: TestDataInput): string {
-  const msg = data.messageText ?? "";
-  const jobId = data.jobId ?? "10042";
-  const sender = data.senderName ?? "";
-  const listingId = data.listingId ?? jobId;
-  const name = data.name ?? "Alex";
-  const role = data.role ?? "Lister";
-  const amount = data.amount ?? "$280";
-  const listingTitle = data.listingTitle ?? "3br House Bond Clean – Sydney";
-  const suburb = data.suburb ?? "Sydney";
-  return text
-    .replace(/\{\{message\}\}/g, msg)
-    .replace(/\{\{jobId\}\}/g, jobId)
-    .replace(/\{\{senderName\}\}/g, sender)
-    .replace(/\{\{listingId\}\}/g, listingId)
-    .replace(/\[Name\]/g, name)
-    .replace(/\[Role\]/g, role)
-    .replace(/\[JobId\]/g, jobId)
-    .replace(/\[Amount\]/g, amount)
-    .replace(/\{name\}/gi, name)
-    .replace(/\{role\}/gi, role)
-    .replace(/\{jobId\}/gi, jobId)
-    .replace(/\{amount\}/gi, amount)
-    .replace(/\{listingTitle\}/gi, listingTitle)
-    .replace(/\{suburb\}/gi, suburb);
+  return substituteEmailTemplatePlaceholders(
+    text,
+    placeholderValuesFromTestDataInput(data)
+  );
 }
 
 function makeLinksOpenInNewTab(html: string): string {
@@ -454,6 +438,9 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
       role: "Lister",
       amount: "$280",
       listingTitle: "3br House Bond Clean – Sydney",
+      suburb: "Sydney",
+      listerName: "Jamie Chen",
+      cleanerName: "Chris Taylor",
     };
     setIsSendingTest(true);
     const result = await sendTestEmailWithContent(sendTestType, toEmail, subject, body, testData);

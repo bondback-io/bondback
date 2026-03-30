@@ -11,6 +11,9 @@ export interface JobCreatedProps {
 
 export function JobCreated({ jobId, messageText }: JobCreatedProps) {
   const viewJobUrl = `${APP_URL}/jobs/${jobId}`;
+  const bodyCopy =
+    (messageText ?? "").trim() ||
+    "Your job is ready—open Bond Back to coordinate timing and details with the other party.";
 
   return (
     <EmailLayout
@@ -20,7 +23,7 @@ export function JobCreated({ jobId, messageText }: JobCreatedProps) {
     >
       <Section>
         <Text style={title}>Your job has been accepted – start coordinating!</Text>
-        <Text style={body}>{messageText}</Text>
+        <Text style={body}>{bodyCopy}</Text>
         <Text style={subtext}>Open the job to message the other party and agree on timing.</Text>
       </Section>
     </EmailLayout>

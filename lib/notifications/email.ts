@@ -2,6 +2,12 @@ import { render } from "@react-email/render";
 import React from "react";
 import { Resend } from "resend";
 import { getEmailForUserId } from "@/lib/supabase/admin";
+import {
+  substituteEmailTemplatePlaceholders,
+  parseAmountFromMessageForEmail,
+  type EmailPlaceholderValues,
+} from "@/lib/email-placeholders";
+import { resolveEmailPlaceholderValues } from "@/lib/email-placeholders-resolve";
 import { NewMessage } from "@/emails/NewMessage";
 import { JobCreated } from "@/emails/JobCreated";
 import { JobApproved } from "@/emails/JobApproved";
@@ -227,13 +233,7 @@ export async function sendEmail(
   }
 }
 
-/** Extract $X from message for Payment Released subject/display if present */
-function parseAmountFromMessage(messageText: string): string | undefined {
-  const match = messageText.match(/\$(\d+(?:\.\d{2})?)/);
-  return match ? `$${match[1]}` : undefined;
-}
-
-/** Admin override: use this subject and HTML when active. Body may use {{message}}, {{jobId}}, {{senderName}}, {{listingId}}. */
+/** Admin override: use this subject and HTML when active. Placeholders: see substituteEmailTemplatePlaceholders in lib/email-placeholders.ts */
 export type AdminEmailOverride = {
   subject: string;
   body: string;
@@ -248,9 +248,7 @@ export type PlaceholderData = {
   listingId?: number | null;
 };
 
-/**
- * Substitute placeholders in admin template body. Exported for preview/test.
- */
+/** @deprecated Use substituteEmailTemplatePlaceholders with full EmailPlaceholderValues */
 export function substitutePlaceholders(
   body: string,
   messageText: string,
@@ -258,11 +256,23 @@ export function substitutePlaceholders(
   senderName?: string,
   listingId?: number | null
 ): string {
-  return body
-    .replace(/\{\{message\}\}/g, messageText)
-    .replace(/\{\{jobId\}\}/g, String(jobId ?? ""))
-    .replace(/\{\{senderName\}\}/g, senderName ?? "")
-    .replace(/\{\{listingId\}\}/g, String(listingId ?? jobId ?? ""));
+  const jobIdStr = String(jobId ?? "");
+  const listingIdStr = String(listingId ?? jobId ?? "");
+  const v: EmailPlaceholderValues = {
+    messageText,
+    jobId: jobIdStr || "—",
+    listingId: listingIdStr || "—",
+    senderName: senderName ?? "",
+    name: "Valued User",
+    recipientName: "Valued User",
+    listerName: "—",
+    cleanerName: "—",
+    listingTitle: "Your listing",
+    amount: parseAmountFromMessageForEmail(messageText) ?? "$0",
+    role: "Member",
+    suburb: "—",
+  };
+  return substituteEmailTemplatePlaceholders(body, v);
 }
 
 /**
@@ -272,20 +282,43 @@ export async function getNotificationEmailContent(
   type: NotificationType,
   jobId: number | null,
   messageText: string,
-  options: { senderName?: string; listingId?: number | null },
+  options: {
+    senderName?: string;
+    listingId?: number | null;
+    recipientUserId?: string;
+  },
   adminOverride?: AdminEmailOverride | null
 ): Promise<{ subject: string; html: string }> {
   if (adminOverride?.active && adminOverride.subject?.trim() && adminOverride.body?.trim()) {
-    const { markdownToHtml } = await import("@/lib/markdown");
-    const bodyHtml = markdownToHtml(adminOverride.body);
-    const html = substitutePlaceholders(
-      bodyHtml,
-      messageText,
-      jobId,
-      options.senderName,
-      options.listingId
-    );
-    return { subject: adminOverride.subject.trim(), html };
+    try {
+      const placeholderValues = await resolveEmailPlaceholderValues({
+        jobId,
+        messageText,
+        senderName: options.senderName,
+        listingId: options.listingId,
+        recipientUserId: options.recipientUserId,
+      });
+      console.info("[email:template-props]", {
+        kind: "admin_override",
+        type,
+        placeholderValues,
+      });
+      const { markdownToHtml } = await import("@/lib/markdown");
+      const bodyHtml = markdownToHtml(adminOverride.body);
+      const html = substituteEmailTemplatePlaceholders(bodyHtml, placeholderValues);
+      const subject = substituteEmailTemplatePlaceholders(
+        adminOverride.subject.trim(),
+        placeholderValues
+      );
+      return { subject, html };
+    } catch (e) {
+      console.error("[email:template-render-error]", {
+        kind: "admin_override",
+        type,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      throw e;
+    }
   }
   return buildNotificationEmail(
     type,
@@ -320,7 +353,7 @@ export async function buildNotificationEmail(
     job_approved_to_start: `Go ahead — start Job #${id} – Bond Back`,
     job_completed: `Cleaner marked job complete – review & approve – Bond Back`,
     payment_released: (() => {
-      const amt = parseAmountFromMessage(messageText);
+      const amt = parseAmountFromMessageForEmail(messageText);
       return amt ? `Payment of ${amt} released – thank you! – Bond Back` : `Payment released – Job #${id} – Bond Back`;
     })(),
     funds_ready: `Ready to release funds – Job #${id} – Bond Back`,
@@ -330,8 +363,10 @@ export async function buildNotificationEmail(
   };
 
   let element: React.ReactElement;
+  let templateProps: Record<string, unknown> = { type };
   switch (type) {
     case "new_message":
+      templateProps = { jobId: idStr, messageSnippet, senderName };
       element = React.createElement(NewMessage, {
         jobId: idStr,
         messageSnippet,
@@ -339,25 +374,31 @@ export async function buildNotificationEmail(
       });
       break;
     case "job_created":
+      templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobCreated, { jobId: idStr, messageText });
       break;
     case "new_bid":
+      templateProps = { listingId: listingIdStr, messageText };
       element = React.createElement(NewBid, {
         listingId: listingIdStr,
         messageText: messageText || undefined,
       });
       break;
     case "job_accepted":
+      templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobApproved, { jobId: idStr, messageText });
       break;
     case "job_approved_to_start":
+      templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobApproved, { jobId: idStr, messageText });
       break;
     case "job_completed":
+      templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobMarkedComplete, { jobId: idStr, messageText });
       break;
     case "payment_released": {
-      const amountDisplay = parseAmountFromMessage(messageText);
+      const amountDisplay = parseAmountFromMessageForEmail(messageText);
+      templateProps = { jobId: idStr, messageText, amountDisplay };
       element = React.createElement(PaymentReleased, {
         jobId: idStr,
         messageText,
@@ -366,25 +407,41 @@ export async function buildNotificationEmail(
       break;
     }
     case "funds_ready":
+      templateProps = { jobId: idStr, messageText };
       element = React.createElement(FundsReady, { jobId: idStr, messageText });
       break;
     case "dispute_opened":
+      templateProps = { jobId: idStr, messageText };
       element = React.createElement(DisputeOpened, { jobId: idStr, messageText });
       break;
     case "dispute_resolved":
+      templateProps = { jobId: idStr, messageText };
       element = React.createElement(DisputeResolved, { jobId: idStr, messageText });
       break;
     case "job_cancelled_by_lister":
+      templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobCancelledByLister, { jobId: idStr, messageText });
       break;
     default:
+      templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobCreated, {
         jobId: idStr,
         messageText: messageText || "You have a new notification.",
       });
   }
 
-  const html = await render(element);
+  console.info("[email:react-template]", { type, templateProps });
+  let html: string;
+  try {
+    html = await render(element);
+  } catch (e) {
+    console.error("[email:react-render-error]", {
+      type,
+      templateProps,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
   const subject = subjects[type] ?? `Notification – Bond Back`;
   return { subject, html };
 }
@@ -398,11 +455,20 @@ export async function buildWelcomeEmail(
   role: "lister" | "cleaner" | "both"
 ): Promise<{ subject: string; html: string }> {
   const subject = "Welcome to Bond Back – Your Bond Cleaning Solution Awaits!";
-  const element = React.createElement(Welcome, {
-    firstName: firstName?.trim() || undefined,
-    role,
-  });
-  const html = await render(element);
+  const templateProps = { firstName: firstName?.trim() || undefined, role };
+  console.info("[email:react-template]", { type: "welcome", templateProps });
+  const element = React.createElement(Welcome, templateProps);
+  let html: string;
+  try {
+    html = await render(element);
+  } catch (e) {
+    console.error("[email:react-render-error]", {
+      type: "welcome",
+      templateProps,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
   return { subject, html };
 }
 
@@ -418,15 +484,23 @@ export async function buildTutorialEmail(
     role === "lister"
       ? "Your Quick Start Guide as a Lister on Bond Back"
       : "Your Quick Start Guide as a Cleaner on Bond Back";
+  const templateProps = { firstName: firstName?.trim() || undefined };
+  console.info("[email:react-template]", { type: `tutorial_${role}`, templateProps });
   const element =
     role === "lister"
-      ? React.createElement(ListerTutorial, {
-          firstName: firstName?.trim() || undefined,
-        })
-      : React.createElement(CleanerTutorial, {
-          firstName: firstName?.trim() || undefined,
-        });
-  const html = await render(element);
+      ? React.createElement(ListerTutorial, templateProps)
+      : React.createElement(CleanerTutorial, templateProps);
+  let html: string;
+  try {
+    html = await render(element);
+  } catch (e) {
+    console.error("[email:react-render-error]", {
+      type: `tutorial_${role}`,
+      templateProps,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
   return { subject, html };
 }
 
@@ -444,13 +518,33 @@ export async function buildPaymentReceiptEmail(params: {
   dateIso: string;
   platformAbn?: string | null;
 }): Promise<{ subject: string; html: string }> {
-  const element = React.createElement(PaymentReceipt, {
+  const templateProps = {
     ...params,
     jobId: String(params.jobId),
     jobTitle: params.jobTitle ?? undefined,
     platformAbn: params.platformAbn ?? undefined,
+  };
+  console.info("[email:react-template]", {
+    type: "payment_receipt",
+    variant: params.variant,
+    templateProps: {
+      jobId: templateProps.jobId,
+      variant: params.variant,
+      amountCents: params.amountCents,
+      jobTitle: templateProps.jobTitle,
+    },
   });
-  const html = await render(element);
+  const element = React.createElement(PaymentReceipt, templateProps);
+  let html: string;
+  try {
+    html = await render(element);
+  } catch (e) {
+    console.error("[email:react-render-error]", {
+      type: "payment_receipt",
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
   const subject =
     params.variant === "refund"
       ? `Refund receipt – Job #${params.jobId} – Bond Back`

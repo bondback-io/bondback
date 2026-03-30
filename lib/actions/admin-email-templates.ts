@@ -5,7 +5,10 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import type { EmailTemplateOverride } from "@/lib/actions/global-settings";
 import { getEmailForUserId } from "@/lib/supabase/admin";
-import { substitutePlaceholders } from "@/lib/notifications/email";
+import {
+  substituteEmailTemplatePlaceholders,
+  placeholderValuesFromTestDataInput,
+} from "@/lib/email-placeholders";
 import {
   buildNotificationEmail,
   buildWelcomeEmail,
@@ -308,18 +311,31 @@ export async function getPreviewContent(
 ): Promise<PreviewContentResult> {
   await requireAdmin();
   const sample = getSampleDataForType(type);
+  const testData: TestDataInput = {
+    messageText: sample.messageText,
+    jobId: sample.jobId != null ? String(sample.jobId) : "10042",
+    senderName: sample.senderName,
+    listingId: sample.listingId != null ? String(sample.listingId) : "10042",
+    name: "Alex",
+    role: "Lister",
+    amount: "$280",
+    listingTitle: "3br House Bond Clean – Sydney",
+    suburb: "Sydney",
+    listerName: "Jamie Chen",
+    cleanerName: "Chris Taylor",
+  };
+  const v = placeholderValuesFromTestDataInput(testData);
+  const { markdownToHtml } = await import("@/lib/markdown");
   const rawHtml =
     subject.trim() && body.trim()
-      ? substitutePlaceholders(
-          body,
-          sample.messageText,
-          sample.jobId,
-          sample.senderName,
-          sample.listingId
-        )
+      ? substituteEmailTemplatePlaceholders(markdownToHtml(body), v)
       : "";
-  const html = rawHtml ? rawHtml + getUnsubscribeFooterHtml() : "<p><em>No template body set. Add subject and body to see preview.</em></p>" + getUnsubscribeFooterHtml();
-  const subj = subject.trim() || "(No subject)";
+  const subj = subject.trim()
+    ? substituteEmailTemplatePlaceholders(subject.trim(), v)
+    : "(No subject)";
+  const html = rawHtml
+    ? rawHtml + getUnsubscribeFooterHtml()
+    : "<p><em>No template body set. Add subject and body to see preview.</em></p>" + getUnsubscribeFooterHtml();
   return {
     subject: subj,
     html,
@@ -399,6 +415,9 @@ export async function sendTestEmail(
       role: "Lister",
       amount: "$280",
       listingTitle: "3br House Bond Clean – Sydney",
+      suburb: "Sydney",
+      listerName: "Jamie Chen",
+      cleanerName: "Chris Taylor",
     };
     subject = substituteTestData(override.subject.trim(), testData);
     html = substituteTestData(bodyHtml, testData) + getUnsubscribeFooterHtml();
@@ -474,37 +493,16 @@ export type TestDataInput = {
   amount?: string;
   listingTitle?: string;
   suburb?: string;
+  listerName?: string;
+  cleanerName?: string;
 };
 
-/** Substitute {{...}}, [Name], [Role], etc., and {name}, {role}, {jobId}, {amount}, {listingTitle}, {suburb} in text. */
-function substituteTestData(
-  text: string,
-  data: TestDataInput
-): string {
-  const msg = data.messageText ?? "";
-  const jobId = data.jobId ?? "10042";
-  const sender = data.senderName ?? "";
-  const listingId = data.listingId ?? jobId;
-  const name = data.name ?? "Alex";
-  const role = data.role ?? "Lister";
-  const amount = data.amount ?? "$280";
-  const listingTitle = data.listingTitle ?? "3br House Bond Clean – Sydney";
-  const suburb = data.suburb ?? "Sydney";
-  return text
-    .replace(/\{\{message\}\}/g, msg)
-    .replace(/\{\{jobId\}\}/g, jobId)
-    .replace(/\{\{senderName\}\}/g, sender)
-    .replace(/\{\{listingId\}\}/g, listingId)
-    .replace(/\[Name\]/g, name)
-    .replace(/\[Role\]/g, role)
-    .replace(/\[JobId\]/g, jobId)
-    .replace(/\[Amount\]/g, amount)
-    .replace(/\{name\}/gi, name)
-    .replace(/\{role\}/gi, role)
-    .replace(/\{jobId\}/gi, jobId)
-    .replace(/\{suburb\}/gi, suburb)
-    .replace(/\{amount\}/gi, amount)
-    .replace(/\{listingTitle\}/gi, listingTitle);
+/** Substitute all admin template placeholders (same rules as production sends). */
+function substituteTestData(text: string, data: TestDataInput): string {
+  return substituteEmailTemplatePlaceholders(
+    text,
+    placeholderValuesFromTestDataInput(data)
+  );
 }
 
 /** Send test email using provided subject/body and test data (for "Send test with current content"). Rate limited. */

@@ -124,7 +124,11 @@ export async function createNotification(
       type as EmailNotificationType,
       jobId,
       messageText,
-      { senderName: options?.senderName, listingId: options?.listingId },
+      {
+        senderName: options?.senderName,
+        listingId: options?.listingId,
+        recipientUserId: userId,
+      },
       adminOverride
     );
     const result = await sendEmail(prefs.email!, subject, html, {
