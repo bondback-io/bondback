@@ -3,7 +3,10 @@ import { expireStaleEarlyBidAcceptances } from "@/lib/actions/early-bid-acceptan
 
 /**
  * Expire pending early-acceptance offers after 24h without cleaner response.
- * Schedule hourly alongside other crons. Auth with CRON_SECRET when set.
+ *
+ * Vercel Hobby plan: crons cannot run more than once per day per route (hourly schedules fail
+ * deployment). This job is scheduled **once daily** in vercel.json (`0 2 * * *` UTC). For hourly
+ * expiry, use Vercel Pro or an external cron. Auth with CRON_SECRET when set.
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;

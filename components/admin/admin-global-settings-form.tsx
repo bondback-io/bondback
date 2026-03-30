@@ -1216,7 +1216,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                 <p className="text-[11px] text-muted-foreground dark:text-gray-400 mt-0.5">
                   When on, the scheduled job can send a 24-hour summary (cleaners: new jobs nearby;
                   listers: bids &amp; jobs). Users control their own copy in Settings → Notifications.
-                  Recommended schedule: 8:00 AM AEST via Vercel Cron (<code className="rounded bg-muted px-0.5">/api/cron/daily-digest</code>).
+                  Recommended schedule: 8:00 AM AEST hitting <code className="rounded bg-muted px-0.5">/api/cron/daily-digest</code> (Vercel Cron on Pro, or external scheduler; Hobby plan omits this cron in vercel.json due to deployment limits).
                 </p>
               </div>
               <Switch
