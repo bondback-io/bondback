@@ -15,6 +15,8 @@ import { getConnectBalance, createInstantPayout } from "@/lib/actions/stripe-con
 import { estimateInstantPayoutFeeCents } from "@/lib/instant-payout-fee";
 import { formatCents } from "@/lib/listings";
 import { useToast } from "@/components/ui/use-toast";
+import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
+import { logClientError } from "@/lib/errors/log-client-error";
 import { Loader2 } from "lucide-react";
 
 type WithdrawNowDialogProps = {
@@ -68,11 +70,21 @@ export function WithdrawNowDialog({
         onSuccess?.();
       } else {
         setError(res.error);
-        toast({ variant: "destructive", title: "Payout failed", description: res.error });
+        logClientError("withdraw.instantPayout", res.error);
+        showAppErrorToast(toast, {
+          flow: "payment",
+          error: new Error(res.error ?? ""),
+          context: "withdraw.instantPayout",
+        });
       }
-    } catch {
+    } catch (e) {
+      logClientError("withdraw.instantPayout.catch", e);
       setError("Something went wrong.");
-      toast({ variant: "destructive", title: "Payout failed", description: "Please try again." });
+      showAppErrorToast(toast, {
+        flow: "payment",
+        error: e,
+        context: "withdraw.instantPayout.catch",
+      });
     } finally {
       setSubmitting(false);
     }

@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  ListingCreationProgressModal,
+  type ListingCreationStepId,
+} from "@/components/listing/listing-creation-progress-modal";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
@@ -72,6 +75,15 @@ import {
 import { compressImage } from "@/lib/utils/compressImage";
 import { NEXT_IMAGE_SIZES_LISTING_PREVIEW, NEXT_IMAGE_SIZES_UPLOAD_TILE } from "@/lib/next-image-sizes";
 import { useToast } from "@/components/ui/use-toast";
+import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
+import { getFriendlyError, type AppErrorFlow } from "@/lib/errors/friendly-messages";
+import { logClientError } from "@/lib/errors/log-client-error";
+import {
+  retryWithBackoff,
+  retryWithBackoffResult,
+} from "@/lib/errors/retry-with-backoff";
+import { logErrorEvent } from "@/lib/actions/error-logs";
+import { saveListingDraftLocal } from "@/lib/listing-draft-storage";
 import {
   validatePhotoFiles,
   PHOTO_LIMITS,
@@ -247,9 +259,17 @@ export function NewListingForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reserveTouched, setReserveTouched] = useState(false);
-  const [created, setCreated] = useState(false);
-  const [createdListingId, setCreatedListingId] = useState<string | null>(null);
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [publishModalPhase, setPublishModalPhase] = useState<
+    "running" | "success" | "error"
+  >("running");
+  const [publishProgress, setPublishProgress] = useState(0);
+  const [publishStepId, setPublishStepId] =
+    useState<ListingCreationStepId>("calculating");
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishFailureHint, setPublishFailureHint] = useState<string | null>(null);
+  const publishRedirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Suburb autocomplete
   const [suburbQuery, setSuburbQuery] = useState("");
@@ -257,7 +277,6 @@ export function NewListingForm({
   const [suburbResults, setSuburbResults] = useState<SuburbRow[]>([]);
   const [isPendingSuburb, startSuburbTransition] = useTransition();
   const [, startSubmitTransition] = useTransition();
-  const [submitPhase, setSubmitPhase] = useState<"idle" | "creating" | "uploading">("idle");
   const [photoStagingCount, setPhotoStagingCount] = useState(0);
 
   const form = useForm<ListingFormValues>({
@@ -346,6 +365,14 @@ export function NewListingForm({
   useEffect(() => {
     const sub = form.getValues("suburb");
     if (sub) setSuburbQuery(sub);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (publishRedirectTimerRef.current) {
+        clearTimeout(publishRedirectTimerRef.current);
+      }
+    };
   }, []);
 
   // Suburb autocomplete fetch
@@ -444,8 +471,43 @@ export function NewListingForm({
     startSubmitTransition(() => {
       setSubmitError(null);
       setIsSubmitting(true);
-      setSubmitPhase("creating");
+      setPublishModalOpen(true);
+      setPublishModalPhase("running");
+      setPublishError(null);
+      setPublishFailureHint(null);
+      setPublishStepId("calculating");
+      setPublishProgress(4);
     });
+
+    const failPublish = (
+      err: unknown,
+      flow: AppErrorFlow = "listing",
+      opts?: { failureHint?: string | null; logToServer?: boolean }
+    ) => {
+      logClientError("newListing.publish", err, { flow });
+      const friendly = getFriendlyError(flow, err);
+      setPublishModalPhase("error");
+      setPublishError(`${friendly.description}\n\n${friendly.nextAction}`);
+      setSubmitError(friendly.title);
+      if (opts?.failureHint !== undefined) {
+        setPublishFailureHint(opts.failureHint);
+      } else if (flow === "listing" || flow === "photoUpload") {
+        setPublishFailureHint(
+          "We automatically retried up to 3 times with short pauses when the connection dropped."
+        );
+      } else {
+        setPublishFailureHint(null);
+      }
+      if (opts?.logToServer !== false) {
+        void logErrorEvent({
+          scope: `newListing.${flow}`,
+          message:
+            err instanceof Error ? err.message : typeof err === "string" ? err : "unknown",
+          maxAttempts: 3,
+          context: { flow },
+        });
+      }
+    };
 
     try {
       const reserve = values.reservePrice;
@@ -454,7 +516,11 @@ export function NewListingForm({
         : null;
       const startingPrice = calculateEstimatedPrice(values, pricingModifiers);
       if (buyNow != null && buyNow >= startingPrice) {
-        setSubmitError("Buy-now price must be lower than the starting bid price.");
+        const msg = "Buy-now price must be lower than the starting bid price.";
+        failPublish(new Error(msg), "listing", {
+          failureHint: null,
+          logToServer: false,
+        });
         return;
       }
 
@@ -472,21 +538,25 @@ export function NewListingForm({
       const title = `${values.bedrooms} ${values.bedrooms === 1 ? "Bedroom" : "Bedrooms"} + ${values.bathrooms} ${values.bathrooms === 1 ? "Bathroom" : "Bathrooms"} ${values.propertyType.charAt(0).toUpperCase() + values.propertyType.slice(1)} in ${values.suburb}`;
 
       if (initialPhotoFiles.length > PHOTO_LIMITS.LISTING_INITIAL) {
-        toast({
-          variant: "destructive",
-          title: "Too many photos",
-          description: `Max ${PHOTO_LIMITS.LISTING_INITIAL} initial condition photos allowed.`,
+        const msg = `Max ${PHOTO_LIMITS.LISTING_INITIAL} initial condition photos allowed.`;
+        failPublish(new Error(msg), "photoUpload", {
+          failureHint: null,
+          logToServer: false,
         });
         return;
       }
       if (initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH) {
-        toast({
-          variant: "destructive",
-          title: "Initial photos required",
-          description: `Upload at least ${PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} initial condition photos (step 3) before publishing.`,
+        const msg = `Upload at least ${PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} initial condition photos (step 3) before publishing.`;
+        failPublish(new Error(msg), "photoUpload", {
+          failureHint: null,
+          logToServer: false,
         });
         return;
       }
+
+      setPublishStepId("calculating");
+      setPublishProgress(12);
+      await new Promise((r) => setTimeout(r, 120));
 
       const row = buildListingInsertRow({
         lister_id: listerId,
@@ -518,24 +588,42 @@ export function NewListingForm({
         property_levels: values.propertyLevels,
       });
 
-      const { data: inserted, error } = await supabase
-        .from("listings")
-        .insert(row as never)
-        .select("id")
-        .maybeSingle();
+      setPublishProgress(20);
+      setPublishStepId("creating");
 
-      if (error || !inserted) {
-        const msg = error?.message ?? "Failed to create listing.";
-        setSubmitError(msg);
-        toast({ variant: "destructive", title: "Error", description: msg });
+      type InsertResult =
+        | { ok: true; data: { id: string } }
+        | { ok: false; error: string };
+
+      const insertResult = await retryWithBackoffResult<InsertResult>(
+        async () => {
+          const r = await supabase
+            .from("listings")
+            .insert(row as never)
+            .select("id")
+            .maybeSingle();
+          if (r.error) {
+            return { ok: false as const, error: r.error.message };
+          }
+          if (!r.data) {
+            return { ok: false as const, error: "Failed to create listing." };
+          }
+          return { ok: true as const, data: r.data as { id: string } };
+        },
+        { scope: "newListing.insert", maxAttempts: 3 }
+      );
+
+      if (!insertResult.ok) {
+        failPublish(new Error(insertResult.error), "listing");
         return;
       }
 
-      const listingId = String((inserted as { id: string }).id);
+      const listingId = String(insertResult.data.id);
       const total = initialPhotoFiles.length;
       const uploadedUrls: string[] = [];
 
-      setSubmitPhase("uploading");
+      setPublishStepId("uploading");
+      setPublishProgress(28);
       setFileStatuses(initialPhotoFiles.map(() => ({ status: "pending" as const })));
       setUploading(true);
       try {
@@ -543,28 +631,54 @@ export function NewListingForm({
           setFileStatuses((prev) =>
             prev.map((s, j) => (j === i ? { ...s, status: "uploading" as const } : s))
           );
+          const uploadPct =
+            total > 0 ? 28 + Math.round(((i + 0.35) / total) * 44) : 28;
+          setPublishProgress(uploadPct);
           setUploadProgress(total > 0 ? Math.round(((i + 1) / total) * 100) : 0);
           const file = initialPhotoFiles[i];
           if (!file) continue;
           const fd = new FormData();
           fd.append("file", file);
-          const { results, error: actionError } = await uploadProcessedPhotos(fd, {
-            bucket: "condition-photos",
-            pathPrefix: `listings/${listingId}/initial`,
-            maxFiles: 1,
-            generateThumb: true,
-          });
-          const res = results[0];
-          if (actionError || !res?.url) {
-            const err = res?.error ?? actionError ?? "Upload failed";
+          let pack: Awaited<ReturnType<typeof uploadProcessedPhotos>>;
+          try {
+            pack = await retryWithBackoff(
+              async () => {
+                const r = await uploadProcessedPhotos(fd, {
+                  bucket: "condition-photos",
+                  pathPrefix: `listings/${listingId}/initial`,
+                  maxFiles: 1,
+                  generateThumb: true,
+                });
+                const res = r.results[0];
+                if (r.error || !res?.url) {
+                  const err = res?.error ?? r.error ?? "Upload failed";
+                  throw new Error(String(err));
+                }
+                return r;
+              },
+              { scope: `newListing.uploadPhoto:${file.name}`, maxAttempts: 3 }
+            );
+          } catch (e) {
+            const errText = e instanceof Error ? e.message : String(e);
+            setFileStatuses((prev) =>
+              prev.map((s, j) =>
+                j === i ? { ...s, status: "error" as const, error: errText } : s
+              )
+            );
+            failPublish(new Error(`${file.name}: ${errText}`), "photoUpload");
+            return;
+          }
+          const res = pack.results[0];
+          if (!res?.url) {
+            const err = "Upload failed";
             setFileStatuses((prev) =>
               prev.map((s, j) => (j === i ? { ...s, status: "error" as const, error: err } : s))
             );
-            setSubmitError(err);
-            toast({ variant: "destructive", title: "Upload failed", description: `${file.name}: ${err}` });
+            failPublish(new Error(`${file.name}: ${err}`), "photoUpload");
             return;
           }
           uploadedUrls.push(res.url);
+          setPublishProgress(28 + Math.round(((i + 1) / total) * 44));
           setFileStatuses((prev) =>
             prev.map((s, j) =>
               j === i
@@ -578,31 +692,34 @@ export function NewListingForm({
         setUploading(false);
       }
 
+      setPublishProgress(74);
+      setPublishStepId("notifications");
+
       if (uploadedUrls.length > 0) {
-        const updateResult = await updateListingInitialPhotos(listingId, uploadedUrls);
+        const updateResult = await retryWithBackoffResult(
+          async () => updateListingInitialPhotos(listingId, uploadedUrls),
+          { scope: "newListing.updateListingPhotos", maxAttempts: 3 }
+        );
         if (!updateResult.ok) {
-          setSubmitError(updateResult.error);
-          toast({
-            variant: "destructive",
-            title: "Photos uploaded but save failed",
-            description: updateResult.error,
-          });
+          failPublish(new Error(updateResult.error ?? "Save failed"), "listing");
           return;
         }
+        setPublishProgress(84);
         const coverUrl =
           uploadedUrls[Math.min(coverPhotoIndex, uploadedUrls.length - 1)] ?? uploadedUrls[0];
         const coverRes = await updateListingCoverPhoto(listingId, coverUrl ?? null);
         if (!coverRes.ok) {
-          toast({
-            variant: "destructive",
-            title: "Cover photo not saved",
-            description: coverRes.error,
+          showAppErrorToast(toast, {
+            flow: "photoUpload",
+            error: new Error(coverRes.error ?? ""),
+            context: "newListing.coverPhoto",
           });
         }
       }
 
-      setCreatedListingId(listingId);
-      setCreated(true);
+      setPublishProgress(90);
+      setPublishStepId("finalizing");
+
       // SMS (Twilio) + push (Expo) to cleaners within max_travel_km — fire-and-forget
       void triggerNewListingJobAlerts(listingId).catch(() => {
         /* non-blocking */
@@ -610,60 +727,73 @@ export function NewListingForm({
       void notifyListerListingLive(listingId).catch(() => {
         /* non-blocking */
       });
-      toast({
-        title: "Listing created",
-        description: "Cleaners can now bid on your bond clean.",
-      });
+
+      setPublishProgress(100);
+      setPublishModalPhase("success");
+
+      if (publishRedirectTimerRef.current) {
+        clearTimeout(publishRedirectTimerRef.current);
+      }
+      publishRedirectTimerRef.current = setTimeout(() => {
+        publishRedirectTimerRef.current = null;
+        router.replace(`/jobs/${listingId}`);
+        setPublishModalOpen(false);
+        setPublishModalPhase("running");
+      }, 1800);
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Something went wrong while publishing.";
-      setSubmitError(msg);
-      toast({ variant: "destructive", title: "Error", description: msg });
+      failPublish(err, "listing");
     } finally {
       setIsSubmitting(false);
-      setSubmitPhase("idle");
     }
   };
 
-  if (created) {
-    return (
-      <section className="page-inner">
-        <Card className="mx-auto max-w-xl border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/30">
-          <CardHeader className="flex flex-col items-center gap-2 text-center">
-            <CheckCircle2 className="h-10 w-10 text-emerald-600 dark:text-emerald-400" />
-            <CardTitle className="text-xl dark:text-gray-100">
-              Listing created successfully
-            </CardTitle>
-            <CardDescription className="text-base md:text-sm dark:text-gray-400">
-              Cleaners can now review your details and start bidding.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button asChild variant="outline" size="lg" className="w-full min-h-12 sm:w-auto md:min-h-0">
-              <Link href="/lister/dashboard">Go to dashboard</Link>
-            </Button>
-            <Button asChild size="lg" className="w-full min-h-12 sm:w-auto md:min-h-0">
-              <Link
-                href={
-                  createdListingId ? `/jobs/${createdListingId}` : "/my-listings"
-                }
-              >
-                View my listing
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
-    );
-  }
-
   return (
     <section className="page-inner relative space-y-6 pb-12 md:space-y-6">
-        <FormSavingOverlay
-          show={isSubmitting}
-          variant="screen"
-          title={submitPhase === "uploading" ? "Uploading photos…" : "Creating listing…"}
-          description="Hang tight — this usually takes a few seconds on mobile networks."
+        <ListingCreationProgressModal
+          open={publishModalOpen}
+          onOpenChange={(next) => {
+            if (!next && (publishModalPhase === "running" || publishModalPhase === "success")) {
+              return;
+            }
+            setPublishModalOpen(next);
+            if (!next) {
+              setPublishError(null);
+              setPublishFailureHint(null);
+              setPublishProgress(0);
+            }
+          }}
+          phase={publishModalPhase}
+          progress={publishProgress}
+          activeStepId={publishStepId}
+          errorMessage={publishError}
+          failureHint={publishFailureHint}
+          onSaveDraft={() => {
+            const v = form.getValues();
+            saveListingDraftLocal({
+              savedAt: new Date().toISOString(),
+              step,
+              values: {
+                ...v,
+                moveOutDate:
+                  v.moveOutDate instanceof Date
+                    ? v.moveOutDate.toISOString()
+                    : v.moveOutDate,
+              } as Record<string, unknown>,
+            });
+            toast({
+              title: "Draft saved on this device",
+              description:
+                "Your answers are stored in this browser only. Add photos again when you publish.",
+            });
+          }}
+          onRetry={() => {
+            setPublishFailureHint(null);
+            setPublishModalPhase("running");
+            setPublishError(null);
+            setPublishStepId("calculating");
+            setPublishProgress(4);
+            void form.handleSubmit(onSubmit)();
+          }}
         />
         <header className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-sky-50/40 px-4 py-5 shadow-sm ring-1 ring-emerald-500/10 dark:border-emerald-800/60 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25 dark:ring-emerald-400/10 sm:px-6 sm:py-6">
           <div

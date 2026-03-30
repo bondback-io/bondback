@@ -10,13 +10,13 @@ import {
   ToastViewport,
 } from "./toast";
 
-type ToastVariant = "default" | "destructive";
+type ToastVariant = "default" | "destructive" | "muted";
 
 export type ToastAction = { label: string; href: string };
 
 export type ToastActionButton = { label: string; onClick: () => void };
 
-type ToastOptions = {
+export type ToastOptions = {
   id?: string;
   title?: string;
   description?: string;

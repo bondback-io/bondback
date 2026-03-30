@@ -37,6 +37,8 @@ import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { ReviewForm } from "@/components/features/review-form";
 import { GuidedDisputeForm } from "@/components/features/guided-dispute-form";
 import { useToast } from "@/components/ui/use-toast";
+import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
+import { logClientError } from "@/lib/errors/log-client-error";
 import { useIsOffline } from "@/hooks/use-offline";
 import {
   respondToDispute,
@@ -312,7 +314,15 @@ export function JobDetail({
         });
         scheduleRouterAction(() => router.refresh());
       } else {
-        toast({ variant: "destructive", title: "Could not send request", description: result.error });
+        logClientError("earlyBidAccept", result.error, {
+          listingId,
+          bidId: bid.id,
+        });
+        showAppErrorToast(toast, {
+          flow: "earlyAccept",
+          error: new Error(result.error ?? ""),
+          context: "jobDetail.earlyAccept",
+        });
       }
     },
     [listingId, toast, router]

@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/tooltip";
 import { Loader2, Landmark, CheckCircle2, Zap } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
+import { logClientError } from "@/lib/errors/log-client-error";
 import { WithdrawNowDialog } from "@/components/features/withdraw-now-dialog";
 
 export type ConnectBankAccountProps = {
@@ -48,10 +50,11 @@ export function ConnectBankAccount({
     try {
       const result = await createConnectAccount(userId);
       if (!result) {
-        toast({
-          variant: "destructive",
-          title: "Could not start setup",
-          description: "No response from server. Please try again.",
+        logClientError("connectBank", new Error("No response"), { userId });
+        showAppErrorToast(toast, {
+          flow: "payment",
+          error: new Error("No response from server."),
+          context: "connectBank",
         });
         return;
       }
@@ -60,35 +63,38 @@ export function ConnectBankAccount({
           window.location.href = result.onboardingUrl;
           return;
         }
-        toast({
-          variant: "destructive",
-          title: "Could not start setup",
-          description: "Missing redirect URL.",
+        logClientError("connectBank", new Error("Missing onboarding URL"), { userId });
+        showAppErrorToast(toast, {
+          flow: "payment",
+          error: new Error("Missing redirect URL."),
+          context: "connectBank",
         });
         return;
       }
       const errMsg = result.error ?? "Please try again.";
-      console.error("[ConnectBankAccount] createConnectAccount failed:", errMsg);
+      logClientError("connectBank.createConnectAccount", errMsg, { userId });
       const isMissingColumn = /column .* does not exist/i.test(errMsg);
       const isConnectNotEnabled = /signed up for Connect|connect.*dashboard\.stripe\.com/i.test(errMsg);
-      toast({
-        variant: "destructive",
-        title: "Could not start setup",
-        description: isMissingColumn
-          ? "The database is missing a column required for payouts. Run the migration in Supabase (SQL Editor): see supabase/migrations/20250608000000_profiles_stripe_connect_id_ensure.sql"
-          : isConnectNotEnabled
-            ? "Stripe Connect is not enabled for your Stripe account. Enable it in the Stripe Dashboard, then try again."
-            : errMsg,
+      showAppErrorToast(toast, {
+        flow: "payment",
+        error: new Error(
+          isMissingColumn
+            ? "Database configuration is incomplete for payouts. Contact support or your admin."
+            : isConnectNotEnabled
+              ? "Stripe Connect is not enabled for this platform account."
+              : errMsg
+        ),
+        context: "connectBank.createConnectAccount",
       });
       if (isConnectNotEnabled) {
         console.info("Enable Connect: https://dashboard.stripe.com/connect/accounts/overview");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Please try again.";
-      toast({
-        variant: "destructive",
-        title: "Something went wrong",
-        description: message,
+      logClientError("connectBank.catch", err, { userId });
+      showAppErrorToast(toast, {
+        flow: "payment",
+        error: err,
+        context: "connectBank.catch",
       });
     } finally {
       setLoading(false);

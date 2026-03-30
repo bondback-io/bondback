@@ -18,6 +18,9 @@ import {
   registerSyncPendingBids,
 } from "@/lib/offline-bids-db";
 import { useToast } from "@/components/ui/use-toast";
+import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
+import { getFriendlyError } from "@/lib/errors/friendly-messages";
+import { logClientError } from "@/lib/errors/log-client-error";
 import { Gavel, TrendingDown } from "lucide-react";
 
 export type PlaceBidFormProps = {
@@ -82,10 +85,11 @@ export function PlaceBidForm({
         });
         setAmountDollars("");
       } catch (err) {
-        toast({
-          title: "Could not queue bid",
-          description: "Try again when back online.",
-          variant: "destructive",
+        logClientError("placeBid.offlineQueue", err);
+        showAppErrorToast(toast, {
+          flow: "bid",
+          error: err,
+          context: "placeBid.offlineQueue",
         });
       }
       setIsSubmitting(false);
@@ -104,10 +108,12 @@ export function PlaceBidForm({
       router.refresh();
     } else {
       const errMsg = result.error ?? "";
+      logClientError("placeBid", errMsg, { listingId });
       if (errMsg.toLowerCase().includes(CONNECT_ERROR_MARKER) && currentUserId) {
         setConnectModalOpen(true);
       } else {
-        setError(errMsg);
+        const friendly = getFriendlyError("bid", new Error(errMsg));
+        setError(`${friendly.description} — ${friendly.nextAction}`);
       }
     }
   };

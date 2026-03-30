@@ -14,6 +14,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
+import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
+import { logClientError } from "@/lib/errors/log-client-error";
+import { retryWithBackoffResult } from "@/lib/errors/retry-with-backoff";
 import {
   saveProfileSettings,
   saveNotificationSettings,
@@ -69,17 +72,21 @@ export function SettingsProfileForm({ profile }: { profile: ProfileSnapshot }) {
         startTransition(() => setIsSaving(true));
         void (async () => {
           try {
-            const result = await saveProfileSettings(formData);
+            const result = await retryWithBackoffResult(
+              () => saveProfileSettings(formData),
+              { scope: "settings.profile", maxAttempts: 3 }
+            );
             if (result.ok) {
               toast({
                 title: "Settings saved successfully",
                 description: "Your profile has been updated.",
               });
             } else {
-              toast({
-                title: "Error",
-                description: result.error,
-                variant: "destructive",
+              logClientError("settings.profile", result.error);
+              showAppErrorToast(toast, {
+                flow: "settings",
+                error: new Error(result.error ?? ""),
+                context: "settings.profile",
               });
             }
           } finally {
@@ -257,7 +264,12 @@ function SendTestSmsButton() {
       if (result.ok) {
         toast({ title: "SMS sent", description: "Check your phone for the test message." });
       } else {
-        toast({ variant: "destructive", title: "SMS failed", description: result.error });
+        logClientError("settings.testSms", result.error);
+        showAppErrorToast(toast, {
+          flow: "settings",
+          error: new Error(result.error ?? ""),
+          context: "settings.testSms",
+        });
       }
     } finally {
       setTesting(false);
@@ -366,10 +378,11 @@ export function SettingsNotificationsForm({
         return;
       }
       setValues(prev);
-      toast({
-        title: "Couldn’t save",
-        description: result.error,
-        variant: "destructive",
+      logClientError("settings.notifications", result.error, { key });
+      showAppErrorToast(toast, {
+        flow: "settings",
+        error: new Error(result.error ?? ""),
+        context: "settings.notifications",
       });
     });
   };
@@ -505,10 +518,11 @@ export function SettingsPrivacyForm({ profilePublic }: { profilePublic: boolean 
           return;
         }
         startTransition(() => setPublicProfile(prev));
-        toast({
-          title: "Couldn’t save",
-          description: result.error,
-          variant: "destructive",
+        logClientError("settings.privacy", result.error);
+        showAppErrorToast(toast, {
+          flow: "settings",
+          error: new Error(result.error ?? ""),
+          context: "settings.privacy",
         });
       } finally {
         setPrivacySaving(false);
@@ -578,10 +592,11 @@ export function SettingsPasswordForm() {
           setNewPassword("");
           setConfirmPassword("");
         } else {
-          toast({
-            title: "Could not change password",
-            description: result.error,
-            variant: "destructive",
+          logClientError("settings.password", result.error);
+          showAppErrorToast(toast, {
+            flow: "settings",
+            error: new Error(result.error ?? ""),
+            context: "settings.password",
           });
         }
       } finally {

@@ -25,7 +25,7 @@ ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> & {
-    variant?: "default" | "destructive";
+    variant?: "default" | "destructive" | "muted";
   }
 >(({ className, variant = "default", ...props }, ref) => (
   <ToastPrimitives.Root
@@ -34,6 +34,8 @@ const Toast = React.forwardRef<
       "group pointer-events-auto relative flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-md border bg-background p-3 text-sm shadow-lg transition-all duration-200 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-bottom data-[state=closed]:fade-out-0",
       variant === "destructive" &&
         "border-destructive bg-destructive/10 text-destructive-foreground dark:border-red-800 dark:bg-red-950/50 dark:text-red-200",
+      variant === "muted" &&
+        "border-slate-200 bg-slate-50 text-slate-900 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-100",
       className
     )}
     {...props}
