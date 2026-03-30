@@ -159,8 +159,6 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
         }
       >
     | undefined;
-  let initialActiveListingIds: (string | number)[] | undefined;
-
   if (listingIds.length > 0) {
     const { data: jobsData } = await supabase
       .from("jobs")
@@ -215,13 +213,6 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
       };
     }
     initialActiveJobsSnapshot = jobByListing;
-    initialActiveListingIds = Array.from(
-      new Set(
-        jobs
-          .filter((j) => j.status !== "cancelled")
-          .map((j) => String(j.listing_id))
-      )
-    );
 
     const nowMs = Date.now();
     const cancelledJobListingIds = new Set(
@@ -382,7 +373,6 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
               initialOpenCancelListingId={cancelListingIdParam}
               feePercentage={feePercentage}
               initialActiveJobsSnapshot={initialActiveJobsSnapshot}
-              initialActiveListingIds={initialActiveListingIds}
               viewTab={
                 tab === "cancelled_listings"
                   ? "cancelled_listings"

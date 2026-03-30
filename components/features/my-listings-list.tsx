@@ -109,7 +109,6 @@ export type MyListingsListProps = {
       updatedAt?: string | null;
     }
   >;
-  initialActiveListingIds?: (string | number)[];
 };
 
 export function MyListingsList({
@@ -120,14 +119,10 @@ export function MyListingsList({
   feePercentage = 12,
   viewTab = "active_listings",
   initialActiveJobsSnapshot,
-  initialActiveListingIds,
   listerVerificationBadges = null,
 }: MyListingsListProps) {
   const [listings, setListings] = useState<ListingRow[]>(initialListings);
   const [createListingOpen, setCreateListingOpen] = useState(false);
-  const [activeListingIds, setActiveListingIds] = useState<string[]>(() =>
-    (initialActiveListingIds ?? []).map((id) => String(id))
-  );
   const [activeJobs, setActiveJobs] = useState<
     Record<
       string,
@@ -278,7 +273,6 @@ export function MyListingsList({
         );
       }
 
-      const taken = new Set<string>();
       const jobMap: Record<
         string,
         {
@@ -293,7 +287,6 @@ export function MyListingsList({
       > = {};
       for (const [lid, arr] of jobsByListing) {
         const j = arr.reduce((best, cur) => preferJobRow(best, cur));
-        if (j.status !== "cancelled") taken.add(lid);
         jobMap[lid] = {
           jobId: j.id,
           winnerId: j.winner_id,
@@ -304,7 +297,6 @@ export function MyListingsList({
           updatedAt: j.updated_at ?? null,
         };
       }
-      setActiveListingIds(Array.from(taken));
       setActiveJobs(jobMap);
     };
     loadJobs();
@@ -562,7 +554,16 @@ export function MyListingsList({
     closeEditor();
   };
 
-  const activeIdSet = new Set(activeListingIds);
+  /** Single source of truth with `activeJobs` — avoids duplicate cards when a listing would match both “live auction” and “active job” if ids drifted. */
+  const activeIdSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const [lid, info] of Object.entries(activeJobs)) {
+      if (info?.status != null && info.status !== "cancelled") {
+        s.add(String(lid));
+      }
+    }
+    return s;
+  }, [activeJobs]);
   const bidIdSet = new Set(bidListingIds);
   const activeListings = listingsDeduped.filter((l) =>
     activeIdSet.has(String(l.id))
