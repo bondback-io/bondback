@@ -124,7 +124,7 @@ export function ListerDashboardContent({
               Active Jobs
             </h2>
             {activeJobs.length > 0 && (
-              <Link href="/my-listings?tab=active_listings" className="text-xs font-medium text-primary underline-offset-4 hover:underline">
+              <Link href="/my-listings?tab=active" className="text-xs font-medium text-primary underline-offset-4 hover:underline">
                 View all
               </Link>
             )}

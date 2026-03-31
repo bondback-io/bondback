@@ -36,8 +36,8 @@ const STEPS = [
     emoji: "✅",
     title: "Approve & release funds",
     body: "Once the clean is done, review photos, approve the job, and release payment. Your bond is one step closer.",
-    learnUrl: `${APP_URL}/my-listings/jobs`,
-    learnLabel: "Manage jobs",
+    learnUrl: `${APP_URL}/my-listings`,
+    learnLabel: "Manage listings & jobs",
   },
 ] as const;
 

@@ -1,4 +1,4 @@
-import { playNotificationChime } from "@/lib/notifications/notification-chime";
+import { scheduleNotificationChime } from "@/lib/notifications/notification-chime";
 
 export type InAppNotificationFeedbackOptions = {
   soundEnabled: boolean;
@@ -19,7 +19,7 @@ export function triggerInAppNotificationFeedback(
   if (opts.bellMenuOpen || opts.isNotificationsRoute) return;
 
   if (opts.soundEnabled) {
-    playNotificationChime({ masterVolume: 0.22 });
+    scheduleNotificationChime({ masterVolume: 0.18 });
   }
 
   if (

@@ -23,6 +23,7 @@ import { ContextualFab } from "@/components/contextual-fab";
 import { UserPreferencesHydration } from "@/components/providers/user-preferences-hydration";
 import { QueryClientProviderWrapper } from "@/components/providers/query-client-provider";
 import { NotificationsRealtimeSync } from "@/components/notifications/notifications-realtime-sync";
+import { NotificationAudioUnlock } from "@/components/notifications/notification-audio-unlock";
 import { SessionSync } from "@/components/auth/session-sync";
 
 const site = getSiteUrl();
@@ -151,6 +152,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         ) : null}
         <TestModeBanner stripeTestMode={stripeTestMode} />
         <PwaRegisterSw />
+        <NotificationAudioUnlock />
         <SessionSync />
         {session?.profile ? (
           <UserPreferencesHydration distanceUnit={session.profile.distance_unit} />

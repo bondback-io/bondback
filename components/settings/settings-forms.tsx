@@ -253,6 +253,43 @@ function buildNotificationFormData(values: Record<string, boolean>): FormData {
   return fd;
 }
 
+function TestNotificationSoundButton() {
+  const [testing, setTesting] = useState(false);
+  const { toast } = useToast();
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      const { testNotificationChime } = await import("@/lib/notifications/notification-chime");
+      await testNotificationChime();
+      toast({
+        title: "Test sound",
+        description: "You should hear a soft ding. If not, tap the page once, check volume, and try again.",
+      });
+    } catch (e) {
+      logClientError("settings.testNotificationSound", e);
+      showAppErrorToast(toast, {
+        flow: "settings",
+        error: e instanceof Error ? e : new Error(String(e)),
+        context: "settings.testNotificationSound",
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+  return (
+    <Button
+      type="button"
+      size="lg"
+      variant="outline"
+      className="h-12 min-h-[48px] w-full rounded-full border-border dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800/90 md:h-8 md:min-h-0 md:w-auto"
+      disabled={testing}
+      onClick={handleTest}
+    >
+      {testing ? "Playing…" : "Test sound"}
+    </Button>
+  );
+}
+
 function SendTestSmsButton() {
   const [testing, setTesting] = useState(false);
   const { toast } = useToast();
@@ -462,6 +499,9 @@ export function SettingsNotificationsForm({
               />
             </div>
           ))}
+          <div className="pt-2">
+            <TestNotificationSoundButton />
+          </div>
         </div>
       </div>
       {/* Preserve cleaner-only prefs when lister saves (fields not shown) */}

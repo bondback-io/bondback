@@ -1,35 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  Briefcase,
-  ImagePlus,
-  MessageCircle,
-  Gavel,
-  ChevronDown,
-  ClipboardList,
-  Inbox,
-} from "lucide-react";
+import { ImagePlus, Search, ClipboardList, Inbox, FileEdit, Scale } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { CountdownTimer } from "@/components/features/countdown-timer";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { formatCents, getListingCoverUrl } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
-import { format } from "date-fns";
 import type { ListingRow } from "@/lib/listings";
 import {
   cancelListing,
@@ -44,17 +25,8 @@ import {
   checkImageHeader,
 } from "@/lib/photo-validation";
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
-import { formatAuctionTimeLeftShort } from "@/components/JobCard";
-import { MyListingsCardMobile } from "@/components/features/my-listings-card-mobile";
 import {
   Dialog,
   DialogContent,
@@ -63,9 +35,29 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CreateListingConfirmDialog } from "@/components/listing/create-listing-confirm-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ListerListingCard } from "@/components/my-listings/lister-listing-card";
+import { ListerDisputedCard } from "@/components/my-listings/lister-disputed-card";
+import { PullToRefresh } from "@/components/my-listings/pull-to-refresh";
+import {
+  classifyListerBadge,
+  buildTimeLabel,
+  passesListFilter,
+  listingMatchesCompletedTab,
+  isDisputedJobStatus,
+  type ListFilter,
+} from "@/lib/my-listings/lister-listing-helpers";
+import {
+  loadListingDraftLocal,
+  clearListingDraftLocal,
+} from "@/lib/listing-draft-storage";
 
-/** When multiple job rows exist for one listing, prefer non-cancelled then newest. */
 function preferJobRow<
   T extends { status: string | null; updated_at?: string | null },
 >(a: T, b: T): T {
@@ -78,25 +70,29 @@ function preferJobRow<
   return tb >= ta ? b : a;
 }
 
+export type ListerViewTab = "active" | "disputed" | "completed" | "drafts" | "all";
+
+type JobRowState = {
+  jobId: number | string;
+  winnerId: string | null;
+  winnerName: string;
+  status: string | null;
+  cleanerConfirmedComplete?: boolean | null;
+  cleanerConfirmedAt?: string | null;
+  updatedAt?: string | null;
+  disputed_at?: string | null;
+  dispute_reason?: string | null;
+  dispute_status?: string | null;
+  dispute_opened_by?: string | null;
+  agreed_amount_cents?: number | null;
+};
+
 export type MyListingsListProps = {
   initialListings: ListingRow[];
   listerId: string;
-  /** Logged-in lister's verification badges (same chips as marketplace cards) */
-  listerVerificationBadges?: string[] | null;
-  /** When set, open the edit panel for this listing id (e.g. from /listings/[id]/edit redirect). */
   initialEditListingId?: string | null;
-  /** From `?cancel=` — open cancel-confirmation dialog for that listing if still live. */
   initialOpenCancelListingId?: string | null;
-  /** Platform fee % (lister pays on top of job price). Used for fee breakdown on job cards. */
-  feePercentage?: number;
-  /** Optional top-level view filter from My Listings tabs. */
-  viewTab?:
-    | "active_listings"
-    | "completed_jobs"
-    | "pending_payments"
-    | "cancelled_listings"
-    | "disputes";
-  /** From server: avoids cancelled listings flashing as “live” before client job fetch. */
+  viewTab: ListerViewTab;
   initialActiveJobsSnapshot?: Record<
     string,
     {
@@ -107,8 +103,19 @@ export type MyListingsListProps = {
       cleanerConfirmedComplete?: boolean | null;
       cleanerConfirmedAt?: string | null;
       updatedAt?: string | null;
+      disputed_at?: string | null;
+      dispute_reason?: string | null;
+      dispute_status?: string | null;
+      dispute_opened_by?: string | null;
+      agreed_amount_cents?: number | null;
     }
   >;
+  tabCounts: {
+    active: number;
+    disputed: number;
+    completed: number;
+    all: number;
+  };
 };
 
 export function MyListingsList({
@@ -116,41 +123,15 @@ export function MyListingsList({
   listerId,
   initialEditListingId = null,
   initialOpenCancelListingId = null,
-  feePercentage = 12,
-  viewTab = "active_listings",
+  viewTab,
   initialActiveJobsSnapshot,
-  listerVerificationBadges = null,
+  tabCounts,
 }: MyListingsListProps) {
   const [listings, setListings] = useState<ListingRow[]>(initialListings);
-  const [createListingOpen, setCreateListingOpen] = useState(false);
-  const [activeJobs, setActiveJobs] = useState<
-    Record<
-      string,
-      {
-        jobId: number | string;
-        winnerId: string | null;
-        winnerName: string;
-        status: string | null;
-        cleanerConfirmedComplete?: boolean | null;
-        cleanerConfirmedAt?: string | null;
-        updatedAt?: string | null;
-      }
-    >
-  >(() => {
+  const [activeJobs, setActiveJobs] = useState<Record<string, JobRowState>>(() => {
     const snap = initialActiveJobsSnapshot;
     if (!snap) return {};
-    const out: Record<
-      string,
-      {
-        jobId: number | string;
-        winnerId: string | null;
-        winnerName: string;
-        status: string | null;
-        cleanerConfirmedComplete?: boolean | null;
-        cleanerConfirmedAt?: string | null;
-        updatedAt?: string | null;
-      }
-    > = {};
+    const out: Record<string, JobRowState> = {};
     for (const l of initialListings) {
       const row = snap[String(l.id)];
       if (row) {
@@ -159,7 +140,13 @@ export function MyListingsList({
     }
     return out;
   });
-  const [bidListingIds, setBidListingIds] = useState<string[]>([]);
+  const [bidCounts, setBidCounts] = useState<Record<string, number>>({});
+  const [search, setSearch] = useState("");
+  const [listFilter, setListFilter] = useState<ListFilter>("all");
+  const [localDraft, setLocalDraft] = useState<ReturnType<
+    typeof loadListingDraftLocal
+  > | null>(null);
+
   const [editing, setEditing] = useState<ListingRow | null>(null);
   const [editPhotoUrls, setEditPhotoUrls] = useState<string[]>([]);
   const [editDescription, setEditDescription] = useState("");
@@ -170,14 +157,18 @@ export function MyListingsList({
   const [cancelListingTarget, setCancelListingTarget] = useState<ListingRow | null>(null);
   const [cancellingListing, setCancellingListing] = useState(false);
   const [relistingId, setRelistingId] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const openedForEditIdRef = useRef<string | null>(null);
+  const cancelParamHandledRef = useRef(false);
 
   const supabase = createBrowserSupabaseClient();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const cancelParamHandledRef = useRef(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    setLocalDraft(loadListingDraftLocal());
+  }, [viewTab, listings.length]);
 
   const listingsDeduped = useMemo(() => {
     const seen = new Map<string, ListingRow>();
@@ -190,7 +181,7 @@ export function MyListingsList({
 
   useEffect(() => {
     const channel = supabase
-      .channel("my-listings")
+      .channel("my-listings-v2")
       .on(
         "postgres_changes",
         {
@@ -203,30 +194,23 @@ export function MyListingsList({
           if (payload.eventType === "INSERT") {
             const row = payload.new as ListingRow;
             setListings((prev) => {
-              if (prev.some((l) => String(l.id) === String(row.id))) {
-                return prev;
-              }
+              if (prev.some((l) => String(l.id) === String(row.id))) return prev;
               return [row, ...prev];
             });
           } else if (payload.eventType === "UPDATE") {
             const row = payload.new as ListingRow;
-            setListings((prev) =>
-              prev.map((l) => (l.id === row.id ? row : l))
-            );
+            setListings((prev) => prev.map((l) => (l.id === row.id ? row : l)));
           } else if (payload.eventType === "DELETE") {
             setListings((prev) => prev.filter((l) => l.id !== payload.old.id));
           }
         }
       )
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
   }, [supabase, listerId]);
 
-  // Fetch jobs for these listings so we can show an "active" status
-  // when a listing has been won or purchased.
   useEffect(() => {
     if (!listingsDeduped.length) return;
     const ids = listingsDeduped.map((l) => l.id as unknown as string | number);
@@ -234,9 +218,9 @@ export function MyListingsList({
       const { data } = await supabase
         .from("jobs")
         .select(
-          "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at"
+          "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents"
         )
-        .in("listing_id", ids as any);
+        .in("listing_id", ids as never);
       const jobs = (data ?? []) as {
         id: number | string;
         listing_id: string | number;
@@ -245,6 +229,11 @@ export function MyListingsList({
         cleaner_confirmed_complete?: boolean | null;
         cleaner_confirmed_at?: string | null;
         updated_at?: string | null;
+        disputed_at?: string | null;
+        dispute_reason?: string | null;
+        dispute_status?: string | null;
+        dispute_opened_by?: string | null;
+        agreed_amount_cents?: number | null;
       }[];
 
       const jobsByListing = new Map<string, (typeof jobs)[number][]>();
@@ -264,27 +253,16 @@ export function MyListingsList({
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, full_name")
-          .in("id", winnerIds as any);
+          .in("id", winnerIds as never);
         winnerNames = Object.fromEntries(
-          (profiles ?? []).map((p: any) => [
-            p.id as string,
-            (p.full_name as string | null) || "Cleaner",
+          (profiles ?? []).map((p: { id: string; full_name: string | null }) => [
+            p.id,
+            p.full_name?.trim() || "Cleaner",
           ])
         );
       }
 
-      const jobMap: Record<
-        string,
-        {
-          jobId: number | string;
-          winnerId: string | null;
-          winnerName: string;
-          status: string | null;
-          cleanerConfirmedComplete?: boolean | null;
-          cleanerConfirmedAt?: string | null;
-          updatedAt?: string | null;
-        }
-      > = {};
+      const jobMap: Record<string, JobRowState> = {};
       for (const [lid, arr] of jobsByListing) {
         const j = arr.reduce((best, cur) => preferJobRow(best, cur));
         jobMap[lid] = {
@@ -295,6 +273,11 @@ export function MyListingsList({
           cleanerConfirmedComplete: j.cleaner_confirmed_complete ?? null,
           cleanerConfirmedAt: j.cleaner_confirmed_at ?? null,
           updatedAt: j.updated_at ?? null,
+          disputed_at: j.disputed_at ?? null,
+          dispute_reason: j.dispute_reason ?? null,
+          dispute_status: j.dispute_status ?? null,
+          dispute_opened_by: j.dispute_opened_by ?? null,
+          agreed_amount_cents: j.agreed_amount_cents ?? null,
         };
       }
       setActiveJobs(jobMap);
@@ -302,7 +285,6 @@ export function MyListingsList({
     loadJobs();
   }, [supabase, listingsDeduped]);
 
-  // Track listings that have at least one bid
   useEffect(() => {
     if (!listingsDeduped.length) return;
     const ids = listingsDeduped.map((l) => l.id as unknown as string | number);
@@ -310,15 +292,14 @@ export function MyListingsList({
       const { data } = await supabase
         .from("bids")
         .select("listing_id")
-        .in("listing_id", ids as any);
-      const withBids = Array.from(
-        new Set(
-          (data ?? []).map((b: { listing_id: string | number }) =>
-            String(b.listing_id)
-          )
-        )
-      );
-      setBidListingIds(withBids);
+        .in("listing_id", ids as never);
+      const counts: Record<string, number> = {};
+      for (const b of data ?? []) {
+        const row = b as { listing_id: string | number };
+        const k = String(row.listing_id);
+        counts[k] = (counts[k] ?? 0) + 1;
+      }
+      setBidCounts(counts);
     };
     loadBids();
   }, [supabase, listingsDeduped]);
@@ -332,7 +313,6 @@ export function MyListingsList({
     setEditError(null);
   };
 
-  // When navigated from /listings/[id]/edit, open the editor for that listing once it's in the list.
   useEffect(() => {
     if (!initialEditListingId || listingsDeduped.length === 0) return;
     if (openedForEditIdRef.current === initialEditListingId) return;
@@ -353,8 +333,6 @@ export function MyListingsList({
     setUploadingPhotos(false);
     setIsSaving(false);
   };
-
-  const { toast } = useToast();
 
   const openCancelListingConfirm = (listing: ListingRow) => {
     setCancelListingTarget(listing);
@@ -382,7 +360,7 @@ export function MyListingsList({
       setCancelListingTarget(null);
       toast({
         title: "Listing cancelled",
-        description: "The auction has ended early. You can view it in your history.",
+        description: "The auction has ended early. You can find it under All.",
       });
       router.refresh();
     } finally {
@@ -390,7 +368,6 @@ export function MyListingsList({
     }
   };
 
-  /** `/my-listings?cancel=id` opens the same confirmation dialog as the card button. */
   useEffect(() => {
     if (!initialOpenCancelListingId) {
       cancelParamHandledRef.current = false;
@@ -418,13 +395,7 @@ export function MyListingsList({
       setCancelListingTarget(listing);
     }
     stripCancelParam();
-  }, [
-    initialOpenCancelListingId,
-    listingsDeduped,
-    pathname,
-    router,
-    searchParams,
-  ]);
+  }, [initialOpenCancelListingId, listingsDeduped, pathname, router, searchParams]);
 
   const handleListingPhotosChange = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -439,11 +410,7 @@ export function MyListingsList({
       existingCount: editPhotoUrls.length,
     });
     errors.forEach((err) => {
-      toast({
-        variant: "destructive",
-        title: "Photo validation",
-        description: err,
-      });
+      toast({ variant: "destructive", title: "Photo validation", description: err });
     });
     if (validFiles.length === 0) {
       event.target.value = "";
@@ -539,7 +506,6 @@ export function MyListingsList({
       return;
     }
 
-    // Update local list so UI reflects the change immediately
     setListings((prev) =>
       prev.map((l) =>
         l.id === editing.id
@@ -553,83 +519,6 @@ export function MyListingsList({
     );
     closeEditor();
   };
-
-  /** Single source of truth with `activeJobs` — avoids duplicate cards when a listing would match both “live auction” and “active job” if ids drifted. */
-  const activeIdSet = useMemo(() => {
-    const s = new Set<string>();
-    for (const [lid, info] of Object.entries(activeJobs)) {
-      if (info?.status != null && info.status !== "cancelled") {
-        s.add(String(lid));
-      }
-    }
-    return s;
-  }, [activeJobs]);
-  const bidIdSet = new Set(bidListingIds);
-  const activeListings = listingsDeduped.filter((l) =>
-    activeIdSet.has(String(l.id))
-  );
-  const completedListings = activeListings.filter((l) => {
-    const info = activeJobs[String(l.id)] ?? null;
-    return info && info.status === "completed";
-  });
-  const activeNonCompletedListings = activeListings.filter((l) => {
-    const info = activeJobs[String(l.id)] ?? null;
-    return !info || info.status !== "completed";
-  });
-
-  const otherListings = listingsDeduped.filter(
-    (l) => !activeIdSet.has(String(l.id))
-  );
-  const nowMs = Date.now();
-  // Exclude listings with a cancelled job from "live" so they don't appear under Active Listings / New listings
-  const cancelledJobListingIds = new Set<string>(
-    listingsDeduped
-      .filter((l) => activeJobs[String(l.id)]?.status === "cancelled")
-      .map((l) => String(l.id))
-  );
-  const liveListings = otherListings.filter(
-    (l) =>
-      l.status === "live" &&
-      parseUtcTimestamp(l.end_time) > nowMs &&
-      !cancelledJobListingIds.has(String(l.id))
-  );
-  /** History on Active tab: excludes expired (those appear under Completed/Cancelled/Expired tab). */
-  const endedListingsForHistory = otherListings.filter(
-    (l) =>
-      !(l.status === "live" && parseUtcTimestamp(l.end_time) > nowMs) &&
-      String(l.status ?? "").toLowerCase() !== "expired"
-  );
-  const expiredListingsOnly = listingsDeduped.filter(
-    (l) => String(l.status ?? "").toLowerCase() === "expired"
-  );
-
-  const noBidLiveListings = liveListings.filter(
-    (l) => !bidIdSet.has(String(l.id))
-  );
-  const liveListingsWithBids = liveListings.filter((l) =>
-    bidIdSet.has(String(l.id))
-  );
-  // Only listings whose job status is "cancelled" — completed/other jobs must not appear here
-  const cancelledListingIds = new Set<string>(
-    listingsDeduped
-      .filter((l) => activeJobs[String(l.id)]?.status === "cancelled")
-      .map((l) => String(l.id))
-  );
-  const cancelledListings = listingsDeduped.filter((l) =>
-    cancelledListingIds.has(String(l.id))
-  );
-
-  const DISPUTED_STATUSES = ["disputed", "in_review", "dispute_negotiating"];
-  const pendingPaymentsListings = activeListings.filter((l) => {
-    const info = activeJobs[String(l.id)] ?? null;
-    return (
-      info?.status === "in_progress" && info?.cleanerConfirmedComplete === true
-    );
-  });
-  const disputedListings = listingsDeduped.filter((l) => {
-    const status = activeJobs[String(l.id)]?.status ?? "";
-    return DISPUTED_STATUSES.includes(status);
-  });
 
   const handleRelist = async (listingId: string) => {
     setRelistingId(listingId);
@@ -650,996 +539,438 @@ export function MyListingsList({
     router.refresh();
   };
 
-  const renderCard = (
-    listing: ListingRow,
-    kind: "active" | "live" | "ended" | "completed"
-  ) => {
-    const feePctForListing = resolvePlatformFeePercent(
-      listing.platform_fee_percentage,
-      feePercentage
+  const activeIdSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const [lid, info] of Object.entries(activeJobs)) {
+      if (info?.status != null && info.status !== "cancelled") {
+        s.add(String(lid));
+      }
+    }
+    return s;
+  }, [activeJobs]);
+
+  const bidIdSet = useMemo(
+    () => new Set(Object.keys(bidCounts).filter((k) => (bidCounts[k] ?? 0) > 0)),
+    [bidCounts]
+  );
+
+  const activeListings = listingsDeduped.filter((l) => activeIdSet.has(String(l.id)));
+  const completedListings = activeListings.filter((l) => {
+    const info = activeJobs[String(l.id)] ?? null;
+    return info && info.status === "completed";
+  });
+  const activeNonCompletedListings = activeListings.filter((l) => {
+    const info = activeJobs[String(l.id)] ?? null;
+    return !info || info.status !== "completed";
+  });
+
+  const otherListings = listingsDeduped.filter((l) => !activeIdSet.has(String(l.id)));
+  const nowMs = Date.now();
+  const cancelledJobListingIds = new Set<string>(
+    listingsDeduped
+      .filter((l) => activeJobs[String(l.id)]?.status === "cancelled")
+      .map((l) => String(l.id))
+  );
+  const liveListings = otherListings.filter(
+    (l) =>
+      l.status === "live" &&
+      parseUtcTimestamp(l.end_time) > nowMs &&
+      !cancelledJobListingIds.has(String(l.id))
+  );
+  const noBidLiveListings = liveListings.filter((l) => !bidIdSet.has(String(l.id)));
+  const liveListingsWithBids = liveListings.filter((l) => bidIdSet.has(String(l.id)));
+
+  const activeTabListings = useMemo(() => {
+    const map = new Map<string, ListingRow>();
+    for (const l of activeNonCompletedListings) {
+      if (isDisputedJobStatus(activeJobs[String(l.id)]?.status)) continue;
+      map.set(String(l.id), l);
+    }
+    for (const l of liveListingsWithBids) map.set(String(l.id), l);
+    for (const l of noBidLiveListings) map.set(String(l.id), l);
+    const arr = Array.from(map.values());
+    arr.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-    const isJobCard = kind === "active" || kind === "completed";
-    const isActiveJob = kind === "active";
-    const isLive = kind === "live";
-    const isExpiredListing =
-      String(listing.status ?? "").toLowerCase() === "expired";
-    const isEndedNoBids =
-      kind === "ended" &&
-      !isExpiredListing &&
-      !bidIdSet.has(String(listing.id));
-    const jobInfo = activeJobs[String(listing.id)] ?? null;
-    const jobStatus = (jobInfo?.status as string | null) ?? null;
-    const cleanerConfirmed =
-      jobInfo?.cleanerConfirmedComplete === true;
-    const completedAt = jobInfo?.cleanerConfirmedAt ?? null;
-    const completedDateLabel =
-      completedAt != null
-        ? format(new Date(completedAt), "d MMM yyyy")
-        : null;
-    const cancelledAt = jobInfo?.updatedAt ?? null;
-    const cancelledDateLabel =
-      jobStatus === "cancelled" && cancelledAt != null
-        ? format(new Date(cancelledAt), "d MMM yyyy")
-        : null;
-    // Card cancelled state: only from job status so completed jobs never show as cancelled
-    const isCancelledListing = jobStatus === "cancelled";
-    const isDisputedListing =
-      jobStatus === "disputed" ||
-      jobStatus === "in_review" ||
-      jobStatus === "dispute_negotiating";
+    return arr;
+  }, [activeNonCompletedListings, liveListingsWithBids, noBidLiveListings, activeJobs]);
 
-    let statusLabel = listing.status;
-    let statusClass =
-      "inline-flex items-center rounded-full px-2 py-[1px] text-[11px] font-medium capitalize";
-    let progressCount = 0;
+  const disputedTabListings = useMemo(() => {
+    const arr = listingsDeduped.filter((l) =>
+      isDisputedJobStatus(activeJobs[String(l.id)]?.status)
+    );
+    arr.sort((a, b) => {
+      const ja = activeJobs[String(a.id)]?.disputed_at ?? activeJobs[String(a.id)]?.updatedAt;
+      const jb = activeJobs[String(b.id)]?.disputed_at ?? activeJobs[String(b.id)]?.updatedAt;
+      const ta = ja ? Date.parse(String(ja)) : 0;
+      const tb = jb ? Date.parse(String(jb)) : 0;
+      return tb - ta;
+    });
+    return arr;
+  }, [listingsDeduped, activeJobs]);
 
-    if (isJobCard) {
-      // Map job state to 5-step progress, aligned with the job detail stepper:
-      // 1/5 = accepted (awaiting approval)
-      // 2/5 = in progress (work underway, checklist not yet confirmed)
-      // 4/5 = checklist complete + photos uploaded (cleaner has confirmed)
-      // 5/5 = completed (funds released)
-      if (jobStatus === "accepted" || !jobStatus) {
-        progressCount = 1;
-      } else if (jobStatus === "in_progress" && !cleanerConfirmed) {
-        progressCount = 2;
-      } else if (jobStatus === "in_progress" && cleanerConfirmed) {
-        progressCount = 4;
-      } else if (jobStatus === "completed") {
-        progressCount = 5;
-      }
-      // cancelled: progressCount stays 0
+  const completedSorted = useMemo(() => {
+    const arr = [...completedListings];
+    arr.sort((a, b) => {
+      const ja = activeJobs[String(a.id)]?.cleanerConfirmedAt ?? activeJobs[String(a.id)]?.updatedAt;
+      const jb = activeJobs[String(b.id)]?.cleanerConfirmedAt ?? activeJobs[String(b.id)]?.updatedAt;
+      const ta = ja ? Date.parse(String(ja)) : 0;
+      const tb = jb ? Date.parse(String(jb)) : 0;
+      return tb - ta;
+    });
+    return arr;
+  }, [completedListings, activeJobs]);
 
-      switch (jobStatus) {
-        case "accepted":
-          statusLabel = "Active / Not yet approved";
-          statusClass += " bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200";
-          break;
-        case "in_progress":
-          statusLabel = "In progress";
-          statusClass +=
-            " bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200";
-          break;
-        case "completed":
-          statusLabel = "Completed";
-          statusClass +=
-            " bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200";
-          break;
-        case "cancelled":
-          statusLabel = "Cancelled";
-          statusClass += " bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200";
-          break;
-        case "disputed":
-        case "in_review":
-        case "dispute_negotiating":
-          statusLabel = "Disputed";
-          statusClass += " bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200";
-          break;
-        default:
-          statusLabel = "Active";
-          statusClass +=
-            " bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200";
-          break;
-      }
-    } else if (isExpiredListing && !isJobCard) {
-      statusLabel = "Expired";
-      statusClass +=
-        " bg-slate-100 text-slate-800 dark:bg-slate-900/50 dark:text-slate-200";
-    } else if (isEndedNoBids) {
-      statusLabel = "Ended with no bids";
-      statusClass += " bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200";
-    } else if (kind === "ended") {
-      if (jobStatus === "cancelled" || cancelledListingIds.has(String(listing.id))) {
-        statusLabel = "Cancelled";
-        statusClass += " bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200";
-      } else {
-        statusLabel = "ended";
-        statusClass += " text-muted-foreground dark:text-gray-300";
-      }
-    }
+  const allSorted = useMemo(() => {
+    const arr = [...listingsDeduped];
+    arr.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return arr;
+  }, [listingsDeduped]);
 
-    let cardClass =
-      "flex h-full flex-col transition-transform transition-shadow hover:-translate-y-0.5 hover:shadow-lg";
-    if (isJobCard || isCancelledListing) {
-      if (isCancelledListing) {
-        cardClass += " border-red-200 bg-red-50/70 dark:border-red-800 dark:bg-red-950/40";
-      } else if (isDisputedListing) {
-        cardClass += " border-amber-200 bg-amber-50/70 dark:border-amber-700 dark:bg-amber-950/40 border-l-4 border-l-amber-500";
-      } else if (jobStatus === "completed") {
-        cardClass += " border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30 border-l-4 border-l-emerald-500";
-      } else {
-        // Accent the left border by progress step for quick scanning.
-        switch (progressCount) {
-          case 1:
-            cardClass += " border-l-4 border-l-sky-400";
-            break;
-          case 2:
-            cardClass += " border-l-4 border-l-emerald-400";
-            break;
-          case 3:
-            cardClass += " border-l-4 border-l-amber-400";
-            break;
-          case 4:
-            cardClass += " border-l-4 border-l-purple-400";
-            break;
-          case 5:
-            cardClass += " border-l-4 border-l-emerald-500";
-            break;
-          default:
-            break;
-        }
-      }
-    }
-
-    const coverUrl = getListingCoverUrl(listing) ?? "/placeholder-listing.png";
-    const endTsMs = parseUtcTimestamp(listing.end_time);
-    const auctionHoursLeft = (endTsMs - Date.now()) / (1000 * 60 * 60);
-    const showHotMobile =
-      isLive &&
-      listing.status === "live" &&
-      !isCancelledListing &&
-      auctionHoursLeft > 0 &&
-      auctionHoursLeft < 24;
-
-    const locationLine = formatLocationWithState(listing.suburb, listing.postcode);
-    const bedsBathsLine = `${listing.bedrooms} bed · ${listing.bathrooms} bath`;
-
-    const jobCents = listing.current_lowest_bid_cents ?? 0;
-    const feeCents = Math.round((jobCents * feePctForListing) / 100);
-    const totalCents = jobCents + feeCents;
-
-    let mobilePriceLabel = "";
-    let mobilePriceDisplay = "";
-    let mobileStatusPill = "";
-    let mobileStatusPillClass = "";
-
-    if (isJobCard || isCancelledListing) {
-      if (jobStatus === "completed") {
-        mobilePriceLabel = "Total you paid (job + fee)";
-        mobilePriceDisplay = formatCents(totalCents);
-      } else if (isDisputedListing) {
-        mobilePriceLabel = "Job amount";
-        mobilePriceDisplay = formatCents(jobCents);
-      } else if (isCancelledListing) {
-        mobilePriceLabel = "Listing";
-        mobilePriceDisplay = formatCents(jobCents);
-      } else {
-        mobilePriceLabel = "Total you pay (job + fee)";
-        mobilePriceDisplay = formatCents(totalCents);
-      }
-      mobileStatusPill =
-        isJobCard && progressCount > 0 && !isCancelledListing
-          ? `${statusLabel} ${progressCount}/5`
-          : statusLabel;
-      if (isCancelledListing) {
-        mobileStatusPillClass =
-          "border-red-400/80 bg-red-500/15 text-red-900 dark:border-red-600/50 dark:bg-red-950/60 dark:text-red-100";
-      } else if (isDisputedListing) {
-        mobileStatusPillClass =
-          "border-amber-400/80 bg-amber-500/20 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/50 dark:text-amber-100";
-      } else if (jobStatus === "completed") {
-        mobileStatusPillClass =
-          "border-emerald-300/80 bg-emerald-500/15 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/60 dark:text-emerald-100";
-      } else if (jobStatus === "in_progress") {
-        mobileStatusPillClass =
-          "border-amber-400/80 bg-amber-500/20 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/50 dark:text-amber-100";
-      } else if (jobStatus === "accepted") {
-        mobileStatusPillClass =
-          "border-sky-400/80 bg-sky-500/15 text-sky-900 dark:border-sky-600/50 dark:bg-sky-950/60 dark:text-sky-100";
-      } else {
-        mobileStatusPillClass =
-          "border-emerald-300/80 bg-emerald-500/15 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/60 dark:text-emerald-100";
-      }
-    } else if (isLive) {
-      mobilePriceLabel = "Current lowest bid";
-      mobilePriceDisplay = formatCents(listing.current_lowest_bid_cents);
-      const endingSoon = auctionHoursLeft > 0 && auctionHoursLeft < 24;
-      mobileStatusPill = endingSoon
-        ? `Ending Soon · ${formatAuctionTimeLeftShort(endTsMs)}`
-        : `Live · ${formatAuctionTimeLeftShort(endTsMs)}`;
-      mobileStatusPillClass = endingSoon
-        ? "border-amber-400/80 bg-amber-500/20 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/50 dark:text-amber-100"
-        : "border-emerald-300/80 bg-emerald-500/15 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/60 dark:text-emerald-100";
-    } else if (kind === "ended" && isExpiredListing) {
-      mobilePriceLabel = "Auction expired";
-      mobilePriceDisplay = "No bids";
-      mobileStatusPill = "Expired · no bids";
-      mobileStatusPillClass =
-        "border-slate-400/80 bg-slate-500/15 text-slate-900 dark:border-slate-600/50 dark:bg-slate-950/60 dark:text-slate-100";
-    } else if (kind === "ended") {
-      mobilePriceLabel = isEndedNoBids ? "Auction ended" : "Final bid";
-      mobilePriceDisplay = formatCents(listing.current_lowest_bid_cents);
-      if (isEndedNoBids) {
-        mobileStatusPill = "Ended · no bids";
-        mobileStatusPillClass =
-          "border-red-400/80 bg-red-500/15 text-red-900 dark:border-red-600/50 dark:bg-red-950/60 dark:text-red-100";
-      } else if (
-        jobStatus === "cancelled" ||
-        cancelledListingIds.has(String(listing.id))
-      ) {
-        mobileStatusPill = "Cancelled";
-        mobileStatusPillClass =
-          "border-red-400/80 bg-red-500/15 text-red-900 dark:border-red-600/50 dark:bg-red-950/60 dark:text-red-100";
-      } else {
-        mobileStatusPill = "Ended";
-        mobileStatusPillClass =
-          "border-border bg-muted text-muted-foreground dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300";
-      }
-    } else {
-      mobilePriceLabel = "Amount";
-      mobilePriceDisplay = formatCents(listing.current_lowest_bid_cents);
-      mobileStatusPill = statusLabel;
-      mobileStatusPillClass =
-        "border-border bg-muted text-muted-foreground dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300";
-    }
-
-    const primaryLabel =
-      kind === "ended"
-        ? "View listing history"
-        : isActiveJob
-          ? "Open job"
-          : kind === "completed"
-            ? "View Job History"
-            : isLive
-              ? "View Job Bids"
-              : "View & bids";
-
-    const primaryHref = `/jobs/${listing.id}`;
-    const showMobileSecondaryMessages =
-      !!jobInfo &&
-      (isJobCard || isCancelledListing) &&
-      !!jobInfo.winnerId &&
-      jobStatus !== "cancelled" &&
-      (jobStatus === "in_progress" ||
-        jobStatus === "completed" ||
-        isDisputedListing);
-
+  const searchLower = search.trim().toLowerCase();
+  const matchesSearch = (l: ListingRow) => {
+    if (!searchLower) return true;
+    const q = searchLower;
     return (
-      <div key={listing.id} className="h-full">
-        <div className="md:hidden">
-          <MyListingsCardMobile
-            listingId={listing.id}
-            title={listing.title}
-            coverUrl={coverUrl}
-            listerVerificationBadges={listerVerificationBadges}
-            showHot={showHotMobile}
-            showCountdown={
-              isLive &&
-              listing.status === "live" &&
-              parseUtcTimestamp(String(listing.end_time ?? "")) > Date.now()
-            }
-            endTime={listing.end_time}
-            statusPill={mobileStatusPill}
-            statusPillClassName={mobileStatusPillClass}
-            priceLabel={mobilePriceLabel}
-            priceDisplay={mobilePriceDisplay}
-            locationLine={locationLine}
-            bedsBathsLine={bedsBathsLine}
-            cardClassName={cardClass}
-            primaryHref={primaryHref}
-            primaryLabel={primaryLabel}
-            secondaryHref={
-              showMobileSecondaryMessages && jobInfo
-                ? `/messages?job=${jobInfo.jobId}`
-                : undefined
-            }
-            secondaryLabel={showMobileSecondaryMessages ? "Messages" : undefined}
-            showCancel={!isActiveJob && isLive && !isCancelledListing}
-            onCancel={
-              !isActiveJob && isLive && !isCancelledListing
-                ? () => {
-                    void openCancelListingConfirm(listing);
-                  }
-                : undefined
-            }
-            showRelist={kind === "ended" && isExpiredListing}
-            onRelist={
-              kind === "ended" && isExpiredListing
-                ? () => void handleRelist(String(listing.id))
-                : undefined
-            }
-            relistLoading={relistingId === String(listing.id)}
-          >
-            <>
-              {(isJobCard || isCancelledListing) && (
-                <div className="space-y-2">
-                  {isCancelledListing && (
-                    <p className="text-sm font-medium text-red-900 dark:text-red-200">
-                      Cancelled
-                      {cancelledDateLabel ? ` (${cancelledDateLabel})` : ""}
-                    </p>
-                  )}
-                  {isDisputedListing && (
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
-                      Dispute in progress — open the job to respond.
-                    </p>
-                  )}
-                  {jobStatus === "completed" && (
-                    <p className="text-sm text-emerald-800 dark:text-emerald-200">
-                      {completedDateLabel
-                        ? `Completed ${completedDateLabel}`
-                        : "Completed"}
-                    </p>
-                  )}
-                  {isJobCard &&
-                    !isCancelledListing &&
-                    !isDisputedListing &&
-                    jobStatus !== "completed" && (
-                      <p className="text-xs text-muted-foreground dark:text-gray-400">
-                        Job {formatCents(jobCents)} + {feePctForListing}% fee ={" "}
-                        {formatCents(totalCents)} total
-                      </p>
-                    )}
-                </div>
-              )}
-              {jobInfo && (isJobCard || isCancelledListing) && (
-                <div className="flex min-h-0 flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-sm dark:border-gray-800">
-                  <span className="font-medium text-muted-foreground dark:text-gray-400">
-                    Assigned
-                  </span>
-                  <div className="flex min-w-0 items-center justify-end gap-2">
-                    {isCancelledListing ? (
-                      <span className="font-medium text-muted-foreground dark:text-gray-400">
-                        Un-assigned
-                      </span>
-                    ) : jobStatus === "in_progress" ||
-                      jobStatus === "completed" ||
-                      isDisputedListing ? (
-                      <>
-                        {jobInfo.winnerId ? (
-                          <Link
-                            href={`/cleaners/${jobInfo.winnerId}`}
-                            className="truncate font-semibold text-sky-800 hover:underline dark:text-sky-300"
-                          >
-                            {jobInfo.winnerName}
-                          </Link>
-                        ) : (
-                          <span className="font-medium text-foreground dark:text-gray-200">{jobInfo.winnerName}</span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-right text-muted-foreground dark:text-gray-400">
-                        Approve job to see cleaner
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-              {!isJobCard && isLive && (
-                <p className="text-sm text-muted-foreground dark:text-gray-400">
-                  Starting {formatCents(listing.starting_price_cents)} ·{" "}
-                  {bidIdSet.has(String(listing.id))
-                    ? "1+"
-                    : "0"}{" "}
-                  bids
-                </p>
-              )}
-            </>
-          </MyListingsCardMobile>
-        </div>
-        <Card
-          className={cn(
-            "hidden h-full flex-col md:flex",
-            cardClass,
-            kind === "completed" ? "text-xs sm:text-[11px]" : ""
-          )}
-        >
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {isLive && !isCancelledListing && (
-              <CountdownTimer
-                endTime={listing.end_time}
-                className="text-xs text-muted-foreground"
-                expiredLabel="Ended"
-              />
-            )}
-          </div>
-          <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">
-            {listing.title}
-          </p>
-        </CardHeader>
-        <CardContent className="flex-1 space-y-2 text-sm">
-          <Link
-            href={`/jobs/${listing.id}`}
-            className="group/thumb mb-1 block w-full overflow-hidden rounded-xl border border-border bg-muted/40 transition hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800"
-            aria-label={`View more photos/info: ${listing.title}`}
-          >
-            <div className="relative h-36 w-full">
-              <OptimizedImage
-                src={getListingCoverUrl(listing) ?? "/placeholder-listing.png"}
-                alt="Property"
-                fill
-                sizes="(max-width: 768px) 100vw, 33vw"
-                className="h-full w-full rounded-xl transition-transform duration-200 group-hover/thumb:scale-[1.02]"
-              />
-              {/* Faded overlay + "View more photos/info" — hover (desktop) / subtle on touch */}
-              <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/0 transition-colors duration-200 [@media(hover:hover)]:group-hover/thumb:bg-black/50 [@media(hover:none)]:bg-black/30">
-                <span className="text-center text-sm font-medium text-white opacity-0 drop-shadow-md transition-opacity duration-200 [@media(hover:hover)]:group-hover/thumb:opacity-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:text-xs [@media(hover:none)]:px-2">
-                  View more photos/info
-                </span>
-              </div>
-            </div>
-          </Link>
-
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-muted-foreground dark:text-gray-400">
-              {isJobCard ? "Job progress" : "Status"}
-            </span>
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className={statusClass}>
-                    {isJobCard && progressCount > 0
-                      ? `${statusLabel} ${progressCount}/5`
-                      : statusLabel}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="end">
-                  <p>
-                    {jobStatus === "accepted" &&
-                      "Active – job created, waiting for owner approval."}
-                    {jobStatus === "in_progress" &&
-                      (cleanerConfirmed
-                        ? "In progress – cleaner has marked the checklist complete and uploaded photos."
-                        : "In progress – work underway, checklist not yet confirmed.")}
-                    {jobStatus === "completed" &&
-                      "Task has been completed – funds released and job fully finished."}
-                  {jobStatus === "cancelled" &&
-                      "Cancelled – this job was cancelled by the property lister. The cleaner was un-assigned."}
-                    {!isJobCard &&
-                      listing.status === "live" &&
-                      "Live – accepting bids until the auction end time."}
-                    {!isJobCard &&
-                      listing.status === "ended" &&
-                      "Ended – this auction has finished and is now in your history."}
-                    {!isJobCard &&
-                      listing.status !== "live" &&
-                      listing.status !== "ended" &&
-                      "Status of this listing."}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground dark:text-gray-400">
-            <span>
-              {listing.bedrooms} bed · {listing.bathrooms} bath
-            </span>
-            <span>
-              {listing.suburb} {listing.postcode}
-            </span>
-          </div>
-
-          {(isJobCard || isCancelledListing) && (
-            <div
-              className={`space-y-1 rounded-md border px-3 py-2 ${
-                isCancelledListing
-                  ? "border-red-300 bg-red-50/80 dark:border-red-700 dark:bg-red-900/50"
-                  : isDisputedListing
-                    ? "border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-900/50"
-                    : jobStatus === "completed"
-                      ? "border-emerald-300 bg-emerald-50/70 dark:border-emerald-600 dark:bg-emerald-900/40"
-                      : "border-emerald-300 bg-emerald-50/70 dark:border-emerald-500 dark:bg-emerald-900/40"
-              }`}
-            >
-              {isCancelledListing ? (
-                <>
-                  <p className="text-xs font-medium text-red-900 dark:text-red-200">
-                    Cancelled by Property Lister
-                  </p>
-                  <p className="text-[11px] text-red-800 dark:text-red-200">
-                    This listing was cancelled by the property lister
-                    {cancelledDateLabel ? (
-                      <>
-                        {" "}
-                        on <span className="font-medium">{cancelledDateLabel}</span>
-                      </>
-                    ) : null}
-                    . Cleaner un-assigned.
-                  </p>
-                </>
-              ) : isDisputedListing ? (
-                <>
-                  <p className="text-xs font-medium text-amber-900 dark:text-amber-200">
-                    Dispute in progress
-                  </p>
-                  <p className="text-[11px] text-amber-800 dark:text-amber-200">
-                    This job is under dispute. Respond in the job to resolve.
-                  </p>
-                  <p className="text-2xl font-semibold text-amber-700 dark:text-amber-200">
-                    {formatCents(listing.current_lowest_bid_cents)}
-                  </p>
-                </>
-              ) : jobStatus === "completed" ? (
-                <>
-                  <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">
-                    Task has been completed
-                  </p>
-                  <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
-                    Payment released:{" "}
-                    <span className="font-semibold">
-                      {formatCents(listing.current_lowest_bid_cents)}
-                    </span>
-                    {completedDateLabel && (
-                      <>
-                        {" "}
-                        · Completed on{" "}
-                        <span className="font-medium">
-                          {completedDateLabel}
-                        </span>
-                      </>
-                    )}
-                  </p>
-                  {(() => {
-                    const jobCents = listing.current_lowest_bid_cents ?? 0;
-                    const feeCents = Math.round((jobCents * feePctForListing) / 100);
-                    const totalCents = jobCents + feeCents;
-                    return (
-                      <div className="mt-2 space-y-1.5 rounded-md border border-emerald-200/80 bg-white/60 px-2 py-2 text-[11px] leading-snug dark:border-emerald-800/50 dark:bg-emerald-950/30 sm:text-xs">
-                        <p className="font-medium text-emerald-900 dark:text-emerald-100">
-                          Job amount to be paid to cleaner
-                        </p>
-                        <p className="tabular-nums font-semibold text-emerald-800 dark:text-emerald-200">
-                          {formatCents(jobCents)}
-                        </p>
-                        <p className="text-emerald-800/90 dark:text-emerald-300/90">
-                          (excl. {feePctForListing}% platform fee:{" "}
-                          <span className="font-medium tabular-nums">
-                            {formatCents(feeCents)}
-                          </span>
-                          )
-                        </p>
-                        <p className="border-t border-emerald-200/70 pt-1.5 text-emerald-900 dark:text-emerald-100">
-                          <span className="font-medium">Total you paid (job + fee):</span>{" "}
-                          <span className="font-semibold tabular-nums">
-                            {formatCents(totalCents)}
-                          </span>
-                        </p>
-                      </div>
-                    );
-                  })()}
-                </>
-              ) : (
-                <>
-                  <p className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
-                    Won for
-                  </p>
-                  {(() => {
-                    const jobCents = listing.current_lowest_bid_cents ?? 0;
-                    const feeCents = Math.round((jobCents * feePctForListing) / 100);
-                    const totalCents = jobCents + feeCents;
-                    return (
-                      <div className="space-y-2">
-                        <p className="text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-200">
-                          {formatCents(jobCents)}
-                        </p>
-                        <div className="space-y-1.5 rounded-md border border-emerald-200/80 bg-white/60 px-2 py-2 text-[11px] leading-snug dark:border-emerald-800/50 dark:bg-emerald-950/30 sm:text-xs">
-                          <p className="font-medium text-emerald-900 dark:text-emerald-100">
-                            Job amount to be paid to cleaner
-                          </p>
-                          <p className="tabular-nums font-semibold text-emerald-800 dark:text-emerald-200">
-                            {formatCents(jobCents)}
-                          </p>
-                          <p className="text-emerald-800/90 dark:text-emerald-300/90">
-                            (excl. {feePctForListing}% platform fee:{" "}
-                            <span className="font-medium tabular-nums">
-                              {formatCents(feeCents)}
-                            </span>
-                            )
-                          </p>
-                          <p className="border-t border-emerald-200/70 pt-1.5 text-emerald-900 dark:text-emerald-100">
-                            <span className="font-medium">Total you pay (job + fee):</span>{" "}
-                            <span className="font-semibold tabular-nums">
-                              {formatCents(totalCents)}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-          )}
-
-          {(isJobCard || isCancelledListing) && jobInfo && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Assigned to</span>
-              <div className="flex items-center gap-2">
-                {isCancelledListing ? (
-                  <span className="text-sm font-medium text-muted-foreground dark:text-gray-400">
-                    Un-assigned
-                  </span>
-                ) : jobStatus === "in_progress" || jobStatus === "completed" || isDisputedListing ? (
-                  <>
-                    {jobInfo.winnerId ? (
-                      <Link
-                        href={`/cleaners/${jobInfo.winnerId}`}
-                        className="text-sm font-medium text-sky-800 hover:underline"
-                      >
-                        {jobInfo.winnerName}
-                      </Link>
-                    ) : (
-                      <span className="text-sm font-medium">
-                        {jobInfo.winnerName}
-                      </span>
-                    )}
-                    <Link
-                      href="/messages"
-                      className="text-sky-700 hover:text-sky-900"
-                      title="Open messages"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                    </Link>
-                  </>
-                ) : (
-                  <span className="text-sm text-muted-foreground">
-                    Approve job to start to view cleaner and chat
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-          {!isJobCard && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Current lowest</span>
-              <span className="font-semibold text-accent">
-                {formatCents(listing.current_lowest_bid_cents)}
-              </span>
-            </div>
-          )}
-
-          {kind === "live" && (
-            <>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Starting price</span>
-                <span>{formatCents(listing.starting_price_cents)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Number of bids</span>
-                <span>
-                  {bidIdSet.has(String(listing.id))
-                    ? "1+"
-                    : "0"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Location</span>
-                <span>
-                  {listing.suburb} {listing.postcode}
-                </span>
-              </div>
-            </>
-          )}
-        </CardContent>
-        <CardFooter className="flex flex-wrap gap-2 pt-2">
-          {kind === "ended" && isExpiredListing ? (
-            <>
-              <Button
-                type="button"
-                variant="default"
-                className="flex-1"
-                size="sm"
-                disabled={relistingId === String(listing.id)}
-                onClick={() => void handleRelist(String(listing.id))}
-              >
-                {relistingId === String(listing.id) ? "Relisting…" : "Relist"}
-              </Button>
-              <Button asChild variant="outline" className="flex-1" size="sm">
-                <Link href={`/jobs/${listing.id}`}>View listing history</Link>
-              </Button>
-            </>
-          ) : kind === "ended" ? (
-            <Button asChild variant="outline" className="flex-1" size="sm">
-              <Link href={`/jobs/${listing.id}`}>View listing history</Link>
-            </Button>
-          ) : (
-            <>
-              <Button asChild variant="outline" className="flex-1" size="sm">
-                <Link href={`/jobs/${listing.id}`}>
-                  {isActiveJob
-                    ? "Open job"
-                    : kind === "completed"
-                      ? "View Job History"
-                      : isLive
-                        ? "View Job Bids"
-                        : "View & bids"}
-                </Link>
-              </Button>
-              {!isActiveJob && isLive && !isCancelledListing && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-1 w-full border-amber-300 text-[11px] text-amber-800 hover:bg-amber-50"
-                  onClick={() => openCancelListingConfirm(listing)}
-                >
-                  Cancel listing
-                </Button>
-              )}
-            </>
-          )}
-        </CardFooter>
-      </Card>
-      </div>
+      String(l.title ?? "")
+        .toLowerCase()
+        .includes(q) ||
+      String(l.suburb ?? "")
+        .toLowerCase()
+        .includes(q) ||
+      String(l.postcode ?? "").includes(q)
     );
   };
 
+  const resolveRowsForTab = (): ListingRow[] => {
+    switch (viewTab) {
+      case "active":
+        return activeTabListings.filter((l) => {
+          const j = activeJobs[String(l.id)];
+          return matchesSearch(l) && passesListFilter(listFilter, l, j, nowMs);
+        });
+      case "disputed":
+        return disputedTabListings.filter((l) => {
+          const j = activeJobs[String(l.id)];
+          return matchesSearch(l) && passesListFilter(listFilter, l, j, nowMs);
+        });
+      case "completed":
+        return completedSorted.filter((l) => {
+          const j = activeJobs[String(l.id)];
+          return (
+            matchesSearch(l) &&
+            listingMatchesCompletedTab(j) &&
+            passesListFilter(listFilter, l, j, nowMs)
+          );
+        });
+      case "all":
+        return allSorted.filter((l) => {
+          const j = activeJobs[String(l.id)];
+          return matchesSearch(l) && passesListFilter(listFilter, l, j, nowMs);
+        });
+      default:
+        return [];
+    }
+  };
+
+  const displayRows = resolveRowsForTab();
+
+  const refresh = useCallback(async () => {
+    router.refresh();
+  }, [router]);
+
+  const addressLine = (l: ListingRow) => {
+    const addr = (l as ListingRow & { property_address?: string | null }).property_address?.trim();
+    if (addr) return addr;
+    return formatLocationWithState(l.suburb, l.postcode);
+  };
+
+  const draftCount = localDraft ? 1 : 0;
+
+  const tabPill = (
+    href: string,
+    active: boolean,
+    children: React.ReactNode,
+    tone: "emerald" | "amber" = "emerald"
+  ) => (
+    <Link
+      href={href}
+      scroll={false}
+      className={cn(
+        "inline-flex min-h-[44px] touch-manipulation snap-center items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
+        active
+          ? tone === "amber"
+            ? "bg-amber-600 text-white shadow-sm dark:bg-amber-500"
+            : "bg-emerald-600 text-white shadow-sm dark:bg-emerald-500"
+          : "bg-muted/90 text-muted-foreground hover:bg-muted dark:bg-gray-800 dark:text-gray-300"
+      )}
+    >
+      {children}
+    </Link>
+  );
+
   return (
-    <>
-      <CreateListingConfirmDialog
-        open={createListingOpen}
-        onOpenChange={setCreateListingOpen}
-      />
-      {listingsDeduped.length === 0 ? (
-        <Card className="mx-auto max-w-xl overflow-hidden border-dashed border-emerald-200/80 bg-gradient-to-b from-emerald-50/50 to-card text-center shadow-md dark:border-emerald-900/40 dark:from-emerald-950/30 dark:to-card">
-          <CardHeader className="space-y-4 px-5 pb-2 pt-8 sm:px-6">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 shadow-inner dark:bg-emerald-900/50">
-              <ImagePlus className="h-8 w-8 text-emerald-700 dark:text-emerald-200" />
+    <PullToRefresh onRefresh={refresh}>
+      <div className="space-y-4">
+        {viewTab !== "drafts" && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search title, suburb, postcode…"
+                className="h-12 rounded-xl border-border/80 pl-10 text-base shadow-sm dark:bg-gray-950"
+                aria-label="Search listings"
+              />
             </div>
-            <CardTitle className="text-balance text-xl font-bold tracking-tight dark:text-gray-100">
-              Start listing your bond cleans
-            </CardTitle>
-            <CardDescription className="text-base leading-relaxed sm:text-sm">
-              Create a listing in minutes — cleaners bid, you choose, and you track the job here.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 px-5 pb-8 sm:px-6">
-            <Button
-              type="button"
-              size="lg"
-              className="min-h-12 w-full touch-manipulation rounded-xl text-base font-semibold shadow-md sm:w-auto sm:rounded-full sm:px-8"
-              onClick={() => setCreateListingOpen(true)}
+            <Select
+              value={listFilter}
+              onValueChange={(v) => setListFilter(v as ListFilter)}
             >
-              Create your first listing
-            </Button>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Everything you post appears under Active — jobs, payments and history use the tabs above.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {viewTab === "active_listings" && liveListingsWithBids.length > 0 && (
-            <div className="space-y-3">
-              <h2 className="flex items-center gap-2.5 rounded-xl border border-amber-200/90 bg-gradient-to-r from-amber-50 to-amber-50/40 px-4 py-3 text-sm font-bold tracking-tight text-amber-950 shadow-sm dark:border-amber-800/80 dark:from-amber-950/50 dark:to-amber-950/20 dark:text-amber-50 sm:py-2.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 dark:bg-amber-400/10">
-                  <Gavel className="h-4 w-4 text-amber-800 dark:text-amber-200" aria-hidden />
-                </span>
-                <span className="min-w-0 leading-snug">Live auctions (bids in)</span>
-              </h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-                {liveListingsWithBids.map((listing) => renderCard(listing, "live"))}
-              </div>
-            </div>
+              <SelectTrigger className="h-12 w-full rounded-xl sm:w-[200px]">
+                <SelectValue placeholder="Filter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="auctions">Auctions only</SelectItem>
+                <SelectItem value="jobs">Jobs only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden">
+          {tabPill(
+            `/my-listings?tab=active`,
+            viewTab === "active",
+            <>
+              Active <span className="ml-1 tabular-nums opacity-60">({tabCounts.active})</span>
+            </>
           )}
-          {viewTab === "active_listings" && activeNonCompletedListings.length > 0 && (
-            <div
-              className={cn(
-                liveListingsWithBids.length > 0 ? "mt-6" : "",
-                "space-y-3"
-              )}
-            >
-              <section
-                id="lister-active-jobs"
-                aria-labelledby="lister-active-jobs-heading"
-                className="overflow-hidden rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/95 via-white to-sky-50/55 shadow-md ring-1 ring-emerald-500/15 dark:border-emerald-800/70 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25"
-              >
-                <header className="border-b border-emerald-200/70 bg-emerald-600/[0.07] px-4 py-4 sm:px-5 sm:py-4 dark:border-emerald-800/55 dark:bg-emerald-500/10">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <div className="flex min-w-0 gap-3.5">
-                      <div
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md ring-2 ring-emerald-500/25 dark:bg-emerald-500"
-                        aria-hidden
+          {tabPill(
+            `/my-listings?tab=disputed`,
+            viewTab === "disputed",
+            <>
+              Disputed{" "}
+              <span className="ml-1 tabular-nums opacity-60">({tabCounts.disputed})</span>
+            </>,
+            "amber"
+          )}
+          {tabPill(
+            `/my-listings?tab=completed`,
+            viewTab === "completed",
+            <>
+              Completed{" "}
+              <span className="ml-1 tabular-nums opacity-60">({tabCounts.completed})</span>
+            </>
+          )}
+          {tabPill(
+            `/my-listings?tab=drafts`,
+            viewTab === "drafts",
+            <>
+              Drafts <span className="ml-1 tabular-nums opacity-60">({draftCount})</span>
+            </>
+          )}
+          {tabPill(
+            `/my-listings?tab=all`,
+            viewTab === "all",
+            <>
+              All <span className="ml-1 tabular-nums opacity-60">({tabCounts.all})</span>
+            </>
+          )}
+        </div>
+
+        <div className="min-h-[40vh] space-y-3">
+          {viewTab === "drafts" && (
+            <>
+              {!localDraft ? (
+                <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center dark:border-gray-800 dark:bg-gray-900/40">
+                  <FileEdit className="h-12 w-12 text-muted-foreground" aria-hidden />
+                  <div>
+                    <p className="text-lg font-semibold text-foreground dark:text-gray-100">
+                      No saved draft
+                    </p>
+                    <p className="mt-2 max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                      When you start a new listing, we can save your progress on this device. Resume
+                      anytime from here.
+                    </p>
+                  </div>
+                  <Button asChild size="lg" className="h-12 rounded-xl px-8 text-base">
+                    <Link href="/listings/new">Create new listing</Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+                        Resume your draft
+                      </p>
+                      <p className="text-xs text-amber-900/80 dark:text-amber-200/80">
+                        Saved {new Date(localDraft.savedAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild variant="default" className="h-11 rounded-xl">
+                        <Link href="/listings/new">Continue editing</Link>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11 rounded-xl"
+                        onClick={() => {
+                          clearListingDraftLocal();
+                          setLocalDraft(null);
+                          toast({ title: "Draft discarded" });
+                        }}
                       >
-                        <Briefcase className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <h2
-                            id="lister-active-jobs-heading"
-                            className="text-lg font-bold tracking-tight text-emerald-950 dark:text-emerald-50 sm:text-lg"
-                          >
-                            Active jobs
-                          </h2>
-                          <span className="inline-flex items-center rounded-full bg-emerald-700/12 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-emerald-900 dark:bg-emerald-400/15 dark:text-emerald-100">
-                            {activeNonCompletedListings.length}{" "}
-                            {activeNonCompletedListings.length === 1 ? "job" : "jobs"}
-                          </span>
-                        </div>
-                        <p className="text-sm leading-relaxed text-emerald-900/85 dark:text-emerald-200/90">
-                          <span className="md:hidden">Track progress, message your cleaner, pay when ready.</span>
-                          <span className="hidden md:inline">
-                            Purchased or won — track progress, message your cleaner, and finish any payment steps.
-                          </span>
-                        </p>
-                      </div>
+                        Discard
+                      </Button>
                     </div>
                   </div>
-                </header>
-                <div className="p-3 sm:p-4">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-                    {activeNonCompletedListings.map((listing) =>
-                      renderCard(listing, "active")
-                    )}
-                  </div>
                 </div>
-              </section>
+              )}
+            </>
+          )}
+
+          {viewTab === "active" && displayRows.length === 0 && (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center dark:border-gray-800 dark:bg-gray-900/40">
+              <ClipboardList className="h-12 w-12 text-muted-foreground" aria-hidden />
+              <div>
+                <p className="text-lg font-semibold text-foreground dark:text-gray-100">
+                  Nothing active right now
+                </p>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                  When an auction is live or a job is underway, it will show up here. Try All to see
+                  past listings.
+                </p>
+              </div>
+              <Button asChild size="lg" className="h-12 rounded-xl px-8 text-base">
+                <Link href="/listings/new">Create new listing</Link>
+              </Button>
             </div>
           )}
-          {viewTab === "active_listings" && noBidLiveListings.length > 0 && (
-            <div className="mt-6 space-y-3">
-              <h2 className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm font-bold text-foreground dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-100 sm:py-2">
-                <ClipboardList className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                New listings (no bids yet)
-              </h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-                {noBidLiveListings.map((listing) => renderCard(listing, "live"))}
+
+          {viewTab === "disputed" && displayRows.length === 0 && (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-amber-200/80 bg-amber-50/40 px-6 py-16 text-center dark:border-amber-900/50 dark:bg-amber-950/20">
+              <Scale className="h-12 w-12 text-amber-700 dark:text-amber-400" aria-hidden />
+              <div>
+                <p className="text-lg font-semibold text-foreground dark:text-gray-100">
+                  No open disputes
+                </p>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                  If something goes wrong on a job, open a dispute from the job page — it will appear here
+                  so you can respond quickly.
+                </p>
               </div>
             </div>
           )}
-          {viewTab === "active_listings" && endedListingsForHistory.length > 0 && (
-            <div className="mt-6 space-y-3">
-              <button
-                type="button"
-                onClick={() => setHistoryOpen((o) => !o)}
-                className="flex w-full touch-manipulation items-center justify-between gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3.5 text-left transition-colors hover:bg-muted/70 active:scale-[0.99] dark:border-gray-800 dark:bg-gray-900/30 dark:hover:bg-gray-900/50 sm:hidden"
-                aria-expanded={historyOpen}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-foreground dark:text-gray-100">
-                    History on this tab
-                  </div>
-                  <div className="mt-0.5 text-xs text-muted-foreground dark:text-gray-400">
-                    {endedListingsForHistory.length} older listing
-                    {endedListingsForHistory.length === 1 ? "" : "s"} — tap to expand
-                  </div>
-                </div>
-                <ChevronDown
-                  className={cn(
-                    "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
-                    historyOpen && "rotate-180"
-                  )}
-                  aria-hidden
+
+          {viewTab === "completed" && displayRows.length === 0 && (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center dark:border-gray-800 dark:bg-gray-900/40">
+              <Inbox className="h-12 w-12 text-muted-foreground" aria-hidden />
+              <div>
+                <p className="text-lg font-semibold text-foreground dark:text-gray-100">
+                  No completed jobs yet
+                </p>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                  When a cleaner finishes and payment clears, completed jobs appear here.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {viewTab === "all" && displayRows.length === 0 && (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center dark:border-gray-800 dark:bg-gray-900/40">
+              <Inbox className="h-12 w-12 text-muted-foreground" aria-hidden />
+              <div>
+                <p className="text-lg font-semibold text-foreground dark:text-gray-100">
+                  No listings yet
+                </p>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                  Publish your first bond clean listing to start receiving bids.
+                </p>
+              </div>
+              <Button asChild size="lg" className="h-12 rounded-xl px-8 text-base">
+                <Link href="/listings/new">Create new listing</Link>
+              </Button>
+            </div>
+          )}
+
+          {viewTab !== "drafts" &&
+            displayRows.map((listing) => {
+              const job = activeJobs[String(listing.id)] ?? null;
+
+              if (viewTab === "disputed") {
+                if (!job) return null;
+                const amount =
+                  job.agreed_amount_cents ??
+                  listing.current_lowest_bid_cents ??
+                  0;
+                return (
+                  <ListerDisputedCard
+                    key={String(listing.id)}
+                    listing={listing}
+                    job={{
+                      jobId: job.jobId,
+                      status: job.status,
+                      dispute_reason: job.dispute_reason,
+                      dispute_status: job.dispute_status,
+                      dispute_opened_by: job.dispute_opened_by,
+                      disputed_at: job.disputed_at,
+                      cleaner_confirmed_complete: job.cleanerConfirmedComplete,
+                      agreed_amount_cents: job.agreed_amount_cents,
+                    }}
+                    addressLine={addressLine(listing)}
+                    amountCents={amount}
+                    onEditPhotos={() => openEditor(listing)}
+                  />
+                );
+              }
+
+              const badge = classifyListerBadge(listing, job, nowMs);
+              const timeLabel = buildTimeLabel(listing, job, nowMs);
+              const bids = bidCounts[String(listing.id)] ?? 0;
+              const highest = listing.current_lowest_bid_cents ?? 0;
+              const buyNow = listing.buy_now_cents ?? null;
+              const liveAuction =
+                listing.status === "live" && parseUtcTimestamp(listing.end_time) > nowMs;
+              const showEndEarly =
+                liveAuction && !activeIdSet.has(String(listing.id));
+              const isExpired =
+                String(listing.status ?? "").toLowerCase() === "expired";
+
+              return (
+                <ListerListingCard
+                  key={String(listing.id)}
+                  listing={listing}
+                  addressLine={addressLine(listing)}
+                  badgeLabel={badge.label}
+                  badgeTone={badge.tone}
+                  bidCount={bids}
+                  highestBidCents={highest}
+                  buyNowCents={buyNow}
+                  timeLabel={timeLabel}
+                  showEndEarly={showEndEarly}
+                  href={`/jobs/${listing.id}`}
+                  onEdit={() => openEditor(listing)}
+                  onEndEarly={showEndEarly ? () => openCancelListingConfirm(listing) : undefined}
+                  onRelist={
+                    isExpired
+                      ? () => void handleRelist(String(listing.id))
+                      : undefined
+                  }
+                  relistLoading={relistingId === String(listing.id)}
                 />
-              </button>
-              <h2 className="hidden items-center gap-2 text-sm font-bold text-muted-foreground sm:flex">
-                <ClipboardList className="h-4 w-4 shrink-0" aria-hidden />
-                Older listings &amp; ended auctions
-              </h2>
-              <div
-                className={cn(
-                  "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3",
-                  !historyOpen && "hidden sm:grid"
-                )}
-              >
-                {endedListingsForHistory.map((listing) =>
-                  renderCard(listing, "ended")
-                )}
-              </div>
-              <p className="px-0.5 text-xs text-muted-foreground dark:text-gray-500 sm:hidden">
-                Tip: full cancelled &amp; expired history is under the History tab.
-              </p>
-            </div>
-          )}
-          {viewTab === "completed_jobs" && (
-            <div className="space-y-2">
-              {completedListings.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-12 text-center dark:border-gray-800 dark:bg-gray-900/25">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/15">
-                    <Inbox className="h-7 w-7 text-emerald-700 dark:text-emerald-300" aria-hidden />
-                  </div>
-                  <p className="text-base font-semibold text-foreground dark:text-gray-100">
-                    No completed jobs yet
-                  </p>
-                  <p className="max-w-sm text-sm text-muted-foreground dark:text-gray-400">
-                    When a cleaner finishes and payment clears, completed jobs appear here.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-                  {completedListings.map((listing) =>
-                    renderCard(listing, "completed")
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {viewTab === "pending_payments" && (
-            <div className="space-y-2">
-              {pendingPaymentsListings.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-12 text-center dark:border-gray-800 dark:bg-gray-900/25">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 dark:bg-amber-500/15">
-                    <ClipboardList className="h-7 w-7 text-amber-800 dark:text-amber-200" aria-hidden />
-                  </div>
-                  <p className="text-base font-semibold text-foreground dark:text-gray-100">
-                    Nothing waiting for payment
-                  </p>
-                  <p className="max-w-sm text-sm text-muted-foreground dark:text-gray-400">
-                    When a cleaner marks work complete, review and pay from the job or here.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-                  {pendingPaymentsListings.map((listing) =>
-                    renderCard(listing, "active")
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {viewTab === "disputes" && (
-            <div className="space-y-2">
-              {disputedListings.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-12 text-center dark:border-gray-800 dark:bg-gray-900/25">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-500/10 dark:bg-sky-500/15">
-                    <Briefcase className="h-7 w-7 text-sky-800 dark:text-sky-200" aria-hidden />
-                  </div>
-                  <p className="text-base font-semibold text-foreground dark:text-gray-100">
-                    No open disputes
-                  </p>
-                  <p className="max-w-sm text-sm text-muted-foreground dark:text-gray-400">
-                    If something goes wrong on a job, resolution tools live on the job page.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-                  {disputedListings.map((listing) =>
-                    renderCard(listing, "active")
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {viewTab === "cancelled_listings" && (
-            <div className="space-y-2">
-              {cancelledListings.length === 0 && expiredListingsOnly.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-12 text-center dark:border-gray-800 dark:bg-gray-900/25">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-500/10 dark:bg-slate-500/15">
-                    <ClipboardList className="h-7 w-7 text-slate-700 dark:text-slate-200" aria-hidden />
-                  </div>
-                  <p className="text-base font-semibold text-foreground dark:text-gray-100">
-                    No history yet
-                  </p>
-                  <p className="max-w-sm text-sm text-muted-foreground dark:text-gray-400">
-                    Cancelled jobs, expired auctions and past listings show up here.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-                  {expiredListingsOnly.map((listing) =>
-                    renderCard(listing, "ended")
-                  )}
-                  {cancelledListings.map((listing) =>
-                    renderCard(listing, "ended")
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
+              );
+            })}
+        </div>
+      </div>
 
       {editing && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
@@ -1651,19 +982,14 @@ export function MyListingsList({
                   Edit / Upload property photos
                 </h2>
                 <p className="text-[11px] text-muted-foreground">
-                  Update the photos for this listing to help cleaners understand the job.
+                  Update photos for this listing.
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={closeEditor}
-              >
+              <Button type="button" variant="ghost" size="sm" onClick={closeEditor}>
                 Close
               </Button>
             </div>
-              <div className="space-y-4">
+            <div className="space-y-4">
               <div className="space-y-1">
                 <Label className="text-xs">
                   Property photos ({editPhotoUrls.length}/{PHOTO_LIMITS.LISTING_EDIT})
@@ -1696,8 +1022,7 @@ export function MyListingsList({
                               l.id === editing.id
                                 ? ({
                                     ...l,
-                                    description:
-                                      editDescription.trim() || null,
+                                    description: editDescription.trim() || null,
                                     photo_urls: next.length ? next : null,
                                   } as ListingRow)
                                 : l
@@ -1731,8 +1056,7 @@ export function MyListingsList({
                                 l.id === editing.id
                                   ? ({
                                       ...l,
-                                      description:
-                                        editDescription.trim() || null,
+                                      description: editDescription.trim() || null,
                                       photo_urls: next.length ? next : null,
                                     } as ListingRow)
                                   : l
@@ -1755,10 +1079,13 @@ export function MyListingsList({
                       )}
                     </div>
                   ))}
-                  <label className={cn(
-                      "flex h-20 w-24 cursor-pointer items-center justify-center rounded-md border border-dashed border-muted-foreground/50 bg-muted/40 text-[11px] text-muted-foreground hover:bg-muted/70 dark:bg-gray-800 dark:border-gray-600",
-                      editPhotoUrls.length >= PHOTO_LIMITS.LISTING_EDIT && "pointer-events-none opacity-60"
-                    )}>
+                  <label
+                    className={cn(
+                      "flex h-20 w-24 cursor-pointer items-center justify-center rounded-md border border-dashed border-muted-foreground/50 bg-muted/40 text-[11px] text-muted-foreground hover:bg-muted/70 dark:border-gray-600 dark:bg-gray-800",
+                      editPhotoUrls.length >= PHOTO_LIMITS.LISTING_EDIT &&
+                        "pointer-events-none opacity-60"
+                    )}
+                  >
                     <Input
                       type="file"
                       accept={PHOTO_VALIDATION.ACCEPT}
@@ -1777,31 +1104,14 @@ export function MyListingsList({
                     )}
                   </label>
                 </div>
-                {editError && (
-                  <p className="text-xs text-destructive">{editError}</p>
-                )}
+                {editError && <p className="text-xs text-destructive">{editError}</p>}
               </div>
 
-              {editError && (
-                <p className="text-xs text-destructive">{editError}</p>
-              )}
-
               <div className="flex justify-end gap-2 pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={closeEditor}
-                  disabled={isSaving}
-                >
+                <Button type="button" variant="outline" size="sm" onClick={closeEditor} disabled={isSaving}>
                   Cancel
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={isSaving}
-                >
+                <Button type="button" size="sm" onClick={() => void handleSave()} disabled={isSaving}>
                   {isSaving ? "Saving…" : "Save changes"}
                 </Button>
               </div>
@@ -1812,21 +1122,15 @@ export function MyListingsList({
 
       {previewUrl && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 animate-in fade-in-0"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
           onClick={() => setPreviewUrl(null)}
         >
           <div
-            className="max-h-[90vh] max-w-3xl overflow-hidden rounded-lg bg-background shadow-xl animate-in zoom-in-95"
+            className="max-h-[90vh] max-w-3xl overflow-hidden rounded-lg bg-background shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt="Listing photo"
-              className="h-full w-full object-contain"
-              loading="lazy"
-              decoding="async"
-            />
+            <img src={previewUrl} alt="Listing photo" className="h-full w-full object-contain" />
           </div>
         </div>
       )}
@@ -1839,10 +1143,10 @@ export function MyListingsList({
       >
         <DialogContent className="max-w-md dark:border-gray-700 dark:bg-gray-900">
           <DialogHeader>
-            <DialogTitle>Cancel this listing?</DialogTitle>
+            <DialogTitle>End this auction early?</DialogTitle>
             <DialogDescription className="text-left">
-              This will end the auction early. No new bids will be accepted, and cleaners who bid will see that the
-              listing has ended. The listing stays in your history. This cannot be undone.
+              This will end the auction early. No new bids will be accepted. The listing stays in your
+              history.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1860,11 +1164,11 @@ export function MyListingsList({
               disabled={cancellingListing}
               onClick={() => void handleConfirmCancelListing()}
             >
-              {cancellingListing ? "Cancelling…" : "Yes, end listing early"}
+              {cancellingListing ? "Ending…" : "Yes, end early"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </PullToRefresh>
   );
 }

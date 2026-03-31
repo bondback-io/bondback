@@ -2,22 +2,12 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { MyListingsList } from "@/components/features/my-listings-list";
-import { MyListingsTabNav } from "@/components/features/my-listings-tab-nav";
+import { MyListingsList, type ListerViewTab } from "@/components/features/my-listings-list";
 import { MyListingsNewListingButton } from "@/components/listing/my-listings-new-listing-button";
-import { cn, parseUtcTimestamp } from "@/lib/utils";
-import { ArrowLeft, Briefcase } from "lucide-react";
+import { parseUtcTimestamp } from "@/lib/utils";
+import { ArrowLeft } from "lucide-react";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -49,25 +39,32 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
+function isDisputeJobStatus(s: string | null | undefined): boolean {
+  const x = String(s ?? "").toLowerCase();
+  return x === "disputed" || x === "in_review" || x === "dispute_negotiating";
+}
+
+function parseTabParam(raw: string | undefined): ListerViewTab {
+  const t = (raw ?? "active").toLowerCase();
+  if (t === "completed" || t === "completed_jobs") return "completed";
+  if (t === "drafts") return "drafts";
+  if (t === "all" || t === "cancelled_listings") return "all";
+  if (t === "disputed" || t === "disputes") return "disputed";
+  if (t === "active" || t === "active_listings" || t === "pending_payments") {
+    return "active";
+  }
+  return "active";
+}
+
 export default async function MyListingsPage({ searchParams }: MyListingsPageProps) {
   const supabase = await createServerSupabaseClient();
   const resolved = searchParams ? await searchParams : {};
   const editId = resolved?.edit ?? null;
   const cancelListingIdParam = resolved?.cancel?.trim() || null;
-  const tabParam = (resolved?.tab ?? "active_listings").toLowerCase();
-  const tab =
-    tabParam === "completed_jobs"
-      ? "completed_jobs"
-      : tabParam === "pending_payments"
-        ? "pending_payments"
-        : tabParam === "cancelled_listings"
-          ? "cancelled_listings"
-          : tabParam === "disputes"
-            ? "disputes"
-            : "active_listings";
+  const tab = parseTabParam(resolved?.tab);
 
   const {
-    data: { session }
+    data: { session },
   } = await supabase.auth.getSession();
   if (!session) {
     redirect("/login");
@@ -75,14 +72,13 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
 
   const { data } = await supabase
     .from("profiles")
-    .select("roles, active_role, verification_badges")
+    .select("roles, active_role")
     .eq("id", session.user.id)
     .maybeSingle();
 
   const profile = data as {
     roles: string[] | null;
     active_role: string | null;
-    verification_badges?: string[] | null;
   } | null;
   const roles = (profile?.roles ?? []) as string[];
   const activeRole =
@@ -90,10 +86,6 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
       ? profile.active_role
       : null;
 
-  /**
-   * Listers must reach this route even if `roles` is briefly out of sync.
-   * Allow: lister in roles OR active_role lister. Cleaner-only → cleaner dashboard.
-   */
   const canAccessMyListings =
     roles.includes("lister") || activeRole === "lister";
   if (!canAccessMyListings) {
@@ -128,23 +120,8 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
   }
 
   const initialListings = list as ListingRow[];
-  const expiredListingsCount = initialListings.filter(
-    (l) => String(l.status ?? "").toLowerCase() === "expired"
-  ).length;
   const listingIds = initialListings.map((l) => l.id);
-  const settings = await getGlobalSettings();
-  const feePercentage =
-    settings?.platform_fee_percentage ??
-    settings?.fee_percentage ??
-    12;
 
-  let activeCount = 0;
-  let completedCount = 0;
-  let pendingPaymentsCount = 0;
-  let cancelledListingsCount = 0;
-  let completedCancelledExpiredTabCount = expiredListingsCount;
-  let disputesCount = 0;
-  /** Seed client so cancelled jobs don’t briefly appear as “live” before useEffect loads jobs */
   let initialActiveJobsSnapshot:
     | Record<
         string,
@@ -156,14 +133,24 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
           cleanerConfirmedComplete?: boolean | null;
           cleanerConfirmedAt?: string | null;
           updatedAt?: string | null;
+          disputed_at?: string | null;
+          dispute_reason?: string | null;
+          dispute_status?: string | null;
+          dispute_opened_by?: string | null;
+          agreed_amount_cents?: number | null;
         }
       >
     | undefined;
+
+  let activeTabCount = 0;
+  let completedCount = 0;
+  let disputedCount = 0;
+
   if (listingIds.length > 0) {
     const { data: jobsData } = await supabase
       .from("jobs")
       .select(
-        "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at"
+        "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents"
       )
       .in("listing_id", listingIds);
     const jobs = (jobsData ?? []) as {
@@ -174,6 +161,11 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
       cleaner_confirmed_complete?: boolean | null;
       cleaner_confirmed_at?: string | null;
       updated_at?: string | null;
+      disputed_at?: string | null;
+      dispute_reason?: string | null;
+      dispute_status?: string | null;
+      dispute_opened_by?: string | null;
+      agreed_amount_cents?: number | null;
     }[];
 
     const winnerIds = [
@@ -210,6 +202,11 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
         cleanerConfirmedComplete: j.cleaner_confirmed_complete ?? null,
         cleanerConfirmedAt: j.cleaner_confirmed_at ?? null,
         updatedAt: j.updated_at ?? null,
+        disputed_at: j.disputed_at ?? null,
+        dispute_reason: j.dispute_reason ?? null,
+        dispute_status: j.dispute_status ?? null,
+        dispute_opened_by: j.dispute_opened_by ?? null,
+        agreed_amount_cents: j.agreed_amount_cents ?? null,
       };
     }
     initialActiveJobsSnapshot = jobByListing;
@@ -218,25 +215,11 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
     const cancelledJobListingIds = new Set(
       jobs.filter((j) => j.status === "cancelled").map((j) => String(j.listing_id))
     );
-    // Prefer merged snapshot so duplicate job rows don’t confuse counts / live vs active split
     const listingIdsWithActiveJob = new Set(
       Object.entries(jobByListing)
         .filter(([, row]) => row.status !== "cancelled")
         .map(([lid]) => lid)
     );
-    const listingIdsWithNonCompletedJob = new Set(
-      Object.entries(jobByListing)
-        .filter(([, row]) =>
-          row.status === "accepted" ||
-          row.status === "in_progress" ||
-          row.status === "completed_pending_approval"
-        )
-        .map(([lid]) => lid)
-    );
-
-    // Active Listings tab: match client exactly.
-    // Client: liveListings = otherListings (listings NOT in activeIdSet) that are live, not ended, not cancelled.
-    // So "live" count must exclude listings that have a non-cancelled job (they're in activeListings, not liveListings).
     const liveCount = initialListings.filter(
       (l) =>
         l.status === "live" &&
@@ -244,150 +227,69 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
         !cancelledJobListingIds.has(String(l.id)) &&
         !listingIdsWithActiveJob.has(String(l.id))
     ).length;
-    // Active jobs section: listings with job status accepted or in_progress (unique by listing)
-    const activeNonCompletedCount = initialListings.filter((l) =>
-      listingIdsWithNonCompletedJob.has(String(l.id))
-    ).length;
-    activeCount = liveCount + activeNonCompletedCount;
+    disputedCount = new Set(
+      jobs.filter((j) => isDisputeJobStatus(j.status)).map((j) => String(j.listing_id))
+    ).size;
 
-    const uniqueCompletedListings = new Set(
+    const activeJobWithoutDisputeCount = initialListings.filter((l) => {
+      const row = jobByListing[String(l.id)];
+      if (!row || row.status === "cancelled" || row.status === "completed") return false;
+      if (isDisputeJobStatus(row.status)) return false;
+      return true;
+    }).length;
+
+    activeTabCount = liveCount + activeJobWithoutDisputeCount;
+
+    completedCount = new Set(
       jobs.filter((j) => j.status === "completed").map((j) => String(j.listing_id))
-    );
-    completedCount = uniqueCompletedListings.size;
-    pendingPaymentsCount = new Set(
-      jobs
-        .filter(
-          (j) =>
-            (j.status === "in_progress" ||
-              j.status === "completed_pending_approval") &&
-            j.cleaner_confirmed_complete === true
-        )
-        .map((j) => String(j.listing_id))
-    ).size;
-    cancelledListingsCount = new Set(
-      jobs.filter((j) => j.status === "cancelled").map((j) => String(j.listing_id))
-    ).size;
-    completedCancelledExpiredTabCount =
-      cancelledListingsCount + expiredListingsCount;
-    disputesCount = new Set(
-      jobs
-        .filter((j) =>
-          ["disputed", "in_review", "dispute_negotiating"].includes(
-            String(j.status ?? "")
-          )
-        )
-        .map((j) => String(j.listing_id))
     ).size;
   }
 
   return (
-    <section className="page-inner space-y-5 pb-28 pt-4 sm:space-y-6 sm:pb-8 sm:pt-8 md:space-y-6">
-      {/* Mobile: sticky chrome + safe-area; desktop: static */}
-      <div className="sticky top-0 z-30 -mx-4 space-y-3 border-b border-border bg-background/95 px-4 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur supports-[backdrop-filter]:bg-background/85 dark:border-gray-800 dark:bg-gray-950/95 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:pt-0 md:backdrop-blur-none">
+    <section className="page-inner pb-28 pt-4 sm:pb-10 sm:pt-8">
+      <div className="sticky top-0 z-30 -mx-4 border-b border-border/80 bg-background/95 px-4 pb-4 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur supports-[backdrop-filter]:bg-background/90 dark:border-gray-800 dark:bg-gray-950/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
         <Link
           href={dashboardHref}
-          className="inline-flex min-h-[44px] touch-manipulation items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-100"
+          className="mb-4 inline-flex min-h-[44px] touch-manipulation items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground dark:text-gray-400"
         >
           <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
           Back to dashboard
         </Link>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div className="min-w-0 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-balance text-xl font-bold tracking-tight text-foreground dark:text-gray-50 sm:text-2xl md:text-3xl">
-                My listings
-              </h1>
-              <Badge
-                className={cn(
-                  "shrink-0 text-xs font-medium",
-                  "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200"
-                )}
-              >
-                Lister
-              </Badge>
-            </div>
-            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground dark:text-gray-400 sm:text-base">
-              Auctions, jobs, payments and history — optimised for phone use.
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground dark:text-gray-50 sm:text-3xl">
+              My listings
+            </h1>
+            <p className="text-sm text-muted-foreground dark:text-gray-400">
+              Auctions and jobs in one calm list — optimised for your phone.
             </p>
-            <p className="hidden text-sm text-muted-foreground sm:block dark:text-gray-400">
-              Manage bond clean auctions, active jobs, payments and history in one place.
-            </p>
-            <Link
-              href="/my-listings/jobs"
-              className="inline-flex min-h-[40px] touch-manipulation items-center gap-2 rounded-lg text-sm font-semibold text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400 sm:hidden"
-            >
-              <Briefcase className="h-4 w-4 shrink-0" aria-hidden />
-              Open job list view
-            </Link>
           </div>
           <MyListingsNewListingButton
             size="lg"
-            className="h-12 min-h-[48px] w-full shrink-0 touch-manipulation rounded-2xl text-base font-semibold shadow-md sm:h-11 sm:w-auto sm:rounded-lg"
+            className="h-12 min-h-[48px] w-full shrink-0 rounded-2xl text-base font-semibold shadow-sm sm:h-11 sm:w-auto sm:min-w-[220px]"
           >
-            New listing
+            Create new listing
           </MyListingsNewListingButton>
         </div>
       </div>
 
-      <Card className="overflow-hidden border-emerald-200/60 bg-gradient-to-br from-emerald-50/90 via-white to-sky-50/50 shadow-md dark:border-gray-800 dark:from-emerald-950/30 dark:via-gray-950 dark:to-sky-950/20 sm:rounded-xl">
-        <CardHeader className="space-y-2 px-4 pb-2 pt-4 sm:px-6 sm:pt-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <CardTitle className="text-lg font-bold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">
-              Listings &amp; jobs
-            </CardTitle>
-            <Link
-              href="/my-listings/jobs"
-              className="hidden shrink-0 touch-manipulation items-center gap-1.5 text-sm font-semibold text-emerald-700 underline-offset-4 hover:underline sm:inline-flex dark:text-emerald-400"
-            >
-              <Briefcase className="h-4 w-4" aria-hidden />
-              Job list view
-            </Link>
-          </div>
-          <CardDescription className="text-sm leading-relaxed dark:text-gray-400 sm:text-sm">
-            <span className="md:hidden">
-              Use the menu below to switch views — same filters as on larger screens.
-            </span>
-            <span className="hidden md:inline">Choose a tab to filter your listings and jobs.</span>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 px-0 pt-0 sm:space-y-6 sm:px-6">
-          <MyListingsTabNav
-            tab={tab}
-            activeCount={activeCount}
-            completedCount={completedCount}
-            pendingPaymentsCount={pendingPaymentsCount}
-            completedCancelledExpiredTabCount={completedCancelledExpiredTabCount}
-            disputesCount={disputesCount}
-          />
-
-          <div className="mx-4 rounded-2xl border border-border/60 bg-background/90 p-3 shadow-sm dark:border-gray-800 dark:bg-gray-950/70 sm:mx-0 sm:rounded-xl sm:p-4 md:p-5">
-            <MyListingsList
-              initialListings={initialListings}
-              listerId={session.user.id}
-              listerVerificationBadges={
-                Array.isArray(profile?.verification_badges)
-                  ? profile.verification_badges
-                  : null
-              }
-              initialEditListingId={editId}
-              initialOpenCancelListingId={cancelListingIdParam}
-              feePercentage={feePercentage}
-              initialActiveJobsSnapshot={initialActiveJobsSnapshot}
-              viewTab={
-                tab === "cancelled_listings"
-                  ? "cancelled_listings"
-                  : tab === "completed_jobs"
-                    ? "completed_jobs"
-                    : tab === "pending_payments"
-                      ? "pending_payments"
-                      : tab === "disputes"
-                        ? "disputes"
-                        : "active_listings"
-              }
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="mt-6 sm:mt-8">
+        <MyListingsList
+          initialListings={initialListings}
+          listerId={session.user.id}
+          initialEditListingId={editId}
+          initialOpenCancelListingId={cancelListingIdParam}
+          initialActiveJobsSnapshot={initialActiveJobsSnapshot}
+          viewTab={tab}
+          tabCounts={{
+            active: activeTabCount,
+            disputed: disputedCount,
+            completed: completedCount,
+            all: initialListings.length,
+          }}
+        />
+      </div>
     </section>
   );
 }

@@ -364,7 +364,7 @@ export default async function ListerDashboardPage() {
           </h2>
           {activeJobs.length > 0 && (
             <Link
-              href="/my-listings?tab=active_listings"
+              href="/my-listings?tab=active"
               className="min-h-10 px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline md:min-h-0 md:text-xs md:font-medium"
             >
               View all
@@ -437,7 +437,7 @@ export default async function ListerDashboardPage() {
           </h2>
           {completedJobs.length > 0 && (
             <Link
-              href="/my-listings?tab=completed_jobs"
+              href="/my-listings?tab=completed"
               className="min-h-10 px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline md:min-h-0 md:text-xs md:font-medium"
             >
               View all

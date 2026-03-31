@@ -48,6 +48,7 @@ import {
   getNotificationHref,
 } from "@/lib/notifications/display";
 import { triggerInAppNotificationFeedback } from "@/lib/notifications/in-app-notification-feedback";
+import { primeNotificationAudioFromUserGesture } from "@/lib/notifications/notification-chime";
 
 const PEEK = 15;
 
@@ -298,6 +299,9 @@ export function NotificationBell({
             "relative shrink-0 cursor-pointer",
             variant !== "row" && "mr-0.5 sm:mr-1"
           )}
+          onPointerDown={() => {
+            primeNotificationAudioFromUserGesture();
+          }}
           aria-label={
             unreadCount > 0
               ? `Notifications, ${unreadCount > 9 ? "9+" : unreadCount} unread`
