@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { scheduleRouterAction } from "@/lib/deferred-router";
+import { shouldSkipSignInSessionRefresh } from "@/lib/auth/post-login-navigation-flag";
 
 /** Debounce rapid auth events (OAuth emits several); one coalesced RSC refresh. */
 const SIGN_IN_DEBOUNCE_MS = 600;
@@ -16,6 +17,8 @@ const MIN_REFRESH_GAP_MS = 2800;
  * - **SIGNED_OUT**: refresh immediately so logged-out UI shows at once.
  * - **SIGNED_IN** / **USER_UPDATED**: debounced refresh so the top nav shows the user again
  *   after email/password login (client navigation alone can leave RSC cache stale).
+ *   **SIGNED_IN** is skipped while `bb_skip_sign_in_refresh_until` is set (full-page post-login
+ *   navigation) to avoid revalidating `/login` mid-transition and causing flicker on mobile.
  * Skips **INITIAL_SESSION** so normal page loads don’t trigger an extra refresh.
  * Does **not** refresh on `TOKEN_REFRESHED` (too frequent).
  */
@@ -70,7 +73,14 @@ export function SessionSync() {
         });
         return;
       }
-      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+      if (event === "SIGNED_IN") {
+        if (shouldSkipSignInSessionRefresh()) {
+          return;
+        }
+        scheduleSignInRefresh();
+        return;
+      }
+      if (event === "USER_UPDATED") {
         scheduleSignInRefresh();
       }
     });

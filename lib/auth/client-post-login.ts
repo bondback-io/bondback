@@ -1,33 +1,49 @@
-import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
+import { getPostLoginDashboardPath, type ProfileLike } from "@/lib/auth/post-login-redirect";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+
+/** Re-export for modules that already import from here */
+export { shouldUseRoleBasedPostLogin } from "@/lib/auth/post-login-redirect";
 
 /** Matches `@supabase/ssr` browser client (differs from bare `SupabaseClient<Database>` in generics). */
 type AppSupabaseClient = ReturnType<typeof createBrowserSupabaseClient>;
 
-/**
- * After login, use role-based routing unless `next` is a real deep link (e.g. /jobs).
- * Treat `/login` (and default /dashboard) as “no deep link” so we never loop back to login.
- */
-export function shouldUseRoleBasedPostLogin(next: string): boolean {
-  if (next === "/dashboard" || next === "/") return true;
-  const pathOnly = next.split("?")[0] ?? "";
-  return pathOnly === "/login";
+/** Calm transition before full-page navigation (reduces visual flicker on mobile). */
+export const POST_LOGIN_TRANSITION_MS = 380;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
+/** Smooth pause after auth before `location.assign` (reduces jarring flashes on mobile). */
+export async function runPostLoginTransition(): Promise<void> {
+  await delay(POST_LOGIN_TRANSITION_MS);
+}
+
+/**
+ * Profile row can lag right after sign-in; retry briefly so lister/cleaner dashboard is correct.
+ */
 export async function fetchPostLoginDestination(
   supabase: AppSupabaseClient,
   userId: string
 ): Promise<string> {
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("roles, active_role")
-    .eq("id", userId)
-    .maybeSingle();
+  const maxAttempts = 4;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("roles, active_role")
+      .eq("id", userId)
+      .maybeSingle();
 
-  if (error || !profile) {
-    return "/dashboard";
+    if (!error && profile) {
+      return getPostLoginDashboardPath(profile as ProfileLike);
+    }
+    if (attempt < maxAttempts - 1) {
+      await delay(100 * (attempt + 1));
+    }
   }
-  return getPostLoginDashboardPath(profile);
+  return "/dashboard";
 }
 
 /**

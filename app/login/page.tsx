@@ -1,3 +1,10 @@
+import { redirect } from "next/navigation";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  getPostLoginDashboardPath,
+  shouldUseRoleBasedPostLogin,
+} from "@/lib/auth/post-login-redirect";
+import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { LoginForm, type LoginFormSearchProps } from "./login-form";
 
 function searchParamsToQueryString(
@@ -45,5 +52,40 @@ export default async function LoginPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (session?.user?.id) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("roles, active_role, is_banned, banned_reason")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    const row = profile as {
+      is_banned?: boolean;
+      banned_reason?: string | null;
+    } | null;
+
+    if (row?.is_banned) {
+      await supabase.auth.signOut();
+      const reason = row.banned_reason?.trim();
+      const qs = new URLSearchParams();
+      qs.set("banned", "1");
+      if (reason) qs.set("reason", reason);
+      redirect(`/login?${qs.toString()}`);
+    }
+
+    const nextRaw = firstParam(sp, "next");
+    const sanitizedNext = sanitizeInternalNextPath(nextRaw);
+    if (sanitizedNext && !shouldUseRoleBasedPostLogin(sanitizedNext)) {
+      redirect(sanitizedNext);
+    }
+
+    redirect(getPostLoginDashboardPath(profile));
+  }
+
   return <LoginForm {...buildLoginFormProps(sp)} />;
 }

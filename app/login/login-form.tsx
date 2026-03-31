@@ -6,7 +6,6 @@ import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,10 +15,13 @@ import { Alert } from "@/components/ui/alert";
 import { checkBanAfterLogin } from "@/lib/actions/admin-users";
 import { scheduleRouterAction } from "@/lib/deferred-router";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { PostLoginBrandedScreen } from "@/components/auth/post-login-branded-screen";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
+import { markPostLoginFullPageNavigation } from "@/lib/auth/post-login-navigation-flag";
+import { shouldUseRoleBasedPostLogin } from "@/lib/auth/post-login-redirect";
 import {
   fetchPostLoginDestination,
-  shouldUseRoleBasedPostLogin,
+  runPostLoginTransition,
   waitForSupabaseSessionReady,
 } from "@/lib/auth/client-post-login";
 
@@ -57,12 +59,16 @@ export function LoginForm({
       : null
   );
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [redirectStatus, setRedirectStatus] = useState("Signing you in…");
 
   const sanitizedNext = sanitizeInternalNextPath(nextParam);
   /** OAuth callback applies `getPostLoginDashboardPath` when `next` is `/dashboard`; avoid `next=/login` loops. */
   const googleOAuthNext = shouldUseRoleBasedPostLogin(sanitizedNext) ? "/dashboard" : sanitizedNext;
 
-  /** Already signed in (e.g. back button, bookmark) — send to role dashboard or preserved `next`. */
+  /**
+   * Client-only fallback when cookies/session are visible in the browser but the server
+   * did not yet see a session (rare timing on some mobile browsers).
+   */
   useEffect(() => {
     let cancelled = false;
     const sb = createBrowserSupabaseClient();
@@ -73,15 +79,20 @@ export function LoginForm({
       } = await sb.auth.getSession();
       if (cancelled || !session?.user) return;
 
+      setRedirectStatus("Welcome back…");
       setIsRedirecting(true);
       try {
+        markPostLoginFullPageNavigation();
         const path = await fetchPostLoginDestination(sb, session.user.id);
         const next = sanitizeInternalNextPath(nextParam);
         const dest = shouldUseRoleBasedPostLogin(next) ? path : next;
+        await runPostLoginTransition();
         await sb.auth.getSession();
         window.location.assign(dest);
       } catch {
-        if (!cancelled) setIsRedirecting(false);
+        if (!cancelled) {
+          setIsRedirecting(false);
+        }
       }
     }
 
@@ -131,7 +142,9 @@ export function LoginForm({
         }
 
         didRedirect = true;
+        setRedirectStatus("Signing you in…");
         setIsRedirecting(true);
+        markPostLoginFullPageNavigation();
 
         if (!signInData.session) {
           try {
@@ -155,13 +168,11 @@ export function LoginForm({
           return;
         }
 
+        setRedirectStatus("Loading your dashboard…");
         const path = await fetchPostLoginDestination(supabase, userId);
         const dest = shouldUseRoleBasedPostLogin(sanitizedNext) ? path : sanitizedNext;
 
-        /**
-         * Ensure SSR-readable cookies are flushed before the next document load. Client-only
-         * `router.replace` can race the first RSC request and surface a broken shell on Vercel.
-         */
+        await runPostLoginTransition();
         await supabase.auth.getSession();
         window.location.assign(dest);
         return;
@@ -174,16 +185,7 @@ export function LoginForm({
   };
 
   if (isRedirecting) {
-    return (
-      <section className="page-inner flex min-h-[50vh] flex-col justify-center px-4">
-        <Card className="mx-auto w-full max-w-md">
-          <CardContent className="flex flex-col items-center justify-center gap-4 py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
-            <p className="text-sm text-muted-foreground">Signing you in…</p>
-          </CardContent>
-        </Card>
-      </section>
-    );
+    return <PostLoginBrandedScreen statusLine={redirectStatus} />;
   }
 
   return (

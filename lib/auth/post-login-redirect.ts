@@ -3,7 +3,18 @@ import {
   resolveActiveRoleFromProfile,
 } from "@/lib/profile-roles";
 
-type ProfileLike = {
+/**
+ * Use role-based routing unless `next` is a real deep link (e.g. /jobs).
+ * Treat `/login` (and default /dashboard) as “no deep link” so we never loop back to login.
+ * Safe for server and client.
+ */
+export function shouldUseRoleBasedPostLogin(next: string): boolean {
+  if (next === "/dashboard" || next === "/") return true;
+  const pathOnly = next.split("?")[0] ?? "";
+  return pathOnly === "/login";
+}
+
+export type ProfileLike = {
   roles?: unknown;
   active_role?: unknown;
 } | null;
