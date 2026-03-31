@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { formatDisputePhaseLabel, formatDisputeReasonLabel } from "@/lib/my-listings/dispute-labels";
 
 export type DisputedJobInfo = {
@@ -33,7 +33,6 @@ type Props = {
   job: DisputedJobInfo;
   addressLine: string;
   amountCents: number;
-  onEditPhotos: () => void;
 };
 
 export function ListerDisputedCard({
@@ -41,7 +40,6 @@ export function ListerDisputedCard({
   job,
   addressLine,
   amountCents,
-  onEditPhotos,
 }: Props) {
   const cover = getListingCoverUrl(listing) ?? "/placeholder-listing.png";
   const jobId = job.jobId;
@@ -107,10 +105,6 @@ export function ListerDisputedCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuItem className="min-h-11 cursor-pointer text-base" onClick={onEditPhotos}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit photos
-                </DropdownMenuItem>
                 <DropdownMenuItem asChild className="min-h-11 cursor-pointer text-base">
                   <Link href={jobPageBase}>Open job page</Link>
                 </DropdownMenuItem>

@@ -266,6 +266,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
             </p>
           </div>
           <MyListingsNewListingButton
+            variant="success"
             size="lg"
             className="h-12 min-h-[48px] w-full shrink-0 rounded-2xl text-base font-semibold shadow-sm sm:h-11 sm:w-auto sm:min-w-[220px]"
           >

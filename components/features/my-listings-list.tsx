@@ -704,9 +704,9 @@ export function MyListingsList({
         "inline-flex min-h-[44px] touch-manipulation snap-center items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
         active
           ? tone === "amber"
-            ? "bg-amber-600 text-white shadow-sm dark:bg-amber-500"
-            : "bg-emerald-600 text-white shadow-sm dark:bg-emerald-500"
-          : "bg-muted/90 text-muted-foreground hover:bg-muted dark:bg-gray-800 dark:text-gray-300"
+            ? "bg-amber-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-amber-600 dark:text-white dark:ring-amber-400/25 [&_span]:text-white/85"
+            : "bg-emerald-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-emerald-600 dark:text-white dark:ring-emerald-400/25 [&_span]:text-white/85"
+          : "border border-transparent bg-muted/90 text-muted-foreground hover:bg-muted dark:border-gray-700/90 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
       )}
     >
       {children}
@@ -800,7 +800,7 @@ export function MyListingsList({
                       anytime from here.
                     </p>
                   </div>
-                  <Button asChild size="lg" className="h-12 rounded-xl px-8 text-base">
+                  <Button asChild variant="success" size="lg" className="h-12 rounded-xl px-8 text-base font-semibold">
                     <Link href="/listings/new">Create new listing</Link>
                   </Button>
                 </div>
@@ -850,7 +850,7 @@ export function MyListingsList({
                   past listings.
                 </p>
               </div>
-              <Button asChild size="lg" className="h-12 rounded-xl px-8 text-base">
+              <Button asChild variant="success" size="lg" className="h-12 rounded-xl px-8 text-base font-semibold">
                 <Link href="/listings/new">Create new listing</Link>
               </Button>
             </div>
@@ -896,7 +896,7 @@ export function MyListingsList({
                   Publish your first bond clean listing to start receiving bids.
                 </p>
               </div>
-              <Button asChild size="lg" className="h-12 rounded-xl px-8 text-base">
+              <Button asChild variant="success" size="lg" className="h-12 rounded-xl px-8 text-base font-semibold">
                 <Link href="/listings/new">Create new listing</Link>
               </Button>
             </div>
@@ -928,7 +928,6 @@ export function MyListingsList({
                     }}
                     addressLine={addressLine(listing)}
                     amountCents={amount}
-                    onEditPhotos={() => openEditor(listing)}
                   />
                 );
               }
@@ -958,7 +957,6 @@ export function MyListingsList({
                   timeLabel={timeLabel}
                   showEndEarly={showEndEarly}
                   href={`/jobs/${listing.id}`}
-                  onEdit={() => openEditor(listing)}
                   onEndEarly={showEndEarly ? () => openCancelListingConfirm(listing) : undefined}
                   onRelist={
                     isExpired

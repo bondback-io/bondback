@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MapPin, MoreHorizontal, Pencil, Gavel, Ban, Trash2, RotateCcw } from "lucide-react";
+import { MapPin, MoreHorizontal, Gavel, Ban, Trash2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCents, getListingCoverUrl } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
@@ -37,7 +37,6 @@ export type ListerListingCardProps = {
   timeLabel: string;
   showEndEarly: boolean;
   href: string;
-  onEdit: () => void;
   onEndEarly?: () => void;
   onRelist?: () => void;
   relistLoading?: boolean;
@@ -57,7 +56,6 @@ export function ListerListingCard({
   timeLabel,
   showEndEarly,
   href,
-  onEdit,
   onEndEarly,
   onRelist,
   relistLoading = false,
@@ -117,10 +115,6 @@ export function ListerListingCard({
               <DropdownMenuContent align="end" className="w-52">
                 {!isLocalDraft && (
                   <>
-                    <DropdownMenuItem className="min-h-11 cursor-pointer text-base" onClick={onEdit}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit photos
-                    </DropdownMenuItem>
                     <DropdownMenuItem asChild className="min-h-11 cursor-pointer text-base">
                       <Link href={href}>
                         <Gavel className="mr-2 h-4 w-4" />
