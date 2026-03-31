@@ -727,6 +727,9 @@ export function NewListingForm({
       void notifyListerListingLive(listingId).catch(() => {
         /* non-blocking */
       });
+      void import("@/lib/actions/admin-notify-email").then((m) =>
+        m.notifyAdminNewListing(listingId).catch(() => {})
+      );
 
       setPublishProgress(100);
       setPublishModalPhase("success");

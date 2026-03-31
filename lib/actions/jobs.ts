@@ -2017,7 +2017,7 @@ export async function openDispute(
 
   const { data: job, error: fetchError } = await supabase
     .from("jobs")
-    .select("id, lister_id, winner_id, status, cleaner_confirmed_complete")
+    .select("id, lister_id, winner_id, listing_id, status, cleaner_confirmed_complete")
     .eq("id", jobId)
     .maybeSingle();
 
@@ -2087,6 +2087,10 @@ export async function openDispute(
   if (updateError) {
     return { ok: false, error: updateError.message };
   }
+
+  void import("@/lib/actions/admin-notify-email").then((m) =>
+    m.notifyAdminDisputeOpened(jobId).catch(() => {})
+  );
 
   const otherUserId = isLister ? j.winner_id : j.lister_id;
   const reasonSnippet = fullReason.length > 150 ? `${fullReason.slice(0, 147)}…` : fullReason;

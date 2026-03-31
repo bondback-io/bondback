@@ -129,6 +129,10 @@ export default async function AdminGlobalSettingsPage() {
         pricingAddonBlindsAud:
           (existing as { pricing_addon_blinds_aud?: number | null }).pricing_addon_blinds_aud ??
           DEFAULT_PRICING_MODIFIERS.addonBlindsAud,
+        adminNotifyNewUser: (existing as { admin_notify_new_user?: boolean }).admin_notify_new_user ?? true,
+        adminNotifyNewListing:
+          (existing as { admin_notify_new_listing?: boolean }).admin_notify_new_listing ?? true,
+        adminNotifyDispute: (existing as { admin_notify_dispute?: boolean }).admin_notify_dispute ?? true,
       }
     : null;
 

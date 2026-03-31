@@ -30,6 +30,10 @@ import {
   NOTIFICATION_LABELS,
   type NotificationPreferenceKey,
 } from "@/lib/notification-preferences";
+import {
+  primeNotificationAudioFromUserGesture,
+  testNotificationChime,
+} from "@/lib/notifications/notification-chime";
 
 type ProfileSnapshot = {
   full_name: string | null;
@@ -256,25 +260,27 @@ function buildNotificationFormData(values: Record<string, boolean>): FormData {
 function TestNotificationSoundButton() {
   const [testing, setTesting] = useState(false);
   const { toast } = useToast();
-  const handleTest = async () => {
+  const handleTest = () => {
+    primeNotificationAudioFromUserGesture();
     setTesting(true);
-    try {
-      const { testNotificationChime } = await import("@/lib/notifications/notification-chime");
-      await testNotificationChime();
-      toast({
-        title: "Test sound",
-        description: "You should hear a soft ding. If not, tap the page once, check volume, and try again.",
+    void testNotificationChime()
+      .then(() => {
+        toast({
+          title: "Test sound",
+          description: "You should hear a soft ding. If not, tap the page once, check volume, and try again.",
+        });
+      })
+      .catch((e: unknown) => {
+        logClientError("settings.testNotificationSound", e);
+        showAppErrorToast(toast, {
+          flow: "settings",
+          error: e instanceof Error ? e : new Error(String(e)),
+          context: "settings.testNotificationSound",
+        });
+      })
+      .finally(() => {
+        setTesting(false);
       });
-    } catch (e) {
-      logClientError("settings.testNotificationSound", e);
-      showAppErrorToast(toast, {
-        flow: "settings",
-        error: e instanceof Error ? e : new Error(String(e)),
-        context: "settings.testNotificationSound",
-      });
-    } finally {
-      setTesting(false);
-    }
   };
   return (
     <Button

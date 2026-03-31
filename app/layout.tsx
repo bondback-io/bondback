@@ -24,6 +24,7 @@ import { UserPreferencesHydration } from "@/components/providers/user-preference
 import { QueryClientProviderWrapper } from "@/components/providers/query-client-provider";
 import { NotificationsRealtimeSync } from "@/components/notifications/notifications-realtime-sync";
 import { NotificationAudioUnlock } from "@/components/notifications/notification-audio-unlock";
+import { NavigationRouteProgress } from "@/components/navigation/navigation-route-progress";
 import { SessionSync } from "@/components/auth/session-sync";
 
 const site = getSiteUrl();
@@ -153,6 +154,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         <TestModeBanner stripeTestMode={stripeTestMode} />
         <PwaRegisterSw />
         <NotificationAudioUnlock />
+        <NavigationRouteProgress />
         <SessionSync />
         {session?.profile ? (
           <UserPreferencesHydration distanceUnit={session.profile.distance_unit} />

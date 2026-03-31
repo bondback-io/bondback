@@ -52,6 +52,10 @@ type GlobalSettingsRow = {
   enable_sms_alerts_new_jobs?: boolean;
   /** When false, no Twilio SMS is sent site-wide. */
   enable_sms_notifications?: boolean;
+  /** Admin inbox alerts (Resend). */
+  admin_notify_new_user?: boolean;
+  admin_notify_new_listing?: boolean;
+  admin_notify_dispute?: boolean;
   /** Per notification type for transactional SMS; empty {} = all allowed. */
   sms_type_enabled?: Record<string, boolean> | null;
   max_sms_per_user_per_day?: number | null;
@@ -321,6 +325,10 @@ export type SaveGlobalSettingsInput = {
   pricingAddonFridgeAud?: number;
   pricingAddonBlindsAud?: number;
   dailyDigestEnabled?: boolean;
+  /** Admin email alerts (requires emails_enabled). */
+  adminNotifyNewUser?: boolean;
+  adminNotifyNewListing?: boolean;
+  adminNotifyDispute?: boolean;
 };
 
 export type SaveGlobalSettingsResult =
@@ -437,6 +445,9 @@ export async function saveGlobalSettings(
         ? Math.max(0, data.pricingAddonBlindsAud)
         : DEFAULT_PRICING_MODIFIERS.addonBlindsAud,
     daily_digest_enabled: data.dailyDigestEnabled !== false,
+    admin_notify_new_user: data.adminNotifyNewUser !== false,
+    admin_notify_new_listing: data.adminNotifyNewListing !== false,
+    admin_notify_dispute: data.adminNotifyDispute !== false,
   };
 
   const { error } = admin

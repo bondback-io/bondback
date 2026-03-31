@@ -1,0 +1,300 @@
+import {
+  Body,
+  Container,
+  Head,
+  Html,
+  Link,
+  Section,
+  Text,
+} from "@react-email/components";
+import * as React from "react";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+
+export type AdminNotificationEventType = "new_user" | "new_listing" | "dispute_opened";
+
+export type AdminNotificationEmailProps =
+  | {
+      eventType: "new_user";
+      fullName: string;
+      email: string;
+      roleLabel: string;
+      signedUpAtFormatted: string;
+      /** Cleaner ABN line; omit or empty for lister-only */
+      abnDetailLine?: string;
+    }
+  | {
+      eventType: "new_listing";
+      listingTitle: string;
+      listingId: string;
+      listerName: string;
+      listerEmail: string;
+      suburb: string;
+      postcode: string;
+      status: string;
+      createdAtFormatted: string;
+    }
+  | {
+      eventType: "dispute_opened";
+      jobId: number;
+      listingTitle: string | null;
+      openedByLabel: string;
+      reasonSnippet: string;
+      openedAtFormatted: string;
+    };
+
+function header(): React.ReactNode {
+  return (
+    <Section style={headerSection}>
+      <Text style={logo}>Bond Back</Text>
+      <Text style={tagline}>Admin notification</Text>
+    </Section>
+  );
+}
+
+function internalFooter(): React.ReactNode {
+  return (
+    <Section style={footerSection}>
+      <Text style={footerMuted}>
+        Internal message for Bond Back administrators. Not sent to customers.
+      </Text>
+      <Text style={footerMuted}>
+        <Link href={`${APP_URL}/admin`} style={link}>
+          Open admin
+        </Link>
+        {" · "}
+        <Link href={APP_URL} style={link}>
+          bondback.com
+        </Link>
+      </Text>
+    </Section>
+  );
+}
+
+/**
+ * Unified template for admin-facing system alerts (new user, listing, dispute).
+ */
+export function AdminNotificationEmail(props: AdminNotificationEmailProps) {
+  const preview =
+    props.eventType === "new_user"
+      ? `New registration: ${props.fullName}`
+      : props.eventType === "new_listing"
+        ? `New listing: ${props.listingTitle}`
+        : `Dispute opened on job #${props.jobId}`;
+
+  const adminBase = `${APP_URL}/admin`;
+
+  if (props.eventType === "new_user") {
+    return (
+      <Html lang="en">
+        <Head />
+        <Body style={main}>
+          <Container style={container}>
+            {header()}
+            <Text style={previewText}>{preview}</Text>
+            <Text style={heading}>New user registration</Text>
+            <Section style={tableSection}>
+              <Row label="Full name" value={props.fullName} />
+              <Row label="Email" value={props.email} />
+              <Row label="Role" value={props.roleLabel} />
+              <Row label="Signup date" value={props.signedUpAtFormatted} />
+              {props.abnDetailLine ? (
+                <Row label="ABN (cleaner)" value={props.abnDetailLine} />
+              ) : null}
+            </Section>
+            {internalFooter()}
+          </Container>
+        </Body>
+      </Html>
+    );
+  }
+
+  if (props.eventType === "new_listing") {
+    return (
+      <Html lang="en">
+        <Head />
+        <Body style={main}>
+          <Container style={container}>
+            {header()}
+            <Text style={previewText}>{preview}</Text>
+            <Text style={heading}>New listing created</Text>
+            <Section style={tableSection}>
+              <Row label="Title" value={props.listingTitle} />
+              <Row label="Listing ID" value={props.listingId} />
+              <Row label="Lister" value={props.listerName} />
+              <Row label="Lister email" value={props.listerEmail} />
+              <Row label="Location" value={`${props.suburb} ${props.postcode}`.trim()} />
+              <Row label="Status" value={props.status} />
+              <Row label="Created" value={props.createdAtFormatted} />
+            </Section>
+            <Section style={ctaWrap}>
+              <Link href={`${APP_URL}/jobs/${props.listingId}`} style={ctaLink}>
+                View listing
+              </Link>
+              {" · "}
+              <Link href={`${adminBase}/listings`} style={ctaLink}>
+                Admin listings
+              </Link>
+            </Section>
+            {internalFooter()}
+          </Container>
+        </Body>
+      </Html>
+    );
+  }
+
+  return (
+    <Html lang="en">
+      <Head />
+      <Body style={main}>
+        <Container style={container}>
+          {header()}
+          <Text style={previewText}>{preview}</Text>
+          <Text style={heading}>Dispute opened</Text>
+          <Section style={tableSection}>
+            <Row label="Job ID" value={String(props.jobId)} />
+            <Row label="Listing" value={props.listingTitle ?? "—"} />
+            <Row label="Opened by" value={props.openedByLabel} />
+            <Row label="Opened at" value={props.openedAtFormatted} />
+          </Section>
+          <Text style={reasonBlock}>
+            <strong>Reason (excerpt)</strong>
+            <br />
+            {props.reasonSnippet}
+          </Text>
+          <Section style={ctaWrap}>
+            <Link href={`${APP_URL}/jobs/${props.jobId}`} style={ctaLink}>
+              View job
+            </Link>
+            {" · "}
+            <Link href={`${adminBase}/disputes`} style={ctaLink}>
+              Admin disputes
+            </Link>
+          </Section>
+          {internalFooter()}
+        </Container>
+      </Body>
+    </Html>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <Text style={row}>
+      <span style={rowLabel}>{label}</span>
+      <br />
+      <span style={rowValue}>{value}</span>
+    </Text>
+  );
+}
+
+const main = {
+  backgroundColor: "#f4f4f5",
+  fontFamily:
+    '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
+};
+
+const container = {
+  margin: "0 auto",
+  padding: "24px 20px 32px",
+  maxWidth: "560px",
+};
+
+const headerSection = {
+  marginBottom: "16px",
+};
+
+const logo = {
+  color: "#111827",
+  fontSize: "20px",
+  fontWeight: "700" as const,
+  margin: "0 0 4px 0",
+};
+
+const tagline = {
+  color: "#6b7280",
+  fontSize: "12px",
+  margin: "0",
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.06em",
+};
+
+const previewText = {
+  color: "#9ca3af",
+  fontSize: "12px",
+  margin: "0 0 16px 0",
+};
+
+const heading = {
+  color: "#111827",
+  fontSize: "18px",
+  fontWeight: "600" as const,
+  margin: "0 0 16px 0",
+  lineHeight: 1.35,
+};
+
+const tableSection = {
+  backgroundColor: "#ffffff",
+  borderRadius: "8px",
+  border: "1px solid #e5e7eb",
+  padding: "16px 18px",
+  marginBottom: "16px",
+};
+
+const row = {
+  margin: "0 0 12px 0",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
+const rowLabel = {
+  color: "#6b7280",
+  fontSize: "11px",
+  fontWeight: "600" as const,
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.04em",
+};
+
+const rowValue = {
+  color: "#111827",
+  fontSize: "14px",
+};
+
+const reasonBlock = {
+  color: "#374151",
+  fontSize: "14px",
+  lineHeight: 1.55,
+  backgroundColor: "#ffffff",
+  borderRadius: "8px",
+  border: "1px solid #e5e7eb",
+  padding: "14px 16px",
+  margin: "0 0 16px 0",
+};
+
+const ctaWrap = {
+  margin: "0 0 20px 0",
+  fontSize: "13px",
+};
+
+const ctaLink = {
+  color: "#2563eb",
+  textDecoration: "underline" as const,
+};
+
+const footerSection = {
+  marginTop: "8px",
+  paddingTop: "16px",
+  borderTop: "1px solid #e5e7eb",
+};
+
+const footerMuted = {
+  color: "#9ca3af",
+  fontSize: "11px",
+  margin: "0 0 8px 0",
+  lineHeight: 1.5,
+};
+
+const link = {
+  color: "#6b7280",
+  textDecoration: "underline" as const,
+};

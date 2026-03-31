@@ -300,9 +300,12 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
 
   const { data: existing } = await admin
     .from("profiles")
-    .select("id, suburb")
+    .select("id, suburb, roles")
     .eq("id", userId)
     .maybeSingle();
+
+  const existingRoles = (existing?.roles as string[] | null) ?? [];
+  const isFirstRoleAssignment = existingRoles.length === 0;
 
   const row: Record<string, unknown> = {
     id: userId,
@@ -318,6 +321,12 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
     .upsert(row as never, { onConflict: "id" });
 
   if (error) return { ok: false, error: error.message };
+
+  if (isFirstRoleAssignment) {
+    void import("@/lib/actions/admin-notify-email").then((m) =>
+      m.notifyAdminNewUserRegistration(userId).catch(() => {})
+    );
+  }
 
   revalidatePath("/onboarding");
   revalidatePath("/onboarding/role-choice");
@@ -457,10 +466,13 @@ export async function completeOnboardingFromSignup(
 
   const { data: existingProf } = await admin
     .from("profiles")
-    .select("referred_by")
+    .select("referred_by, roles")
     .eq("id", session.user.id)
     .maybeSingle();
   const alreadyReferred = (existingProf as { referred_by?: string | null } | null)?.referred_by;
+  const hadRolesAlready =
+    Array.isArray((existingProf as { roles?: string[] | null } | null)?.roles) &&
+    ((existingProf as { roles?: string[] | null }).roles as string[]).length > 0;
 
   const row: ProfileInsert = {
     id: session.user.id,
@@ -483,6 +495,12 @@ export async function completeOnboardingFromSignup(
     .upsert(row as never, { onConflict: "id" });
 
   if (error) return { ok: false, error: error.message };
+
+  if (!hadRolesAlready) {
+    void import("@/lib/actions/admin-notify-email").then((m) =>
+      m.notifyAdminNewUserRegistration(session.user.id).catch(() => {})
+    );
+  }
 
   const email = session.user.email;
   if (email) {

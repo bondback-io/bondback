@@ -1,11 +1,10 @@
 /**
  * Soft in-app “ding” via Web Audio API.
- * Browsers require AudioContext.resume() from a user gesture before audio can play;
- * we only create the context from unlock paths, then play only when state is "running".
+ * Browsers gate AudioContext behind user activation; resume() is async, so we retry
+ * scheduling after resume. iOS/Safari often need a short silent buffer in the gesture path.
  */
 
 const CHIME_DELAY_MS = 300;
-/** Ignore further triggers shortly after a chime (burst of INSERTs). */
 const CHIME_COOLDOWN_MS = 2500;
 
 const DEFAULT_MASTER = 0.18;
@@ -30,8 +29,27 @@ function createAudioContext(): AudioContext | null {
 }
 
 /**
- * Create (if needed) and resume the shared context. Call from user gestures only
- * (click, tap, keydown) so autoplay policy allows playback.
+ * Play a zeroed buffer in the same user-gesture turn — helps Safari/iOS fully unlock output.
+ */
+function playSilentUnlockBuffer(ctx: AudioContext): void {
+  try {
+    const rate = ctx.sampleRate || 44100;
+    const frames = Math.max(128, Math.floor(rate * 0.01));
+    const buf = ctx.createBuffer(1, frames, rate);
+    const ch = buf.getChannelData(0);
+    ch.fill(0);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Create (if needed), resume, and prime output. Call from user gestures (click/tap/keydown).
+ * Synchronous resume() + silent buffer in the same turn helps keep mobile Safari’s user activation.
  */
 export function primeNotificationAudioFromUserGesture(): void {
   if (typeof window === "undefined") return;
@@ -40,11 +58,22 @@ export function primeNotificationAudioFromUserGesture(): void {
   }
   const ctx = sharedCtx;
   if (!ctx) return;
-  void ctx.resume().catch(() => {});
+
+  void ctx.resume();
+  try {
+    playSilentUnlockBuffer(ctx);
+  } catch {
+    /* ignore */
+  }
+
+  void ctx.resume().then(() => {
+    if (ctx.state === "running") {
+      playSilentUnlockBuffer(ctx);
+    }
+  });
 }
 
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
-/** Timestamp of last successful chime start (cooldown vs. burst INSERTs). */
 let lastChimeAt = 0;
 
 function devLog(message: string, extra?: Record<string, unknown>): void {
@@ -62,8 +91,9 @@ function playChimeInternal(masterVol: number): void {
     devLog("skip play: no AudioContext (unlock first)");
     return;
   }
+
   if (ctx.state !== "running") {
-    devLog("skip play: AudioContext not running", { state: ctx.state });
+    devLog("skip play: not running", { state: ctx.state });
     void ctx.resume().catch(() => {});
     return;
   }
@@ -71,47 +101,40 @@ function playChimeInternal(masterVol: number): void {
   devLog("playing chime");
   lastChimeAt = Date.now();
 
-  const t0 = ctx.currentTime;
-  const master = ctx.createGain();
-  master.gain.value = masterVol;
-  master.connect(ctx.destination);
+  try {
+    const t0 = ctx.currentTime;
+    const master = ctx.createGain();
+    master.gain.value = masterVol;
+    master.connect(ctx.destination);
 
-  const partials: { freq: number; delay: number; peak: number }[] = [
-    { freq: 880, delay: 0, peak: 0.11 },
-    { freq: 1320, delay: 0.025, peak: 0.055 },
-  ];
-  const decay = 0.28;
+    const partials: { freq: number; delay: number; peak: number }[] = [
+      { freq: 880, delay: 0, peak: 0.11 },
+      { freq: 1320, delay: 0.025, peak: 0.055 },
+    ];
+    const decay = 0.28;
 
-  for (const { freq, delay, peak } of partials) {
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(freq, t0 + delay);
-    const env = ctx.createGain();
-    const start = t0 + delay;
-    env.gain.setValueAtTime(0, start);
-    env.gain.linearRampToValueAtTime(peak, start + 0.014);
-    env.gain.exponentialRampToValueAtTime(0.0006, start + decay);
-    osc.connect(env);
-    env.connect(master);
-    osc.start(start);
-    osc.stop(start + decay + 0.05);
+    for (const { freq, delay, peak } of partials) {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, t0 + delay);
+      const env = ctx.createGain();
+      const start = t0 + delay;
+      env.gain.setValueAtTime(0.0001, start);
+      env.gain.linearRampToValueAtTime(peak, start + 0.014);
+      env.gain.exponentialRampToValueAtTime(0.0001, start + decay);
+      osc.connect(env);
+      env.connect(master);
+      osc.start(start);
+      osc.stop(start + decay + 0.05);
+    }
+  } catch (e) {
+    console.warn("[notification-chime] play failed", e);
   }
 }
 
-/**
- * Schedules the in-app chime (delay + cooldown + single pending timer).
- * Use for realtime notifications. Requires prior user gesture via unlock listeners or bell/settings.
- */
-export function scheduleNotificationChime(options?: { masterVolume?: number }): void {
-  const masterVol = options?.masterVolume ?? DEFAULT_MASTER;
+function scheduleChimeAfterRunning(masterVol: number): void {
   const ctx = sharedCtx;
-  if (!ctx || ctx.state !== "running") {
-    devLog("schedule skipped: context missing or not running", {
-      hasContext: !!ctx,
-      state: ctx?.state,
-    });
-    return;
-  }
+  if (!ctx) return;
 
   const now = Date.now();
   if (lastChimeAt > 0 && now - lastChimeAt < CHIME_COOLDOWN_MS) {
@@ -133,7 +156,38 @@ export function scheduleNotificationChime(options?: { masterVolume?: number }): 
 }
 
 /**
- * Manual test from Settings: must run from a click/tap so resume() is allowed.
+ * Schedules the in-app chime. If context is not running yet (race after first tap), retries after resume().
+ */
+export function scheduleNotificationChime(options?: { masterVolume?: number }): void {
+  const masterVol = options?.masterVolume ?? DEFAULT_MASTER;
+
+  if (!sharedCtx) {
+    devLog("schedule skipped: no AudioContext yet (user has not interacted)");
+    return;
+  }
+
+  const ctx = sharedCtx;
+
+  const attempt = () => {
+    if (ctx.state === "running") {
+      scheduleChimeAfterRunning(masterVol);
+      return;
+    }
+    devLog("schedule: waiting for running", { state: ctx.state });
+    void ctx.resume().then(() => {
+      if (ctx.state === "running") {
+        scheduleChimeAfterRunning(masterVol);
+      } else {
+        devLog("schedule: still not running after resume()", { state: ctx.state });
+      }
+    });
+  };
+
+  attempt();
+}
+
+/**
+ * Manual test from Settings — must run from a real click/tap.
  */
 export async function testNotificationChime(): Promise<void> {
   primeNotificationAudioFromUserGesture();
@@ -142,27 +196,39 @@ export async function testNotificationChime(): Promise<void> {
     devLog("test: no AudioContext");
     return;
   }
+
   try {
     await ctx.resume();
   } catch {
     return;
   }
+
   if (ctx.state !== "running") {
-    devLog("test: context not running after resume", { state: ctx.state });
+    try {
+      await ctx.resume();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (ctx.state === "running") {
+    playSilentUnlockBuffer(ctx);
+  }
+
+  if (ctx.state !== "running") {
+    devLog("test: context not running", { state: ctx.state });
     return;
   }
+
   playChimeInternal(DEFAULT_MASTER);
 }
 
-/**
- * Attach one-time unlock on first pointer or key interaction + visibility resume.
- */
 export function installNotificationAudioUnlockListeners(): () => void {
   if (typeof window === "undefined" || typeof document === "undefined") {
     return () => {};
   }
 
-  const onFirstGesture = () => {
+  const onGesture = () => {
     primeNotificationAudioFromUserGesture();
   };
 
@@ -173,13 +239,17 @@ export function installNotificationAudioUnlockListeners(): () => void {
   };
 
   const opts = { capture: true, passive: true } as const;
-  document.addEventListener("pointerdown", onFirstGesture, opts);
-  document.addEventListener("keydown", onFirstGesture, opts);
+  document.addEventListener("pointerdown", onGesture, opts);
+  document.addEventListener("keydown", onGesture, opts);
+  document.addEventListener("touchstart", onGesture, opts);
+  document.addEventListener("click", onGesture, opts);
   document.addEventListener("visibilitychange", onVisibility);
 
   return () => {
-    document.removeEventListener("pointerdown", onFirstGesture, opts);
-    document.removeEventListener("keydown", onFirstGesture, opts);
+    document.removeEventListener("pointerdown", onGesture, opts);
+    document.removeEventListener("keydown", onGesture, opts);
+    document.removeEventListener("touchstart", onGesture, opts);
+    document.removeEventListener("click", onGesture, opts);
     document.removeEventListener("visibilitychange", onVisibility);
   };
 }

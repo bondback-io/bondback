@@ -30,6 +30,7 @@ import { sendGlobalSettingsTestEmail } from "@/lib/actions/admin-email-templates
 import { sendAdminTestNotification } from "@/lib/actions/notifications";
 import { sendAdminSmsFromGlobalSettings } from "@/lib/actions/sms-notifications";
 import { sendTestDailyDigestEmail } from "@/lib/actions/daily-digest";
+import { sendTestAdminNotificationEmail } from "@/lib/actions/admin-notify-email";
 import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
 import { getListingAddonLabel } from "@/lib/listing-addon-prices";
 
@@ -119,6 +120,15 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [dailyDigestEnabled, setDailyDigestEnabled] = React.useState(
     initial?.dailyDigestEnabled ?? true
   );
+  const [adminNotifyNewUser, setAdminNotifyNewUser] = React.useState(
+    initial?.adminNotifyNewUser ?? true
+  );
+  const [adminNotifyNewListing, setAdminNotifyNewListing] = React.useState(
+    initial?.adminNotifyNewListing ?? true
+  );
+  const [adminNotifyDispute, setAdminNotifyDispute] = React.useState(
+    initial?.adminNotifyDispute ?? true
+  );
   const [enableSmsAlertsNewJobs, setEnableSmsAlertsNewJobs] = React.useState(
     initial?.enableSmsAlertsNewJobs ?? true
   );
@@ -201,6 +211,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [testEmailPending, setTestEmailPending] = React.useState(false);
   const [testNotifPending, setTestNotifPending] = React.useState(false);
   const [digestTestPending, setDigestTestPending] = React.useState(false);
+  const [adminTestPending, setAdminTestPending] = React.useState<
+    "new_user" | "new_listing" | "dispute_opened" | null
+  >(null);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -257,6 +270,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       stripeTestMode: stripeTestMode.value,
       floatingChatEnabled: floatingChatEnabledState.value,
       dailyDigestEnabled,
+      adminNotifyNewUser,
+      adminNotifyNewListing,
+      adminNotifyDispute,
       enableSmsAlertsNewJobs,
       enableSmsNotifications,
       smsTypeEnabled,
@@ -1332,6 +1348,154 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                     {digestTestPending ? "Sending…" : "Send test daily digest"}
                   </Button>
                 </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold dark:text-gray-100">
+              Admin notifications
+            </CardTitle>
+            <p className="text-[11px] text-muted-foreground dark:text-gray-400 font-normal pt-0.5">
+              System emails to administrators for important events. Respects{" "}
+              <strong className="font-medium text-foreground/90 dark:text-gray-100">Enable all email notifications</strong>{" "}
+              above. Optional env:{" "}
+              <code className="rounded bg-muted px-0.5">ADMIN_NOTIFICATION_EMAIL</code> (defaults to the first admin
+              account email).
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3 text-xs sm:text-sm text-muted-foreground dark:text-gray-300">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground dark:text-gray-300">
+                  Notify admin on new user sign-up
+                </Label>
+                <p className="text-[11px] text-muted-foreground dark:text-gray-400 mt-0.5">
+                  Sent when a user completes their first role (onboarding), not when unlocking a second role later.
+                </p>
+              </div>
+              <Switch
+                checked={adminNotifyNewUser}
+                onCheckedChange={(v) => setAdminNotifyNewUser(Boolean(v))}
+                disabled={!emailsEnabled}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/60">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground dark:text-gray-300">
+                  Notify admin on new listing created
+                </Label>
+                <p className="text-[11px] text-muted-foreground dark:text-gray-400 mt-0.5">
+                  When a lister publishes a new live listing.
+                </p>
+              </div>
+              <Switch
+                checked={adminNotifyNewListing}
+                onCheckedChange={(v) => setAdminNotifyNewListing(Boolean(v))}
+                disabled={!emailsEnabled}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/60">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground dark:text-gray-300">
+                  Notify admin on new dispute
+                </Label>
+                <p className="text-[11px] text-muted-foreground dark:text-gray-400 mt-0.5">
+                  When a lister or cleaner opens a dispute on a job.
+                </p>
+              </div>
+              <Switch
+                checked={adminNotifyDispute}
+                onCheckedChange={(v) => setAdminNotifyDispute(Boolean(v))}
+                disabled={!emailsEnabled}
+              />
+            </div>
+            <div className="pt-3 border-t border-border/60 space-y-2">
+              <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                Test sends a sample email to the admin recipient (subject prefix{" "}
+                <code className="rounded bg-muted px-0.5">[Test]</code>).
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!emailsEnabled || adminTestPending !== null}
+                  onClick={() => {
+                    setAdminTestPending("new_user");
+                    void sendTestAdminNotificationEmail("new_user").then((r) => {
+                      setAdminTestPending(null);
+                      if (r.ok) {
+                        toast({
+                          title: "Test sent",
+                          description: "Check the admin inbox for the new user sample.",
+                        });
+                      } else {
+                        toast({
+                          variant: "destructive",
+                          title: "Test failed",
+                          description: r.error,
+                        });
+                      }
+                    });
+                  }}
+                >
+                  {adminTestPending === "new_user" ? "Sending…" : "Test new user"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!emailsEnabled || adminTestPending !== null}
+                  onClick={() => {
+                    setAdminTestPending("new_listing");
+                    void sendTestAdminNotificationEmail("new_listing").then((r) => {
+                      setAdminTestPending(null);
+                      if (r.ok) {
+                        toast({
+                          title: "Test sent",
+                          description: "Check the admin inbox for the new listing sample.",
+                        });
+                      } else {
+                        toast({
+                          variant: "destructive",
+                          title: "Test failed",
+                          description: r.error,
+                        });
+                      }
+                    });
+                  }}
+                >
+                  {adminTestPending === "new_listing" ? "Sending…" : "Test new listing"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!emailsEnabled || adminTestPending !== null}
+                  onClick={() => {
+                    setAdminTestPending("dispute_opened");
+                    void sendTestAdminNotificationEmail("dispute_opened").then((r) => {
+                      setAdminTestPending(null);
+                      if (r.ok) {
+                        toast({
+                          title: "Test sent",
+                          description: "Check the admin inbox for the dispute sample.",
+                        });
+                      } else {
+                        toast({
+                          variant: "destructive",
+                          title: "Test failed",
+                          description: r.error,
+                        });
+                      }
+                    });
+                  }}
+                >
+                  {adminTestPending === "dispute_opened" ? "Sending…" : "Test dispute"}
+                </Button>
               </div>
             </div>
           </CardContent>
