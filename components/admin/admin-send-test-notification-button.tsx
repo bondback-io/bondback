@@ -7,6 +7,7 @@ import {
   sendAdminTestNotificationByType,
   type NotificationType,
 } from "@/lib/actions/notifications";
+import { playNotificationChimeFromUserGesture } from "@/lib/notifications/notification-chime";
 import { useToast } from "@/components/ui/use-toast";
 
 const TEST_TYPES: { type: NotificationType; label: string }[] = [
@@ -46,6 +47,7 @@ export function AdminSendTestNotificationButton() {
         try {
           const r = await sendAdminTestNotification();
           if (r.ok) {
+            playNotificationChimeFromUserGesture();
             toast({
               title: "Test notification sent",
               description: "Check the bell icon or /notifications.",
@@ -77,6 +79,7 @@ export function AdminSendTestNotificationGrid() {
     try {
       const r = await sendAdminTestNotificationByType(type);
       if (r.ok) {
+        playNotificationChimeFromUserGesture();
         toast({
           title: "Sample sent",
           description: `Type: ${type}. Check the bell or /notifications.`,

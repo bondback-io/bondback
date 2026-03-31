@@ -66,6 +66,8 @@ export function filterNotificationsForActiveRole(
   if (activeRole == null) return notifications;
 
   return notifications.filter((n) => {
+    const data = n.data as Record<string, unknown> | null;
+    if (data?.admin_test === true) return true;
     if (activeRole === "lister") {
       if (CLEANER_ONLY_TYPES.has(n.type)) return false;
       if (n.type === "job_completed") {

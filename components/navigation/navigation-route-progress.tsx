@@ -2,23 +2,29 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { getNavigationLoadingLabel } from "@/lib/navigation-route-labels";
 
 function isSameRoute(a: string, b: string): boolean {
   return a === b;
 }
 
+/** Wait before showing overlay so fast navigations never flash UI. */
+const OVERLAY_DELAY_MS = 120;
+
 function NavigationRouteProgressInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const routeKey = `${pathname}?${searchParams.toString()}`;
 
-  const [active, setActive] = useState(false);
+  const [navigating, setNavigating] = useState(false);
+  const [overlayVisible, setOverlayVisible] = useState(false);
   const [progress, setProgress] = useState(0);
   const [label, setLabel] = useState("Loading…");
 
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlayDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstRouteEffectRef = useRef(true);
   const pendingNavigationRef = useRef(false);
 
@@ -30,6 +36,10 @@ function NavigationRouteProgressInner() {
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
       hideTimeoutRef.current = null;
+    }
+    if (overlayDelayRef.current) {
+      clearTimeout(overlayDelayRef.current);
+      overlayDelayRef.current = null;
     }
   };
 
@@ -43,11 +53,12 @@ function NavigationRouteProgressInner() {
     }
     pendingNavigationRef.current = false;
     clearTimers();
+    setOverlayVisible(false);
+    setNavigating(false);
     setProgress(100);
     hideTimeoutRef.current = setTimeout(() => {
-      setActive(false);
       setProgress(0);
-    }, 380);
+    }, 200);
     return () => {
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current);
@@ -60,9 +71,18 @@ function NavigationRouteProgressInner() {
     const start = (nextLabel: string) => {
       pendingNavigationRef.current = true;
       clearTimers();
-      setActive(true);
       setLabel(nextLabel);
-      setProgress(5);
+      setProgress(6);
+      setNavigating(true);
+      setOverlayVisible(false);
+
+      overlayDelayRef.current = setTimeout(() => {
+        overlayDelayRef.current = null;
+        if (pendingNavigationRef.current) {
+          setOverlayVisible(true);
+        }
+      }, OVERLAY_DELAY_MS);
+
       progressIntervalRef.current = setInterval(() => {
         setProgress((p) => {
           if (p >= 89) return p;
@@ -102,7 +122,7 @@ function NavigationRouteProgressInner() {
     };
 
     const onPopState = () => {
-      start("Loading…");
+      start("Loading page…");
     };
 
     document.addEventListener("click", onClick, true);
@@ -114,42 +134,76 @@ function NavigationRouteProgressInner() {
     };
   }, []);
 
-  if (!active && progress === 0) {
+  if (!navigating && progress === 0) {
     return null;
   }
 
   const pct = Math.min(100, Math.round(progress));
 
   return (
-    <div
-      className="pointer-events-none fixed left-0 right-0 top-0 z-[200] flex flex-col"
-      aria-live="polite"
-      aria-busy={active}
-    >
-      <div className="h-1 w-full overflow-hidden bg-muted/60 dark:bg-gray-800/80">
+    <>
+      {/* Thin top strip — always visible while navigating (feedback even before overlay) */}
+      {navigating ? (
         <div
-          className="h-full bg-primary transition-[width] duration-200 ease-out dark:bg-primary"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <div className="flex justify-center px-3 pb-1 pt-1.5">
-        <div className="max-w-[min(100%,28rem)] rounded-b-md border border-t-0 border-border/80 bg-background/95 px-3 py-1 shadow-sm backdrop-blur-md dark:border-gray-700 dark:bg-gray-950/95">
-          <p className="text-center text-[11px] font-medium leading-snug text-muted-foreground dark:text-gray-300 sm:text-xs">
-            <span className="tabular-nums text-foreground/90 dark:text-gray-100">{pct}%</span>
-            <span className="mx-1.5 text-border dark:text-gray-600" aria-hidden>
-              ·
-            </span>
-            <span>{label}</span>
-          </p>
+          className="pointer-events-none fixed left-0 right-0 top-0 z-[401] h-1 overflow-hidden bg-muted/50 dark:bg-gray-800/60"
+          aria-hidden
+        >
+          <div
+            className="h-full bg-primary transition-[width] duration-200 ease-out"
+            style={{ width: `${pct}%` }}
+          />
         </div>
-      </div>
-    </div>
+      ) : null}
+
+      {/* Same visual language as post-login (gradient + centered brand), scaled down for in-app nav */}
+      {navigating && overlayVisible ? (
+        <div
+          className="pointer-events-none fixed inset-0 z-[400] flex min-h-[100dvh] flex-col items-center justify-center bg-background px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]"
+          aria-live="polite"
+          aria-busy="true"
+          role="status"
+        >
+          <div
+            className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/[0.06] via-transparent to-muted/30 dark:from-primary/10 dark:to-gray-950/80"
+            aria-hidden
+          />
+          <div className="relative flex w-full max-w-md flex-col items-center text-center">
+            <p className="text-xl font-semibold tracking-tight text-primary sm:text-2xl">Bond Back</p>
+            <p className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground sm:text-xs">
+              Bond cleaning marketplace
+            </p>
+            <p className="mt-2 text-[11px] text-muted-foreground/90 sm:text-xs">Loading page</p>
+            <div className="mt-8 flex flex-col items-center gap-5 sm:mt-9">
+              <Loader2
+                className="h-8 w-8 animate-spin text-primary/90 sm:h-9 sm:w-9"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <div className="h-1.5 w-full max-w-[17rem] overflow-hidden rounded-full bg-muted/90 dark:bg-gray-800/90">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="max-w-[22rem] text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                <span className="tabular-nums font-semibold text-foreground/90 dark:text-gray-100">{pct}%</span>
+                <span className="mx-1.5 text-border dark:text-gray-600" aria-hidden>
+                  ·
+                </span>
+                <span>{label}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
 /**
- * Top progress bar + label for client-side navigations that take noticeable time.
- * Wraps inner in Suspense for useSearchParams.
+ * In-app navigation: top progress strip + (after a short delay) a full-screen surface
+ * aligned with `PostLoginBrandedScreen` (gradient + centered Bond Back), slightly smaller
+ * typography and no long marketing line — for route changes only.
  */
 export function NavigationRouteProgress() {
   return (

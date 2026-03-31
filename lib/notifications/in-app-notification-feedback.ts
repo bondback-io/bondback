@@ -19,7 +19,7 @@ export function triggerInAppNotificationFeedback(
   if (opts.bellMenuOpen || opts.isNotificationsRoute) return;
 
   if (opts.soundEnabled) {
-    scheduleNotificationChime({ masterVolume: 0.18 });
+    scheduleNotificationChime();
   }
 
   if (

@@ -3,7 +3,13 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient, getAllUserEmailsMap } from "@/lib/supabase/admin";
+import type { User } from "@supabase/supabase-js";
+import {
+  createSupabaseAdminClient,
+  emailsMapFromAuthUsers,
+  listAllAuthUsersPaginated,
+  mergeProfilesWithAuthUsers,
+} from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -83,7 +89,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   // Admin Users requires the service-role client to bypass RLS and load all users.
   const serviceRoleMissing = !supabaseAdmin;
 
-  const [profilesRes, jobsRes, emailsMap] = await Promise.all([
+  const [profilesRes, jobsRes, authUsers] = await Promise.all([
     serviceRoleMissing
       ? { data: null as ProfileRow[] | null, error: { message: "Service role key not configured" } }
       : supabaseAdmin!
@@ -93,8 +99,12 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     serviceRoleMissing
       ? { data: [] as JobRow[], error: null }
       : supabaseAdmin!.from("jobs").select("id, lister_id, winner_id, listing_id, status"),
-    getAllUserEmailsMap(),
+    serviceRoleMissing || !supabaseAdmin
+      ? Promise.resolve([] as User[])
+      : listAllAuthUsersPaginated(supabaseAdmin),
   ]);
+
+  const emailsMap = emailsMapFromAuthUsers(authUsers);
 
   if (process.env.NODE_ENV !== "production") {
      
@@ -119,50 +129,9 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   let allProfiles = (profilesRes.data ?? []) as ProfileWithExtras[];
   const allJobs = (jobsRes.data ?? []) as JobRow[];
 
-  // Fallback: if profiles query failed (e.g. RLS or wrong key) but we have the admin client,
-  // load users from Auth Admin API so the table still shows all users (id, email, created_at).
-  if (profilesRes.error && supabaseAdmin && allProfiles.length === 0) {
-    const authUsers: ProfileWithExtras[] = [];
-    let page = 1;
-    const perPage = 1000;
-    while (true) {
-      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
-      if (error || !data?.users?.length) break;
-      for (const u of data.users) {
-        authUsers.push({
-          id: u.id,
-          full_name: (u.user_metadata?.full_name as string) ?? u.email ?? null,
-          created_at: u.created_at,
-          updated_at: u.updated_at ?? u.created_at,
-          profile_photo_url: null,
-          bio: null,
-          phone: null,
-          suburb: "",
-          postcode: null,
-          state: null,
-          abn: null,
-          roles: (u.user_metadata?.roles as string[] | null) ?? [],
-          active_role: (u.user_metadata?.active_role as "lister" | "cleaner") ?? "lister",
-          specialties: null,
-          portfolio_photo_urls: null,
-          availability: null,
-          notification_preferences: null,
-          email_force_disabled: null,
-          max_travel_km: 0,
-          business_name: null,
-          insurance_policy_number: null,
-          equipment_notes: null,
-          email_preferences_locked: null,
-          is_admin: (u.user_metadata?.is_admin as boolean) ?? null,
-          is_deleted: null,
-        } as ProfileWithExtras);
-      }
-      if (data.users.length < perPage) break;
-      page++;
-    }
-    if (authUsers.length > 0) {
-      allProfiles = authUsers;
-    }
+  // Include every Auth user — `profiles` may be missing rows (signup edge cases, manual auth inserts).
+  if (!serviceRoleMissing && authUsers.length > 0) {
+    allProfiles = mergeProfilesWithAuthUsers(allProfiles, authUsers) as ProfileWithExtras[];
   }
 
   // When service role is set but list query failed and no auth fallback, show current admin only (full row via service role).

@@ -27,7 +27,7 @@ export type NotificationPreferenceKey =
   | "push_enabled"
   | "push_new_job"
   | "daily_digest"
-  /** In-app bell: soft chime when a new notification row arrives (Web Audio). */
+  /** In-app bell: short chime when a new notification row arrives (Web Audio). */
   | "in_app_sound"
   /** In-app bell: short vibration on supported devices. */
   | "in_app_vibrate";

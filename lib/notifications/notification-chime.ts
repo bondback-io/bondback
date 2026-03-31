@@ -1,5 +1,5 @@
 /**
- * Soft in-app “ding” via Web Audio API.
+ * In-app notification chime via Web Audio API — short major-triad “bell” (still polite, not alarm-like).
  * Browsers gate AudioContext behind user activation; resume() is async, so we retry
  * scheduling after resume. iOS/Safari often need a short silent buffer in the gesture path.
  */
@@ -7,7 +7,8 @@
 const CHIME_DELAY_MS = 300;
 const CHIME_COOLDOWN_MS = 2500;
 
-const DEFAULT_MASTER = 0.18;
+/** Default output gain (0–1). Louder than the old soft ding, still discreet vs system alerts. */
+export const DEFAULT_NOTIFICATION_CHIME_MASTER = 0.3;
 
 let sharedCtx: AudioContext | null = null;
 
@@ -107,11 +108,14 @@ function playChimeInternal(masterVol: number): void {
     master.gain.value = masterVol;
     master.connect(ctx.destination);
 
+    /** Major triad (C5–E5–G5), staggered like a small bell — fuller than the old two high sines. */
     const partials: { freq: number; delay: number; peak: number }[] = [
-      { freq: 880, delay: 0, peak: 0.11 },
-      { freq: 1320, delay: 0.025, peak: 0.055 },
+      { freq: 523.25, delay: 0, peak: 0.24 },
+      { freq: 659.25, delay: 0.02, peak: 0.16 },
+      { freq: 783.99, delay: 0.04, peak: 0.095 },
     ];
-    const decay = 0.28;
+    const decay = 0.4;
+    const attack = 0.016;
 
     for (const { freq, delay, peak } of partials) {
       const osc = ctx.createOscillator();
@@ -120,12 +124,12 @@ function playChimeInternal(masterVol: number): void {
       const env = ctx.createGain();
       const start = t0 + delay;
       env.gain.setValueAtTime(0.0001, start);
-      env.gain.linearRampToValueAtTime(peak, start + 0.014);
+      env.gain.linearRampToValueAtTime(peak, start + attack);
       env.gain.exponentialRampToValueAtTime(0.0001, start + decay);
       osc.connect(env);
       env.connect(master);
       osc.start(start);
-      osc.stop(start + decay + 0.05);
+      osc.stop(start + decay + 0.06);
     }
   } catch (e) {
     console.warn("[notification-chime] play failed", e);
@@ -159,7 +163,7 @@ function scheduleChimeAfterRunning(masterVol: number): void {
  * Schedules the in-app chime. If context is not running yet (race after first tap), retries after resume().
  */
 export function scheduleNotificationChime(options?: { masterVolume?: number }): void {
-  const masterVol = options?.masterVolume ?? DEFAULT_MASTER;
+  const masterVol = options?.masterVolume ?? DEFAULT_NOTIFICATION_CHIME_MASTER;
 
   if (!sharedCtx) {
     devLog("schedule skipped: no AudioContext yet (user has not interacted)");
@@ -184,6 +188,27 @@ export function scheduleNotificationChime(options?: { masterVolume?: number }): 
   };
 
   attempt();
+}
+
+/**
+ * Play the chime right after a button click (e.g. Admin → Notifications QA).
+ * Realtime-driven chimes often fail silently (no user gesture + cooldown); this runs from the
+ * same interaction as the server action’s success path so audio can actually play.
+ */
+export function playNotificationChimeFromUserGesture(): void {
+  primeNotificationAudioFromUserGesture();
+  const ctx = sharedCtx;
+  if (!ctx) return;
+  const play = () => {
+    if (ctx.state !== "running") return;
+    lastChimeAt = Date.now();
+    playChimeInternal(DEFAULT_NOTIFICATION_CHIME_MASTER);
+  };
+  if (ctx.state === "running") {
+    play();
+    return;
+  }
+  void ctx.resume().then(play);
 }
 
 /**
@@ -220,7 +245,7 @@ export async function testNotificationChime(): Promise<void> {
     return;
   }
 
-  playChimeInternal(DEFAULT_MASTER);
+  playChimeInternal(DEFAULT_NOTIFICATION_CHIME_MASTER);
 }
 
 export function installNotificationAudioUnlockListeners(): () => void {

@@ -18,7 +18,7 @@
  * ============================================================================
  */
 
-import { Suspense, useState, useTransition } from "react";
+import { Suspense, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
@@ -32,7 +32,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
-import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
+import {
+  AccountCreationProgressModal,
+  SIGNUP_ACCOUNT_STEPS_EMAIL,
+  SIGNUP_ACCOUNT_STEPS_SESSION,
+  type AccountCreationProgressPhase,
+  type AccountCreationStep,
+} from "@/components/auth/account-creation-progress-modal";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { useToast } from "@/components/ui/use-toast";
 import { PENDING_MINIMAL_PROFILE_KEY } from "@/components/onboarding/onboarding-storage";
@@ -61,6 +67,19 @@ function SignupForm() {
   const [submitting, setSubmitting] = useState(false);
   const [, startSignupTransition] = useTransition();
 
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [accountPhase, setAccountPhase] = useState<AccountCreationProgressPhase>("running");
+  const [accountProgress, setAccountProgress] = useState(0);
+  const [accountStepId, setAccountStepId] = useState<string>("auth");
+  const [accountSteps, setAccountSteps] = useState<readonly AccountCreationStep[]>(SIGNUP_ACCOUNT_STEPS_SESSION);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+    };
+  }, []);
+
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
@@ -76,10 +95,22 @@ function SignupForm() {
     setInfo(null);
     startSignupTransition(() => setSubmitting(true));
 
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = null;
+    }
+
+    setAccountSteps(SIGNUP_ACCOUNT_STEPS_SESSION);
+    setAccountPhase("running");
+    setAccountProgress(6);
+    setAccountStepId("auth");
+    setAccountModalOpen(true);
+
     const supabase = createBrowserSupabaseClient();
     const postcode = values.postcode?.trim() || null;
 
     try {
+      setAccountProgress(18);
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: values.email.trim(),
         password: values.password,
@@ -97,6 +128,7 @@ function SignupForm() {
             ? "Too many signup emails were sent recently. Try again in about an hour or use a different email."
             : signUpError.message
         );
+        setAccountModalOpen(false);
         setSubmitting(false);
         return;
       }
@@ -108,6 +140,8 @@ function SignupForm() {
       };
 
       if (data.session) {
+        setAccountStepId("profile");
+        setAccountProgress(44);
         const result = await upsertMinimalProfileAfterSignup({
           full_name: pendingPayload.full_name,
           postcode: pendingPayload.postcode,
@@ -115,12 +149,26 @@ function SignupForm() {
         });
         if (!result.ok) {
           setError(result.error);
+          setAccountPhase("error");
           setSubmitting(false);
           return;
         }
-        scheduleRouterAction(() => router.replace("/onboarding/role-choice"));
+        setAccountStepId("finalizing");
+        setAccountProgress(96);
+        setAccountProgress(100);
+        setAccountPhase("success");
+        redirectTimerRef.current = setTimeout(() => {
+          redirectTimerRef.current = null;
+          setAccountModalOpen(false);
+          setAccountPhase("running");
+          scheduleRouterAction(() => router.replace("/onboarding/role-choice"));
+        }, 1100);
         return;
       }
+
+      setAccountSteps(SIGNUP_ACCOUNT_STEPS_EMAIL);
+      setAccountStepId("email");
+      setAccountProgress(52);
 
       try {
         localStorage.setItem(PENDING_MINIMAL_PROFILE_KEY, JSON.stringify(pendingPayload));
@@ -128,13 +176,19 @@ function SignupForm() {
         /* ignore quota */
       }
 
+      setAccountStepId("finalizing");
+      setAccountProgress(100);
       const confirmMsg =
         "We sent a confirmation link. After you verify your email and log in, continue to choose Lister or Cleaner.";
-      setInfo(confirmMsg);
-      toast({
-        title: "Check your email",
-        description: confirmMsg,
-      });
+      setTimeout(() => {
+        setAccountModalOpen(false);
+        setAccountPhase("running");
+        setInfo(confirmMsg);
+        toast({
+          title: "Check your email",
+          description: confirmMsg,
+        });
+      }, 450);
     } finally {
       setSubmitting(false);
     }
@@ -142,13 +196,37 @@ function SignupForm() {
 
   return (
     <section className="page-inner flex min-h-[70vh] flex-col items-center justify-center px-3 py-8">
+      <AccountCreationProgressModal
+        open={accountModalOpen}
+        onOpenChange={(next) => {
+          if (!next && (accountPhase === "running" || accountPhase === "success")) {
+            return;
+          }
+          setAccountModalOpen(next);
+          if (!next) {
+            setAccountProgress(0);
+            setAccountStepId("auth");
+          }
+        }}
+        phase={accountPhase}
+        progress={accountProgress}
+        steps={accountSteps}
+        activeStepId={accountStepId}
+        titleRunning="Creating your Bond Back account…"
+        subtitleRunning="Sit tight — we’re setting up your sign-in and profile."
+        successTitle="Account ready"
+        successSubtitle="Taking you to choose Lister or Cleaner…"
+        errorMessage={accountPhase === "error" ? error : null}
+        onRetry={() => {
+          setAccountPhase("running");
+          setError(null);
+          setAccountProgress(6);
+          setAccountStepId("auth");
+          setAccountSteps(SIGNUP_ACCOUNT_STEPS_SESSION);
+          void onSubmit();
+        }}
+      />
       <Card className="relative w-full max-w-md border-border/80 shadow-lg dark:border-gray-800 dark:bg-gray-900">
-        <FormSavingOverlay
-          show={submitting}
-          variant="card"
-          title="Creating your account…"
-          description="Securing your profile — you’ll choose Lister or Cleaner next."
-        />
         <CardHeader className="space-y-1 pb-4 text-center sm:text-left">
           <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
             Create your account

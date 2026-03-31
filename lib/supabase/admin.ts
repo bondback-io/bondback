@@ -1,6 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type User } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { shouldSendEmailForType } from "@/lib/notification-preferences";
+
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 /**
  * Server-only. Use only for admin operations (e.g. resolving user email for notifications).
@@ -24,24 +26,118 @@ export async function getEmailForUserId(userId: string): Promise<string | null> 
   return data.user.email;
 }
 
-/** Build a map of user id -> email (server-only, admin). Paginates to fetch all. */
-export async function getAllUserEmailsMap(): Promise<Map<string, string>> {
-  const admin = createSupabaseAdminClient();
-  const map = new Map<string, string>();
-  if (!admin) return map;
-
+/**
+ * Paginate through Supabase Auth (admin API). Use for admin directory + email maps so the
+ * dashboard matches Authentication → Users even when `profiles` rows are missing.
+ */
+export async function listAllAuthUsersPaginated(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>
+): Promise<User[]> {
+  const users: User[] = [];
   let page = 1;
   const perPage = 1000;
   while (true) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-    if (error || !data?.users?.length) break;
-    for (const u of data.users) {
-      if (u.email) map.set(u.id, u.email);
+    if (error) {
+      console.warn("[listAllAuthUsersPaginated]", error.message);
+      break;
     }
+    if (!data?.users?.length) break;
+    users.push(...data.users);
     if (data.users.length < perPage) break;
     page++;
   }
+  return users;
+}
+
+/** Build id → email from Auth users (no extra API call if you already have the list). */
+export function emailsMapFromAuthUsers(users: User[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const u of users) {
+    if (u.email) map.set(u.id, u.email);
+  }
   return map;
+}
+
+/**
+ * Minimal `profiles` row for an Auth user with no DB profile yet (orphaned auth account).
+ */
+export function syntheticProfileFromAuthUser(u: User): ProfileRow {
+  const md = (u.user_metadata ?? {}) as Record<string, unknown>;
+  const roles = Array.isArray(md.roles) ? (md.roles as string[]) : [];
+  const activeRole = md.active_role === "cleaner" ? "cleaner" : "lister";
+  return {
+    id: u.id,
+    full_name: (typeof md.full_name === "string" ? md.full_name : null) ?? u.email ?? null,
+    created_at: u.created_at,
+    updated_at: u.updated_at ?? u.created_at,
+    profile_photo_url: null,
+    bio: null,
+    phone: null,
+    suburb: "",
+    postcode: null,
+    state: null,
+    abn: null,
+    roles,
+    active_role: activeRole,
+    specialties: null,
+    portfolio_photo_urls: null,
+    availability: null,
+    notification_preferences: null,
+    email_force_disabled: null,
+    max_travel_km: 0,
+    business_name: null,
+    insurance_policy_number: null,
+    equipment_notes: null,
+    email_preferences_locked: null,
+    is_admin: md.is_admin === true ? true : null,
+    is_deleted: null,
+    date_of_birth: null,
+    years_experience: null,
+    vehicle_type: null,
+    stripe_connect_id: null,
+    stripe_payment_method_id: null,
+    stripe_customer_id: null,
+    expo_push_token: null,
+    verification_badges: [],
+    is_email_verified: !!u.email_confirmed_at,
+    referred_by: null,
+    referral_code: null,
+    account_credit_cents: 0,
+    high_dispute_opens_30d: 0,
+    last_dispute_abuse_alert_at: null,
+    preferred_payout_schedule: "weekly",
+    theme_preference: null,
+    distance_unit: null,
+  };
+}
+
+/**
+ * Union of `profiles` rows and Auth users: every auth account appears even without a profile row.
+ */
+export function mergeProfilesWithAuthUsers<T extends { id: string; created_at?: string }>(
+  profiles: T[],
+  authUsers: User[]
+): T[] {
+  const byId = new Map<string, T>(profiles.map((p) => [p.id, p]));
+  for (const u of authUsers) {
+    if (!byId.has(u.id)) {
+      byId.set(u.id, syntheticProfileFromAuthUser(u) as unknown as T);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+/** Build a map of user id -> email (server-only, admin). Paginates to fetch all. */
+export async function getAllUserEmailsMap(): Promise<Map<string, string>> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return new Map();
+  const users = await listAllAuthUsersPaginated(admin);
+  return emailsMapFromAuthUsers(users);
 }
 
 export type NotificationPrefsResult = {

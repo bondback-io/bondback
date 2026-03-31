@@ -73,7 +73,7 @@ export async function createNotification(
   jobId: number | null,
   messageText: string,
   options?: CreateNotificationOptions
-): Promise<void> {
+): Promise<boolean> {
   const supabase = await createServerSupabaseClient();
   // Do not require a browser session: webhooks and background jobs call this with no auth cookie.
   // Inserts use the service role client when configured (see below).
@@ -108,7 +108,7 @@ export async function createNotification(
       error: error.message,
       row,
     });
-    return;
+    return false;
   }
 
   if (process.env.NODE_ENV === "development") {
@@ -125,7 +125,7 @@ export async function createNotification(
   revalidatePath("/profile");
   revalidatePath("/notifications");
 
-  if (options?.adminTest) return;
+  if (options?.adminTest) return true;
 
   const globalSettings = await getGlobalSettings();
   const prefs = await getNotificationPrefs(userId);
@@ -248,6 +248,8 @@ export async function createNotification(
       console.info("[push:notification]", { outcome: "sent", type, userId });
     }
   }
+
+  return true;
 }
 
 /** Admin only: inserts an in-app test row (no email/SMS/push). For Global Settings QA. */
@@ -459,12 +461,12 @@ export async function sendAdminTestNotificationByType(
     return { ok: false, error: "Not authorised" };
   }
 
-  const sampleJobId = 1;
+  /** Always null — avoids FK failures when no row exists in `jobs` (sample ids like 1 often missing). */
   const samples: Partial<
     Record<NotificationType, { jobId: number | null; message: string; options?: CreateNotificationOptions }>
   > = {
     new_message: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: you have a new message in job chat.",
       options: { senderName: "Sample Cleaner", adminTest: true },
     },
@@ -479,47 +481,47 @@ export async function sendAdminTestNotificationByType(
       },
     },
     job_created: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: you accepted a bid — pay & start when ready.",
       options: { adminTest: true },
     },
     job_accepted: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: your bid was accepted.",
       options: { listingTitle: "2 Bedroom Unit", adminTest: true },
     },
     job_approved_to_start: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: lister paid — you can start the job.",
       options: { adminTest: true },
     },
     job_completed: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: cleaner marked the job complete — review and release.",
       options: { adminTest: true },
     },
     funds_ready: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: funds are ready to release after review.",
       options: { adminTest: true },
     },
     payment_released: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: payment released.",
       options: { amountCents: 35000, adminTest: true },
     },
     dispute_opened: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: a dispute was opened on this job.",
       options: { adminTest: true },
     },
     dispute_resolved: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: dispute resolved.",
       options: { adminTest: true },
     },
     job_cancelled_by_lister: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: the lister cancelled this job.",
       options: { adminTest: true },
     },
@@ -538,17 +540,17 @@ export async function sendAdminTestNotificationByType(
       },
     },
     after_photos_uploaded: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: the cleaner uploaded after photos — review when ready.",
       options: { listingTitle: "2 Bed Unit", adminTest: true },
     },
     auto_release_warning: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: ~24h left before funds auto-release.",
       options: { adminTest: true },
     },
     checklist_all_complete: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: the other party finished every checklist item.",
       options: { adminTest: true },
     },
@@ -565,7 +567,7 @@ export async function sendAdminTestNotificationByType(
       },
     },
     job_status_update: {
-      jobId: sampleJobId,
+      jobId: null,
       message: "Sample: job status changed (e.g. payment secured / in progress).",
       options: { adminTest: true },
     },
@@ -576,7 +578,14 @@ export async function sendAdminTestNotificationByType(
     return { ok: false, error: "No sample template for this type yet." };
   }
 
-  await createNotification(session.user.id, type, s.jobId, s.message, s.options);
+  const inserted = await createNotification(session.user.id, type, s.jobId, s.message, s.options);
+  if (!inserted) {
+    return {
+      ok: false,
+      error:
+        "Could not save the notification row. Ensure SUPABASE_SERVICE_ROLE_KEY is set and check the server log for the insert error.",
+    };
+  }
   return { ok: true };
 }
 

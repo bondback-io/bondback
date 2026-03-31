@@ -28,6 +28,7 @@ import {
 } from "@/lib/actions/global-settings";
 import { sendGlobalSettingsTestEmail } from "@/lib/actions/admin-email-templates";
 import { sendAdminTestNotification } from "@/lib/actions/notifications";
+import { playNotificationChimeFromUserGesture } from "@/lib/notifications/notification-chime";
 import { sendAdminSmsFromGlobalSettings } from "@/lib/actions/sms-notifications";
 import { sendTestDailyDigestEmail } from "@/lib/actions/daily-digest";
 import { sendTestAdminNotificationEmail } from "@/lib/actions/admin-notify-email";
@@ -1304,6 +1305,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                       void sendAdminTestNotification().then((r) => {
                         setTestNotifPending(false);
                         if (r.ok) {
+                          playNotificationChimeFromUserGesture();
                           toast({
                             title: "Test notification sent",
                             description: "Check the bell icon and /notifications. No email or push is sent.",
