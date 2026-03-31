@@ -255,6 +255,11 @@ export function LoginForm({
                 Password updated. Log in with your new password.
               </Alert>
             )}
+            {messageParam && messageParam !== "password-reset" && (
+              <Alert className="border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+                <p className="text-xs leading-relaxed">{messageParam}</p>
+              </Alert>
+            )}
             {error && <p className="text-xs text-destructive">{error}</p>}
 
             <Button type="submit" className="min-h-11 w-full" disabled={isSubmitting}>

@@ -18,7 +18,7 @@
  * ============================================================================
  */
 
-import { Suspense, useEffect, useRef, useState, useTransition } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
@@ -40,8 +40,16 @@ import {
   type AccountCreationStep,
 } from "@/components/auth/account-creation-progress-modal";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
-import { useToast } from "@/components/ui/use-toast";
+import { RegistrationCheckEmailModal } from "@/components/auth/registration-check-email-modal";
 import { PENDING_MINIMAL_PROFILE_KEY } from "@/components/onboarding/onboarding-storage";
+
+/** Email confirmation links hit `/auth/confirm` (verifyOtp + session + role-based redirect). */
+function buildAuthConfirmUrl(origin: string, ref: string | null): string {
+  const u = new URL(`${origin}/auth/confirm`);
+  u.searchParams.set("next", "/dashboard");
+  if (ref) u.searchParams.set("ref", ref);
+  return u.toString();
+}
 
 const signupSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -59,11 +67,9 @@ type SignupValues = z.infer<typeof signupSchema>;
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
   const refParam = searchParams.get("ref")?.trim() || null;
 
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [, startSignupTransition] = useTransition();
 
@@ -73,6 +79,14 @@ function SignupForm() {
   const [accountStepId, setAccountStepId] = useState<string>("auth");
   const [accountSteps, setAccountSteps] = useState<readonly AccountCreationStep[]>(SIGNUP_ACCOUNT_STEPS_SESSION);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [checkEmailOpen, setCheckEmailOpen] = useState(false);
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState("");
+  const [authConfirmRedirectUrl, setAuthConfirmRedirectUrl] = useState("");
+
+  const handleCheckEmailOpenChange = useCallback((next: boolean) => {
+    setCheckEmailOpen(next);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -92,7 +106,6 @@ function SignupForm() {
 
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null);
-    setInfo(null);
     startSignupTransition(() => setSubmitting(true));
 
     if (redirectTimerRef.current) {
@@ -108,6 +121,7 @@ function SignupForm() {
 
     const supabase = createBrowserSupabaseClient();
     const postcode = values.postcode?.trim() || null;
+    const confirmUrl = buildAuthConfirmUrl(window.location.origin, refParam);
 
     try {
       setAccountProgress(18);
@@ -115,7 +129,7 @@ function SignupForm() {
         email: values.email.trim(),
         password: values.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: confirmUrl,
         },
       });
 
@@ -178,16 +192,12 @@ function SignupForm() {
 
       setAccountStepId("finalizing");
       setAccountProgress(100);
-      const confirmMsg =
-        "We sent a confirmation link. After you verify your email and log in, continue to choose Lister or Cleaner.";
+      setPendingConfirmEmail(values.email.trim());
+      setAuthConfirmRedirectUrl(confirmUrl);
       setTimeout(() => {
         setAccountModalOpen(false);
         setAccountPhase("running");
-        setInfo(confirmMsg);
-        toast({
-          title: "Check your email",
-          description: confirmMsg,
-        });
+        setCheckEmailOpen(true);
       }, 450);
     } finally {
       setSubmitting(false);
@@ -196,6 +206,12 @@ function SignupForm() {
 
   return (
     <section className="page-inner flex min-h-[70vh] flex-col items-center justify-center px-3 py-8">
+      <RegistrationCheckEmailModal
+        open={checkEmailOpen}
+        onOpenChange={handleCheckEmailOpenChange}
+        email={pendingConfirmEmail}
+        emailRedirectTo={authConfirmRedirectUrl}
+      />
       <AccountCreationProgressModal
         open={accountModalOpen}
         onOpenChange={(next) => {
@@ -249,11 +265,6 @@ function SignupForm() {
             {error && (
               <Alert variant="destructive" className="text-sm">
                 {error}
-              </Alert>
-            )}
-            {info && (
-              <Alert className="border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
-                {info}
               </Alert>
             )}
 
