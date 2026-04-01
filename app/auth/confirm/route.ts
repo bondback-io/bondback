@@ -18,19 +18,42 @@ function confirmErrorRedirect(origin: string, message: string) {
 }
 
 /**
- * Email confirmation (signup) — **use this route only** for confirm-signup links, not `/auth/callback`.
- * `/auth/callback` is for OAuth PKCE; mixing both in Supabase “Redirect URLs” for the same email action
- * causes wrong redirects and “login” loops. Configure:
+ * ---------------------------------------------------------------------------
+ * Supabase — “Confirm signup” email template (fixes wrong host / vercel.com)
+ * ---------------------------------------------------------------------------
+ * The link in the email MUST open **your app** at `/auth/confirm`, not supabase.co only,
+ * and not a bare `{{ .RedirectTo }}` unless that value is already the **full** URL below.
  *
- * - **Authentication → URL Configuration → Redirect URLs:** include exactly your app origins, e.g.
- *   `https://your-production-domain.com/auth/confirm**`
- *   `http://localhost:3000/auth/confirm**`
- *   Keep `/auth/callback**` only for OAuth if needed — **Confirm signup email template** must point
- *   to `/auth/confirm` (or use `{{ .ConfirmationURL }}` after `signUp({ emailRedirectTo: .../auth/confirm?... })`).
- * - **Site URL:** your live app URL (e.g. `https://www.bondback.io`).
+ * **Recommended (simplest):** use the built-in confirmation URL Supabase generates from
+ * `signUp({ options: { emailRedirectTo: 'https://YOUR_DOMAIN/auth/confirm?next=%2Fdashboard' } })`:
  *
- * Flow: `verifyOtp({ type: 'signup', token_hash })` OR `exchangeCodeForSession(code)` → session cookies
- * on the response → role-based redirect via `redirectAfterAuthSessionEstablished`.
+ * ```html
+ * <p><a href="{{ .ConfirmationURL }}">Confirm your email</a></p>
+ * ```
+ *
+ * **Alternative (explicit path):** if you build the link yourself, use:
+ *
+ * ```html
+ * <p>
+ *   <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=%2Fdashboard">
+ *     Confirm your email
+ *   </a>
+ * </p>
+ * ```
+ *
+ * **Do not** use only `{{ .RedirectTo }}` as `href` unless your app passes that exact full URL
+ * (including `/auth/confirm?...`) in `emailRedirectTo`. A bare `RedirectTo` pointing at the wrong
+ * host or Supabase project URL is why users land on vercel.com or the wrong site.
+ *
+ * Dashboard → Authentication → URL configuration:
+ * - **Site URL:** `https://your-production-domain` (same as your app).
+ * - **Redirect URLs:** must include `https://your-production-domain/auth/confirm**` (and localhost for dev).
+ * - Keep `/auth/callback**` for OAuth only; email confirmation should use `/auth/confirm` as above.
+ *
+ * ---------------------------------------------------------------------------
+ * This route: `verifyOtp({ type: 'signup', token_hash })` OR PKCE `exchangeCodeForSession(code)` →
+ * session cookies on the response → `redirectAfterAuthSessionEstablished` (lister/cleaner dashboards).
+ * ---------------------------------------------------------------------------
  */
 export const GET = async (request: NextRequest) => {
   const started = Date.now();
@@ -50,8 +73,11 @@ export const GET = async (request: NextRequest) => {
     (k) => !["token_hash", "token", "code"].includes(k)
   );
 
+  const forwardedHost = request.headers.get("x-forwarded-host");
   console.log("[auth/confirm] GET", {
     origin,
+    host: request.nextUrl.host,
+    forwardedHost,
     pathname: request.nextUrl.pathname,
     hasCode: Boolean(code),
     hasTokenHash: Boolean(token_hash),
@@ -73,7 +99,7 @@ export const GET = async (request: NextRequest) => {
 
     if (!code && !token_hash) {
       console.warn("[auth/confirm] missing_code_and_token", {
-        hint: "Confirm signup template must link to /auth/confirm?token_hash=...&type=signup (or PKCE ?code=...). Check Supabase Redirect URLs include .../auth/confirm**",
+        hint: "Use {{ .ConfirmationURL }} or SiteURL + /auth/confirm?token_hash=...&type=signup in Supabase email template. Ensure Redirect URLs allow /auth/confirm**.",
       });
       return confirmErrorRedirect(
         origin,
@@ -110,6 +136,7 @@ export const GET = async (request: NextRequest) => {
       return noStoreHeaders(res);
     }
 
+    /** Signup email confirmation — default `signup`; query may override for other OTP types. */
     const otpType = (typeParam ?? "signup") as
       | "signup"
       | "email"
@@ -144,6 +171,7 @@ export const GET = async (request: NextRequest) => {
       userId: user?.id ?? null,
       hasSession: Boolean(session),
       emailConfirmed: Boolean(user?.email_confirmed_at),
+      type: otpType,
       ms: Date.now() - started,
     });
 
@@ -158,7 +186,10 @@ export const GET = async (request: NextRequest) => {
     return noStoreHeaders(res);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    console.error("[auth/confirm] unhandled_error", { message, stack: e instanceof Error ? e.stack : undefined });
+    console.error("[auth/confirm] unhandled_error", {
+      message,
+      stack: e instanceof Error ? e.stack : undefined,
+    });
     return confirmErrorRedirect(
       origin,
       "Something went wrong confirming your email. Try the link again or log in from the sign-up page."
