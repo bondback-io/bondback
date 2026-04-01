@@ -16,7 +16,29 @@ type SessionFinalizeParams = {
   /** `airtasker` = main `/signup`; `onboarding` = `/onboarding/signup`. */
   signupFlow: string | null;
   refParam: string | null;
+  /**
+   * Route Handler `NextResponse` that was passed to `createSupabaseRouteHandlerClient` so auth
+   * cookie writes landed on this object. Outgoing redirects must copy these Set-Cookie headers or
+   * the browser never receives a session (user appears logged out → middleware/login).
+   */
+  authCookieResponse?: NextResponse;
 };
+
+/** Copy Supabase auth cookies from the provisional route response onto the real redirect. */
+function redirectWithAuthCookies(
+  authCookieResponse: NextResponse | undefined,
+  destination: URL
+): NextResponse {
+  if (!authCookieResponse) {
+    return NextResponse.redirect(destination);
+  }
+  const out = NextResponse.redirect(destination);
+  const setCookies = authCookieResponse.headers.getSetCookie?.() ?? [];
+  for (const line of setCookies) {
+    out.headers.append("Set-Cookie", line);
+  }
+  return out;
+}
 
 /**
  * After `exchangeCodeForSession` or `verifyOtp` has established a session, apply profile rules
@@ -25,7 +47,7 @@ type SessionFinalizeParams = {
 export async function redirectAfterAuthSessionEstablished(
   params: SessionFinalizeParams
 ): Promise<NextResponse> {
-  const { supabase, request, next: nextRaw, signupFlow, refParam } = params;
+  const { supabase, request, next: nextRaw, signupFlow, refParam, authCookieResponse } = params;
   const origin = request.nextUrl.origin;
   const next = sanitizeInternalNextPath(nextRaw, "/dashboard");
 
@@ -33,7 +55,8 @@ export async function redirectAfterAuthSessionEstablished(
     data: { session },
   } = await supabase.auth.getSession();
   if (!session?.user?.id) {
-    return NextResponse.redirect(
+    return redirectWithAuthCookies(
+      authCookieResponse,
       new URL(
         `/login?message=${encodeURIComponent("Could not complete sign-in. Try the link again or log in with your email and password.")}`,
         origin
@@ -78,7 +101,7 @@ export async function redirectAfterAuthSessionEstablished(
     const loginUrl = new URL("/login", origin);
     loginUrl.searchParams.set("banned", "1");
     if (reason) loginUrl.searchParams.set("reason", reason);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithAuthCookies(authCookieResponse, loginUrl);
   }
 
   const roles = normalizeProfileRolesFromDb(p?.roles ?? null, !!p);
@@ -94,5 +117,5 @@ export async function redirectAfterAuthSessionEstablished(
     redirectTo = getPostLoginDashboardPath(p);
   }
 
-  return NextResponse.redirect(new URL(redirectTo, origin));
+  return redirectWithAuthCookies(authCookieResponse, new URL(redirectTo, origin));
 }

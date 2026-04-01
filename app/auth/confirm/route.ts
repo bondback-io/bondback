@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
 
@@ -10,17 +10,14 @@ function confirmErrorRedirect(origin: string, message: string) {
 }
 
 /**
- * Dedicated email-confirmation entry: verifies signup (or other OTP types) and establishes a session,
- * then redirects to the role-based dashboard (or onboarding) via `redirectAfterAuthSessionEstablished`.
- *
- * Configure Supabase "Confirm signup" redirect to this URL, e.g.
- * `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/dashboard`
- * (plus `ref` / `flow` if your app adds them from signUp `emailRedirectTo`).
+ * Email confirmation: `exchangeCodeForSession` (PKCE) or `verifyOtp` (token_hash + type).
+ * Session cookies are applied via `createSupabaseRouteHandlerClient` + `authCookieResponse`
+ * (see `redirectAfterAuthSessionEstablished`).
  */
 export const GET = async (request: NextRequest) => {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const token_hash = searchParams.get("token_hash");
+  const token_hash = searchParams.get("token_hash") ?? searchParams.get("token");
   const typeParam = searchParams.get("type");
   const error = searchParams.get("error");
   const error_code = searchParams.get("error_code");
@@ -30,15 +27,35 @@ export const GET = async (request: NextRequest) => {
   const signupFlow = searchParams.get("flow");
   const refParam = searchParams.get("ref");
 
+  console.log("[auth/confirm] request", {
+    origin,
+    path: request.nextUrl.pathname,
+    hasCode: Boolean(code),
+    hasTokenHash: Boolean(token_hash),
+    type: typeParam ?? "(default signup)",
+    hasError: Boolean(error || error_code),
+    next,
+  });
+
   if (error || error_code) {
     const msg =
       error_description?.replace(/\+/g, " ") ||
       error ||
       "Email confirmation was cancelled or could not be completed.";
+    console.warn("[auth/confirm] oauth error params", { error, error_code, msg });
     return confirmErrorRedirect(origin, msg);
   }
 
-  const supabase = await createServerSupabaseClient();
+  if (!code && !token_hash) {
+    console.warn("[auth/confirm] missing code and token_hash");
+    return confirmErrorRedirect(
+      origin,
+      "Invalid or missing confirmation link. Open the latest email from Bond Back or request a new confirmation from sign up."
+    );
+  }
+
+  const authCookieResponse = NextResponse.redirect(new URL("/dashboard", origin));
+  const supabase = createSupabaseRouteHandlerClient(request, authCookieResponse);
 
   if (code) {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
@@ -55,41 +72,43 @@ export const GET = async (request: NextRequest) => {
       next,
       signupFlow,
       refParam,
+      authCookieResponse,
     });
   }
 
-  if (token_hash) {
-    const otpType = (typeParam ?? "signup") as
-      | "signup"
-      | "email"
-      | "recovery"
-      | "invite"
-      | "magiclink"
-      | "email_change";
+  const otpType = (typeParam ?? "signup") as
+    | "signup"
+    | "email"
+    | "recovery"
+    | "invite"
+    | "magiclink"
+    | "email_change";
 
-    const { error: otpError } = await supabase.auth.verifyOtp({
-      token_hash,
-      type: otpType,
-    });
-    if (otpError) {
-      console.error("[auth/confirm] verifyOtp", otpError.message);
-      return confirmErrorRedirect(
-        origin,
-        otpError.message ||
-          "This confirmation link failed or expired. Request a new email from the sign-up page."
-      );
-    }
-    return redirectAfterAuthSessionEstablished({
-      supabase,
-      request,
-      next,
-      signupFlow,
-      refParam,
-    });
+  const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
+    token_hash: token_hash!,
+    type: otpType,
+  });
+
+  if (otpError) {
+    console.error("[auth/confirm] verifyOtp", otpError.message, { type: otpType });
+    return confirmErrorRedirect(
+      origin,
+      otpError.message ||
+        "This confirmation link failed or expired. Request a new email from the sign-up page."
+    );
   }
 
-  return confirmErrorRedirect(
-    origin,
-    "Invalid or missing confirmation link. Open the latest email from Bond Back or request a new confirmation from sign up."
-  );
+  console.log("[auth/confirm] verifyOtp ok", {
+    userId: otpData.user?.id ?? null,
+    session: Boolean(otpData.session),
+  });
+
+  return redirectAfterAuthSessionEstablished({
+    supabase,
+    request,
+    next,
+    signupFlow,
+    refParam,
+    authCookieResponse,
+  });
 };
