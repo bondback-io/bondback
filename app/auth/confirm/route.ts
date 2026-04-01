@@ -10,6 +10,18 @@ function noStoreHeaders(res: NextResponse) {
   return res;
 }
 
+/** Log shape without exposing full secrets in Vercel/server logs. */
+function redactTokenHash(token: string | null): string | null {
+  if (!token) return null;
+  if (token.length <= 12) return `[len=${token.length}]`;
+  return `${token.slice(0, 4)}…${token.slice(-4)} (len=${token.length})`;
+}
+
+function logRedirectDestination(source: string, res: NextResponse) {
+  const location = res.headers.get("location");
+  console.log("[auth/confirm] redirect_destination", { source, location });
+}
+
 function confirmErrorRedirect(origin: string, message: string) {
   const res = NextResponse.redirect(
     new URL(`/auth/confirm/error?message=${encodeURIComponent(message)}`, origin)
@@ -21,39 +33,14 @@ function confirmErrorRedirect(origin: string, message: string) {
  * ---------------------------------------------------------------------------
  * Supabase — “Confirm signup” email template (fixes wrong host / vercel.com)
  * ---------------------------------------------------------------------------
- * The link in the email MUST open **your app** at `/auth/confirm`, not supabase.co only,
- * and not a bare `{{ .RedirectTo }}` unless that value is already the **full** URL below.
+ * **Recommended:** `<a href="{{ .ConfirmationURL }}">Confirm your email</a>`
+ * (built from `signUp({ emailRedirectTo: 'https://YOUR_DOMAIN/auth/confirm?next=%2Fdashboard' })`).
  *
- * **Recommended (simplest):** use the built-in confirmation URL Supabase generates from
- * `signUp({ options: { emailRedirectTo: 'https://YOUR_DOMAIN/auth/confirm?next=%2Fdashboard' } })`:
- *
- * ```html
- * <p><a href="{{ .ConfirmationURL }}">Confirm your email</a></p>
- * ```
- *
- * **Alternative (explicit path):** if you build the link yourself, use:
- *
- * ```html
- * <p>
- *   <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=%2Fdashboard">
- *     Confirm your email
- *   </a>
- * </p>
- * ```
- *
- * **Do not** use only `{{ .RedirectTo }}` as `href` unless your app passes that exact full URL
- * (including `/auth/confirm?...`) in `emailRedirectTo`. A bare `RedirectTo` pointing at the wrong
- * host or Supabase project URL is why users land on vercel.com or the wrong site.
+ * **Alternative:** `<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=%2Fdashboard">…</a>`
  *
  * Dashboard → Authentication → URL configuration:
- * - **Site URL:** `https://your-production-domain` (same as your app).
- * - **Redirect URLs:** must include `https://your-production-domain/auth/confirm**` (and localhost for dev).
- * - Keep `/auth/callback**` for OAuth only; email confirmation should use `/auth/confirm` as above.
- *
- * ---------------------------------------------------------------------------
- * This route: `verifyOtp({ type: 'signup', token_hash })` OR PKCE `exchangeCodeForSession(code)` →
- * session cookies on the response → `redirectAfterAuthSessionEstablished` (lister/cleaner dashboards).
- * ---------------------------------------------------------------------------
+ * - **Redirect URLs:** `https://your-domain/auth/confirm**` (+ localhost for dev).
+ * - **Site URL:** your production app origin.
  */
 export const GET = async (request: NextRequest) => {
   const started = Date.now();
@@ -81,6 +68,7 @@ export const GET = async (request: NextRequest) => {
     pathname: request.nextUrl.pathname,
     hasCode: Boolean(code),
     hasTokenHash: Boolean(token_hash),
+    token_hash_preview: redactTokenHash(token_hash),
     type: typeParam ?? "signup (default)",
     hasOAuthError: Boolean(error || error_code),
     next,
@@ -99,7 +87,7 @@ export const GET = async (request: NextRequest) => {
 
     if (!code && !token_hash) {
       console.warn("[auth/confirm] missing_code_and_token", {
-        hint: "Use {{ .ConfirmationURL }} or SiteURL + /auth/confirm?token_hash=...&type=signup in Supabase email template. Ensure Redirect URLs allow /auth/confirm**.",
+        hint: "Use {{ .ConfirmationURL }} in Supabase email; add /auth/confirm** to Redirect URLs.",
       });
       return confirmErrorRedirect(
         origin,
@@ -133,10 +121,11 @@ export const GET = async (request: NextRequest) => {
         refParam,
         authCookieResponse,
       });
+      logRedirectDestination("pkce", res);
       return noStoreHeaders(res);
     }
 
-    /** Signup email confirmation — default `signup`; query may override for other OTP types. */
+    /** Email signup: `verifyOtp({ type: 'signup', token_hash })` — default type is `signup`. */
     const otpType = (typeParam ?? "signup") as
       | "signup"
       | "email"
@@ -145,7 +134,10 @@ export const GET = async (request: NextRequest) => {
       | "magiclink"
       | "email_change";
 
-    console.log("[auth/confirm] verifyOtp_start", { type: otpType });
+    console.log("[auth/confirm] verifyOtp_call", {
+      type: otpType,
+      token_hash_preview: redactTokenHash(token_hash),
+    });
 
     const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
       token_hash: token_hash!,
@@ -153,7 +145,8 @@ export const GET = async (request: NextRequest) => {
     });
 
     if (otpError) {
-      console.error("[auth/confirm] verifyOtp_failed", {
+      console.error("[auth/confirm] verifyOtp_result", {
+        ok: false,
         message: otpError.message,
         status: otpError.status,
         type: otpType,
@@ -167,7 +160,8 @@ export const GET = async (request: NextRequest) => {
 
     const session = otpData.session;
     const user = otpData.user;
-    console.log("[auth/confirm] verifyOtp_ok", {
+    console.log("[auth/confirm] verifyOtp_result", {
+      ok: true,
       userId: user?.id ?? null,
       hasSession: Boolean(session),
       emailConfirmed: Boolean(user?.email_confirmed_at),
@@ -183,6 +177,7 @@ export const GET = async (request: NextRequest) => {
       refParam,
       authCookieResponse,
     });
+    logRedirectDestination("verifyOtp", res);
     return noStoreHeaders(res);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
