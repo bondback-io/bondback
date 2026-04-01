@@ -59,6 +59,15 @@ export function emailsMapFromAuthUsers(users: User[]): Map<string, string> {
   return map;
 }
 
+/** Build id → last sign-in (ISO string) from Auth users — true “last login” for admin tables. */
+export function lastSignInMapFromAuthUsers(users: User[]): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const u of users) {
+    map.set(u.id, u.last_sign_in_at ?? null);
+  }
+  return map;
+}
+
 /**
  * Minimal `profiles` row for an Auth user with no DB profile yet (orphaned auth account).
  */

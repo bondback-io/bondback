@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js";
 import {
   createSupabaseAdminClient,
   emailsMapFromAuthUsers,
+  lastSignInMapFromAuthUsers,
   listAllAuthUsersPaginated,
   mergeProfilesWithAuthUsers,
 } from "@/lib/supabase/admin";
@@ -105,6 +106,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   ]);
 
   const emailsMap = emailsMapFromAuthUsers(authUsers);
+  const lastSignInMap = lastSignInMapFromAuthUsers(authUsers);
 
   if (process.env.NODE_ENV !== "production") {
      
@@ -337,7 +339,9 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                 <TableHead className="hidden md:table-cell">Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead className="whitespace-nowrap">Joined</TableHead>
-                <TableHead className="hidden lg:table-cell">Last active</TableHead>
+                <TableHead className="hidden md:table-cell whitespace-nowrap">
+                  Last login
+                </TableHead>
               <TableHead>Badges</TableHead>
                 <TableHead className="text-right">Jobs</TableHead>
                 <TableHead className="text-right hidden sm:table-cell">Earnings</TableHead>
@@ -360,6 +364,13 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                       ? "Lister"
                       : String(roles[0] ?? "Lister");
                 const email = emailsMap.get(user.id) ?? "—";
+                const lastSignInAt = lastSignInMap.get(user.id) ?? null;
+                const lastLoginLabel = lastSignInAt
+                  ? formatDistanceToNow(new Date(lastSignInAt), { addSuffix: true })
+                  : "Never";
+                const lastLoginAbsolute = lastSignInAt
+                  ? format(new Date(lastSignInAt), "MMM d, yyyy · h:mm a")
+                  : null;
                 const totalJobs = totalJobsByUser.get(user.id) ?? 0;
                 const totalEarnings = totalEarningsByUser.get(user.id) ?? 0;
                 const strength = calculateProfileStrength(user);
@@ -407,6 +418,15 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                             Deleted
                           </Badge>
                         )}
+                        <p
+                          className="pt-1 text-[11px] leading-snug text-muted-foreground md:hidden dark:text-gray-400"
+                          title={lastLoginAbsolute ?? "No login recorded"}
+                        >
+                          <span className="font-medium text-foreground/80 dark:text-gray-300">
+                            Last login:
+                          </span>{" "}
+                          {lastSignInAt ? lastLoginLabel : "Never"}
+                        </p>
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-sm text-muted-foreground dark:text-gray-400">
@@ -420,12 +440,20 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                         ? format(new Date(user.created_at), "MMM d, yyyy")
                         : "—"}
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground dark:text-gray-400">
-                      {user.updated_at
-                        ? formatDistanceToNow(new Date(user.updated_at), {
-                            addSuffix: true,
-                          })
-                        : "—"}
+                    <TableCell
+                      className="hidden md:table-cell text-xs text-muted-foreground dark:text-gray-400"
+                      title={lastLoginAbsolute ?? undefined}
+                    >
+                      {lastSignInAt ? (
+                        <>
+                          <span className="whitespace-nowrap">{lastLoginLabel}</span>
+                          <span className="mt-0.5 block text-[10px] text-muted-foreground/90 dark:text-gray-500">
+                            {format(new Date(lastSignInAt), "MMM d, yyyy")}
+                          </span>
+                        </>
+                      ) : (
+                        <span>Never</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <VerificationBadges badges={userBadges} showLabel={false} size="sm" />
