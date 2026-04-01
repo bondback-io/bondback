@@ -1,14 +1,12 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Mail } from "lucide-react";
 import { DialogOverlay } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-
-const AUTO_CLOSE_MS = 30_000;
 
 type RegistrationCheckEmailModalProps = {
   open: boolean;
@@ -21,7 +19,7 @@ type RegistrationCheckEmailModalProps = {
 
 /**
  * Post-signup feedback when email confirmation is required (no instant session).
- * Mobile-first: dark backdrop, large type, primary “Got it”, optional resend, 30s auto-dismiss.
+ * Mobile-first: dark backdrop, large type, primary “Got it”, optional resend; user dismisses only.
  */
 export function RegistrationCheckEmailModal({
   open,
@@ -31,27 +29,10 @@ export function RegistrationCheckEmailModal({
 }: RegistrationCheckEmailModalProps) {
   const [resending, setResending] = useState(false);
   const [resendHint, setResendHint] = useState<string | null>(null);
-  const autoCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearAutoClose = useCallback(() => {
-    if (autoCloseRef.current) {
-      clearTimeout(autoCloseRef.current);
-      autoCloseRef.current = null;
-    }
-  }, []);
 
   useEffect(() => {
-    if (!open) {
-      clearAutoClose();
-      setResendHint(null);
-      return;
-    }
-    autoCloseRef.current = setTimeout(() => {
-      autoCloseRef.current = null;
-      onOpenChange(false);
-    }, AUTO_CLOSE_MS);
-    return () => clearAutoClose();
-  }, [open, onOpenChange, clearAutoClose]);
+    if (!open) setResendHint(null);
+  }, [open]);
 
   const handleResend = async () => {
     const trimmed = email.trim();
