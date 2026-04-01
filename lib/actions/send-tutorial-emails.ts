@@ -75,6 +75,15 @@ export async function sendScheduledTutorialEmails(): Promise<{
       skipped++;
       continue;
     }
+
+    const role = row.active_role === "cleaner" ? "cleaner" : "lister";
+    const roleSentKey =
+      role === "lister" ? "email_tutorial_lister_sent" : "email_tutorial_cleaner_sent";
+    const prefMap = prefs as Record<string, boolean | undefined>;
+    if (prefMap[roleSentKey] === true) {
+      skipped++;
+      continue;
+    }
     if (prefs.email_tutorial_sent === true) {
       skipped++;
       continue;
@@ -85,8 +94,6 @@ export async function sendScheduledTutorialEmails(): Promise<{
       skipped++;
       continue;
     }
-
-    const role = row.active_role === "cleaner" ? "cleaner" : "lister";
     const firstName = row.full_name?.trim()?.split(" ")[0];
 
     try {
@@ -108,7 +115,11 @@ export async function sendScheduledTutorialEmails(): Promise<{
         skipped++;
         continue;
       }
-      const newPrefs = { ...prefs, email_tutorial_sent: true };
+      const newPrefs = {
+        ...prefs,
+        email_tutorial_sent: true,
+        [role === "lister" ? "email_tutorial_lister_sent" : "email_tutorial_cleaner_sent"]: true,
+      };
       await admin
         .from("profiles")
         .update({ notification_preferences: newPrefs })

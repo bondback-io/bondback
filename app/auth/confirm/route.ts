@@ -13,6 +13,18 @@ function confirmErrorRedirect(origin: string, message: string) {
  * Email confirmation: `exchangeCodeForSession` (PKCE) or `verifyOtp` (token_hash + type).
  * Session cookies are applied via `createSupabaseRouteHandlerClient` + `authCookieResponse`
  * (see `redirectAfterAuthSessionEstablished`).
+ *
+ * Supabase Dashboard → Authentication → Email Templates → Confirm signup:
+ * Prefer the built-in `{{ .ConfirmationURL }}` if it already targets your app.
+ * Or build a link (ensure `Site URL` + Redirect URLs match production), e.g.:
+ *   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=%2Fdashboard
+ * If `{{ .RedirectTo }}` is only the site origin (not already `/auth/confirm`), you can use:
+ *   {{ .RedirectTo }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup
+ * If `signUp` already sets `emailRedirectTo` to the full confirm URL, prefer `{{ .ConfirmationURL }}`
+ * or a single variable — avoid duplicating `/auth/confirm`.
+ *
+ * Dashboard → Authentication → URL Configuration: add `https://<your-domain>/auth/confirm**`
+ * (and localhost for dev). If users see “Vercel login”, disable Deployment Protection for that project.
  */
 export const GET = async (request: NextRequest) => {
   const { searchParams, origin } = request.nextUrl;

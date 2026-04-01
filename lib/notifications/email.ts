@@ -528,7 +528,7 @@ export async function buildWelcomeEmail(
 }
 
 /**
- * Build role-specific tutorial email (sent 24h after signup).
+ * Build role-specific tutorial email (sent when the user gains that role, or by 24h cron fallback).
  * Subjects and preheader tuned for engagement.
  */
 export async function buildTutorialEmail(

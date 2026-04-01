@@ -328,6 +328,36 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
     );
   }
 
+  const {
+    data: { session: sessionForEmail },
+  } = await supabase.auth.getSession();
+  if (isFirstRoleAssignment && sessionForEmail) {
+    const { data: nameRow } = await admin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    const fullName = (nameRow as { full_name?: string | null } | null)?.full_name ?? null;
+    const tutorialRoles =
+      choice === "both" ? (["lister", "cleaner"] as const) : choice === "lister" ? (["lister"] as const) : (["cleaner"] as const);
+    void import("@/lib/actions/onboarding-transactional-emails").then((m) =>
+      Promise.all([
+        m.sendWelcomeEmailAfterRoleChoice({
+          userId,
+          session: sessionForEmail,
+          choice,
+          fullName,
+        }),
+        m.sendTutorialEmailsForRoles({
+          userId,
+          session: sessionForEmail,
+          firstName: fullName?.trim()?.split(" ")[0],
+          roles: [...tutorialRoles],
+        }),
+      ]).catch(() => {})
+    );
+  }
+
   revalidatePath("/onboarding");
   revalidatePath("/onboarding/role-choice");
   revalidatePath("/onboarding/both");
@@ -372,7 +402,7 @@ export async function unlockRole(
 
   const { data: profile, error: fetchErr } = await admin
     .from("profiles")
-    .select("roles, active_role, abn")
+    .select("roles, active_role, abn, full_name")
     .eq("id", session.user.id)
     .maybeSingle();
 
@@ -401,6 +431,24 @@ export async function unlockRole(
     .eq("id", session.user.id);
 
   if (updateErr) return { ok: false, error: updateErr.message };
+
+  const {
+    data: { session: sessionForEmail },
+  } = await supabase.auth.getSession();
+  if (sessionForEmail) {
+    const firstName =
+      (profile as { full_name?: string | null }).full_name?.trim()?.split(" ")[0];
+    void import("@/lib/actions/onboarding-transactional-emails").then((m) =>
+      m
+        .sendTutorialEmailsForRoles({
+          userId: session.user.id,
+          session: sessionForEmail,
+          firstName,
+          roles: [newRole],
+        })
+        .catch(() => {})
+    );
+  }
 
   revalidatePath("/settings");
   revalidatePath("/profile");
@@ -500,44 +548,24 @@ export async function completeOnboardingFromSignup(
     void import("@/lib/actions/admin-notify-email").then((m) =>
       m.notifyAdminNewUserRegistration(session.user.id).catch(() => {})
     );
-  }
-
-  const email = session.user.email;
-  if (email) {
-    const { getGlobalSettings } = await import("@/lib/actions/global-settings");
-    const { getNotificationPrefs } = await import("@/lib/supabase/admin");
-    const globalSettings = await getGlobalSettings();
-    if (globalSettings?.emails_enabled !== false) {
-      const prefs = await getNotificationPrefs(session.user.id);
-      const emailWelcome = prefs?.notificationPreferences?.email_welcome;
-      if (emailWelcome !== false) {
-        const { sendEmail, buildWelcomeEmail } = await import("@/lib/notifications/email");
-        const firstName = details.full_name?.trim()?.split(" ")[0];
-        const signupRole = role === "both" ? "both" : role === "lister" ? "lister" : "cleaner";
-        const { subject, html } = await buildWelcomeEmail(firstName, signupRole);
-        const welcomeResult = await sendEmail(email, subject, html, {
-          log: { userId: session.user.id, kind: "welcome" },
-        });
-        if (welcomeResult.skipped) {
-          console.info("[email:welcome]", {
-            outcome: "skipped",
-            userId: session.user.id,
-            reason: "global_emails_disabled",
-          });
-        } else if (!welcomeResult.ok) {
-          console.error("[email:welcome]", {
-            outcome: "failed",
-            userId: session.user.id,
-            error: welcomeResult.error ?? "unknown",
-          });
-        } else {
-          console.info("[email:welcome]", {
-            outcome: "sent",
-            userId: session.user.id,
-          });
-        }
-      }
-    }
+    const { sendWelcomeEmailAfterRoleChoice, sendTutorialEmailsForRoles } = await import(
+      "@/lib/actions/onboarding-transactional-emails"
+    );
+    const firstName = details.full_name?.trim()?.split(" ")[0];
+    const tutorialRoles =
+      role === "both" ? (["lister", "cleaner"] as const) : role === "lister" ? (["lister"] as const) : (["cleaner"] as const);
+    await sendWelcomeEmailAfterRoleChoice({
+      userId: session.user.id,
+      session,
+      choice: role,
+      fullName: details.full_name.trim() || null,
+    });
+    await sendTutorialEmailsForRoles({
+      userId: session.user.id,
+      session,
+      firstName,
+      roles: [...tutorialRoles],
+    });
   }
 
   revalidatePath("/onboarding");

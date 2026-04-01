@@ -84,9 +84,15 @@ function SignupForm() {
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState("");
   const [authConfirmRedirectUrl, setAuthConfirmRedirectUrl] = useState("");
 
-  const handleCheckEmailOpenChange = useCallback((next: boolean) => {
-    setCheckEmailOpen(next);
-  }, []);
+  const handleCheckEmailOpenChange = useCallback(
+    (next: boolean) => {
+      setCheckEmailOpen(next);
+      if (!next) {
+        scheduleRouterAction(() => router.replace("/login"));
+      }
+    },
+    [router]
+  );
 
   useEffect(() => {
     return () => {
