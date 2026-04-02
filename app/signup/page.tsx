@@ -49,7 +49,7 @@ import {
   saveCachedSignupLocation,
 } from "@/lib/location/signup-location-prefill";
 
-/** Email confirmation links open `/auth/confirm` (loading UI → `/api/auth/confirm` verifyOtp + redirect). */
+/** Email confirmation links open `/auth/confirm` (GET route verifies token and redirects). */
 function buildAuthConfirmUrl(origin: string, ref: string | null): string {
   const u = new URL(`${origin}/auth/confirm`);
   u.searchParams.set("next", "/dashboard");

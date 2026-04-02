@@ -29,6 +29,7 @@ export default async function AuthConfirmErrorPage({
   const message = firstMessage(sp);
   const reason = firstReason(sp);
   const isMissingToken = reason === "missing_token";
+  const isAlreadyUsed = reason === "already_used";
 
   return (
     <section className="page-inner flex min-h-[70vh] flex-col items-center justify-center px-4 py-10">
@@ -38,7 +39,9 @@ export default async function AuthConfirmErrorPage({
             Email confirmation
           </CardTitle>
           <CardDescription className="text-base text-muted-foreground">
-            Something went wrong with this link.
+            {isAlreadyUsed
+              ? "This confirmation link was already used."
+              : "Something went wrong with this link."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-6">
@@ -51,6 +54,12 @@ export default async function AuthConfirmErrorPage({
               <li>Try “Copy link” instead of tapping, if the app/browser strips the link.</li>
               <li>Request a new confirmation email from the sign-up page (same email address).</li>
             </ul>
+          ) : null}
+          {isAlreadyUsed ? (
+            <p className="text-center text-sm text-muted-foreground">
+              Your account may already be active. Use <strong>Log in</strong> with the same email and password you
+              registered with.
+            </p>
           ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button asChild className="min-h-12 w-full text-base font-semibold sm:flex-1" size="lg">

@@ -1,7 +1,8 @@
 /**
- * Supabase email links pass `type` on the redirect URL. The hosted "Confirm signup" template’s
- * `{{ .ConfirmationURL }}` uses `type=email` (see Auth → Email templates docs), not `type=signup`.
- * `verifyOtp({ token_hash, type })` must use the **same** type or Auth returns "invalid or expired".
+ * Supabase email links pass `type` on the redirect URL. It must match `verifyOtp({ token_hash, type })`.
+ *
+ * Bond Back email templates should use `type=signup` (see handoff / Supabase Confirm sign up template).
+ * If `type` is omitted, we default to `signup`. If the URL includes `type=email` (hosted default), we honour it.
  */
 const EMAIL_OTP_TYPES = [
   "signup",
@@ -21,6 +22,6 @@ export function resolveEmailOtpTypeFromSearchParams(
   if (raw && (EMAIL_OTP_TYPES as readonly string[]).includes(raw)) {
     return raw as EmailOtpType;
   }
-  /** Default matches Supabase’s documented ConfirmationURL for signup (`type=email`). */
-  return "email";
+  /** Default when `type` is missing — matches Bond Back template `&type=signup`. */
+  return "signup";
 }
