@@ -42,6 +42,7 @@ import {
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { RegistrationCheckEmailModal } from "@/components/auth/registration-check-email-modal";
 import { PENDING_MINIMAL_PROFILE_KEY } from "@/components/onboarding/onboarding-storage";
+import { getClientAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
 
 /** Email confirmation links hit `/auth/confirm` (verifyOtp + session + role-based redirect). */
 function buildAuthConfirmUrl(origin: string, ref: string | null): string {
@@ -127,7 +128,7 @@ function SignupForm() {
 
     const supabase = createBrowserSupabaseClient();
     const postcode = values.postcode?.trim() || null;
-    const confirmUrl = buildAuthConfirmUrl(window.location.origin, refParam);
+    const confirmUrl = buildAuthConfirmUrl(getClientAuthEmailRedirectOrigin(), refParam);
 
     try {
       setAccountProgress(18);

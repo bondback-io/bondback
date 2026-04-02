@@ -354,7 +354,9 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
           firstName: fullName?.trim()?.split(" ")[0],
           roles: [...tutorialRoles],
         }),
-      ]).catch(() => {})
+      ]).catch((e) => {
+        console.error("[saveRoleChoice] welcome/tutorial emails failed", e);
+      })
     );
   }
 

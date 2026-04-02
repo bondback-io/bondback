@@ -13,8 +13,39 @@ function prefsRecord(prefs: Record<string, boolean | undefined> | null | undefin
 }
 
 /**
+ * Prefer Auth API (admin) over JWT from `getSession()` — the cookie session can be stale right
+ * after email confirmation, so `session.user.email_confirmed_at` is still null while Auth has it.
+ */
+async function resolveAuthEmailAndConfirmed(
+  userId: string,
+  session: Session
+): Promise<{ email: string | null; emailConfirmed: boolean }> {
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (error) {
+      console.warn("[email:auth-resolve] getUserById failed; falling back to session JWT", {
+        userId,
+        message: error.message,
+      });
+    }
+    if (!error && data?.user) {
+      const u = data.user;
+      return {
+        email: u.email ?? null,
+        emailConfirmed: Boolean(u.email_confirmed_at),
+      };
+    }
+  }
+  return {
+    email: session.user.email ?? null,
+    emailConfirmed: Boolean(session.user.email_confirmed_at),
+  };
+}
+
+/**
  * Welcome email: after first role selection (main signup) or onboarding signup completion.
- * Only when email is confirmed (Supabase) and user has not opted out of `email_welcome`.
+ * Only when email is confirmed (Supabase Auth) and user has not opted out of `email_welcome`.
  */
 export async function sendWelcomeEmailAfterRoleChoice(params: {
   userId: string;
@@ -22,9 +53,9 @@ export async function sendWelcomeEmailAfterRoleChoice(params: {
   choice: "lister" | "cleaner" | "both";
   fullName: string | null;
 }): Promise<void> {
-  const email = params.session.user.email;
+  const { email, emailConfirmed } = await resolveAuthEmailAndConfirmed(params.userId, params.session);
   if (!email) return;
-  if (!params.session.user.email_confirmed_at) {
+  if (!emailConfirmed) {
     console.info("[email:welcome]", {
       outcome: "skipped",
       userId: params.userId,
@@ -81,9 +112,9 @@ export async function sendTutorialEmailsForRoles(params: {
   firstName: string | undefined;
   roles: TutorialRole[];
 }): Promise<void> {
-  const email = params.session.user.email;
+  const { email, emailConfirmed } = await resolveAuthEmailAndConfirmed(params.userId, params.session);
   if (!email) return;
-  if (!params.session.user.email_confirmed_at) {
+  if (!emailConfirmed) {
     console.info("[email:tutorial]", {
       outcome: "skipped",
       userId: params.userId,
