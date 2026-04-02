@@ -16,10 +16,10 @@ import {
   Mail,
   Menu,
   Scale,
-  Settings,
   Shield,
   UserCog,
   LifeBuoy,
+  Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -76,7 +76,7 @@ export const ADMIN_NAV_GROUPS: {
     items: [
       { label: "Global settings", href: "/admin/global-settings", icon: Globe },
       { label: "Activity log", href: "/admin/activity", icon: Activity },
-      { label: "Settings & Backups", href: "/admin/settings", icon: Settings },
+      { label: "Backups", href: "/admin/settings", icon: Database },
     ],
   },
 ];

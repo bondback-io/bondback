@@ -48,7 +48,7 @@ export type SectionId =
   | "disputes"
   | "payments"
   | "notifications"
-  | "settings";
+  | "backups";
 
 type Stats = {
   totalUsers: number;
@@ -88,7 +88,7 @@ export function AdminDashboardClient({
     { id: "disputes", label: "Disputes", icon: <AlertTriangle className="h-4 w-4" /> },
     { id: "payments", label: "Payments & payouts", icon: <DollarSign className="h-4 w-4" /> },
     { id: "notifications", label: "Notifications & emails", icon: <Bell className="h-4 w-4" /> },
-    { id: "settings", label: "Settings & backups", icon: <Database className="h-4 w-4" /> },
+    { id: "backups", label: "Backups", icon: <Database className="h-4 w-4" /> },
   ];
 
   const openDeleteStep1 = () => setDeleteStep1Open(true);
@@ -328,15 +328,27 @@ export function AdminDashboardClient({
           </Card>
         )}
 
-        {section === "settings" && (
+        {section === "backups" && (
           <Card className="border-border dark:border-gray-800 dark:bg-gray-900/80">
             <CardHeader>
-              <CardTitle className="text-lg dark:text-gray-100">Settings & backups</CardTitle>
+              <CardTitle className="text-lg dark:text-gray-100">Backups</CardTitle>
               <p className="text-sm text-muted-foreground dark:text-gray-400">
-                Database backup and operational settings. Use Supabase Dashboard or CLI for production backups.
+                Export JSON snapshots and backup guidance. Platform configuration (fees, Stripe, email defaults) is under{" "}
+                <Link href="/admin/global-settings" className="font-medium text-foreground underline-offset-4 hover:underline dark:text-gray-200">
+                  Global settings
+                </Link>
+                .
               </p>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="w-full justify-center sm:w-auto dark:border-gray-700 dark:hover:bg-gray-800"
+              >
+                <Link href="/admin/settings">Open Backups page →</Link>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -346,7 +358,7 @@ export function AdminDashboardClient({
                 Download Database Backup (stub)
               </Button>
               {backupMessage && (
-                <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+                <p className="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-xs dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
                   {backupMessage}
                 </p>
               )}

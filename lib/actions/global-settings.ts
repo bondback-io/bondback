@@ -480,7 +480,6 @@ export async function saveGlobalSettings(
   });
 
   revalidatePath("/admin/global-settings");
-  revalidatePath("/admin/settings");
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/emails");
   revalidatePath("/");
