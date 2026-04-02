@@ -21,6 +21,7 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminUsersFetchErrorToast } from "@/components/admin/admin-users-fetch-error-toast";
 import { AdminUserNotificationOverrides } from "@/components/admin/admin-user-notification-overrides";
 import { AdminUserActions } from "@/components/admin/admin-user-actions";
+import { AdminResendWelcomeEmail } from "@/components/admin/admin-resend-welcome-email";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getEffectivePayoutSchedule, formatPayoutScheduleLabel } from "@/lib/payout-schedule";
 import { formatDistanceToNow, format } from "date-fns";
@@ -196,6 +197,7 @@ export default async function AdminUserDetailPage({
                     View profile
                   </Link>
                 </Button>
+                <AdminResendWelcomeEmail userId={userId} />
                 <AdminUserActions
                   user={{
                     id: userId,

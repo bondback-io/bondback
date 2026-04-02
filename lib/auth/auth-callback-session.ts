@@ -6,6 +6,7 @@ import { upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
+import { sendWelcomeEmailAfterEmailVerification } from "@/lib/actions/onboarding-transactional-emails";
 
 type SessionFinalizeParams = {
   /** Matches `@supabase/ssr` server client (differs from bare `SupabaseClient<Database>` generics). */
@@ -22,6 +23,11 @@ type SessionFinalizeParams = {
    * the browser never receives a session (user appears logged out → middleware/login).
    */
   authCookieResponse?: NextResponse;
+  /**
+   * When true (default), send the welcome email once after email verification / OAuth first session.
+   * Set false only if you add another caller that must not trigger welcome.
+   */
+  sendWelcomeEmail?: boolean;
 };
 
 /** Copy Supabase auth cookies from the provisional route response onto the real redirect. */
@@ -47,7 +53,15 @@ function redirectWithAuthCookies(
 export async function redirectAfterAuthSessionEstablished(
   params: SessionFinalizeParams
 ): Promise<NextResponse> {
-  const { supabase, request, next: nextRaw, signupFlow, refParam, authCookieResponse } = params;
+  const {
+    supabase,
+    request,
+    next: nextRaw,
+    signupFlow,
+    refParam,
+    authCookieResponse,
+    sendWelcomeEmail = true,
+  } = params;
   const origin = request.nextUrl.origin;
   const next = sanitizeInternalNextPath(nextRaw, "/dashboard");
 
@@ -115,6 +129,25 @@ export async function redirectAfterAuthSessionEstablished(
         : "/onboarding/role-choice";
   } else if (!hasNoRole && next === "/dashboard") {
     redirectTo = getPostLoginDashboardPath(p);
+  }
+
+  if (sendWelcomeEmail && session.user.id) {
+    try {
+      const result = await sendWelcomeEmailAfterEmailVerification({
+        userId: session.user.id,
+        session,
+        trigger: "auth_redirect_after_verify",
+      });
+      console.info("[auth-callback-session] welcome_email", {
+        userId: session.user.id,
+        ...result,
+      });
+    } catch (e) {
+      console.error("[auth-callback-session] welcome_email_failed", {
+        userId: session.user.id,
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 
   return redirectWithAuthCookies(authCookieResponse, new URL(redirectTo, origin));

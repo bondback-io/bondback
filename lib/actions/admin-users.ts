@@ -1,8 +1,10 @@
 "use server";
 
+import type { Session } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { sendWelcomeEmailAfterEmailVerification } from "@/lib/actions/onboarding-transactional-emails";
 import { createNotification } from "@/lib/actions/notifications";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import type {
@@ -370,4 +372,46 @@ export async function adminUpdateNotificationPreferences(
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${userId}`);
   return { ok: true };
+}
+
+/** Admin only: resend the signup welcome email (testing / support). Ignores email_welcome_sent. */
+export async function adminResendWelcomeEmail(
+  userId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireAdmin(supabase);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const db = requireServiceRole();
+  if (!db.ok) return { ok: false, error: db.error };
+
+  const { data: userData, error } = await db.supabaseAdmin.auth.admin.getUserById(userId);
+  if (error || !userData?.user?.email) {
+    return { ok: false, error: error?.message ?? "User not found or has no email." };
+  }
+
+  const session = { user: userData.user } as Session;
+  const result = await sendWelcomeEmailAfterEmailVerification({
+    userId,
+    session,
+    force: true,
+    trigger: "admin_resend",
+  });
+
+  if (result.ok) {
+    await logAdminActivity({
+      adminId: auth.adminId!,
+      actionType: "user_welcome_email_resent",
+      targetType: "user",
+      targetId: userId,
+      details: {},
+    });
+    revalidatePath("/admin/users");
+    revalidatePath(`/admin/users/${userId}`);
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    error: result.error ?? result.skipped ?? "Welcome email was not sent.",
+  };
 }

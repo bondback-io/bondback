@@ -341,25 +341,16 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
     const tutorialRoles =
       choice === "both" ? (["lister", "cleaner"] as const) : choice === "lister" ? (["lister"] as const) : (["cleaner"] as const);
     try {
-      const { sendWelcomeEmailAfterRoleChoice, sendTutorialEmailsForRoles } = await import(
-        "@/lib/actions/onboarding-transactional-emails"
-      );
-      await Promise.all([
-        sendWelcomeEmailAfterRoleChoice({
-          userId,
-          session: sessionForEmail,
-          choice,
-          fullName,
-        }),
-        sendTutorialEmailsForRoles({
-          userId,
-          session: sessionForEmail,
-          firstName: fullName?.trim()?.split(" ")[0],
-          roles: [...tutorialRoles],
-        }),
-      ]);
+      const { sendTutorialEmailsForRoles } = await import("@/lib/actions/onboarding-transactional-emails");
+      await sendTutorialEmailsForRoles({
+        userId,
+        session: sessionForEmail,
+        firstName: fullName?.trim()?.split(" ")[0],
+        roles: [...tutorialRoles],
+        skipEmailConfirmedCheck: true,
+      });
     } catch (e) {
-      console.error("[saveRoleChoice] welcome/tutorial emails failed", e);
+      console.error("[saveRoleChoice] tutorial emails failed", e);
     }
   }
 
@@ -450,6 +441,7 @@ export async function unlockRole(
           session: sessionForEmail,
           firstName,
           roles: [newRole],
+          skipEmailConfirmedCheck: true,
         })
         .catch(() => {})
     );
@@ -553,23 +545,23 @@ export async function completeOnboardingFromSignup(
     void import("@/lib/actions/admin-notify-email").then((m) =>
       m.notifyAdminNewUserRegistration(session.user.id).catch(() => {})
     );
-    const { sendWelcomeEmailAfterRoleChoice, sendTutorialEmailsForRoles } = await import(
+    const { sendWelcomeEmailAfterEmailVerification, sendTutorialEmailsForRoles } = await import(
       "@/lib/actions/onboarding-transactional-emails"
     );
     const firstName = details.full_name?.trim()?.split(" ")[0];
     const tutorialRoles =
       role === "both" ? (["lister", "cleaner"] as const) : role === "lister" ? (["lister"] as const) : (["cleaner"] as const);
-    await sendWelcomeEmailAfterRoleChoice({
+    await sendWelcomeEmailAfterEmailVerification({
       userId: session.user.id,
       session,
-      choice: role,
-      fullName: details.full_name.trim() || null,
+      trigger: "onboarding_signup_complete",
     });
     await sendTutorialEmailsForRoles({
       userId: session.user.id,
       session,
       firstName,
       roles: [...tutorialRoles],
+      skipEmailConfirmedCheck: true,
     });
   }
 

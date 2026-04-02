@@ -6,21 +6,29 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getNotificationPrefs } from "@/lib/supabase/admin";
 import { buildTutorialEmail, buildWelcomeEmail, sendEmail } from "@/lib/notifications/email";
+import type { ProfileRole } from "@/lib/types";
+import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 
 type TutorialRole = "lister" | "cleaner";
+
+const WELCOME_SENT_KEY = "email_welcome_sent" as const;
 
 function prefsRecord(prefs: Record<string, boolean | undefined> | null | undefined) {
   return { ...(prefs ?? {}) } as Record<string, boolean | undefined>;
 }
 
+function logEmailEnvSnapshot(context: string) {
+  console.info("[email:onboarding:env]", {
+    context,
+    hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
+    hasResendKey: Boolean(process.env.RESEND_API_KEY?.trim()),
+    resendFrom: process.env.RESEND_FROM?.trim() || "(default Bond Back <onboarding@resend.dev>)",
+  });
+}
+
 /**
- * Resolve recipient email and whether the address is confirmed for transactional onboarding emails.
- *
- * Order (merge with OR for `emailConfirmed`):
- * 1) `createServerSupabaseClient().auth.getUser()` — validates JWT with Auth and returns **fresh**
- *    `email_confirmed_at` (recommended over cookie `session` alone after email confirmation).
- * 2) `auth.admin.getUserById` — authoritative Auth record when service role is available.
- * 3) `session.user` — fallback when the above are unavailable.
+ * Resolve recipient email and whether the address is confirmed for **tutorial** (sent after role
+ * selection). Welcome uses {@link sendWelcomeEmailAfterEmailVerification} and does not require this.
  */
 async function resolveAuthEmailAndConfirmed(
   userId: string,
@@ -55,7 +63,7 @@ async function resolveAuthEmailAndConfirmed(
   if (admin) {
     const { data, error } = await admin.auth.admin.getUserById(userId);
     if (error) {
-      console.warn("[email:auth-resolve] getUserById failed; using session JWT if needed", {
+      console.warn("[email:auth-resolve] getUserById failed", {
         userId,
         message: error.message,
       });
@@ -78,37 +86,53 @@ async function resolveAuthEmailAndConfirmed(
   emailConfirmed = emailConfirmed || Boolean(session.user.email_confirmed_at);
 
   if (email && !emailConfirmed) {
-    console.warn("[email:auth-resolve] still_unconfirmed_after_merge", {
-      userId,
-      note: "If Supabase requires confirmed email, onboarding emails may be skipped until Auth shows email_confirmed_at.",
-    });
+    console.warn("[email:auth-resolve] still_unconfirmed_after_merge", { userId });
   }
 
   return { email, emailConfirmed };
 }
 
+function welcomeRoleFromProfileRoles(roles: ProfileRole[]): "lister" | "cleaner" | "both" {
+  if (roles.length === 0) return "both";
+  if (roles.length >= 2) return "both";
+  return roles[0] === "cleaner" ? "cleaner" : "lister";
+}
+
 /**
- * Welcome email: after first role selection (main signup) or onboarding signup completion.
- * Only when email is confirmed (Supabase Auth) and user has not opted out of `email_welcome`.
+ * Sends the **welcome** email once after the user completes email verification (session established
+ * in `/auth/confirm` or `/auth/callback`). Does **not** rely on `email_confirmed_at` in the JWT
+ * (the caller is only invoked immediately after a successful verifyOtp / exchangeCodeForSession).
+ *
+ * Idempotent via `notification_preferences.email_welcome_sent` unless `force` (admin resend).
  */
-export async function sendWelcomeEmailAfterRoleChoice(params: {
+export async function sendWelcomeEmailAfterEmailVerification(params: {
   userId: string;
   session: Session;
-  choice: "lister" | "cleaner" | "both";
-  fullName: string | null;
-}): Promise<void> {
-  const { email, emailConfirmed } = await resolveAuthEmailAndConfirmed(params.userId, params.session);
+  /** Where this was triggered (logs, debugging). */
+  trigger?: string;
+  /** Admin “Resend welcome” — skips email_welcome_sent guard. */
+  force?: boolean;
+}): Promise<{ ok: boolean; skipped?: string; error?: string }> {
+  const trigger = params.trigger ?? "auth_session";
+  logEmailEnvSnapshot(`welcome:${trigger}`);
+
+  const email =
+    params.session.user.email?.trim() ||
+    (await (async () => {
+      const admin = createSupabaseAdminClient();
+      if (!admin) return null;
+      const { data } = await admin.auth.admin.getUserById(params.userId);
+      return data?.user?.email?.trim() ?? null;
+    })());
+
   if (!email) {
-    console.info("[email:welcome]", { outcome: "skipped", userId: params.userId, reason: "no_email" });
-    return;
-  }
-  if (!emailConfirmed) {
     console.info("[email:welcome]", {
       outcome: "skipped",
       userId: params.userId,
-      reason: "email_not_confirmed",
+      trigger,
+      reason: "no_email",
     });
-    return;
+    return { ok: false, skipped: "no_email" };
   }
 
   const globalSettings = await getGlobalSettings();
@@ -116,9 +140,10 @@ export async function sendWelcomeEmailAfterRoleChoice(params: {
     console.info("[email:welcome]", {
       outcome: "skipped",
       userId: params.userId,
+      trigger,
       reason: "global_emails_disabled",
     });
-    return;
+    return { ok: false, skipped: "global_emails_disabled" };
   }
 
   const prefs = await getNotificationPrefs(params.userId);
@@ -126,72 +151,145 @@ export async function sendWelcomeEmailAfterRoleChoice(params: {
     console.info("[email:welcome]", {
       outcome: "skipped",
       userId: params.userId,
+      trigger,
       reason: "user_pref_email_welcome_off",
     });
-    return;
+    return { ok: false, skipped: "user_pref_email_welcome_off" };
   }
   if (prefs?.emailForceDisabled) {
     console.info("[email:welcome]", {
       outcome: "skipped",
       userId: params.userId,
+      trigger,
       reason: "email_force_disabled",
     });
-    return;
+    return { ok: false, skipped: "email_force_disabled" };
   }
 
-  const firstName = params.fullName?.trim()?.split(" ")[0];
-  const signupRole = params.choice;
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    console.warn("[email:welcome] no_service_role_admin — attempting send without prefs/idempotency", {
+      userId: params.userId,
+      trigger,
+    });
+    const { subject, html } = await buildWelcomeEmail(undefined, "both");
+    const welcomeResult = await sendEmail(email, subject, html, {
+      log: { userId: params.userId, kind: "welcome" },
+    });
+    if (!welcomeResult.ok) {
+      return { ok: false, error: welcomeResult.error ?? "send_failed" };
+    }
+    const outcome = welcomeResult.skipped ? "skipped" : "sent";
+    console.info("[email:welcome]", { outcome, userId: params.userId, trigger, note: "fallback_no_admin" });
+    return welcomeResult.skipped ? { ok: false, skipped: "send_skipped" } : { ok: true };
+  }
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("notification_preferences, full_name, roles, active_role")
+    .eq("id", params.userId)
+    .maybeSingle();
+
+  const merged = prefsRecord(
+    profile?.notification_preferences as Record<string, boolean | undefined> | null
+  );
+  if (merged[WELCOME_SENT_KEY] === true && !params.force) {
+    console.info("[email:welcome]", {
+      outcome: "skipped",
+      userId: params.userId,
+      trigger,
+      reason: "already_sent",
+    });
+    return { ok: false, skipped: "already_sent" };
+  }
+
+  const fullName = (profile as { full_name?: string | null } | null)?.full_name ?? null;
+  const roles = normalizeProfileRolesFromDb(
+    (profile as { roles?: unknown } | null)?.roles ?? null,
+    !!profile
+  );
+  const signupRole = welcomeRoleFromProfileRoles(roles);
+  const firstName = fullName?.trim()?.split(" ")[0];
+
+  console.info("[email:welcome:attempt]", {
+    userId: params.userId,
+    trigger,
+    force: Boolean(params.force),
+    signupRole,
+    to: email.replace(/(^.).*(@.*)$/, "$1***$2"),
+  });
+
   const { subject, html } = await buildWelcomeEmail(firstName, signupRole);
   const welcomeResult = await sendEmail(email, subject, html, {
     log: { userId: params.userId, kind: "welcome" },
   });
+
   if (welcomeResult.skipped) {
     console.info("[email:welcome]", {
       outcome: "skipped",
       userId: params.userId,
+      trigger,
       reason: "send_skipped",
     });
-  } else if (!welcomeResult.ok) {
+    return { ok: false, skipped: "send_skipped" };
+  }
+  if (!welcomeResult.ok) {
     console.error("[email:welcome]", {
       outcome: "failed",
       userId: params.userId,
+      trigger,
       error: welcomeResult.error ?? "unknown",
     });
-  } else {
-    console.info("[email:welcome]", { outcome: "sent", userId: params.userId });
+    return { ok: false, error: welcomeResult.error ?? "unknown" };
   }
-}
 
-function shouldSkipTutorialForRole(
-  merged: Record<string, boolean | undefined>,
-  role: TutorialRole
-): boolean {
-  const key = role === "lister" ? "email_tutorial_lister_sent" : "email_tutorial_cleaner_sent";
-  return merged[key] === true;
+  merged[WELCOME_SENT_KEY] = true;
+  await admin
+    .from("profiles")
+    .update({ notification_preferences: merged as never })
+    .eq("id", params.userId);
+
+  console.info("[email:welcome]", { outcome: "sent", userId: params.userId, trigger });
+  return { ok: true };
 }
 
 /**
  * Role-specific tutorial emails (lister vs cleaner). Tracks
  * `email_tutorial_lister_sent` / `email_tutorial_cleaner_sent` in notification_preferences.
+ *
+ * When `skipEmailConfirmedCheck` is true (first role selection after login), we still require an
+ * email address but do not skip if `email_confirmed_at` is missing from the JWT (common after
+ * confirm + immediate navigation).
  */
 export async function sendTutorialEmailsForRoles(params: {
   userId: string;
   session: Session;
   firstName: string | undefined;
   roles: TutorialRole[];
+  skipEmailConfirmedCheck?: boolean;
 }): Promise<void> {
-  const { email, emailConfirmed } = await resolveAuthEmailAndConfirmed(params.userId, params.session);
+  const resolved = await resolveAuthEmailAndConfirmed(params.userId, params.session);
+  const email = resolved.email;
+  const emailConfirmed = resolved.emailConfirmed;
+
   if (!email) {
     console.info("[email:tutorial]", { outcome: "skipped", userId: params.userId, reason: "no_email" });
     return;
   }
-  if (!emailConfirmed) {
+  if (!emailConfirmed && !params.skipEmailConfirmedCheck) {
     console.info("[email:tutorial]", {
       outcome: "skipped",
       userId: params.userId,
       reason: "email_not_confirmed",
     });
     return;
+  }
+  if (!emailConfirmed && params.skipEmailConfirmedCheck) {
+    console.info("[email:tutorial]", {
+      outcome: "proceeding",
+      userId: params.userId,
+      reason: "skipEmailConfirmedCheck_after_role_choice",
+    });
   }
 
   const globalSettings = await getGlobalSettings();
@@ -247,7 +345,14 @@ export async function sendTutorialEmailsForRoles(params: {
   const uniqueRoles = [...new Set(params.roles)];
 
   for (const role of uniqueRoles) {
-    if (shouldSkipTutorialForRole(merged, role)) continue;
+    const key = role === "lister" ? "email_tutorial_lister_sent" : "email_tutorial_cleaner_sent";
+    if (merged[key] === true) continue;
+
+    console.info("[email:tutorial:attempt]", {
+      userId: params.userId,
+      role,
+      to: email.replace(/(^.).*(@.*)$/, "$1***$2"),
+    });
 
     const { subject, html } = await buildTutorialEmail(role, params.firstName);
     const result = await sendEmail(email, subject, html, {
@@ -272,7 +377,6 @@ export async function sendTutorialEmailsForRoles(params: {
       continue;
     }
 
-    const key = role === "lister" ? "email_tutorial_lister_sent" : "email_tutorial_cleaner_sent";
     merged[key] = true;
     merged.email_tutorial_sent = true;
     wrote = true;
