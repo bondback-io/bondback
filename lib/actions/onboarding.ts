@@ -77,6 +77,7 @@ export async function saveOnboardingProfile(profile: {
 export async function upsertMinimalProfileAfterSignup(input: {
   full_name: string;
   postcode: string | null;
+  suburb?: string | null;
   referralCode?: string | null;
 }): Promise<SaveOnboardingResult> {
   const supabase = await createServerSupabaseClient();
@@ -131,7 +132,7 @@ export async function upsertMinimalProfileAfterSignup(input: {
     id: userId,
     full_name: input.full_name.trim() || null,
     postcode: input.postcode?.trim() || null,
-    suburb: "",
+    suburb: input.suburb?.trim() ?? "",
     max_travel_km: 30,
     roles: [],
     ...(!alreadyReferred && referredBy ? { referred_by: referredBy } : {}),

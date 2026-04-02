@@ -5,9 +5,9 @@
  * BOND BACK — SINGLE SIGN-UP (Airtasker-style)
  * ============================================================================
  * SUMMARY
- * - One form: email, password, confirm password, full name, postcode.
+ * - One form: email, password, confirm password, full name, suburb, postcode (suburb/postcode prefilled from cache or location when possible).
  * - With session (instant / dev): upsert minimal profile `roles: []` → `/onboarding/role-choice`.
- * - Email-confirm flow: stash name/postcode in localStorage; after confirm + login,
+ * - Email-confirm flow: stash name/suburb/postcode in localStorage; after confirm + login,
  *   `PendingProfileSync` on role-choice runs the same minimal upsert.
  *
  * FLOW (high level)
@@ -43,6 +43,11 @@ import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { RegistrationCheckEmailModal } from "@/components/auth/registration-check-email-modal";
 import { PENDING_MINIMAL_PROFILE_KEY } from "@/components/onboarding/onboarding-storage";
 import { getClientAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
+import {
+  loadCachedSignupLocation,
+  reverseGeocodeAuForSignupPrefill,
+  saveCachedSignupLocation,
+} from "@/lib/location/signup-location-prefill";
 
 /** Email confirmation links hit `/auth/confirm` (verifyOtp + session + role-based redirect). */
 function buildAuthConfirmUrl(origin: string, ref: string | null): string {
@@ -58,6 +63,7 @@ const signupSchema = z
     password: z.string().min(6, "At least 6 characters"),
     confirmPassword: z.string().min(1, "Confirm your password"),
     fullName: z.string().min(1, "Name is required").max(120),
+    suburb: z.string().max(120).optional().or(z.literal("")),
     postcode: z
       .string()
       .max(10)
@@ -86,6 +92,7 @@ function SignupForm() {
   const [accountStepId, setAccountStepId] = useState<string>("auth");
   const [accountSteps, setAccountSteps] = useState<readonly AccountCreationStep[]>(SIGNUP_ACCOUNT_STEPS_SESSION);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const geoPrefillAttemptedRef = useRef(false);
 
   const [checkEmailOpen, setCheckEmailOpen] = useState(false);
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState("");
@@ -114,9 +121,23 @@ function SignupForm() {
       password: "",
       confirmPassword: "",
       fullName: "",
+      suburb: "",
       postcode: "",
     },
   });
+
+  useEffect(() => {
+    const cached = loadCachedSignupLocation();
+    if (cached?.postcode) form.setValue("postcode", cached.postcode);
+    if (cached?.suburb) form.setValue("suburb", cached.suburb);
+    if (cached?.postcode || cached?.suburb) return;
+    if (geoPrefillAttemptedRef.current) return;
+    geoPrefillAttemptedRef.current = true;
+    void reverseGeocodeAuForSignupPrefill().then((geo) => {
+      if (geo?.postcode) form.setValue("postcode", geo.postcode);
+      if (geo?.suburb) form.setValue("suburb", geo.suburb);
+    });
+  }, [form]);
 
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null);
@@ -135,6 +156,7 @@ function SignupForm() {
 
     const supabase = createBrowserSupabaseClient();
     const postcode = values.postcode?.trim() || null;
+    const suburb = values.suburb?.trim() || null;
     const confirmUrl = buildAuthConfirmUrl(getClientAuthEmailRedirectOrigin(), refParam);
 
     try {
@@ -163,6 +185,7 @@ function SignupForm() {
 
       const pendingPayload = {
         full_name: values.fullName.trim(),
+        suburb,
         postcode,
         referralCode: refParam,
       };
@@ -172,6 +195,7 @@ function SignupForm() {
         setAccountProgress(44);
         const result = await upsertMinimalProfileAfterSignup({
           full_name: pendingPayload.full_name,
+          suburb: pendingPayload.suburb,
           postcode: pendingPayload.postcode,
           referralCode: pendingPayload.referralCode,
         });
@@ -203,6 +227,8 @@ function SignupForm() {
       } catch {
         /* ignore quota */
       }
+
+      saveCachedSignupLocation(values.postcode ?? "", values.suburb ?? "");
 
       setAccountStepId("finalizing");
       setAccountProgress(100);
@@ -346,6 +372,22 @@ function SignupForm() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="suburb" className="text-base">
+                Suburb
+              </Label>
+              <Input
+                id="suburb"
+                autoComplete="address-level2"
+                className="min-h-12 text-base"
+                placeholder="e.g. Surry Hills"
+                {...form.register("suburb")}
+              />
+              {form.formState.errors.suburb && (
+                <p className="text-sm text-destructive">{form.formState.errors.suburb.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="postcode" className="text-base">
                 Postcode
               </Label>
@@ -357,6 +399,9 @@ function SignupForm() {
                 placeholder="e.g. 2000"
                 {...form.register("postcode")}
               />
+              <p className="text-xs text-muted-foreground">
+                We may suggest suburb and postcode from your location (you can edit). Last values are remembered on this device.
+              </p>
               {form.formState.errors.postcode && (
                 <p className="text-sm text-destructive">{form.formState.errors.postcode.message}</p>
               )}

@@ -7,7 +7,7 @@
  *
  * ONBOARDING FLOW DIAGRAM
  * -----------------------
- *   /signup (email, password, name, postcode)
+ *   /signup (email, password, name, suburb, postcode)
  *        │
  *        ▼
  *   /onboarding/role-choice   ◄── you are here
@@ -77,12 +77,14 @@ export function RoleChoiceClient() {
         try {
           const payload = JSON.parse(raw) as {
             full_name?: string;
+            suburb?: string | null;
             postcode?: string | null;
             referralCode?: string | null;
           };
           if (payload?.full_name?.trim()) {
             await upsertMinimalProfileAfterSignup({
               full_name: payload.full_name,
+              suburb: payload.suburb ?? null,
               postcode: payload.postcode ?? null,
               referralCode: payload.referralCode ?? null,
             });
