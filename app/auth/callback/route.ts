@@ -2,12 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
+import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
 
 export const GET = async (request: NextRequest) => {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
   const token_hash = searchParams.get("token_hash") ?? searchParams.get("token");
-  const typeParam = searchParams.get("type");
   const error = searchParams.get("error");
   const error_code = searchParams.get("error_code");
   const error_description = searchParams.get("error_description");
@@ -59,13 +59,7 @@ export const GET = async (request: NextRequest) => {
     });
   }
 
-  const otpType = (typeParam ?? "signup") as
-    | "signup"
-    | "email"
-    | "recovery"
-    | "invite"
-    | "magiclink"
-    | "email_change";
+  const otpType = resolveEmailOtpTypeFromSearchParams(searchParams);
 
   const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
     token_hash: token_hash!,

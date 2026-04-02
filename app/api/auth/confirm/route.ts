@@ -2,9 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
-
-/** Signup confirmation emails (Site URL template) must use verifyOtp type `signup`. */
-const SIGNUP_OTP_TYPE = "signup" as const;
+import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +62,7 @@ export const GET = async (request: NextRequest) => {
   const code = searchParams.get("code")?.trim() || null;
   const token_hash = readTokenHashFromRequest(searchParams);
   const typeFromQuery = readTypeParamForLog(searchParams);
+  const resolvedOtpType = resolveEmailOtpTypeFromSearchParams(searchParams);
   const error = searchParams.get("error");
   const error_code = searchParams.get("error_code");
   const error_description = searchParams.get("error_description");
@@ -79,13 +78,6 @@ export const GET = async (request: NextRequest) => {
   const forwardedHost = request.headers.get("x-forwarded-host");
   const rawQuery = request.nextUrl.search?.slice(0, 500) ?? "";
 
-  if (typeFromQuery && typeFromQuery.toLowerCase() !== SIGNUP_OTP_TYPE) {
-    console.warn("[api/auth/confirm] type_query_not_signup", {
-      typeFromQuery,
-      note: "verifyOtp will still use type: signup for this route",
-    });
-  }
-
   console.log("[api/auth/confirm] GET", {
     origin,
     host: request.nextUrl.host,
@@ -95,7 +87,7 @@ export const GET = async (request: NextRequest) => {
     hasTokenHash: Boolean(token_hash),
     token_hash_preview: redactTokenHash(token_hash),
     typeFromQuery,
-    verifyOtpType: code ? "pkce_exchange" : SIGNUP_OTP_TYPE,
+    resolvedOtpType: code ? "pkce_exchange" : resolvedOtpType,
     hasOAuthError: Boolean(error || error_code),
     next,
     paramKeys,
@@ -161,14 +153,14 @@ export const GET = async (request: NextRequest) => {
     }
 
     console.log("[api/auth/confirm] verifyOtp_call", {
-      type: SIGNUP_OTP_TYPE,
+      type: resolvedOtpType,
       token_hash_preview: redactTokenHash(token_hash),
       typeFromQuery,
     });
 
     const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
       token_hash: token_hash!,
-      type: SIGNUP_OTP_TYPE,
+      type: resolvedOtpType,
     });
 
     if (otpError) {
@@ -176,7 +168,7 @@ export const GET = async (request: NextRequest) => {
         ok: false,
         message: otpError.message,
         status: otpError.status,
-        type: SIGNUP_OTP_TYPE,
+        type: resolvedOtpType,
       });
       return confirmErrorRedirect(
         origin,
@@ -193,7 +185,7 @@ export const GET = async (request: NextRequest) => {
       userId: user?.id ?? null,
       hasSession: Boolean(session),
       emailConfirmed: Boolean(user?.email_confirmed_at),
-      type: SIGNUP_OTP_TYPE,
+      type: resolvedOtpType,
       ms: Date.now() - started,
     });
 
