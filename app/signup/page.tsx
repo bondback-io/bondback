@@ -49,7 +49,7 @@ import {
   saveCachedSignupLocation,
 } from "@/lib/location/signup-location-prefill";
 
-/** Email confirmation links hit `/auth/confirm` (verifyOtp + session + role-based redirect). */
+/** Email confirmation links open `/auth/confirm` (loading UI → `/api/auth/confirm` verifyOtp + redirect). */
 function buildAuthConfirmUrl(origin: string, ref: string | null): string {
   const u = new URL(`${origin}/auth/confirm`);
   u.searchParams.set("next", "/dashboard");
@@ -92,7 +92,6 @@ function SignupForm() {
   const [accountStepId, setAccountStepId] = useState<string>("auth");
   const [accountSteps, setAccountSteps] = useState<readonly AccountCreationStep[]>(SIGNUP_ACCOUNT_STEPS_SESSION);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const geoPrefillAttemptedRef = useRef(false);
 
   const [checkEmailOpen, setCheckEmailOpen] = useState(false);
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState("");
@@ -126,18 +125,44 @@ function SignupForm() {
     },
   });
 
+  const formRef = useRef(form);
+  formRef.current = form;
+
   useEffect(() => {
-    const cached = loadCachedSignupLocation();
-    if (cached?.postcode) form.setValue("postcode", cached.postcode);
-    if (cached?.suburb) form.setValue("suburb", cached.suburb);
-    if (cached?.postcode || cached?.suburb) return;
-    if (geoPrefillAttemptedRef.current) return;
-    geoPrefillAttemptedRef.current = true;
-    void reverseGeocodeAuForSignupPrefill().then((geo) => {
-      if (geo?.postcode) form.setValue("postcode", geo.postcode);
-      if (geo?.suburb) form.setValue("suburb", geo.suburb);
-    });
-  }, [form]);
+    let cancelled = false;
+    const opts = { shouldDirty: false, shouldTouch: false } as const;
+
+    const sync = async () => {
+      const { setValue, getValues } = formRef.current;
+
+      const cached = loadCachedSignupLocation();
+      if (cached?.postcode?.trim()) {
+        setValue("postcode", cached.postcode.trim(), opts);
+      }
+      if (cached?.suburb?.trim()) {
+        setValue("suburb", cached.suburb.trim(), opts);
+      }
+
+      const needPostcode = !getValues("postcode")?.trim();
+      const needSuburb = !getValues("suburb")?.trim();
+      if (!needPostcode && !needSuburb) return;
+
+      const geo = await reverseGeocodeAuForSignupPrefill();
+      if (cancelled || !geo) return;
+
+      if (geo.postcode && !getValues("postcode")?.trim()) {
+        setValue("postcode", geo.postcode, opts);
+      }
+      if (geo.suburb && !getValues("suburb")?.trim()) {
+        setValue("suburb", geo.suburb, opts);
+      }
+    };
+
+    void sync();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null);

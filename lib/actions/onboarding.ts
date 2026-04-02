@@ -146,6 +146,8 @@ export async function upsertMinimalProfileAfterSignup(input: {
 
   revalidatePath("/onboarding");
   revalidatePath("/dashboard");
+  revalidatePath("/profile");
+  revalidatePath("/settings");
   return { ok: true };
 }
 
@@ -305,8 +307,8 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
     .eq("id", userId)
     .maybeSingle();
 
-  const existingRoles = (existing?.roles as string[] | null) ?? [];
-  const isFirstRoleAssignment = existingRoles.length === 0;
+  const normalizedRolesBefore = normalizeProfileRolesFromDb(existing?.roles, !!existing);
+  const isFirstRoleAssignment = normalizedRolesBefore.length === 0;
 
   const row: Record<string, unknown> = {
     id: userId,
@@ -330,8 +332,9 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
   }
 
   const {
-    data: { session: sessionForEmail },
+    data: { session: sessionAfterUpsert },
   } = await supabase.auth.getSession();
+  const sessionForEmail = sessionAfterUpsert ?? session;
   if (isFirstRoleAssignment && sessionForEmail) {
     const { data: nameRow } = await admin
       .from("profiles")
@@ -341,6 +344,11 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
     const fullName = (nameRow as { full_name?: string | null } | null)?.full_name ?? null;
     const tutorialRoles =
       choice === "both" ? (["lister", "cleaner"] as const) : choice === "lister" ? (["lister"] as const) : (["cleaner"] as const);
+    console.info("[onboarding:saveRoleChoice] role_selected_attempting_tutorial", {
+      userId,
+      choice,
+      tutorialRoles,
+    });
     try {
       const { sendTutorialEmailsForRoles } = await import("@/lib/actions/onboarding-transactional-emails");
       await sendTutorialEmailsForRoles({
@@ -351,8 +359,13 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
         skipEmailConfirmedCheck: true,
       });
     } catch (e) {
-      console.error("[saveRoleChoice] tutorial emails failed", e);
+      console.error("[saveRoleChoice] tutorial emails failed", {
+        userId,
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
+  } else if (isFirstRoleAssignment && !sessionForEmail) {
+    console.error("[onboarding:saveRoleChoice] tutorial_skipped_no_session", { userId, choice });
   }
 
   revalidatePath("/onboarding");

@@ -138,18 +138,18 @@ export default async function AdminGlobalSettingsPage() {
 
   return (
     <AdminShell activeHref="/admin/global-settings">
-      <div className="space-y-6 md:space-y-8">
+      <div className="space-y-4 md:space-y-8">
         <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900/80">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
-            <div>
-              <CardTitle className="text-lg font-semibold tracking-tight md:text-xl dark:text-gray-100">
+          <CardHeader className="flex flex-col gap-3 space-y-0 pb-3 sm:flex-row sm:items-start sm:justify-between sm:pb-4">
+            <div className="min-w-0 space-y-1">
+              <CardTitle className="text-base font-semibold tracking-tight sm:text-lg md:text-xl dark:text-gray-100">
                 Global settings
               </CardTitle>
-              <p className="text-xs text-muted-foreground dark:text-gray-400">
+              <p className="text-xs leading-relaxed text-muted-foreground dark:text-gray-400">
                 {profile.full_name ?? "Admin"} · Platform-wide configuration, toggles, and email templates.
               </p>
             </div>
-            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+            <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase tracking-wide">
               Admin only
             </Badge>
           </CardHeader>

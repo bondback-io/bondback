@@ -64,13 +64,19 @@ function actionIcon(actionType: string) {
 export default async function AdminActivityLogPage() {
   const { profile, supabase } = await requireAdmin();
   const admin = createSupabaseAdminClient();
+  /** Prefer service role so reads work even if RLS policies are missing; fallback uses admin SELECT policy. */
   const client = (admin ?? supabase) as SupabaseClient<Database>;
 
-  const { data: logData } = await (client as any)
+  const { data: logData, error: logError } = await (client as any)
     .from("admin_activity_log")
     .select("id, admin_id, action_type, target_type, target_id, details, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
+
+  const tableMissing =
+    logError &&
+    (String(logError.message).toLowerCase().includes("does not exist") ||
+      String(logError.code) === "42P01");
 
   const rows = (logData ?? []) as ActivityLogRow[];
   const adminIds = Array.from(new Set(rows.map((r) => r.admin_id).filter(Boolean))) as string[];
@@ -93,8 +99,15 @@ export default async function AdminActivityLogPage() {
             Activity log
           </h1>
           <p className="text-sm text-muted-foreground dark:text-gray-400">
-            Audit trail of admin actions: settings changes, job and listing updates. {profile.full_name ?? "Admin"}
+            Audit trail of admin actions: settings, email templates, users, jobs, and listings.{" "}
+            {profile.full_name ?? "Admin"}
           </p>
+          {!admin && (
+            <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">
+              Server is missing <code className="rounded bg-muted px-1">SUPABASE_SERVICE_ROLE_KEY</code> — activity
+              may not save. Add it in Vercel (or .env) and redeploy.
+            </p>
+          )}
         </div>
 
         <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
@@ -112,9 +125,30 @@ export default async function AdminActivityLogPage() {
             </Badge>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
-            {rows.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground dark:text-gray-400">
-                No activity logged yet. Actions from global settings, jobs, and listings are recorded here once the table exists.
+            {tableMissing ? (
+              <div className="space-y-2 px-4 py-8 text-center text-sm">
+                <p className="font-medium text-foreground dark:text-gray-100">Activity table not found</p>
+                <p className="text-muted-foreground dark:text-gray-400">
+                  Run the migration{" "}
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                    supabase/sql/20260331120000_admin_activity_log.sql
+                  </code>{" "}
+                  in the Supabase SQL Editor (or apply via your migration pipeline), then refresh this page.
+                </p>
+                {logError && (
+                  <p className="text-xs text-muted-foreground opacity-80">
+                    {(logError as { message?: string }).message}
+                  </p>
+                )}
+              </div>
+            ) : rows.length === 0 ? (
+              <div className="space-y-2 px-4 py-8 text-center text-sm text-muted-foreground dark:text-gray-400">
+                <p>No activity rows yet.</p>
+                <p className="text-xs">
+                  Saving global settings, email templates, user moderation, jobs, or listings should create entries. If
+                  you still see nothing after an action, confirm{" "}
+                  <code className="rounded bg-muted px-1">SUPABASE_SERVICE_ROLE_KEY</code> is set on the server.
+                </p>
               </div>
             ) : (
               <Table>

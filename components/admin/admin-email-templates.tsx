@@ -477,24 +477,24 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900/80">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
-          <div>
-            <CardTitle className="text-lg font-semibold tracking-tight md:text-xl dark:text-gray-100">
+        <CardHeader className="flex flex-col gap-3 space-y-0 pb-3 sm:flex-row sm:items-start sm:justify-between sm:pb-4">
+          <div className="min-w-0 space-y-1">
+            <CardTitle className="text-base font-semibold tracking-tight sm:text-lg md:text-xl dark:text-gray-100">
               Global email toggles
             </CardTitle>
-            <p className="text-xs text-muted-foreground dark:text-gray-400">
+            <p className="text-xs leading-relaxed text-muted-foreground dark:text-gray-400">
               Kill switch and per-type enable/disable. When off, no emails are sent for that type.
             </p>
           </div>
-          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+          <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase tracking-wide">
             Admin only
           </Badge>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4 dark:border-gray-800">
-            <div className="min-w-0">
+          <div className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 dark:border-gray-800">
+            <div className="min-w-0 flex-1">
               <Label className="text-sm font-medium">Enable all emails</Label>
               <p className="text-xs text-muted-foreground">Master switch; when off, no notification emails are sent.</p>
             </div>
@@ -502,16 +502,16 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
               checked={emailsEnabled}
               onCheckedChange={handleToggleAll}
               disabled={isPending}
-              className="shrink-0"
+              className="shrink-0 self-end sm:self-center"
             />
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {allTemplateKeys.map((type) => (
               <div
                 key={type}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5 dark:border-gray-800"
               >
-                <Label className="text-sm truncate">{getEmailTypeLabel(type)}</Label>
+                <Label className="min-w-0 flex-1 text-sm leading-snug break-words">{getEmailTypeLabel(type)}</Label>
                 <Switch
                   checked={typeEnabled[type] !== false}
                   onCheckedChange={(enabled) => handleToggleType(type, enabled)}
@@ -525,19 +525,20 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
       </Card>
 
       <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900/80">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold tracking-tight md:text-xl dark:text-gray-100">
+        <CardHeader className="space-y-1 pb-3 sm:pb-4">
+          <CardTitle className="text-base font-semibold tracking-tight sm:text-lg md:text-xl dark:text-gray-100">
             Template management
           </CardTitle>
-          <p className="mt-1 text-xs text-muted-foreground dark:text-gray-400">
-            Type, Subject, Active toggle, Preview (live modal), Edit (split-view), Send test. Override subject and body per type; leave empty to use defaults.
+          <p className="text-xs leading-relaxed text-muted-foreground dark:text-gray-400">
+            Override subject and body per type; leave empty to use defaults. Preview, edit, or send a test from each row.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Button
               variant="outline"
               size="sm"
+              className="w-full sm:w-auto"
               disabled={isPending}
               onClick={async () => {
                 startTransition(async () => {
@@ -556,115 +557,228 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
             <Button
               variant="default"
               size="sm"
+              className="w-full sm:w-auto"
               onClick={() => { setCreateKey(""); setCreateOpen(true); }}
               disabled={isPending}
             >
               Create template
             </Button>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border dark:border-gray-800">
-                <TableHead className="text-muted-foreground w-[140px]">Type</TableHead>
-                <TableHead className="text-muted-foreground min-w-[180px]">Subject</TableHead>
-                <TableHead className="text-muted-foreground w-[120px]">Send after</TableHead>
-                <TableHead className="text-muted-foreground w-20">Active</TableHead>
-                <TableHead className="text-right w-[240px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {allTemplateKeys.map((type) => {
-                const t = templates[type];
-                const isBirthday = type === "birthday";
-                const sendAfter = isBirthday ? "on_dob" : (t?.send_after ?? "instant");
-                return (
-                  <TableRow key={type} className="border-border dark:border-gray-800">
-                    <TableCell className="font-medium">{getEmailTypeLabel(type)}</TableCell>
-                    <TableCell className="max-w-[200px] truncate text-muted-foreground">
-                      {t?.subject || "—"}
-                    </TableCell>
-                    <TableCell>
-                      {isBirthday ? (
-                        <span className="inline-flex h-8 items-center rounded-md border border-border bg-muted/50 px-2.5 text-xs text-muted-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400" title="Birthday emails always send on the user's date of birth.">
-                          On DOB (locked)
-                        </span>
-                      ) : (
-                        <Select
-                          value={sendAfter}
-                          onValueChange={(value) => {
-                            const def = getDefaultTemplate(type);
-                            const subject = (t?.subject?.trim() || def?.subject) ?? "";
-                            const body = (t?.body?.trim() || def?.body) ?? "";
-                            startTransition(() => {
-                              saveEmailTemplate(type, subject, body, isTemplateActive(t), value).then((result) => {
-                                if (result.ok) {
-                                  setTemplates((prev) => ({ ...prev, [type]: { subject: t?.subject ?? "", body: t?.body ?? "", active: isTemplateActive(t), send_after: value } }));
-                                  toast({ title: "Send timing updated", description: getSendAfterLabel(value) });
-                                  router.refresh();
-                                } else {
-                                  toast({ variant: "destructive", title: "Error", description: result.error });
-                                }
-                              });
+
+          {/* Mobile: one card per template */}
+          <div className="space-y-3 md:hidden">
+            {allTemplateKeys.map((type) => {
+              const t = templates[type];
+              const isBirthday = type === "birthday";
+              const sendAfter = isBirthday ? "on_dob" : (t?.send_after ?? "instant");
+              return (
+                <div
+                  key={`m-${type}`}
+                  className="rounded-xl border border-border bg-muted/20 p-3 dark:border-gray-800 dark:bg-gray-900/50"
+                >
+                  <p className="font-medium leading-snug text-foreground dark:text-gray-100">{getEmailTypeLabel(type)}</p>
+                  <p className="mt-1 line-clamp-2 break-words text-xs text-muted-foreground dark:text-gray-400">
+                    {t?.subject?.trim() ? t.subject : "— default subject —"}
+                  </p>
+                  <div className="mt-3 space-y-2 border-t border-border pt-3 dark:border-gray-800">
+                    <span className="block text-[10px] font-medium uppercase text-muted-foreground">Send after</span>
+                    {isBirthday ? (
+                      <span
+                        className="inline-flex min-h-9 w-full items-center justify-center rounded-md border border-border bg-muted/50 px-2 text-xs text-muted-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                        title="Birthday emails always send on the user's date of birth."
+                      >
+                        On DOB (locked)
+                      </span>
+                    ) : (
+                      <Select
+                        value={sendAfter}
+                        onValueChange={(value) => {
+                          const def = getDefaultTemplate(type);
+                          const subject = (t?.subject?.trim() || def?.subject) ?? "";
+                          const body = (t?.body?.trim() || def?.body) ?? "";
+                          startTransition(() => {
+                            saveEmailTemplate(type, subject, body, isTemplateActive(t), value).then((result) => {
+                              if (result.ok) {
+                                setTemplates((prev) => ({
+                                  ...prev,
+                                  [type]: {
+                                    subject: t?.subject ?? "",
+                                    body: t?.body ?? "",
+                                    active: isTemplateActive(t),
+                                    send_after: value,
+                                  },
+                                }));
+                                toast({ title: "Send timing updated", description: getSendAfterLabel(value) });
+                                router.refresh();
+                              } else {
+                                toast({ variant: "destructive", title: "Error", description: result.error });
+                              }
                             });
-                          }}
-                          disabled={isPending}
-                        >
-                          <SelectTrigger className="h-8 text-xs w-[110px] bg-background dark:bg-gray-800 dark:border-gray-700">
-                            <SelectValue placeholder="When" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background dark:bg-gray-900 dark:border-gray-700">
-                            {SEND_AFTER_OPTIONS.filter((o) => o.value !== "on_dob").map((o) => (
-                              <SelectItem key={o.value} value={o.value} className="dark:focus:bg-gray-700 dark:text-gray-100">
-                                {o.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Switch
-                        checked={isTemplateActive(t)}
-                        onCheckedChange={(checked) => handleToggleActive(type, !!checked)}
+                          });
+                        }}
                         disabled={isPending}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2"
-                          onClick={() => openPreviewModal(type, t?.subject ?? "", t?.body ?? "")}
+                      >
+                        <SelectTrigger className="h-9 w-full text-xs bg-background dark:bg-gray-800 dark:border-gray-700">
+                          <SelectValue placeholder="When" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background dark:bg-gray-900 dark:border-gray-700">
+                          {SEND_AFTER_OPTIONS.filter((o) => o.value !== "on_dob").map((o) => (
+                            <SelectItem key={o.value} value={o.value} className="dark:focus:bg-gray-700 dark:text-gray-100">
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-medium uppercase text-muted-foreground">Active</span>
+                    <Switch
+                      checked={isTemplateActive(t)}
+                      onCheckedChange={(checked) => handleToggleActive(type, !!checked)}
+                      disabled={isPending}
+                    />
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 text-xs"
+                      onClick={() => openPreviewModal(type, t?.subject ?? "", t?.body ?? "")}
+                      disabled={isPending}
+                    >
+                      Preview
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="h-9 text-xs"
+                      onClick={() => openEdit(type)}
+                      disabled={isPending}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-9 text-xs"
+                      onClick={() => openSendTest(type)}
+                      disabled={isPending || (rateLimit !== null && !rateLimit.allowed)}
+                    >
+                      Test
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tablet/desktop: table with horizontal scroll fallback */}
+          <div className="hidden md:block overflow-x-auto rounded-lg border border-border -mx-1 px-1 dark:border-gray-800 sm:mx-0 sm:px-0">
+            <Table className="min-w-[720px]">
+              <TableHeader>
+                <TableRow className="border-border dark:border-gray-800">
+                  <TableHead className="text-muted-foreground w-[140px]">Type</TableHead>
+                  <TableHead className="text-muted-foreground min-w-[180px]">Subject</TableHead>
+                  <TableHead className="text-muted-foreground w-[120px]">Send after</TableHead>
+                  <TableHead className="text-muted-foreground w-20">Active</TableHead>
+                  <TableHead className="text-right min-w-[220px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allTemplateKeys.map((type) => {
+                  const t = templates[type];
+                  const isBirthday = type === "birthday";
+                  const sendAfter = isBirthday ? "on_dob" : (t?.send_after ?? "instant");
+                  return (
+                    <TableRow key={type} className="border-border dark:border-gray-800">
+                      <TableCell className="font-medium align-top">{getEmailTypeLabel(type)}</TableCell>
+                      <TableCell className="max-w-[220px] truncate text-muted-foreground align-top">
+                        {t?.subject || "—"}
+                      </TableCell>
+                      <TableCell className="align-top">
+                        {isBirthday ? (
+                          <span className="inline-flex h-8 items-center rounded-md border border-border bg-muted/50 px-2.5 text-xs text-muted-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400" title="Birthday emails always send on the user's date of birth.">
+                            On DOB (locked)
+                          </span>
+                        ) : (
+                          <Select
+                            value={sendAfter}
+                            onValueChange={(value) => {
+                              const def = getDefaultTemplate(type);
+                              const subject = (t?.subject?.trim() || def?.subject) ?? "";
+                              const body = (t?.body?.trim() || def?.body) ?? "";
+                              startTransition(() => {
+                                saveEmailTemplate(type, subject, body, isTemplateActive(t), value).then((result) => {
+                                  if (result.ok) {
+                                    setTemplates((prev) => ({ ...prev, [type]: { subject: t?.subject ?? "", body: t?.body ?? "", active: isTemplateActive(t), send_after: value } }));
+                                    toast({ title: "Send timing updated", description: getSendAfterLabel(value) });
+                                    router.refresh();
+                                  } else {
+                                    toast({ variant: "destructive", title: "Error", description: result.error });
+                                  }
+                                });
+                              });
+                            }}
+                            disabled={isPending}
+                          >
+                            <SelectTrigger className="h-8 text-xs w-[110px] bg-background dark:bg-gray-800 dark:border-gray-700">
+                              <SelectValue placeholder="When" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-background dark:bg-gray-900 dark:border-gray-700">
+                              {SEND_AFTER_OPTIONS.filter((o) => o.value !== "on_dob").map((o) => (
+                                <SelectItem key={o.value} value={o.value} className="dark:focus:bg-gray-700 dark:text-gray-100">
+                                  {o.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Switch
+                          checked={isTemplateActive(t)}
+                          onCheckedChange={(checked) => handleToggleActive(type, !!checked)}
                           disabled={isPending}
-                        >
-                          Preview
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-2"
-                          onClick={() => openEdit(type)}
-                          disabled={isPending}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2"
-                          onClick={() => openSendTest(type)}
-                          disabled={isPending || (rateLimit !== null && !rateLimit.allowed)}
-                        >
-                          Send test
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                        />
+                      </TableCell>
+                      <TableCell className="text-right align-top">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => openPreviewModal(type, t?.subject ?? "", t?.body ?? "")}
+                            disabled={isPending}
+                          >
+                            Preview
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => openEdit(type)}
+                            disabled={isPending}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => openSendTest(type)}
+                            disabled={isPending || (rateLimit !== null && !rateLimit.allowed)}
+                          >
+                            Send test
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
           {rateLimit !== null && (
             <p className="text-xs text-muted-foreground">
               Test sends: {rateLimit.remaining} of {rateLimit.limit} remaining this hour.
@@ -674,7 +788,7 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
       </Card>
 
       <Dialog open={!!editType} onOpenChange={(open) => !open && setEditType(null)}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="left-2 top-4 max-h-[calc(100dvh-2rem)] w-[calc(100vw-1rem)] max-w-[min(100vw-1rem,72rem)] translate-x-0 translate-y-0 overflow-y-auto p-4 sm:left-1/2 sm:top-1/2 sm:max-h-[90vh] sm:w-full sm:max-w-6xl sm:translate-x-[-50%] sm:translate-y-[-50%] sm:p-6">
           <DialogHeader>
             <DialogTitle>
               Edit template: {editType ? getEmailTypeLabel(editType) : ""}
@@ -683,9 +797,9 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
               Split view: editor on the left, live preview on the right. Placeholders: {"{{message}}"}, {"{{jobId}}"}, {"{{senderName}}"}, {"{{listingId}}"}, [Name], [Role], [JobId], [Amount], {"{name}"}, {"{listingTitle}"}.
             </p>
           </DialogHeader>
-          <div className="grid gap-6 py-4 lg:grid-cols-2">
+          <div className="grid gap-6 py-2 sm:py-4 lg:grid-cols-2">
             {/* Left: Editor */}
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Editor</p>
               <div className="grid gap-2">
                 <Label htmlFor="edit-subject">Subject</Label>
@@ -773,7 +887,7 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
                   </div>
                 </CardHeader>
                 <CardContent className="grid gap-3 text-sm">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Test Name</Label>
                       <Input value={testName} onChange={(e) => setTestName(e.target.value)} placeholder="Alex" className="h-8 text-xs" />
@@ -798,7 +912,7 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
                       <Label className="text-xs">Test Amount</Label>
                       <Input value={testAmount} onChange={(e) => setTestAmount(e.target.value)} placeholder="$280" className="h-8 text-xs" />
                     </div>
-                    <div className="space-y-1.5 col-span-2">
+                    <div className="space-y-1.5 sm:col-span-2">
                       <Label className="text-xs">Listing Title</Label>
                       <Input value={testListingTitle} onChange={(e) => setTestListingTitle(e.target.value)} placeholder="3br House Bond Clean – Sydney" className="h-8 text-xs" />
                     </div>
@@ -865,9 +979,9 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
             </div>
 
             {/* Right: Live preview */}
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Live preview</p>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <Tabs value={previewDarkMode ? "dark" : "light"} onValueChange={(v) => setPreviewDarkMode(v === "dark")}>
                   <TabsList className="h-8 p-0.5">
                     <TabsTrigger className="h-7 gap-1 px-2 text-xs" value="light">
@@ -950,7 +1064,7 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
 
       {/* Interactive Preview modal: live editing + personalization + iframe + theme/device */}
       <Dialog open={previewModalOpen} onOpenChange={setPreviewModalOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="left-2 top-4 max-h-[calc(100dvh-2rem)] w-[calc(100vw-1rem)] max-w-[min(100vw-1rem,64rem)] translate-x-0 translate-y-0 overflow-y-auto p-4 sm:left-1/2 sm:top-1/2 sm:max-h-[90vh] sm:w-full sm:max-w-5xl sm:translate-x-[-50%] sm:translate-y-[-50%] sm:p-6">
           <DialogHeader>
             <DialogTitle>
               Preview: {previewModalType ? getEmailTypeLabel(previewModalType) : ""}
@@ -960,7 +1074,7 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
             </p>
           </DialogHeader>
           <div className="grid gap-4 py-2 md:grid-cols-2">
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Subject (live)</Label>
                 <Input
@@ -1007,7 +1121,7 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
                   Use my profile
                 </Button>
               </div>
-              <div className="grid grid-cols-2 gap-2 gap-y-3 text-sm">
+              <div className="grid grid-cols-1 gap-2 gap-y-3 text-sm sm:grid-cols-2">
                 <div>
                   <Label className="text-xs">Name</Label>
                   <Input value={testName} onChange={(e) => setTestName(e.target.value)} className="h-8 text-xs" />

@@ -1,4 +1,4 @@
-"use server";
+/** Server-only module (imported from Route Handlers and server actions). Not a client boundary. */
 
 import type { Session } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -27,15 +27,28 @@ function logEmailEnvSnapshot(context: string) {
 }
 
 /**
- * Resolve recipient email and whether the address is confirmed for **tutorial** (sent after role
- * selection). Welcome uses {@link sendWelcomeEmailAfterEmailVerification} and does not require this.
+ * Resolve recipient email for **tutorial** (after role selection). Prefers service_role
+ * `getUserById` so we always have the address in server actions / Route Handlers.
  */
-async function resolveAuthEmailAndConfirmed(
+async function resolveRecipientEmailForTutorial(
   userId: string,
   session: Session
-): Promise<{ email: string | null; emailConfirmed: boolean }> {
-  let email: string | null = null;
-  let emailConfirmed = false;
+): Promise<string | null> {
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (!error && data?.user?.email?.trim()) {
+      console.info("[email:auth-resolve] tutorial_recipient", {
+        userId,
+        source: "admin_getUserById",
+        hasEmail: true,
+      });
+      return data.user.email.trim();
+    }
+    if (error) {
+      console.warn("[email:auth-resolve] getUserById failed", { userId, message: error.message });
+    }
+  }
 
   try {
     const supabase = await createServerSupabaseClient();
@@ -43,53 +56,33 @@ async function resolveAuthEmailAndConfirmed(
       data: { user },
       error,
     } = await supabase.auth.getUser();
-    if (!error && user?.id === userId) {
-      email = user.email ?? null;
-      emailConfirmed = Boolean(user.email_confirmed_at);
-      console.info("[email:auth-resolve] getUser", {
+    if (!error && user?.id === userId && user.email?.trim()) {
+      console.info("[email:auth-resolve] tutorial_recipient", {
         userId,
-        emailConfirmed,
-        hasEmail: Boolean(email),
         source: "server_getUser",
+        hasEmail: true,
       });
-    } else if (error) {
+      return user.email.trim();
+    }
+    if (error) {
       console.warn("[email:auth-resolve] getUser error", { userId, message: error.message });
     }
   } catch (e) {
-    console.warn("[email:auth-resolve] getUser threw", { userId, message: e instanceof Error ? e.message : String(e) });
+    console.warn("[email:auth-resolve] getUser threw", {
+      userId,
+      message: e instanceof Error ? e.message : String(e),
+    });
   }
 
-  const admin = createSupabaseAdminClient();
-  if (admin) {
-    const { data, error } = await admin.auth.admin.getUserById(userId);
-    if (error) {
-      console.warn("[email:auth-resolve] getUserById failed", {
-        userId,
-        message: error.message,
-      });
-    }
-    if (!error && data?.user) {
-      const u = data.user;
-      email = u.email ?? email;
-      emailConfirmed = emailConfirmed || Boolean(u.email_confirmed_at);
-      console.info("[email:auth-resolve] admin", {
-        userId,
-        emailConfirmedFromAdmin: Boolean(u.email_confirmed_at),
-        mergedEmailConfirmed: emailConfirmed,
-      });
-    }
+  const fromSession = session.user.email?.trim() ?? null;
+  if (fromSession) {
+    console.info("[email:auth-resolve] tutorial_recipient", {
+      userId,
+      source: "session_jwt",
+      hasEmail: true,
+    });
   }
-
-  if (!email) {
-    email = session.user.email ?? null;
-  }
-  emailConfirmed = emailConfirmed || Boolean(session.user.email_confirmed_at);
-
-  if (email && !emailConfirmed) {
-    console.warn("[email:auth-resolve] still_unconfirmed_after_merge", { userId });
-  }
-
-  return { email, emailConfirmed };
+  return fromSession;
 }
 
 function welcomeRoleFromProfileRoles(roles: ProfileRole[]): "lister" | "cleaner" | "both" {
@@ -218,6 +211,11 @@ export async function sendWelcomeEmailAfterEmailVerification(params: {
     signupRole,
     to: email.replace(/(^.).*(@.*)$/, "$1***$2"),
   });
+  console.info("[email:user-journey] welcome_attempt", {
+    userId: params.userId,
+    trigger,
+    signupRole,
+  });
 
   const { subject, html } = await buildWelcomeEmail(firstName, signupRole);
   const welcomeResult = await sendEmail(email, subject, html, {
@@ -250,6 +248,7 @@ export async function sendWelcomeEmailAfterEmailVerification(params: {
     .eq("id", params.userId);
 
   console.info("[email:welcome]", { outcome: "sent", userId: params.userId, trigger });
+  console.info("[email:user-journey] welcome_sent", { userId: params.userId, trigger });
   return { ok: true };
 }
 
@@ -257,39 +256,26 @@ export async function sendWelcomeEmailAfterEmailVerification(params: {
  * Role-specific tutorial emails (lister vs cleaner). Tracks
  * `email_tutorial_lister_sent` / `email_tutorial_cleaner_sent` in notification_preferences.
  *
- * When `skipEmailConfirmedCheck` is true (first role selection after login), we still require an
- * email address but do not skip if `email_confirmed_at` is missing from the JWT (common after
- * confirm + immediate navigation).
+ * Requires a recipient address (service_role lookup first). Does **not** gate on
+ * `email_confirmed_at` — JWT may lag after confirm; logged-in users are eligible.
  */
 export async function sendTutorialEmailsForRoles(params: {
   userId: string;
   session: Session;
   firstName: string | undefined;
   roles: TutorialRole[];
+  /** @deprecated No longer used; kept for call-site compatibility. */
   skipEmailConfirmedCheck?: boolean;
 }): Promise<void> {
-  const resolved = await resolveAuthEmailAndConfirmed(params.userId, params.session);
-  const email = resolved.email;
-  const emailConfirmed = resolved.emailConfirmed;
+  const email = await resolveRecipientEmailForTutorial(params.userId, params.session);
 
   if (!email) {
     console.info("[email:tutorial]", { outcome: "skipped", userId: params.userId, reason: "no_email" });
-    return;
-  }
-  if (!emailConfirmed && !params.skipEmailConfirmedCheck) {
-    console.info("[email:tutorial]", {
-      outcome: "skipped",
+    console.info("[email:user-journey] tutorial_skipped", {
       userId: params.userId,
-      reason: "email_not_confirmed",
+      reason: "no_email",
     });
     return;
-  }
-  if (!emailConfirmed && params.skipEmailConfirmedCheck) {
-    console.info("[email:tutorial]", {
-      outcome: "proceeding",
-      userId: params.userId,
-      reason: "skipEmailConfirmedCheck_after_role_choice",
-    });
   }
 
   const globalSettings = await getGlobalSettings();
@@ -353,6 +339,11 @@ export async function sendTutorialEmailsForRoles(params: {
       role,
       to: email.replace(/(^.).*(@.*)$/, "$1***$2"),
     });
+    console.info("[email:user-journey] tutorial_attempt", {
+      userId: params.userId,
+      role,
+      phase: "role_saved_onboarding",
+    });
 
     const { subject, html } = await buildTutorialEmail(role, params.firstName);
     const result = await sendEmail(email, subject, html, {
@@ -381,6 +372,7 @@ export async function sendTutorialEmailsForRoles(params: {
     merged.email_tutorial_sent = true;
     wrote = true;
     console.info("[email:tutorial]", { outcome: "sent", userId: params.userId, role });
+    console.info("[email:user-journey] tutorial_sent", { userId: params.userId, role });
   }
 
   if (wrote) {

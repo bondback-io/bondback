@@ -39,7 +39,7 @@ export const GET = async (request: NextRequest) => {
   const supabase = createSupabaseRouteHandlerClient(request, authCookieResponse);
 
   if (code) {
-    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
     if (exchangeError) {
       console.error("[auth/callback] exchangeCodeForSession", exchangeError.message);
       return NextResponse.redirect(
@@ -67,7 +67,7 @@ export const GET = async (request: NextRequest) => {
     | "magiclink"
     | "email_change";
 
-  const { error: otpError } = await supabase.auth.verifyOtp({
+  const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
     token_hash: token_hash!,
     type: otpType,
   });
@@ -87,5 +87,6 @@ export const GET = async (request: NextRequest) => {
     signupFlow,
     refParam,
     authCookieResponse,
+    sessionFromAuth: otpData.session ?? null,
   });
 };

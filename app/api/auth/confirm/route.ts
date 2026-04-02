@@ -3,8 +3,10 @@ import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
 
-/** Signup confirmation emails (SiteURL template) must use verifyOtp type `signup`. */
+/** Signup confirmation emails (Site URL template) must use verifyOtp type `signup`. */
 const SIGNUP_OTP_TYPE = "signup" as const;
+
+export const dynamic = "force-dynamic";
 
 /** Avoid stale redirects in mobile in-app browsers / proxies. */
 function noStoreHeaders(res: NextResponse) {
@@ -22,7 +24,7 @@ function redactTokenHash(token: string | null): string | null {
 
 function logRedirectDestination(source: string, res: NextResponse) {
   const location = res.headers.get("location");
-  console.log("[auth/confirm] redirect_destination", { source, location });
+  console.log("[api/auth/confirm] redirect_destination", { source, location });
 }
 
 function confirmErrorRedirect(origin: string, message: string, reason?: string) {
@@ -33,10 +35,6 @@ function confirmErrorRedirect(origin: string, message: string, reason?: string) 
   return noStoreHeaders(res);
 }
 
-/**
- * Read `token_hash` or legacy `token` from the query string (trim + safe decode).
- * SiteURL template: `.../auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=...`
- */
 function readTokenHashFromRequest(searchParams: URLSearchParams): string | null {
   const raw = searchParams.get("token_hash") ?? searchParams.get("token");
   if (raw == null) return null;
@@ -49,9 +47,6 @@ function readTokenHashFromRequest(searchParams: URLSearchParams): string | null 
   }
 }
 
-/**
- * Read optional `type` from the query for logging only. Verification always uses `signup` on this route.
- */
 function readTypeParamForLog(searchParams: URLSearchParams): string | null {
   const t = searchParams.get("type");
   if (t == null) return null;
@@ -60,23 +55,8 @@ function readTypeParamForLog(searchParams: URLSearchParams): string | null {
 }
 
 /**
- * ============================================================================
- * SUPABASE — "Confirm sign up" (Site URL template)
- * ============================================================================
- * ```html
- * <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=%2Fdashboard">
- *   Confirm your email
- * </a>
- * ```
- * Or use `{{ .ConfirmationURL }}` (Supabase builds the full URL; may return `code` for PKCE).
- *
- * Redirect URLs: `https://YOUR_DOMAIN/auth/confirm**` (+ localhost).
- *
- * After success, session cookies are set and the user is redirected via
- * `redirectAfterAuthSessionEstablished`: when `next` is `/dashboard` and the profile has roles,
- * destination is **active_role** — lister → `/lister/dashboard`, cleaner → `/cleaner/dashboard`;
- * if there are no roles yet → `/onboarding/role-choice`.
- * ============================================================================
+ * Email confirmation handler (called from `/auth/confirm` page via fetch so the UI can show a loader first).
+ * Supabase Site URL can stay `.../auth/confirm?token_hash=...` — the page loads, then requests this route.
  */
 export const GET = async (request: NextRequest) => {
   const started = Date.now();
@@ -100,13 +80,13 @@ export const GET = async (request: NextRequest) => {
   const rawQuery = request.nextUrl.search?.slice(0, 500) ?? "";
 
   if (typeFromQuery && typeFromQuery.toLowerCase() !== SIGNUP_OTP_TYPE) {
-    console.warn("[auth/confirm] type_query_not_signup", {
+    console.warn("[api/auth/confirm] type_query_not_signup", {
       typeFromQuery,
       note: "verifyOtp will still use type: signup for this route",
     });
   }
 
-  console.log("[auth/confirm] GET", {
+  console.log("[api/auth/confirm] GET", {
     origin,
     host: request.nextUrl.host,
     forwardedHost,
@@ -128,12 +108,12 @@ export const GET = async (request: NextRequest) => {
         error_description?.replace(/\+/g, " ") ||
         error ||
         "Email confirmation was cancelled or could not be completed.";
-      console.warn("[auth/confirm] oauth_error", { error, error_code, msg });
+      console.warn("[api/auth/confirm] oauth_error", { error, error_code, msg });
       return confirmErrorRedirect(origin, msg, "oauth_error");
     }
 
     if (!code && !token_hash) {
-      console.warn("[auth/confirm] missing_code_and_token", {
+      console.warn("[api/auth/confirm] missing_code_and_token", {
         hint: "Expected {{ .SiteURL }}/auth/confirm?token_hash=…&type=signup or PKCE ?code=…",
         paramKeys: [...searchParams.keys()],
         querySample: rawQuery,
@@ -150,10 +130,10 @@ export const GET = async (request: NextRequest) => {
     const supabase = createSupabaseRouteHandlerClient(request, authCookieResponse);
 
     if (code) {
-      console.log("[auth/confirm] pkce_exchange_start", { code_preview: `${code.slice(0, 8)}…` });
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      console.log("[api/auth/confirm] pkce_exchange_start", { code_preview: `${code.slice(0, 8)}…` });
+      const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
       if (exchangeError) {
-        console.error("[auth/confirm] exchangeCodeForSession_failed", {
+        console.error("[api/auth/confirm] exchangeCodeForSession_failed", {
           message: exchangeError.message,
           name: exchangeError.name,
         });
@@ -163,7 +143,10 @@ export const GET = async (request: NextRequest) => {
           "exchange_failed"
         );
       }
-      console.log("[auth/confirm] pkce_exchange_ok", { ms: Date.now() - started });
+      console.log("[api/auth/confirm] pkce_exchange_ok", {
+        ms: Date.now() - started,
+        userId: exchangeData.session?.user?.id ?? null,
+      });
       const res = await redirectAfterAuthSessionEstablished({
         supabase,
         request,
@@ -171,12 +154,13 @@ export const GET = async (request: NextRequest) => {
         signupFlow,
         refParam,
         authCookieResponse,
+        sessionFromAuth: exchangeData.session ?? null,
       });
       logRedirectDestination("pkce", res);
       return noStoreHeaders(res);
     }
 
-    console.log("[auth/confirm] verifyOtp_call", {
+    console.log("[api/auth/confirm] verifyOtp_call", {
       type: SIGNUP_OTP_TYPE,
       token_hash_preview: redactTokenHash(token_hash),
       typeFromQuery,
@@ -188,7 +172,7 @@ export const GET = async (request: NextRequest) => {
     });
 
     if (otpError) {
-      console.error("[auth/confirm] verifyOtp_result", {
+      console.error("[api/auth/confirm] verifyOtp_result", {
         ok: false,
         message: otpError.message,
         status: otpError.status,
@@ -204,7 +188,7 @@ export const GET = async (request: NextRequest) => {
 
     const session = otpData.session;
     const user = otpData.user;
-    console.log("[auth/confirm] verifyOtp_result", {
+    console.log("[api/auth/confirm] verifyOtp_result", {
       ok: true,
       userId: user?.id ?? null,
       hasSession: Boolean(session),
@@ -220,12 +204,13 @@ export const GET = async (request: NextRequest) => {
       signupFlow,
       refParam,
       authCookieResponse,
+      sessionFromAuth: session ?? null,
     });
     logRedirectDestination("verifyOtp_signup", res);
     return noStoreHeaders(res);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    console.error("[auth/confirm] unhandled_error", {
+    console.error("[api/auth/confirm] unhandled_error", {
       message,
       stack: e instanceof Error ? e.stack : undefined,
     });

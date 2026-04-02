@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
@@ -23,6 +23,12 @@ type SessionFinalizeParams = {
    * the browser never receives a session (user appears logged out → middleware/login).
    */
   authCookieResponse?: NextResponse;
+  /**
+   * Session returned by `verifyOtp` / `exchangeCodeForSession` in the same request. Route Handler
+   * clients read cookies from the **request**; new auth cookies are often only on the **response**
+   * until the next round-trip, so `getSession()` can miss the user. Merge this when present.
+   */
+  sessionFromAuth?: Session | null;
   /**
    * When true (default), send the welcome email once after email verification / OAuth first session.
    * Set false only if you add another caller that must not trigger welcome.
@@ -60,15 +66,27 @@ export async function redirectAfterAuthSessionEstablished(
     signupFlow,
     refParam,
     authCookieResponse,
+    sessionFromAuth,
     sendWelcomeEmail = true,
   } = params;
   const origin = request.nextUrl.origin;
   const next = sanitizeInternalNextPath(nextRaw, "/dashboard");
 
   const {
-    data: { session },
+    data: { session: sessionFromCookies },
   } = await supabase.auth.getSession();
+  const session =
+    sessionFromCookies?.user?.id
+      ? sessionFromCookies
+      : sessionFromAuth?.user?.id
+        ? sessionFromAuth
+        : null;
+
   if (!session?.user?.id) {
+    console.warn("[auth-callback-session] no_session_after_auth", {
+      hadCookieSession: Boolean(sessionFromCookies?.user?.id),
+      hadSessionFromAuth: Boolean(sessionFromAuth?.user?.id),
+    });
     return redirectWithAuthCookies(
       authCookieResponse,
       new URL(
@@ -76,6 +94,13 @@ export async function redirectAfterAuthSessionEstablished(
         origin
       )
     );
+  }
+
+  if (!sessionFromCookies?.user?.id && sessionFromAuth?.user?.id) {
+    console.info("[auth-callback-session] session_from_auth_fallback", {
+      userId: session.user.id,
+      note: "getSession had no user; using verifyOtp/exchangeCode session (cookies on response only)",
+    });
   }
 
   const provider = session.user.app_metadata?.provider;
@@ -132,22 +157,30 @@ export async function redirectAfterAuthSessionEstablished(
   }
 
   if (sendWelcomeEmail && session.user.id) {
-    try {
-      const result = await sendWelcomeEmailAfterEmailVerification({
-        userId: session.user.id,
-        session,
-        trigger: "auth_redirect_after_verify",
+    console.info("[auth-callback-session] email_confirmed_attempting_welcome", {
+      userId: session.user.id,
+      trigger: "auth_redirect_after_verify",
+      note: "non_blocking",
+    });
+    void sendWelcomeEmailAfterEmailVerification({
+      userId: session.user.id,
+      session,
+      trigger: "auth_redirect_after_verify",
+    })
+      .then((result) => {
+        console.info("[auth-callback-session] welcome_email_result", {
+          userId: session.user.id,
+          ok: result.ok,
+          skipped: result.skipped,
+          error: result.error,
+        });
+      })
+      .catch((e) => {
+        console.error("[auth-callback-session] welcome_email_failed", {
+          userId: session.user.id,
+          message: e instanceof Error ? e.message : String(e),
+        });
       });
-      console.info("[auth-callback-session] welcome_email", {
-        userId: session.user.id,
-        ...result,
-      });
-    } catch (e) {
-      console.error("[auth-callback-session] welcome_email_failed", {
-        userId: session.user.id,
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
   }
 
   return redirectWithAuthCookies(authCookieResponse, new URL(redirectTo, origin));

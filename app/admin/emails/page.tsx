@@ -38,12 +38,14 @@ export default async function AdminEmailsPage() {
   return (
     <AdminShell activeHref="/admin/emails">
       <div className="space-y-4 md:space-y-6">
-        <h1 className="text-xl font-semibold tracking-tight md:text-2xl dark:text-gray-100">
-          Email templates & toggles
-        </h1>
-        <p className="text-sm text-muted-foreground dark:text-gray-400">
-          Configure global email on/off, per-type toggles, and override subject/body per notification type.
-        </p>
+        <div className="space-y-1.5">
+          <h1 className="text-lg font-semibold tracking-tight sm:text-xl md:text-2xl dark:text-gray-100">
+            Email templates & toggles
+          </h1>
+          <p className="text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
+            Configure global email on/off, per-type toggles, and override subject/body per notification type.
+          </p>
+        </div>
         <AdminEmailTemplates initial={initial} />
       </div>
     </AdminShell>

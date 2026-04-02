@@ -1,6 +1,6 @@
 /**
  * Client-only helpers for signup suburb/postcode prefill.
- * Cache last successful values in localStorage; optionally reverse-geocode via OSM Nominatim (AU).
+ * Cache last successful values in localStorage; reverse-geocode via same-origin API (Nominatim server-side).
  */
 
 export const SIGNUP_LOCATION_STORAGE_KEY = "bondback_signup_location";
@@ -44,46 +44,17 @@ export function saveCachedSignupLocation(postcode: string, suburb: string): void
   }
 }
 
-/**
- * Uses browser geolocation + Nominatim reverse search (Australia). Fails silently if denied or offline.
- * Respect Nominatim usage policy: low volume, identifiable User-Agent.
- */
-export async function reverseGeocodeAuForSignupPrefill(): Promise<SignupLocationCache | null> {
-  if (typeof window === "undefined" || !navigator.geolocation) return null;
-
-  const position = await new Promise<GeolocationPosition | null>((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve(pos),
-      () => resolve(null),
-      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 300_000 }
-    );
-  });
-  if (!position) return null;
-
-  const { latitude, longitude } = position.coords;
+async function reverseGeocodeViaApi(lat: number, lon: number): Promise<SignupLocationCache | null> {
   try {
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1&countrycodes=au`;
-    const res = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-        "Accept-Language": "en-AU",
-        "User-Agent": "BondBack/1.0 (signup location prefill; contact: https://bondback.com.au)",
-      },
+    const res = await fetch("/api/signup/reverse-geocode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lat, lon }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as {
-      address?: Record<string, string>;
-    };
-    const addr = data?.address ?? {};
-    const postcode = typeof addr.postcode === "string" ? addr.postcode.trim() : "";
-    const suburbRaw =
-      addr.suburb ||
-      addr.city ||
-      addr.town ||
-      addr.city_district ||
-      addr.neighbourhood ||
-      "";
-    const suburb = typeof suburbRaw === "string" ? suburbRaw.trim() : "";
+    const data = (await res.json()) as { postcode?: string; suburb?: string };
+    const postcode = typeof data.postcode === "string" ? data.postcode.trim() : "";
+    const suburb = typeof data.suburb === "string" ? data.suburb.trim() : "";
     if (!postcode && !suburb) return null;
     return {
       ...(postcode ? { postcode } : {}),
@@ -92,4 +63,34 @@ export async function reverseGeocodeAuForSignupPrefill(): Promise<SignupLocation
   } catch {
     return null;
   }
+}
+
+function getCurrentPosition(): Promise<GeolocationPosition | null> {
+  if (typeof window === "undefined" || !navigator.geolocation) return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(pos),
+      () => resolve(null),
+      {
+        enableHighAccuracy: false,
+        /** Prefer a cached fix so permission + coords often resolve immediately when already granted. */
+        maximumAge: 600_000,
+        timeout: 30_000,
+      }
+    );
+  });
+}
+
+/**
+ * Browser geolocation + server reverse lookup (Australia). Fails silently if denied or offline.
+ */
+export async function reverseGeocodeAuForSignupPrefill(): Promise<SignupLocationCache | null> {
+  if (typeof window === "undefined") return null;
+
+  const position = await getCurrentPosition();
+  if (!position) return null;
+
+  const { latitude, longitude } = position.coords;
+  return reverseGeocodeViaApi(latitude, longitude);
 }

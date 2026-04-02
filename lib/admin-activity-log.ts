@@ -19,17 +19,32 @@ export type AdminActivityPayload = {
  */
 export async function logAdminActivity(payload: AdminActivityPayload): Promise<void> {
   const admin = createSupabaseAdminClient();
-  if (!admin) return;
+  if (!admin) {
+    console.warn(
+      "[admin-activity-log] skipped (no service role):",
+      payload.actionType,
+      "— set SUPABASE_SERVICE_ROLE_KEY on the server to record audit events."
+    );
+    return;
+  }
   try {
-    await (admin as any).from("admin_activity_log").insert({
+    const { error } = await (admin as any).from("admin_activity_log").insert({
       admin_id: payload.adminId,
       action_type: payload.actionType,
       target_type: payload.targetType,
       target_id: payload.targetId,
       details: payload.details ?? {},
     });
-  } catch {
-    // Swallow so main action is not affected
+    if (error) {
+      console.warn(
+        "[admin-activity-log] insert failed:",
+        error.code ?? "",
+        error.message,
+        { actionType: payload.actionType, hint: error.hint }
+      );
+    }
+  } catch (e) {
+    console.warn("[admin-activity-log] insert threw:", e instanceof Error ? e.message : e);
   }
 }
 
@@ -43,7 +58,7 @@ export async function logTimerActivity(payload: {
   const admin = createSupabaseAdminClient();
   if (!admin) return;
   try {
-    await (admin as any).from("admin_activity_log").insert({
+    const { error } = await (admin as any).from("admin_activity_log").insert({
       admin_id: null,
       action_type: payload.actionType,
       target_type: "job",
@@ -53,7 +68,10 @@ export async function logTimerActivity(payload: {
         ...payload.details,
       },
     });
-  } catch {
-    /* ignore */
+    if (error) {
+      console.warn("[admin-activity-log] timer insert failed:", error.message);
+    }
+  } catch (e) {
+    console.warn("[admin-activity-log] timer insert threw:", e instanceof Error ? e.message : e);
   }
 }

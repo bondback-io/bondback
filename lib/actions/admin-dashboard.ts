@@ -66,13 +66,20 @@ export type ExportCsvResult = { ok: true; data: string; filename: string } | { o
 export async function adminExportCsv(
   type: "listings" | "jobs" | "users"
 ): Promise<ExportCsvResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase, adminId } = await requireAdmin();
 
   if (type === "listings") {
     const { data, error } = await supabase.from("listings").select("*").order("created_at", { ascending: false });
     if (error) return { ok: false, error: error.message };
     const rows = (data ?? []) as Record<string, unknown>[];
     const csv = rowsToCsv(rows);
+    await logAdminActivity({
+      adminId,
+      actionType: "csv_export",
+      targetType: "listing",
+      targetId: null,
+      details: { rowCount: rows.length },
+    });
     return { ok: true, data: csv, filename: `listings-${dateSuffix()}.csv` };
   }
 
@@ -81,6 +88,13 @@ export async function adminExportCsv(
     if (error) return { ok: false, error: error.message };
     const rows = (data ?? []) as Record<string, unknown>[];
     const csv = rowsToCsv(rows);
+    await logAdminActivity({
+      adminId,
+      actionType: "csv_export",
+      targetType: "job",
+      targetId: null,
+      details: { rowCount: rows.length },
+    });
     return { ok: true, data: csv, filename: `jobs-${dateSuffix()}.csv` };
   }
 
@@ -89,6 +103,13 @@ export async function adminExportCsv(
     if (error) return { ok: false, error: error.message };
     const rows = (data ?? []) as Record<string, unknown>[];
     const csv = rowsToCsv(rows);
+    await logAdminActivity({
+      adminId,
+      actionType: "csv_export",
+      targetType: "user",
+      targetId: null,
+      details: { rowCount: rows.length },
+    });
     return { ok: true, data: csv, filename: `users-${dateSuffix()}.csv` };
   }
 
