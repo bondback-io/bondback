@@ -1,6 +1,7 @@
 "use server";
 
 import type { Session } from "@supabase/supabase-js";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getNotificationPrefs } from "@/lib/supabase/admin";
@@ -13,34 +14,77 @@ function prefsRecord(prefs: Record<string, boolean | undefined> | null | undefin
 }
 
 /**
- * Prefer Auth API (admin) over JWT from `getSession()` — the cookie session can be stale right
- * after email confirmation, so `session.user.email_confirmed_at` is still null while Auth has it.
+ * Resolve recipient email and whether the address is confirmed for transactional onboarding emails.
+ *
+ * Order (merge with OR for `emailConfirmed`):
+ * 1) `createServerSupabaseClient().auth.getUser()` — validates JWT with Auth and returns **fresh**
+ *    `email_confirmed_at` (recommended over cookie `session` alone after email confirmation).
+ * 2) `auth.admin.getUserById` — authoritative Auth record when service role is available.
+ * 3) `session.user` — fallback when the above are unavailable.
  */
 async function resolveAuthEmailAndConfirmed(
   userId: string,
   session: Session
 ): Promise<{ email: string | null; emailConfirmed: boolean }> {
+  let email: string | null = null;
+  let emailConfirmed = false;
+
+  try {
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+    if (!error && user?.id === userId) {
+      email = user.email ?? null;
+      emailConfirmed = Boolean(user.email_confirmed_at);
+      console.info("[email:auth-resolve] getUser", {
+        userId,
+        emailConfirmed,
+        hasEmail: Boolean(email),
+        source: "server_getUser",
+      });
+    } else if (error) {
+      console.warn("[email:auth-resolve] getUser error", { userId, message: error.message });
+    }
+  } catch (e) {
+    console.warn("[email:auth-resolve] getUser threw", { userId, message: e instanceof Error ? e.message : String(e) });
+  }
+
   const admin = createSupabaseAdminClient();
   if (admin) {
     const { data, error } = await admin.auth.admin.getUserById(userId);
     if (error) {
-      console.warn("[email:auth-resolve] getUserById failed; falling back to session JWT", {
+      console.warn("[email:auth-resolve] getUserById failed; using session JWT if needed", {
         userId,
         message: error.message,
       });
     }
     if (!error && data?.user) {
       const u = data.user;
-      return {
-        email: u.email ?? null,
-        emailConfirmed: Boolean(u.email_confirmed_at),
-      };
+      email = u.email ?? email;
+      emailConfirmed = emailConfirmed || Boolean(u.email_confirmed_at);
+      console.info("[email:auth-resolve] admin", {
+        userId,
+        emailConfirmedFromAdmin: Boolean(u.email_confirmed_at),
+        mergedEmailConfirmed: emailConfirmed,
+      });
     }
   }
-  return {
-    email: session.user.email ?? null,
-    emailConfirmed: Boolean(session.user.email_confirmed_at),
-  };
+
+  if (!email) {
+    email = session.user.email ?? null;
+  }
+  emailConfirmed = emailConfirmed || Boolean(session.user.email_confirmed_at);
+
+  if (email && !emailConfirmed) {
+    console.warn("[email:auth-resolve] still_unconfirmed_after_merge", {
+      userId,
+      note: "If Supabase requires confirmed email, onboarding emails may be skipped until Auth shows email_confirmed_at.",
+    });
+  }
+
+  return { email, emailConfirmed };
 }
 
 /**
@@ -54,7 +98,10 @@ export async function sendWelcomeEmailAfterRoleChoice(params: {
   fullName: string | null;
 }): Promise<void> {
   const { email, emailConfirmed } = await resolveAuthEmailAndConfirmed(params.userId, params.session);
-  if (!email) return;
+  if (!email) {
+    console.info("[email:welcome]", { outcome: "skipped", userId: params.userId, reason: "no_email" });
+    return;
+  }
   if (!emailConfirmed) {
     console.info("[email:welcome]", {
       outcome: "skipped",
@@ -65,11 +112,32 @@ export async function sendWelcomeEmailAfterRoleChoice(params: {
   }
 
   const globalSettings = await getGlobalSettings();
-  if (globalSettings?.emails_enabled === false) return;
+  if (globalSettings?.emails_enabled === false) {
+    console.info("[email:welcome]", {
+      outcome: "skipped",
+      userId: params.userId,
+      reason: "global_emails_disabled",
+    });
+    return;
+  }
 
   const prefs = await getNotificationPrefs(params.userId);
-  if (prefs?.notificationPreferences?.email_welcome === false) return;
-  if (prefs?.emailForceDisabled) return;
+  if (prefs?.notificationPreferences?.email_welcome === false) {
+    console.info("[email:welcome]", {
+      outcome: "skipped",
+      userId: params.userId,
+      reason: "user_pref_email_welcome_off",
+    });
+    return;
+  }
+  if (prefs?.emailForceDisabled) {
+    console.info("[email:welcome]", {
+      outcome: "skipped",
+      userId: params.userId,
+      reason: "email_force_disabled",
+    });
+    return;
+  }
 
   const firstName = params.fullName?.trim()?.split(" ")[0];
   const signupRole = params.choice;
@@ -113,7 +181,10 @@ export async function sendTutorialEmailsForRoles(params: {
   roles: TutorialRole[];
 }): Promise<void> {
   const { email, emailConfirmed } = await resolveAuthEmailAndConfirmed(params.userId, params.session);
-  if (!email) return;
+  if (!email) {
+    console.info("[email:tutorial]", { outcome: "skipped", userId: params.userId, reason: "no_email" });
+    return;
+  }
   if (!emailConfirmed) {
     console.info("[email:tutorial]", {
       outcome: "skipped",
@@ -124,14 +195,43 @@ export async function sendTutorialEmailsForRoles(params: {
   }
 
   const globalSettings = await getGlobalSettings();
-  if (globalSettings?.emails_enabled === false) return;
+  if (globalSettings?.emails_enabled === false) {
+    console.info("[email:tutorial]", {
+      outcome: "skipped",
+      userId: params.userId,
+      reason: "global_emails_disabled",
+    });
+    return;
+  }
 
   const prefsResult = await getNotificationPrefs(params.userId);
-  if (prefsResult?.notificationPreferences?.email_tutorial === false) return;
-  if (prefsResult?.emailForceDisabled) return;
+  if (prefsResult?.notificationPreferences?.email_tutorial === false) {
+    console.info("[email:tutorial]", {
+      outcome: "skipped",
+      userId: params.userId,
+      reason: "user_pref_email_tutorial_off",
+    });
+    return;
+  }
+  if (prefsResult?.emailForceDisabled) {
+    console.info("[email:tutorial]", {
+      outcome: "skipped",
+      userId: params.userId,
+      reason: "email_force_disabled",
+    });
+    return;
+  }
 
   const admin = createSupabaseAdminClient();
-  if (!admin) return;
+  if (!admin) {
+    console.error("[email:tutorial]", {
+      outcome: "skipped",
+      userId: params.userId,
+      reason: "no_service_role_admin",
+      hint: "Set SUPABASE_SERVICE_ROLE_KEY to send tutorial and persist prefs.",
+    });
+    return;
+  }
 
   const { data: profile } = await admin
     .from("profiles")
@@ -160,6 +260,13 @@ export async function sendTutorialEmailsForRoles(params: {
           userId: params.userId,
           role,
           error: result.error,
+        });
+      } else {
+        console.info("[email:tutorial]", {
+          outcome: "skipped",
+          userId: params.userId,
+          role,
+          reason: "send_skipped",
         });
       }
       continue;

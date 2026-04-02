@@ -5,7 +5,7 @@
  * BOND BACK — SINGLE SIGN-UP (Airtasker-style)
  * ============================================================================
  * SUMMARY
- * - One form: email, password, full name, postcode.
+ * - One form: email, password, confirm password, full name, postcode.
  * - With session (instant / dev): upsert minimal profile `roles: []` → `/onboarding/role-choice`.
  * - Email-confirm flow: stash name/postcode in localStorage; after confirm + login,
  *   `PendingProfileSync` on role-choice runs the same minimal upsert.
@@ -52,16 +52,22 @@ function buildAuthConfirmUrl(origin: string, ref: string | null): string {
   return u.toString();
 }
 
-const signupSchema = z.object({
-  email: z.string().email("Enter a valid email"),
-  password: z.string().min(6, "At least 6 characters"),
-  fullName: z.string().min(1, "Name is required").max(120),
-  postcode: z
-    .string()
-    .max(10)
-    .optional()
-    .or(z.literal("")),
-});
+const signupSchema = z
+  .object({
+    email: z.string().email("Enter a valid email"),
+    password: z.string().min(6, "At least 6 characters"),
+    confirmPassword: z.string().min(1, "Confirm your password"),
+    fullName: z.string().min(1, "Name is required").max(120),
+    postcode: z
+      .string()
+      .max(10)
+      .optional()
+      .or(z.literal("")),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 type SignupValues = z.infer<typeof signupSchema>;
 
@@ -106,6 +112,7 @@ function SignupForm() {
     defaultValues: {
       email: "",
       password: "",
+      confirmPassword: "",
       fullName: "",
       postcode: "",
     },
@@ -319,6 +326,22 @@ function SignupForm() {
               />
               {form.formState.errors.password && (
                 <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-base">
+                Confirm password
+              </Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                className="min-h-12 text-base"
+                {...form.register("confirmPassword")}
+              />
+              {form.formState.errors.confirmPassword && (
+                <p className="text-sm text-destructive">{form.formState.errors.confirmPassword.message}</p>
               )}
             </div>
 

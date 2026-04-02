@@ -340,24 +340,27 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
     const fullName = (nameRow as { full_name?: string | null } | null)?.full_name ?? null;
     const tutorialRoles =
       choice === "both" ? (["lister", "cleaner"] as const) : choice === "lister" ? (["lister"] as const) : (["cleaner"] as const);
-    void import("@/lib/actions/onboarding-transactional-emails").then((m) =>
-      Promise.all([
-        m.sendWelcomeEmailAfterRoleChoice({
+    try {
+      const { sendWelcomeEmailAfterRoleChoice, sendTutorialEmailsForRoles } = await import(
+        "@/lib/actions/onboarding-transactional-emails"
+      );
+      await Promise.all([
+        sendWelcomeEmailAfterRoleChoice({
           userId,
           session: sessionForEmail,
           choice,
           fullName,
         }),
-        m.sendTutorialEmailsForRoles({
+        sendTutorialEmailsForRoles({
           userId,
           session: sessionForEmail,
           firstName: fullName?.trim()?.split(" ")[0],
           roles: [...tutorialRoles],
         }),
-      ]).catch((e) => {
-        console.error("[saveRoleChoice] welcome/tutorial emails failed", e);
-      })
-    );
+      ]);
+    } catch (e) {
+      console.error("[saveRoleChoice] welcome/tutorial emails failed", e);
+    }
   }
 
   revalidatePath("/onboarding");
