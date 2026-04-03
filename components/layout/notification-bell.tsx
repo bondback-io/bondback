@@ -264,7 +264,7 @@ export function NotificationBell({
         <Bell className="h-5 w-5 shrink-0" />
         <span>Notifications</span>
         {unreadCount > 0 && (
-          <Badge className="ml-auto bg-destructive px-1.5 text-[10px]">
+          <Badge variant="destructive" className="ml-auto px-1.5 text-[10px]">
             {unreadCount > 9 ? "9+" : unreadCount}
           </Badge>
         )}
@@ -273,7 +273,7 @@ export function NotificationBell({
       <>
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <Badge className="absolute -right-1 -top-1 bg-destructive px-1 text-[10px]">
+          <Badge variant="destructive" className="absolute -right-1 -top-1 px-1 text-[10px]">
             {unreadCount > 9 ? "9+" : unreadCount}
           </Badge>
         )}

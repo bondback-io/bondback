@@ -215,10 +215,26 @@ export function EarningsPageClient({
       a.href = url;
       a.download = filename;
       a.click();
-      URL.revokeObjectURL(url);
+
+      let revoked = false;
+      const safeRevoke = () => {
+        if (revoked) return;
+        revoked = true;
+        URL.revokeObjectURL(url);
+      };
+      const revokeSoon = window.setTimeout(safeRevoke, 10 * 60 * 1000);
+
       toast({
         title: "CSV downloaded",
-        description: "Check your downloads folder.",
+        description: "Check your downloads folder, or open a preview in a new tab.",
+        actionButton: {
+          label: "View",
+          onClick: () => {
+            window.clearTimeout(revokeSoon);
+            window.open(url, "_blank", "noopener,noreferrer");
+            window.setTimeout(safeRevoke, 60_000);
+          },
+        },
       });
     } finally {
       setExportingCsv(false);
