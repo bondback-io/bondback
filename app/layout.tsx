@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next";
 import { getSiteUrl } from "@/lib/site";
 import "./globals.css";
 import { Header } from "@/components/layout/header";
@@ -183,6 +184,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         </Toaster>
         <PwaInstallPrompt />
         </QueryClientProviderWrapper>
+        <Analytics />
       </body>
     </html>
   );
