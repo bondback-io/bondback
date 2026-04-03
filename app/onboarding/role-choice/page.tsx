@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { OnboardingRouteLoadingFallback } from "@/components/onboarding/onboarding-flow-progress-screen";
 import { RoleChoiceClient } from "@/components/onboarding/role-choice-client";
 
 /**
@@ -51,7 +53,9 @@ export default async function RoleChoicePage() {
 
   return (
     <section className="page-inner flex min-h-[60vh] flex-col items-center justify-center">
-      <RoleChoiceClient />
+      <Suspense fallback={<OnboardingRouteLoadingFallback />}>
+        <RoleChoiceClient />
+      </Suspense>
     </section>
   );
 }

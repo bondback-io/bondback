@@ -5,7 +5,6 @@ import {
   ListingCreationProgressModal,
   type ListingCreationStepId,
 } from "@/components/listing/listing-creation-progress-modal";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
 import { useForm, Controller } from "react-hook-form";
@@ -265,7 +264,6 @@ export function NewListingForm({
     () => zodResolver(listingSchema),
     [listingSchema]
   );
-  const router = useRouter();
   const supabase = createBrowserSupabaseClient();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
@@ -544,8 +542,11 @@ export function NewListingForm({
       const buyNow = values.buyNowPrice?.trim()
         ? Number(values.buyNowPrice)
         : null;
-      const startingPrice = calculateEstimatedPrice(values, pricingModifiers);
-      if (buyNow != null && buyNow >= startingPrice) {
+      /** Suggested price from property + add-ons (shown in UI as the estimate). */
+      const estimatedPriceAud = calculateEstimatedPrice(values, pricingModifiers);
+      /** Auction starts at the reserve the lister set in step 5 — must match reserve_cents (not the calculator alone). */
+      const startingBidAud = reserve;
+      if (buyNow != null && buyNow >= reserve) {
         const msg = "Buy-now price must be lower than the starting bid price.";
         failPublish(new Error(msg), "listing", {
           failureHint: null,
@@ -605,9 +606,9 @@ export function NewListingForm({
         reserve_cents: Math.round(reserve * 100),
         reserve_price: Math.round(reserve * 100),
         buy_now_cents: buyNow ? Math.round(buyNow * 100) : null,
-        base_price: Math.round(startingPrice * 100),
-        starting_price_cents: Math.round(startingPrice * 100),
-        current_lowest_bid_cents: Math.round(startingPrice * 100),
+        base_price: Math.round(estimatedPriceAud * 100),
+        starting_price_cents: Math.round(startingBidAud * 100),
+        current_lowest_bid_cents: Math.round(startingBidAud * 100),
         duration_days: durationDays,
         status: "live",
         end_time: endTime,
@@ -769,9 +770,8 @@ export function NewListingForm({
       }
       publishRedirectTimerRef.current = setTimeout(() => {
         publishRedirectTimerRef.current = null;
-        router.replace(`/jobs/${listingId}`);
-        setPublishModalOpen(false);
-        setPublishModalPhase("running");
+        /** Full navigation avoids soft-nav edge cases and stuck modal on mobile after publish. */
+        window.location.assign(`/jobs/${listingId}`);
       }, 1800);
     } catch (err) {
       failPublish(err, "listing");
@@ -785,7 +785,8 @@ export function NewListingForm({
         <ListingCreationProgressModal
           open={publishModalOpen}
           onOpenChange={(next) => {
-            if (!next && (publishModalPhase === "running" || publishModalPhase === "success")) {
+            /** Modal already blocks dismiss while running/success; only ignore duplicate close while working. */
+            if (!next && publishModalPhase === "running") {
               return;
             }
             setPublishModalOpen(next);

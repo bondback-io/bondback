@@ -359,34 +359,41 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
   } = await supabase.auth.getSession();
   const sessionForEmail = sessionAfterUpsert ?? session;
   if (isFirstRoleAssignment && sessionForEmail) {
-    const { data: nameRow } = await admin
-      .from("profiles")
-      .select("full_name")
-      .eq("id", userId)
-      .maybeSingle();
-    const fullName = (nameRow as { full_name?: string | null } | null)?.full_name ?? null;
     const tutorialRoles =
-      choice === "both" ? (["lister", "cleaner"] as const) : choice === "lister" ? (["lister"] as const) : (["cleaner"] as const);
+      choice === "both"
+        ? (["lister", "cleaner"] as const)
+        : choice === "lister"
+          ? (["lister"] as const)
+          : (["cleaner"] as const);
     console.info("[onboarding:saveRoleChoice] role_selected_attempting_tutorial", {
       userId,
       choice,
       tutorialRoles,
+      note: "deferred_background",
     });
-    try {
-      const { sendTutorialEmailsForRoles } = await import("@/lib/actions/onboarding-transactional-emails");
-      await sendTutorialEmailsForRoles({
-        userId,
-        session: sessionForEmail,
-        firstName: fullName?.trim()?.split(" ")[0],
-        roles: [...tutorialRoles],
-        skipEmailConfirmedCheck: true,
-      });
-    } catch (e) {
-      console.error("[saveRoleChoice] tutorial emails failed", {
-        userId,
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
+    void (async () => {
+      try {
+        const { data: nameRow } = await admin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", userId)
+          .maybeSingle();
+        const fullName = (nameRow as { full_name?: string | null } | null)?.full_name ?? null;
+        const { sendTutorialEmailsForRoles } = await import("@/lib/actions/onboarding-transactional-emails");
+        await sendTutorialEmailsForRoles({
+          userId,
+          session: sessionForEmail,
+          firstName: fullName?.trim()?.split(" ")[0],
+          roles: [...tutorialRoles],
+          skipEmailConfirmedCheck: true,
+        });
+      } catch (e) {
+        console.error("[saveRoleChoice] tutorial emails failed", {
+          userId,
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+    })();
   } else if (isFirstRoleAssignment && !sessionForEmail) {
     console.error("[onboarding:saveRoleChoice] tutorial_skipped_no_session", { userId, choice });
   }

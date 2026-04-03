@@ -173,8 +173,9 @@ export async function GET(request: NextRequest) {
         hasSession: Boolean(exchangeData.session),
       });
 
-      /** Brief pause so Set-Cookie + client storage can stabilize before the browser follows the redirect (reduces race on mobile). */
-      await new Promise((r) => setTimeout(r, 400));
+      await supabase.auth.getSession();
+      /** Pause so Set-Cookie + client storage can stabilize before the browser follows the redirect. */
+      await new Promise((r) => setTimeout(r, 500));
 
       const res = await redirectAfterAuthSessionEstablished({
         supabase,
@@ -226,8 +227,9 @@ export async function GET(request: NextRequest) {
       ms: Date.now() - started,
     });
 
-    /** Brief pause so session cookies persist before redirect (helps first paint on `/onboarding/role-choice`). */
-    await new Promise((r) => setTimeout(r, 400));
+    await supabase.auth.getSession();
+    /** Pause so session cookies persist before redirect (helps first paint on `/onboarding/role-choice`). */
+    await new Promise((r) => setTimeout(r, 500));
 
     const res = await redirectAfterAuthSessionEstablished({
       supabase,
