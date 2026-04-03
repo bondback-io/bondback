@@ -55,6 +55,10 @@ export type UserMenuProps = {
 
 const MOBILE_BREAKPOINT = 768;
 
+/** Light: soft sky-tint strip; dark: subtle gray bar — see `app/globals.css` chrome tokens */
+const MENU_SECTION_HEADER =
+  "mx-1.5 mb-1 rounded-md bg-menuSectionHeader px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-menuSectionHeaderFg dark:bg-gray-800/70 dark:text-gray-400";
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState(false);
 
@@ -451,9 +455,7 @@ export function UserMenu({ session }: UserMenuProps) {
                   className="my-1 h-px w-full shrink-0 bg-border dark:bg-gray-800"
                   aria-hidden
                 />
-                <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                  Appearance
-                </p>
+                <p className={MENU_SECTION_HEADER}>Appearance</p>
                 <UserMenuThemeToggleSheetRow persistToServer />
 
                 {isAdmin && (
@@ -523,12 +525,10 @@ export function UserMenu({ session }: UserMenuProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="w-56 max-w-[calc(100vw-2rem)] rounded-xl border-border/80 py-1.5 shadow-lg dark:border-gray-800 dark:bg-gray-900"
+          className="w-56 max-w-[calc(100vw-2rem)] rounded-xl border-chromeBorder/90 py-1.5 shadow-lg dark:border-gray-800 dark:bg-gray-900"
           sideOffset={8}
         >
-          <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-            Account
-          </div>
+          <div className={MENU_SECTION_HEADER}>Account</div>
           <DropdownMenuItem
             onSelect={() => {
               router.push("/profile");
@@ -541,9 +541,7 @@ export function UserMenu({ session }: UserMenuProps) {
 
           <DropdownMenuSeparator className="my-1" />
 
-          <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-            Jobs &amp; activity
-          </div>
+          <div className={MENU_SECTION_HEADER}>Jobs &amp; activity</div>
           {isLister && (
             <DropdownMenuItem
               onSelect={() => {
@@ -619,9 +617,7 @@ export function UserMenu({ session }: UserMenuProps) {
 
           <DropdownMenuSeparator className="my-1" />
 
-          <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-            Support
-          </div>
+          <div className={MENU_SECTION_HEADER}>Support</div>
           <DropdownMenuItem
             onSelect={() => {
               router.push("/help");
@@ -633,9 +629,7 @@ export function UserMenu({ session }: UserMenuProps) {
           </DropdownMenuItem>
 
           <DropdownMenuSeparator className="my-1" />
-          <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-            Appearance
-          </div>
+          <div className={MENU_SECTION_HEADER}>Appearance</div>
           <UserMenuThemeToggleDropdownItem persistToServer />
 
           {isAdmin && (

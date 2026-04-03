@@ -317,8 +317,8 @@ export function NotificationBell({
         className="z-[100] w-[360px] p-0"
         sideOffset={8}
       >
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-sm font-semibold">Notifications</span>
+        <div className="flex items-center justify-between rounded-t-[inherit] border-b border-chromeBorder/70 bg-menuSectionHeader px-3 py-2.5 dark:border-gray-800 dark:bg-gray-900/60">
+          <span className="text-sm font-semibold text-foreground dark:text-gray-100">Notifications</span>
           {unreadCount > 0 && (
             <Button
               type="button"

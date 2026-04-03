@@ -6,6 +6,15 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
+    /**
+     * Light-mode chrome: soft sky-tinted surfaces for nav, sheets, and menus.
+     * Dark mode keeps existing gray stack via .dark overrides below.
+     */
+    --chrome-surface: 210 55% 97%;
+    --chrome-border: 214 42% 88%;
+    --chrome-elevated: 210 48% 99%;
+    --menu-section-header-bg: 210 42% 94%;
+    --menu-section-header-fg: 215 32% 38%;
     --muted: 210 40% 96%;
     --muted-foreground: 215.4 16.3% 46.9%;
     --border: 214.3 31.8% 91.4%;
@@ -28,6 +37,11 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
+    --chrome-surface: 222.2 84% 4.9%;
+    --chrome-border: 217.2 32.6% 17.5%;
+    --chrome-elevated: 222.2 84% 7%;
+    --menu-section-header-bg: 217.2 32.6% 16%;
+    --menu-section-header-fg: 215 20% 65%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20% 65%;
     --border: 217.2 32.6% 17.5%;

@@ -53,7 +53,13 @@ const config: Config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))"
-        }
+        },
+        /** Nav / sheets / menus — see `app/globals.css` */
+        chromeSurface: "hsl(var(--chrome-surface))",
+        chromeBorder: "hsl(var(--chrome-border))",
+        chromeElevated: "hsl(var(--chrome-elevated))",
+        menuSectionHeader: "hsl(var(--menu-section-header-bg))",
+        menuSectionHeaderFg: "hsl(var(--menu-section-header-fg))"
       },
       borderRadius: {
         lg: "0.75rem",

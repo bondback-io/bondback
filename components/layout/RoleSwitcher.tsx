@@ -146,12 +146,12 @@ export function RoleSwitcher({
         <DropdownMenuContent
           align="end"
           className={cn(
-            "w-[min(100vw-2rem,20rem)] rounded-xl border-border/80 p-1 shadow-lg",
-            "bg-popover text-popover-foreground",
+            "w-[min(100vw-2rem,20rem)] rounded-xl border-chromeBorder/90 p-1 shadow-lg",
+            "bg-chromeElevated text-popover-foreground",
             "dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
           )}
         >
-          <div className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+          <div className="mx-1 mb-0.5 rounded-md bg-menuSectionHeader px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-menuSectionHeaderFg dark:bg-gray-800/70 dark:text-gray-400">
             Your roles
           </div>
           <DropdownMenuSeparator className="my-0 dark:bg-gray-800" />

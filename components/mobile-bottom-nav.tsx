@@ -135,8 +135,8 @@ function MessagesTabLink({
           aria-hidden
         />
         {showBadge && (
-          <span className="absolute -right-1 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-bold leading-none text-primary-foreground shadow-sm ring-2 ring-background dark:ring-gray-950">
-            {unread > 99 ? "99+" : unread}
+          <span className="absolute -right-1 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-bold leading-none text-primary-foreground shadow-sm ring-2 ring-chromeSurface dark:ring-gray-950">
+                  {unread > 99 ? "99+" : unread}
           </span>
         )}
       </span>
@@ -345,7 +345,7 @@ export function MobileBottomNav({
     >
       <div
         className={cn(
-          "border-t border-border/80 bg-background/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.12)] backdrop-blur-xl",
+          "border-t border-chromeBorder/90 bg-chromeSurface/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_30px_-12px_rgba(15,23,42,0.08)] backdrop-blur-xl",
           "dark:border-gray-800 dark:bg-gray-950/95 dark:shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.45)]"
         )}
       >
@@ -376,7 +376,7 @@ export function MobileBottomNav({
                 aria-hidden
               />
               {notificationUnread > 0 && (
-                <span className="absolute -right-1 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-destructive-foreground shadow-sm ring-2 ring-background dark:ring-gray-950">
+                <span className="absolute -right-1 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-destructive-foreground shadow-sm ring-2 ring-chromeSurface dark:ring-gray-950">
                   {notificationUnread > 9 ? "9+" : notificationUnread}
                 </span>
               )}

@@ -48,6 +48,7 @@ import {
   reverseGeocodeAuForSignupPrefill,
   saveCachedSignupLocation,
 } from "@/lib/location/signup-location-prefill";
+import { SuburbPostcodeAutocomplete } from "@/components/features/suburb-postcode-autocomplete";
 
 /** Email confirmation links open `/auth/confirm` (GET route verifies token and redirects). */
 function buildAuthConfirmUrl(origin: string, ref: string | null): string {
@@ -307,7 +308,7 @@ function SignupForm() {
           void onSubmit();
         }}
       />
-      <Card className="relative w-full max-w-md border-border/80 shadow-lg dark:border-gray-800 dark:bg-gray-900">
+      <Card className="relative w-full max-w-md overflow-visible border-border/80 shadow-lg dark:border-gray-800 dark:bg-gray-900">
         <CardHeader className="space-y-1 pb-4 text-center sm:text-left">
           <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
             Create your account
@@ -396,40 +397,36 @@ function SignupForm() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="suburb" className="text-base">
-                Suburb
-              </Label>
-              <Input
-                id="suburb"
-                autoComplete="address-level2"
-                className="min-h-12 text-base"
-                placeholder="e.g. Surry Hills"
-                {...form.register("suburb")}
+            <div className="relative z-10 overflow-visible">
+              <SuburbPostcodeAutocomplete
+                hideStateSelect
+                stateValue=""
+                onStateChange={() => {}}
+                suburbValue={form.watch("suburb") ?? ""}
+                postcodeValue={form.watch("postcode") ?? ""}
+                onSuburbPostcodeChange={(suburb, postcode) => {
+                  form.setValue("suburb", suburb, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  });
+                  form.setValue("postcode", postcode, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  });
+                }}
+                id="signup-suburb"
+                label="Where are you based?"
+                suburbPlaceholder="Type suburb or postcode (e.g. 2000 or Surry)"
+                error={
+                  form.formState.errors.suburb?.message ||
+                  form.formState.errors.postcode?.message ||
+                  undefined
+                }
               />
-              {form.formState.errors.suburb && (
-                <p className="text-sm text-destructive">{form.formState.errors.suburb.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="postcode" className="text-base">
-                Postcode
-              </Label>
-              <Input
-                id="postcode"
-                autoComplete="postal-code"
-                inputMode="numeric"
-                className="min-h-12 text-base"
-                placeholder="e.g. 2000"
-                {...form.register("postcode")}
-              />
-              <p className="text-xs text-muted-foreground">
-                We may suggest suburb and postcode from your location (you can edit). Last values are remembered on this device.
+              <p className="mt-2 text-xs text-muted-foreground">
+                Choose a suggestion to set suburb and postcode, or type manually. We may prefill from your
+                location; last values are remembered on this device.
               </p>
-              {form.formState.errors.postcode && (
-                <p className="text-sm text-destructive">{form.formState.errors.postcode.message}</p>
-              )}
             </div>
 
             <Button

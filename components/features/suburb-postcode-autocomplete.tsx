@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,7 +28,23 @@ export type SuburbPostcodeAutocompleteProps = {
   suburbPlaceholder?: string;
   disabled?: boolean;
   error?: string;
+  /** When true, only suburb/postcode field is shown; all states are searched (optional state filter). */
+  hideStateSelect?: boolean;
+  /** Override default "Suburb & postcode" label */
+  label?: string;
+  className?: string;
+  inputClassName?: string;
 };
+
+const BLUR_CLOSE_MS = 350;
+
+function formatDisplayFromValues(suburb: string, postcode: string): string {
+  const s = suburb?.trim() ?? "";
+  const p = postcode?.trim() ?? "";
+  if (s && p) return `${s} ${p}`;
+  if (p && !s) return p;
+  return s;
+}
 
 export function SuburbPostcodeAutocomplete({
   stateValue,
@@ -40,13 +56,22 @@ export function SuburbPostcodeAutocomplete({
   suburbPlaceholder = "Select state then type suburb or postcode",
   disabled,
   error,
+  hideStateSelect = false,
+  label = "Suburb & postcode",
+  className,
+  inputClassName,
 }: SuburbPostcodeAutocompleteProps) {
   const [open, setOpen] = useState(false);
-  const [inputValue, setInputValue] = useState(
-    suburbValue && postcodeValue ? `${suburbValue} ${postcodeValue}` : suburbValue || ""
+  const [inputValue, setInputValue] = useState(() =>
+    formatDisplayFromValues(suburbValue, postcodeValue)
   );
   const [highlightIndex, setHighlightIndex] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
+  const blurCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setInputValue(formatDisplayFromValues(suburbValue, postcodeValue));
+  }, [suburbValue, postcodeValue]);
 
   const stateCode = stateValue as AuStateCode | undefined;
   const suggestions = filterSuburbs(inputValue, stateCode ?? null);
@@ -77,6 +102,23 @@ export function SuburbPostcodeAutocomplete({
     }
   };
 
+  const clearBlurTimer = useCallback(() => {
+    if (blurCloseTimerRef.current != null) {
+      clearTimeout(blurCloseTimerRef.current);
+      blurCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    clearBlurTimer();
+    blurCloseTimerRef.current = setTimeout(() => {
+      blurCloseTimerRef.current = null;
+      setOpen(false);
+    }, BLUR_CLOSE_MS);
+  }, [clearBlurTimer]);
+
+  useEffect(() => () => clearBlurTimer(), [clearBlurTimer]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!open || suggestions.length === 0) {
       if (e.key === "Escape") setOpen(false);
@@ -98,53 +140,77 @@ export function SuburbPostcodeAutocomplete({
   };
 
   return (
-    <div className="space-y-2">
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="state">State</Label>
-          <Select
-            value={stateValue || ""}
-            onValueChange={handleStateChange}
-            disabled={disabled}
-          >
-            <SelectTrigger id="state">
-              <SelectValue placeholder="Select state" />
-            </SelectTrigger>
-            <SelectContent>
-              {AU_STATES.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>Suburb & postcode</Label>
-          <div className="relative">
+    <div className={cn("space-y-2", className)}>
+      <div
+        className={cn(
+          "grid gap-2",
+          !hideStateSelect && "sm:grid-cols-2"
+        )}
+      >
+        {!hideStateSelect && (
+          <div className="space-y-1.5">
+            <Label htmlFor="state">State</Label>
+            <Select
+              value={stateValue || ""}
+              onValueChange={handleStateChange}
+              disabled={disabled}
+            >
+              <SelectTrigger id="state">
+                <SelectValue placeholder="Select state" />
+              </SelectTrigger>
+              <SelectContent>
+                {AU_STATES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className={cn("space-y-1.5", hideStateSelect && "sm:col-span-1")}>
+          <Label htmlFor={id} className={hideStateSelect ? "text-base" : undefined}>
+            {label}
+          </Label>
+          <div className="relative z-20 overflow-visible">
             <Input
               id={id}
               type="text"
               placeholder={suburbPlaceholder}
               value={inputValue}
               onChange={handleInputChange}
-              onFocus={() => setOpen(true)}
-              onBlur={() => setTimeout(() => setOpen(false), 150)}
+              onFocus={() => {
+                clearBlurTimer();
+                setOpen(true);
+              }}
+              onBlur={scheduleClose}
               onKeyDown={handleKeyDown}
               disabled={disabled}
               autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="search"
+              className={cn(
+                "touch-manipulation",
+                hideStateSelect && "min-h-12 text-base",
+                inputClassName
+              )}
             />
             {open && suggestions.length > 0 && (
               <ul
                 ref={listRef}
-                className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border bg-popover py-1 text-sm shadow-md"
+                role="listbox"
+                aria-label="Suburb suggestions"
+                className="absolute left-0 right-0 z-[100] mt-1 max-h-[min(50vh,16rem)] w-full touch-pan-y overflow-y-auto overscroll-contain rounded-md border border-chromeBorder bg-chromeElevated py-1 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-900"
               >
                 {suggestions.map((s, i) => (
                   <li
                     key={`${s.state}-${s.suburb}-${s.postcode}`}
+                    role="option"
+                    aria-selected={i === highlightIndex}
                     className={cn(
-                      "cursor-pointer px-3 py-2 hover:bg-accent hover:text-accent-foreground",
-                      i === highlightIndex && "bg-accent text-accent-foreground"
+                      "cursor-pointer px-3 py-2.5 text-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent/90 dark:text-gray-100 dark:hover:bg-gray-800",
+                      i === highlightIndex && "bg-accent text-accent-foreground dark:bg-gray-800"
                     )}
                     onMouseDown={(e) => {
                       e.preventDefault();

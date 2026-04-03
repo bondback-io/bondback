@@ -50,9 +50,9 @@ export const Header = async ({
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 w-full border-b border-border/60 bg-background/95 backdrop-blur-md",
+        "sticky top-0 z-30 w-full border-b border-chromeBorder/90 bg-chromeSurface/95 backdrop-blur-md",
         "dark:border-gray-800 dark:bg-gray-950/95",
-        "shadow-sm dark:shadow-none",
+        "shadow-sm shadow-sky-900/5 dark:shadow-none",
         "min-h-[3.25rem] sm:min-h-14",
         "pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]",
         className

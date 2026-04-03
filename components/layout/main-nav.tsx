@@ -161,7 +161,7 @@ function MobileNavContent({
   return (
     <div className="flex flex-1 flex-col">
       {/* Logo at top */}
-      <div className="flex shrink-0 items-center justify-between border-b border-border pb-4 dark:border-gray-800">
+      <div className="flex shrink-0 items-center justify-between rounded-xl border border-chromeBorder/70 bg-menuSectionHeader/80 px-3 py-3 dark:border-gray-800 dark:bg-gray-900/40">
         <SheetClose asChild>
           <Link
             href="/"
@@ -190,7 +190,7 @@ function MobileNavContent({
             )}
             <div
               className={cn(
-                "flex flex-col gap-2 border-t border-border pt-4 dark:border-gray-800",
+                "flex flex-col gap-2 border-t border-chromeBorder/80 pt-4 dark:border-gray-800",
                 isHomePage && "mt-0 border-t-0 pt-0"
               )}
             >
@@ -385,7 +385,7 @@ export function MainNav({
         <SheetContent
           side="right"
           className={cn(
-            "flex w-full flex-col border-l border-border bg-background shadow-xl dark:bg-gray-950 dark:border-gray-800",
+            "flex w-full flex-col border-l border-chromeBorder bg-chromeSurface shadow-xl dark:bg-gray-950 dark:border-gray-800",
             "w-[min(100vw-1.5rem,22rem)] sm:w-[min(100vw-2rem,24rem)]",
             "data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right",
             "duration-200 ease-out"
