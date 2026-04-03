@@ -50,6 +50,56 @@ export function getListingCoverUrl(listing: ListingWithPhotos | null | undefined
   return typeof first === "string" && first.trim() ? first : null;
 }
 
+/** Listing row may include `preferred_dates` (not always in generated DB types). */
+export type ListingWithPreferredDates = ListingRow & {
+  preferred_dates?: string[] | null;
+};
+
+/**
+ * End of the preferred cleaning window: latest preferred date, or move-out date if none.
+ * Used for "due soon" / overdue relative to what the lister asked for.
+ */
+export function getPreferredCleaningDeadlineMs(
+  listing: ListingWithPreferredDates | null
+): number | null {
+  if (!listing) return null;
+  const rawPreferred = listing.preferred_dates;
+  if (Array.isArray(rawPreferred) && rawPreferred.length > 0) {
+    const times = rawPreferred
+      .map((d) => new Date(d).getTime())
+      .filter((t) => !Number.isNaN(t));
+    if (times.length === 0) return null;
+    return Math.max(...times);
+  }
+  const mov = listing.move_out_date;
+  if (mov) {
+    const t = new Date(mov).getTime();
+    return Number.isNaN(t) ? null : t;
+  }
+  return null;
+}
+
+/**
+ * Whole days until the preferred cleaning deadline. Negative means overdue (past end of window).
+ */
+export function daysUntilPreferredCleaningDeadline(
+  deadlineMs: number,
+  now: Date = new Date()
+): number {
+  return Math.ceil((deadlineMs - now.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+/** Short label for dashboards (supports negative days = overdue). */
+export function formatPreferredCleaningDueLine(daysLeft: number | null): string | null {
+  if (daysLeft == null) return null;
+  if (daysLeft < 0) {
+    const n = Math.abs(daysLeft);
+    return n === 1 ? "1 day overdue" : `${n} days overdue`;
+  }
+  if (daysLeft === 0) return "Due today";
+  return `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`;
+}
+
 /** Insert payload may include columns not in generated types (e.g. reserve_price, base_price, end_date). */
 export type ListingInsertPayload = ListingInsert & {
   reserve_price?: number;

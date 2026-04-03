@@ -12,7 +12,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatCents, getListingCoverUrl } from "@/lib/listings";
+import {
+  formatCents,
+  formatPreferredCleaningDueLine,
+  getListingCoverUrl,
+} from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { cn } from "@/lib/utils";
@@ -37,6 +41,8 @@ export type ActiveJobCardProps = {
 
 export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
   const router = useRouter();
+  const dueLine = formatPreferredCleaningDueLine(daysLeft);
+  const overdue = daysLeft != null && daysLeft < 0;
   const jobHref = `/jobs/${job.id}`;
   const title = listing?.title ?? "Bond clean job";
   const thumb = getListingCoverUrl(listing);
@@ -169,9 +175,16 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
             >
               {statusLine}
             </div>
-            {daysLeft != null && (
-              <p className="mt-2 text-base font-semibold text-muted-foreground dark:text-gray-400">
-                {daysLeft} days left
+            {dueLine != null && (
+              <p
+                className={cn(
+                  "mt-2 text-base font-semibold",
+                  overdue
+                    ? "text-destructive dark:text-red-400"
+                    : "text-muted-foreground dark:text-gray-400"
+                )}
+              >
+                {dueLine}
               </p>
             )}
           </div>
@@ -315,8 +328,14 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
                 </span>
               </>
             )}
-            {daysLeft != null && (
-              <span className="text-muted-foreground dark:text-gray-400">{daysLeft} days left</span>
+            {dueLine != null && (
+              <span
+                className={cn(
+                  overdue ? "font-semibold text-destructive dark:text-red-400" : "text-muted-foreground dark:text-gray-400"
+                )}
+              >
+                {dueLine}
+              </span>
             )}
             {(job.status === "disputed" || job.status === "in_review" || job.status === "dispute_negotiating") && (
               <Badge

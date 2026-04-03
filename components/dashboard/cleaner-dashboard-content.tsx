@@ -10,7 +10,11 @@ import {
 } from "@/components/dashboard";
 import { DashboardJobCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 import { Briefcase, XCircle, ChevronDown } from "lucide-react";
-import type { ListingRow } from "@/lib/listings";
+import {
+  getPreferredCleaningDeadlineMs,
+  daysUntilPreferredCleaningDeadline,
+  type ListingRow,
+} from "@/lib/listings";
 
 type JobRow = {
   id: number;
@@ -88,21 +92,14 @@ export function CleanerDashboardContent({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activeJobs.map((job) => {
               const listing = listingsMap.get(String(job.listing_id)) ?? null;
-              const moveOutDate = listing?.move_out_date;
-              const moveOut =
-                moveOutDate != null && moveOutDate !== ""
-                  ? new Date(moveOutDate)
-                  : null;
+              const deadlineMs = listing
+                ? getPreferredCleaningDeadlineMs(listing)
+                : null;
               const daysLeft =
-                moveOut != null
-                  ? Math.max(
-                      0,
-                      Math.ceil(
-                        (moveOut.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)
-                      )
-                    )
+                (job.status === "accepted" || job.status === "in_progress") &&
+                deadlineMs != null
+                  ? daysUntilPreferredCleaningDeadline(deadlineMs, now)
                   : null;
-              const isUrgent = daysLeft != null && daysLeft <= 1;
               return (
                 <DashboardJobCardWithSwipe
                   key={job.id}
@@ -114,7 +111,6 @@ export function CleanerDashboardContent({
                   }}
                   listing={listing}
                   daysLeft={daysLeft}
-                  isUrgent={isUrgent}
                 />
               );
             })}

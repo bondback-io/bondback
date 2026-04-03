@@ -20,7 +20,13 @@ import {
 } from "@/components/dashboard";
 import { ResponsiveCleanerJobCards } from "@/components/mobile-fab";
 import { cn } from "@/lib/utils";
-import { formatCents, getListingCoverUrl, isListingLive } from "@/lib/listings";
+import {
+  formatCents,
+  getListingCoverUrl,
+  getPreferredCleaningDeadlineMs,
+  daysUntilPreferredCleaningDeadline,
+  isListingLive,
+} from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
 import {
   CleanerLiveBidsSection,
@@ -360,19 +366,14 @@ export default async function CleanerDashboardPage() {
             }
             items={activeJobs.map((job) => {
               const listing = listingsMap.get(job.listing_id as string) ?? null;
-              const moveOutRaw = listing?.move_out_date;
-              const moveOut = moveOutRaw ? new Date(moveOutRaw) : null;
+              const deadlineMs = listing
+                ? getPreferredCleaningDeadlineMs(listing)
+                : null;
               const daysLeft =
-                moveOut != null
-                  ? Math.max(
-                      0,
-                      Math.ceil(
-                        (moveOut.getTime() - now.getTime()) /
-                          (24 * 60 * 60 * 1000)
-                      )
-                    )
+                (job.status === "accepted" || job.status === "in_progress") &&
+                deadlineMs != null
+                  ? daysUntilPreferredCleaningDeadline(deadlineMs, now)
                   : null;
-              const isUrgent = daysLeft != null && daysLeft <= 1;
               return {
                 job: {
                   id: job.id,
@@ -382,7 +383,6 @@ export default async function CleanerDashboardPage() {
                 },
                 listing,
                 daysLeft,
-                isUrgent,
                 canMarkCleanComplete:
                   job.status === "in_progress"
                     ? (markCompleteReadyByJobId.get(Number(job.id)) ?? false)

@@ -166,6 +166,8 @@ export interface Database {
           addons: string[] | null;
           special_instructions: string | null;
           move_out_date: string | null;
+          /** ISO date strings for lister-preferred cleaning window (optional). */
+          preferred_dates: string[] | null;
           photo_urls: string[] | null;
           initial_photos: string[] | null;
           cover_photo_url: string | null;
@@ -200,6 +202,7 @@ export interface Database {
           addons?: string[] | null;
           special_instructions?: string | null;
           move_out_date?: string | null;
+          preferred_dates?: string[] | null;
           photo_urls?: string[] | null;
           initial_photos?: string[] | null;
           cover_photo_url?: string | null;
@@ -227,6 +230,7 @@ export interface Database {
           addons?: string[] | null;
           special_instructions?: string | null;
           move_out_date?: string | null;
+          preferred_dates?: string[] | null;
           photo_urls?: string[] | null;
           initial_photos?: string[] | null;
           cover_photo_url?: string | null;

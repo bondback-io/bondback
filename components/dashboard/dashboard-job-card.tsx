@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { OptimizedImage } from "@/components/ui/optimized-image";
-import { formatCents, getListingCoverUrl } from "@/lib/listings";
+import {
+  formatCents,
+  formatPreferredCleaningDueLine,
+  getListingCoverUrl,
+} from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import {
   MapPin,
@@ -36,7 +40,6 @@ export type DashboardJobCardProps = {
   job: JobRow;
   listing: ListingRow | null;
   daysLeft: number | null;
-  isUrgent?: boolean;
   /**
    * When true (all checklist items done + ≥3 after-photos), show Mark Complete and call
    * the same server action as job detail "Clean Complete — Request Payment".
@@ -101,7 +104,6 @@ export function DashboardJobCard({
   job,
   listing,
   daysLeft,
-  isUrgent = false,
   canMarkCleanComplete = false,
 }: DashboardJobCardProps) {
   const statusLabel =
@@ -121,12 +123,10 @@ export function DashboardJobCard({
   const title = listing?.title ?? `Job #${job.id}`;
   const cover = listing && getListingCoverUrl(listing) ? getListingCoverUrl(listing)! : null;
 
-  const daysLine =
-    daysLeft != null
-      ? daysLeft === 0
-        ? "Due today"
-        : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
-      : null;
+  const overdue = daysLeft != null && daysLeft < 0;
+  const dueSoon =
+    daysLeft != null && daysLeft >= 0 && daysLeft <= 1;
+  const daysLine = formatPreferredCleaningDueLine(daysLeft);
 
   return (
     <Card
@@ -164,7 +164,12 @@ export function DashboardJobCard({
               <Badge className={cn("px-2.5 py-1 text-xs font-bold shadow-sm", statusClass)}>
                 {statusLabel}
               </Badge>
-              {isUrgent && daysLeft != null && (
+              {overdue && (
+                <Badge className="border border-red-600/90 bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">
+                  Overdue
+                </Badge>
+              )}
+              {dueSoon && !overdue && (
                 <Badge className="gap-1 border border-orange-400/80 bg-orange-500 px-2.5 py-1 text-xs font-bold text-white">
                   <Flame className="h-3.5 w-3.5" aria-hidden />
                   Hot
@@ -189,9 +194,11 @@ export function DashboardJobCard({
               <div
                 className={cn(
                   "mt-3 inline-flex rounded-xl border-2 px-3 py-2.5 text-lg font-bold",
-                  isUrgent
-                    ? "border-amber-400/80 bg-amber-500/15 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100"
-                    : "border-border bg-muted/50 text-foreground dark:border-gray-600 dark:bg-gray-900/80 dark:text-gray-100"
+                  overdue
+                    ? "border-red-500/80 bg-red-500/15 text-red-950 dark:border-red-500/50 dark:bg-red-950/40 dark:text-red-100"
+                    : dueSoon
+                      ? "border-amber-400/80 bg-amber-500/15 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100"
+                      : "border-border bg-muted/50 text-foreground dark:border-gray-600 dark:bg-gray-900/80 dark:text-gray-100"
                 )}
               >
                 <Clock className="mr-2 h-6 w-6 shrink-0 opacity-80" aria-hidden />
@@ -260,7 +267,12 @@ export function DashboardJobCard({
             )}
             <div className="absolute left-2 top-2 flex flex-wrap gap-1.5">
               <Badge className={cn("px-2.5 py-1 text-xs font-bold", statusClass)}>{statusLabel}</Badge>
-              {isUrgent && daysLeft != null && (
+              {overdue && (
+                <Badge className="bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">
+                  Overdue
+                </Badge>
+              )}
+              {dueSoon && !overdue && (
                 <Badge className="bg-amber-500 px-2.5 py-1 text-xs font-bold text-white dark:bg-amber-600">
                   Due soon
                 </Badge>
@@ -301,15 +313,19 @@ export function DashboardJobCard({
                 <DollarSign className="h-5 w-5 shrink-0" />
                 {formatCents(gross)}
               </span>
-              {daysLeft != null && (
+              {daysLine != null && (
                 <span
                   className={cn(
                     "flex items-center gap-1.5 text-sm font-semibold",
-                    isUrgent ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+                    overdue
+                      ? "text-destructive dark:text-red-400"
+                      : dueSoon
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-muted-foreground"
                   )}
                 >
                   <Clock className="h-4 w-4 shrink-0" />
-                  {daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}
+                  {daysLine}
                 </span>
               )}
             </div>

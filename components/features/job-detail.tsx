@@ -15,7 +15,12 @@ import { CountdownTimer } from "@/components/features/countdown-timer";
 import { BidHistoryTable } from "@/components/features/bid-history-table";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
 import { BuyNowButton } from "@/components/features/buy-now-button";
-import { formatCents } from "@/lib/listings";
+import {
+  formatCents,
+  getPreferredCleaningDeadlineMs,
+  daysUntilPreferredCleaningDeadline,
+  type ListingWithPreferredDates,
+} from "@/lib/listings";
 import { parseUtcTimestamp, cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -966,6 +971,18 @@ export function JobDetail({
     isJobCleaner &&
     cleanerConfirmed &&
     localJobStatus === "completed_pending_approval";
+
+  /** Preferred cleaning window ended but job still active (checklist / after photos / not marked complete). */
+  const preferredCleaningOverdueForCleaner = useMemo(() => {
+    const st = localJobStatus ?? jobStatus;
+    if (!isCleaner || !isJobCleaner) return false;
+    if (st !== "accepted" && st !== "in_progress") return false;
+    const deadlineMs = getPreferredCleaningDeadlineMs(
+      listing as ListingWithPreferredDates
+    );
+    if (deadlineMs == null) return false;
+    return daysUntilPreferredCleaningDeadline(deadlineMs, new Date()) < 0;
+  }, [isCleaner, isJobCleaner, localJobStatus, jobStatus, listing]);
 
   /** Lister is on Approve & Release Funds (review after cleaner requested payment). */
   const listerReleaseFundsStep =
@@ -2903,14 +2920,21 @@ export function JobDetail({
               <div className="space-y-2">
                 {dates.length > 0 && (
                   <div>
-                    <p
-                      className={cn(
-                        "font-medium text-muted-foreground dark:text-gray-300",
-                        detailUiBoost ? "text-sm font-semibold" : "text-xs"
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p
+                        className={cn(
+                          "font-medium text-muted-foreground dark:text-gray-300",
+                          detailUiBoost ? "text-sm font-semibold" : "text-xs"
+                        )}
+                      >
+                        Preferred cleaning dates
+                      </p>
+                      {preferredCleaningOverdueForCleaner && (
+                        <Badge variant="destructive" className="text-[10px] font-semibold">
+                          Overdue
+                        </Badge>
                       )}
-                    >
-                      Preferred cleaning dates
-                    </p>
+                    </div>
                     <ul
                       className={cn(
                         "mt-1 space-y-1 dark:text-gray-200",
