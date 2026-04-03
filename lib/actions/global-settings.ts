@@ -79,6 +79,8 @@ type GlobalSettingsRow = {
   pricing_addon_patio_aud?: number | null;
   pricing_addon_fridge_aud?: number | null;
   pricing_addon_blinds_aud?: number | null;
+  /** When true, new listings may use starting price below $100 (e.g. $1 tests). */
+  allow_low_amount_listings?: boolean;
 };
 
 /** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
@@ -329,6 +331,8 @@ export type SaveGlobalSettingsInput = {
   adminNotifyNewUser?: boolean;
   adminNotifyNewListing?: boolean;
   adminNotifyDispute?: boolean;
+  /** When true, bypass $100 AUD minimum starting price for new listings. */
+  allowLowAmountListings?: boolean;
 };
 
 export type SaveGlobalSettingsResult =
@@ -448,6 +452,7 @@ export async function saveGlobalSettings(
     admin_notify_new_user: data.adminNotifyNewUser !== false,
     admin_notify_new_listing: data.adminNotifyNewListing !== false,
     admin_notify_dispute: data.adminNotifyDispute !== false,
+    allow_low_amount_listings: data.allowLowAmountListings === true,
   };
 
   const { error } = admin
@@ -476,6 +481,7 @@ export async function saveGlobalSettings(
       require_abn: data.requireAbn,
       emails_enabled: data.emailsEnabled,
       maintenance_active: data.maintenanceActive,
+      allow_low_amount_listings: data.allowLowAmountListings === true,
     },
   });
 

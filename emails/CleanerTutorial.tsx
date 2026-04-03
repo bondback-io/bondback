@@ -2,7 +2,7 @@ import { Section, Text, Link } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
 
 export const CLEANER_TUTORIAL_PREHEADER = "Get your first bond clean job done fast";
 

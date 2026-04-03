@@ -26,7 +26,7 @@ import { getAllDefaultTemplates, getDefaultTemplate } from "@/lib/default-email-
 import { logAdminActivity } from "@/lib/admin-activity-log";
 
 const TEST_SEND_LIMIT_PER_HOUR = 10;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
 const UNSUBSCRIBE_PATH = "/profile";
 
 function getUnsubscribeFooterHtml(): string {
@@ -564,7 +564,7 @@ export async function sendGlobalSettingsTestEmail(
   if (!recipient) {
     return { ok: false, error: "Enter an email address or add one to your admin account." };
   }
-  const fromDisplay = process.env.RESEND_FROM ?? "Bond Back <onboarding@resend.dev>";
+  const fromDisplay = process.env.RESEND_FROM ?? "Bond Back <noreply@bondback.io>";
   const replyHint = process.env.RESEND_REPLY_TO?.trim()
     ? `<p>Reply-To: <code>${process.env.RESEND_REPLY_TO}</code></p>`
     : "<p><em>No RESEND_REPLY_TO set.</em></p>";

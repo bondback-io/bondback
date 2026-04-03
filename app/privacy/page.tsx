@@ -33,7 +33,7 @@ export default function PrivacyPage() {
           <p>
             Bond Back stores necessary account and job information to operate the
             marketplace. You can request a copy of your data or account deletion from the
-            Settings page or by emailing support@bondback.com.
+            Settings page or by emailing support@bondback.io.
           </p>
         </CardContent>
       </Card>

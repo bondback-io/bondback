@@ -2,7 +2,7 @@
  * Origin for Supabase `emailRedirectTo` / `resend` (client components only).
  *
  * Prefer `NEXT_PUBLIC_APP_URL` so confirmation links open your **canonical** app (e.g. production)
- * instead of a transient hostname (`*.vercel.app` preview, wrong subdomain). Preview URLs are often
+ * instead of a transient preview hostname (wrong subdomain). Preview URLs are often
  * behind **Vercel Deployment Protection**, which shows a Vercel login to unauthenticated visitors —
  * exactly what users see when the email link points at a protected preview.
  *

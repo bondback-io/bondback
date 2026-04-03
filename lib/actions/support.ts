@@ -194,7 +194,7 @@ export async function submitSupportTicket(
   revalidatePath("/support");
   revalidatePath("/admin/support");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
   const userName = (session as any).user?.user_metadata?.full_name ?? "there";
   const confirmHtml = `
     <p>Hi ${userName},</p>

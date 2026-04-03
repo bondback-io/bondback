@@ -94,10 +94,10 @@ export async function getEmailDiagnostics(): Promise<
     hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
     hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()),
     resendFromDisplay:
-      process.env.RESEND_FROM?.trim() || "Bond Back <onboarding@resend.dev> (default)",
+      process.env.RESEND_FROM?.trim() || "Bond Back <noreply@bondback.io> (default)",
     replyToSet: Boolean(process.env.RESEND_REPLY_TO?.trim()),
     appUrlDisplay:
-      process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://bondback.com (default when unset)",
+      process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.bondback.io (default when unset)",
     emailsEnabledGlobally: globalSettings?.emails_enabled !== false,
     lastFailure,
     failedLast24h,

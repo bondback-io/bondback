@@ -72,7 +72,7 @@ Bond Back is a **web app**; push tokens are obtained in an **Expo (React Native)
       ]
     ],
     "extra": {
-      "apiUrl": "https://your-next-app.vercel.app"
+      "apiUrl": "https://www.bondback.io"
     }
   }
 }

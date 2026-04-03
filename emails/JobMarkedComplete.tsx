@@ -2,7 +2,7 @@ import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
 
 export interface JobMarkedCompleteProps {
   jobId: number | string;

@@ -12,8 +12,8 @@ import {
 import * as React from "react";
 
 const BRAND_COLOR = "#3b82f6";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
-const SUPPORT_EMAIL = "support@bondback.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const SUPPORT_EMAIL = "support@bondback.io";
 
 export interface EmailLayoutProps {
   children: React.ReactNode;
@@ -72,7 +72,7 @@ export function EmailLayout({
               </Link>
               {" · "}
               <Link href={APP_URL} style={footerLink}>
-                bondback.com
+                www.bondback.io
               </Link>
             </Text>
             <Text style={footerCopy}>© Bond Back. All rights reserved.</Text>

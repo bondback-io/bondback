@@ -357,7 +357,7 @@ export function MyAccountSections({
                   </Link>
                 </li>
                 <li>
-                  <Link href="mailto:support@bondback.com" className={settingsLinkClass}>
+                  <Link href="mailto:support@bondback.io" className={settingsLinkClass}>
                     Contact support <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-80" />
                   </Link>
                 </li>

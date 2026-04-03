@@ -1,3 +1,9 @@
+/**
+ * Canonical public URL when `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_SITE_URL` are unset
+ * (e.g. tests). Production should set `NEXT_PUBLIC_APP_URL=https://www.bondback.io`.
+ */
+export const DEFAULT_PUBLIC_APP_URL = "https://www.bondback.io" as const;
+
 function originFromVercelUrl(vercel: string): string | null {
   const withProto =
     vercel.startsWith("http://") || vercel.startsWith("https://")
@@ -50,7 +56,7 @@ export function getAppBaseUrl(): string {
 
 /**
  * Origin for Stripe Checkout success/cancel redirects.
- * Set `NEXT_PUBLIC_APP_URL` (e.g. https://bondback.vercel.app) so Stripe returns users to the
+ * Set `NEXT_PUBLIC_APP_URL` (e.g. https://www.bondback.io) so Stripe returns users to the
  * canonical host instead of a Vercel preview URL (which can prompt login).
  * Falls back to {@link getAppBaseUrl} when unset (e.g. local dev).
  */
@@ -69,8 +75,8 @@ export function getStripeCheckoutAppUrl(): string {
 
 /**
  * Canonical public site URL for metadata, sitemap, and Open Graph.
- * Set NEXT_PUBLIC_SITE_URL in production (e.g. https://bondback.com.au).
- * Falls back to NEXT_PUBLIC_APP_URL, then a sensible Australia-focused default.
+ * Set NEXT_PUBLIC_SITE_URL in production (e.g. https://www.bondback.io) if it differs from
+ * NEXT_PUBLIC_APP_URL. Falls back to NEXT_PUBLIC_APP_URL, then {@link DEFAULT_PUBLIC_APP_URL}.
  */
 export function getSiteUrl(): URL {
   const raw =
@@ -84,5 +90,5 @@ export function getSiteUrl(): URL {
       // fallthrough
     }
   }
-  return new URL("https://bondback.com.au");
+  return new URL(DEFAULT_PUBLIC_APP_URL);
 }

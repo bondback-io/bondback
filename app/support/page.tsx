@@ -35,8 +35,8 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
       />
       <p className="text-center text-xs text-muted-foreground dark:text-gray-500">
         You can also email{" "}
-        <a href="mailto:support@bondback.com" className="text-primary underline-offset-4 hover:underline">
-          support@bondback.com
+        <a href="mailto:support@bondback.io" className="text-primary underline-offset-4 hover:underline">
+          support@bondback.io
         </a>
         .
       </p>

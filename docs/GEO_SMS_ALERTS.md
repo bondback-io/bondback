@@ -9,7 +9,7 @@ Cleaners receive SMS when a new bond cleaning listing is created **near their lo
   - `profiles.notification_preferences.sms_new_job = true`
   - A valid `profiles.phone`
 - **Message:**  
-  `"New bond clean job in [suburb] ([postcode]) – $[min]–$[max]. Bid now: bondback.com/jobs/[listingId]"`
+  `"New bond clean job in [suburb] ([postcode]) – $[min]–$[max]. Bid now: https://www.bondback.io/jobs/[listingId]"`
 - **Rate limit:** Max 5 SMS per cleaner per day (UTC). Admin can override in **Admin → Global settings** (optional "Max SMS per user per day").
 - **Kill switch:** Admin can disable all new-job SMS via **Admin → Global settings** → "Enable SMS Alerts for New Jobs".
 

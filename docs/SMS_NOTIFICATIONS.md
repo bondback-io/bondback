@@ -14,11 +14,11 @@ If these are not set, SMS sending is a no-op (no errors).
 
 | Event | Recipient | Message |
 |-------|-----------|--------|
-| **1. New job near cleaner** | Cleaners with matching suburb/postcode | "New bond clean job in [suburb] ([postcode]) – $[min]–$[max]. Bid now: bondback.com/jobs/[id]" |
-| **2. Bid accepted / job won** | Cleaner | "Your bid was accepted! Job #[id] – [title]. View: bondback.com/jobs/[id]" |
-| **3. Job approved to start** | Cleaner | "Lister approved – start Job #[id]. Chat: bondback.com/jobs/[id]" |
-| **4. Payment released** | Cleaner (and lister where applicable) | "Payment of $[amount] received for Job #[id]. View earnings: bondback.com/earnings" |
-| **5. Dispute opened** | Other party | "Dispute on Job #[id]. Respond now: bondback.com/jobs/[id]" |
+| **1. New job near cleaner** | Cleaners with matching suburb/postcode | "New bond clean job in [suburb] ([postcode]) – $[min]–$[max]. Bid now: https://www.bondback.io/jobs/[id]" |
+| **2. Bid accepted / job won** | Cleaner | "Your bid was accepted! Job #[id] – [title]. View: https://www.bondback.io/jobs/[id]" |
+| **3. Job approved to start** | Cleaner | "Lister approved – start Job #[id]. Chat: https://www.bondback.io/jobs/[id]" |
+| **4. Payment released** | Cleaner (and lister where applicable) | "Payment of $[amount] received for Job #[id]. View earnings: https://www.bondback.io/earnings" |
+| **5. Dispute opened** | Other party | "Dispute on Job #[id]. Respond now: https://www.bondback.io/jobs/[id]" |
 
 ## SMS send function
 

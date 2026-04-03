@@ -1,4 +1,4 @@
-export const SUPPORT_EMAIL = "support@bondback.com";
+export const SUPPORT_EMAIL = "support@bondback.io";
 
 export type AppErrorFlow =
   | "listing"

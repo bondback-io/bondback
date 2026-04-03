@@ -22,7 +22,7 @@ function logEmailEnvSnapshot(context: string) {
     context,
     hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
     hasResendKey: Boolean(process.env.RESEND_API_KEY?.trim()),
-    resendFrom: process.env.RESEND_FROM?.trim() || "(default Bond Back <onboarding@resend.dev>)",
+    resendFrom: process.env.RESEND_FROM?.trim() || "(default Bond Back <noreply@bondback.io>)",
   });
 }
 

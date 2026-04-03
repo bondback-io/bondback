@@ -131,52 +131,61 @@ const propertyConditionKeys = [
   "poor_bad",
 ] as const;
 
-/** Minimum starting price (AUD) for new listings — auction settings. */
-const MIN_LISTING_STARTING_PRICE_AUD = 100;
+/** Default minimum starting price (AUD) for new listings — auction settings. */
+const DEFAULT_MIN_LISTING_STARTING_PRICE_AUD = 100;
+/** When admin enables low-amount test listings, allow cents-level starting prices. */
+const LOW_AMOUNT_MIN_RESERVE_AUD = 0.01;
 
-const listingSchema = z
-  .object({
-    propertyType: z.enum(propertyTypes),
-    bedrooms: z.coerce.number().int().min(1).max(6),
-    bathrooms: z.coerce.number().int().min(1).max(5),
-    propertyCondition: z.enum(propertyConditionKeys),
-    propertyLevels: z.enum(["1", "2"]),
-    specialAreas: z.array(z.enum(specialAreaKeys)).default([]),
-    suburb: z.string().min(1, "Select or enter your suburb"),
-    postcode: z
-      .string()
-      .trim()
-      .regex(/^\d{4}$/, "Postcode must be a 4-digit Australian postcode"),
-    propertyAddress: z.string().max(200).optional(),
-    addons: z.array(listingAddonZodEnum).default([]),
-    instructions: z.string().max(2000).optional(),
-    moveOutDate: z.date({ required_error: "Select your move-out date" }),
-    reservePrice: z.coerce.number().min(
-      MIN_LISTING_STARTING_PRICE_AUD,
-      `Starting price must be at least $${MIN_LISTING_STARTING_PRICE_AUD} AUD`
-    ),
-    durationDays: z.coerce.number().int().min(1),
-    buyNowPrice: z.string().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.buyNowPrice?.trim()) {
-      const numeric = Number(data.buyNowPrice);
-      if (Number.isNaN(numeric))
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["buyNowPrice"],
-          message: "Buy-now price must be a number",
-        });
-      else if (numeric >= data.reservePrice)
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["buyNowPrice"],
-          message: "Buy-now price must be lower than starting price",
-        });
-    }
-  });
+function reservePriceMinMessage(minAud: number): string {
+  const label =
+    minAud < 1
+      ? `$${minAud.toFixed(2)}`
+      : `$${Math.round(minAud)}`;
+  return `Starting price must be at least ${label} AUD`;
+}
 
-type ListingFormValues = z.infer<typeof listingSchema>;
+function buildListingSchema(minReserveAud: number) {
+  return z
+    .object({
+      propertyType: z.enum(propertyTypes),
+      bedrooms: z.coerce.number().int().min(1).max(6),
+      bathrooms: z.coerce.number().int().min(1).max(5),
+      propertyCondition: z.enum(propertyConditionKeys),
+      propertyLevels: z.enum(["1", "2"]),
+      specialAreas: z.array(z.enum(specialAreaKeys)).default([]),
+      suburb: z.string().min(1, "Select or enter your suburb"),
+      postcode: z
+        .string()
+        .trim()
+        .regex(/^\d{4}$/, "Postcode must be a 4-digit Australian postcode"),
+      propertyAddress: z.string().max(200).optional(),
+      addons: z.array(listingAddonZodEnum).default([]),
+      instructions: z.string().max(2000).optional(),
+      moveOutDate: z.date({ required_error: "Select your move-out date" }),
+      reservePrice: z.coerce.number().min(minReserveAud, reservePriceMinMessage(minReserveAud)),
+      durationDays: z.coerce.number().int().min(1),
+      buyNowPrice: z.string().optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.buyNowPrice?.trim()) {
+        const numeric = Number(data.buyNowPrice);
+        if (Number.isNaN(numeric))
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["buyNowPrice"],
+            message: "Buy-now price must be a number",
+          });
+        else if (numeric >= data.reservePrice)
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["buyNowPrice"],
+            message: "Buy-now price must be lower than starting price",
+          });
+      }
+    });
+}
+
+type ListingFormValues = z.infer<ReturnType<typeof buildListingSchema>>;
 
 function calculateEstimatedPrice(
   values: ListingFormValues,
@@ -210,6 +219,8 @@ export type NewListingFormProps = {
   listerPostcode?: string | null;
   feePercentage?: number;
   pricingModifiers: PricingModifiersConfig;
+  /** When true (admin global setting), starting price may be below $100 for live payment tests. */
+  allowLowAmountListings?: boolean;
 };
 
 function platformFeeCents(jobAmountDollars: number, feePct: number): number {
@@ -241,7 +252,19 @@ export function NewListingForm({
   listerPostcode = "",
   feePercentage = 12,
   pricingModifiers,
+  allowLowAmountListings = false,
 }: NewListingFormProps) {
+  const minReserveAud = allowLowAmountListings
+    ? LOW_AMOUNT_MIN_RESERVE_AUD
+    : DEFAULT_MIN_LISTING_STARTING_PRICE_AUD;
+  const listingSchema = useMemo(
+    () => buildListingSchema(minReserveAud),
+    [minReserveAud]
+  );
+  const listingResolver = useMemo(
+    () => zodResolver(listingSchema),
+    [listingSchema]
+  );
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
   const { toast } = useToast();
@@ -279,8 +302,17 @@ export function NewListingForm({
   const [, startSubmitTransition] = useTransition();
   const [photoStagingCount, setPhotoStagingCount] = useState(0);
 
+  const defaultReservePrice = Math.max(
+    computeBaseListingPriceAud(pricingModifiers, {
+      bedrooms: 2,
+      condition: "excellent_very_good",
+      levels: "1",
+    }),
+    minReserveAud
+  );
+
   const form = useForm<ListingFormValues>({
-    resolver: zodResolver(listingSchema),
+    resolver: listingResolver,
     defaultValues: {
       propertyType: "apartment",
       bedrooms: 2,
@@ -294,11 +326,7 @@ export function NewListingForm({
       addons: [],
       instructions: "",
       moveOutDate: undefined as unknown as Date,
-      reservePrice: computeBaseListingPriceAud(pricingModifiers, {
-        bedrooms: 2,
-        condition: "excellent_very_good",
-        levels: "1",
-      }),
+      reservePrice: defaultReservePrice,
       durationDays: 3,
       buyNowPrice: "",
     },
@@ -358,9 +386,11 @@ export function NewListingForm({
 
   useEffect(() => {
     if (!reserveTouched) {
-      form.setValue("reservePrice", estimatedPrice, { shouldValidate: true });
+      form.setValue("reservePrice", Math.max(estimatedPrice, minReserveAud), {
+        shouldValidate: true,
+      });
     }
-  }, [estimatedPrice, form, reserveTouched]);
+  }, [estimatedPrice, form, reserveTouched, minReserveAud]);
 
   useEffect(() => {
     const sub = form.getValues("suburb");
@@ -1534,6 +1564,15 @@ export function NewListingForm({
                   )}
                 </CardHeader>
                 <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
+                {allowLowAmountListings && (
+                  <Alert className="border-sky-200 bg-sky-50/90 text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+                    <AlertDescription className="text-xs sm:text-sm">
+                      <strong className="font-semibold">Low starting prices enabled</strong> — Admin has allowed
+                      starting amounts below the usual ${DEFAULT_MIN_LISTING_STARTING_PRICE_AUD} minimum (for payment
+                      testing). Stripe and card networks may still reject very small charges.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
                   <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-3">
                     <Label htmlFor="reservePrice" className="shrink-0 text-sm">
@@ -1556,7 +1595,8 @@ export function NewListingForm({
                   <Input
                     id="reservePrice"
                     type="number"
-                    min={MIN_LISTING_STARTING_PRICE_AUD}
+                    min={minReserveAud}
+                    step={allowLowAmountListings ? "0.01" : "1"}
                     inputMode="decimal"
                     className="dark:bg-gray-800 dark:border-gray-700"
                     {...form.register("reservePrice", {

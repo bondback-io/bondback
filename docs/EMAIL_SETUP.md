@@ -50,10 +50,10 @@ Add to `.env.local` (and production env):
 ```bash
 # Resend (required for sending)
 RESEND_API_KEY=re_xxxxxxxxxxxx
-# Optional: custom "From" (default: Bond Back <onboarding@resend.dev>)
-RESEND_FROM=Bond Back <notifications@yourdomain.com>
+# From — production (verify bondback.io in Resend):
+RESEND_FROM=Bond Back <noreply@bondback.io>
 
-# Base URL for links in emails (optional; default https://bondback.com)
+# Base URL for links in emails (optional; default https://www.bondback.io)
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Optional: secret for cron endpoint (tutorial emails 24h after signup)
@@ -61,7 +61,7 @@ CRON_SECRET=your-secret-here
 ```
 
 - **RESEND_API_KEY:** From [Resend Dashboard](https://resend.com/api-keys). Without it, `sendEmail` no-ops (no error; emails simply don’t send).
-- **RESEND_FROM:** Must be a verified domain in Resend if you use a custom address; otherwise use Resend’s default domain (e.g. `onboarding@resend.dev`).
+- **RESEND_FROM:** Production uses `Bond Back <noreply@bondback.io>` after verifying `bondback.io` in Resend. For local dev without a verified domain, use `Bond Back <onboarding@resend.dev>`.
 - **NEXT_PUBLIC_APP_URL:** Used in email links (e.g. “View listing”, “View Job”). Use your real app URL in production.
 
 ---
@@ -70,7 +70,7 @@ CRON_SECRET=your-secret-here
 
 1. **Sign up:** [resend.com](https://resend.com).
 2. **API key:** Create an API key in the dashboard and set `RESEND_API_KEY` in `.env.local`.
-3. **Domain (optional):** Add and verify your domain so you can use e.g. `notifications@yourdomain.com` as `RESEND_FROM`. Until then, use the default Resend sender (e.g. `onboarding@resend.dev`).
+3. **Domain:** Verify **`bondback.io`** in Resend to send from `noreply@bondback.io`. Until then, use the Resend sandbox sender in `.env.local` (e.g. `Bond Back <onboarding@resend.dev>`).
 4. **Testing:** Resend free tier is fine for development; use a real inbox for signup so you receive the welcome and notification emails.
 
 ---
@@ -89,7 +89,7 @@ So the confirmation email is delivered through Resend (better deliverability, sa
    - **Port:** `465`
    - **Username:** `resend`
    - **Password:** your Resend API key (same as `RESEND_API_KEY` in `.env.local`)
-3. Set **Sender email** and **Sender name** (e.g. `Bond Back <onboarding@resend.dev>` or a verified domain in Resend).
+3. Set **Sender email** and **Sender name** (e.g. `Bond Back <noreply@bondback.io>` once `bondback.io` is verified in Resend).
 4. Save.
 
 ### B. Redirect URL for local testing

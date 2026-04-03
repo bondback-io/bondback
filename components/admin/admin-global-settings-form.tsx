@@ -114,6 +114,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
     value: (initial as any)?.stripeTestMode ?? true,
     saving: false,
   });
+  const [allowLowAmountListings, setAllowLowAmountListings] = React.useState(
+    initial?.allowLowAmountListings === true
+  );
   const [floatingChatEnabledState, setFloatingChatEnabledState] = React.useState({
     value: initial?.floatingChatEnabled ?? true,
     saving: false,
@@ -311,6 +314,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       pricingAddonPatioAud: Math.max(0, Number(pricingAddonPatioAud) || DEFAULT_PRICING_MODIFIERS.addonPatioAud),
       pricingAddonFridgeAud: Math.max(0, Number(pricingAddonFridgeAud) || DEFAULT_PRICING_MODIFIERS.addonFridgeAud),
       pricingAddonBlindsAud: Math.max(0, Number(pricingAddonBlindsAud) || DEFAULT_PRICING_MODIFIERS.addonBlindsAud),
+      allowLowAmountListings,
     };
 
     startTransition(async () => {
@@ -382,6 +386,31 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               }}
             />
             {stripeTestMode.saving && <span className="text-[11px] text-muted-foreground">Saving…</span>}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/30">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold text-sky-900 dark:text-sky-100">
+            New listing minimum price (testing)
+          </CardTitle>
+          <p className="text-[11px] text-sky-800/90 dark:text-sky-200/90">
+            Normally new listings require a <strong>$100 AUD</strong> minimum starting price. Turn this on to allow
+            very low amounts (e.g. <strong>$1</strong> or <strong>$0.10</strong>) for end-to-end live payment tests.
+            Use only when you understand Stripe minimum charge rules. Saves with <strong>Save global settings</strong> below.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="allow-low-amount-listings" className="text-xs font-medium text-sky-900 dark:text-sky-100">
+              Allow low starting prices (bypass $100 minimum)
+            </Label>
+            <Switch
+              id="allow-low-amount-listings"
+              checked={allowLowAmountListings}
+              onCheckedChange={(v) => setAllowLowAmountListings(Boolean(v))}
+            />
           </div>
         </CardContent>
       </Card>

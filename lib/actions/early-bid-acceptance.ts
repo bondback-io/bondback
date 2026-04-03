@@ -162,7 +162,7 @@ export async function requestEarlyBidAcceptance(
     };
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
   const confirmUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=confirm`;
   const declineUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=decline`;
 

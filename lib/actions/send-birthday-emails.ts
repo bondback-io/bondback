@@ -7,7 +7,7 @@ import { getDefaultTemplate } from "@/lib/default-email-templates";
 import { sendEmail } from "@/lib/notifications/email";
 import { markdownToHtml } from "@/lib/markdown";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
 const UNSUBSCRIBE_PATH = "/profile";
 
 function unsubscribeFooter(): string {

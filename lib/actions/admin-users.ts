@@ -77,7 +77,7 @@ export async function banUser(
   if (error) return { ok: false, error: error.message };
   await logAdminActivity({ adminId, actionType: "user_banned", targetType: "user", targetId: userId, details: { reason: trimmed } });
 
-  const message = `Your account has been banned for: ${trimmed}. Contact support@bondback.com.`;
+  const message = `Your account has been banned for: ${trimmed}. Contact support@bondback.io.`;
   await createNotification(userId, "new_message", null, message);
 
   revalidatePath("/admin/users");

@@ -133,6 +133,8 @@ export default async function AdminGlobalSettingsPage() {
         adminNotifyNewListing:
           (existing as { admin_notify_new_listing?: boolean }).admin_notify_new_listing ?? true,
         adminNotifyDispute: (existing as { admin_notify_dispute?: boolean }).admin_notify_dispute ?? true,
+        allowLowAmountListings:
+          (existing as { allow_low_amount_listings?: boolean }).allow_low_amount_listings === true,
       }
     : null;
 

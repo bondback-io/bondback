@@ -10,7 +10,7 @@ import { EMAIL_TEMPLATE_TYPES } from "./admin-email-templates-utils";
 export type DefaultTemplate = { subject: string; body: string };
 
 const APP_NAME = "Bond Back";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
 const PH_JOB = "{{jobId}}";
 const PH_LISTING = "{{listingId}}";
 const PH_MESSAGE = "{{message}}";

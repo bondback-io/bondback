@@ -3,8 +3,8 @@
 --
 -- Required env vars for email (see .env.example):
 --   RESEND_API_KEY     - From resend.com dashboard (create free account)
---   RESEND_FROM        - Optional; default "Bond Back <onboarding@resend.dev>"
---   NEXT_PUBLIC_APP_URL - Optional; default https://bondback.com (for job links)
+--   RESEND_FROM        - Optional; default "Bond Back <noreply@bondback.io>" (verify bondback.io in Resend)
+--   NEXT_PUBLIC_APP_URL - Optional; default https://www.bondback.io (for job links)
 --   SUPABASE_SERVICE_ROLE_KEY - Required to resolve user email for sending
 
 -- 1. Add email_notifications to profiles (default true)

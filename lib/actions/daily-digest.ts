@@ -113,7 +113,7 @@ async function buildDigestPropsForUser(
   const isCleaner = roles.includes("cleaner");
   const isLister = roles.includes("lister");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
   const dashboardUrl = `${appUrl}/dashboard`;
 
   let cleaner: DailyDigestEmailProps["cleaner"];
@@ -363,7 +363,7 @@ export async function sendTestDailyDigestEmail(): Promise<{ ok: boolean; error?:
   const email = await getEmailForUserId(session.user.id);
   if (!email) return { ok: false, error: "No email on account." };
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
   const fn =
     (profile as { display_name?: string | null; full_name?: string | null } | null)?.display_name?.trim() ||
     (profile as { full_name?: string | null } | null)?.full_name?.trim() ||

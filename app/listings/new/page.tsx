@@ -104,6 +104,8 @@ const NewListingPage = async () => {
     settings as Record<string, unknown> | null
   );
 
+  const allowLowAmountListings = settings?.allow_low_amount_listings === true;
+
   return (
     <NewListingFormLazy
       listerId={session.user.id}
@@ -111,6 +113,7 @@ const NewListingPage = async () => {
       listerPostcode={profile.postcode ?? ""}
       feePercentage={feePercentage}
       pricingModifiers={pricingModifiers}
+      allowLowAmountListings={allowLowAmountListings}
     />
   );
 };

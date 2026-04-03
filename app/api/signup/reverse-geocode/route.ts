@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       headers: {
         Accept: "application/json",
         "Accept-Language": "en-AU",
-        "User-Agent": "BondBack/1.0 (signup reverse-geocode; https://bondback.com.au)",
+        "User-Agent": "BondBack/1.0 (signup reverse-geocode; https://www.bondback.io)",
       },
       next: { revalidate: 0 },
     });

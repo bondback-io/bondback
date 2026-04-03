@@ -55,7 +55,7 @@ export function LoginForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bannedMessage, setBannedMessage] = useState<string | null>(
     bannedParam === "1"
-      ? `Account banned. ${bannedReason ? `Reason: ${decodeURIComponent(bannedReason)}. ` : ""}Contact support@bondback.com.`
+      ? `Account banned. ${bannedReason ? `Reason: ${decodeURIComponent(bannedReason)}. ` : ""}Contact support@bondback.io.`
       : null
   );
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -136,7 +136,7 @@ export function LoginForm({
             router.replace(`/login?banned=1${reason ? `&reason=${reason}` : ""}`)
           );
           setBannedMessage(
-            `Account banned. ${banCheck.reason ? `Reason: ${banCheck.reason}. ` : ""}Contact support@bondback.com.`
+            `Account banned. ${banCheck.reason ? `Reason: ${banCheck.reason}. ` : ""}Contact support@bondback.io.`
           );
           return;
         }

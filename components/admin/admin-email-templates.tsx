@@ -84,7 +84,7 @@ function getSendAfterLabel(value: string): string {
   return SEND_AFTER_OPTIONS.find((o) => o.value === value)?.label ?? (value || "Instant");
 }
 
-const APP_URL = typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com") : "https://bondback.com";
+const APP_URL = typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io") : "https://www.bondback.io";
 const UNSUBSCRIBE_FOOTER_HTML = `
 <div style="margin-top:2em;padding-top:1em;border-top:1px solid #eee;font-size:12px;color:#666;">
   <p>You received this email because of your Bond Back notification settings.</p>
@@ -117,7 +117,7 @@ function wrapEmailPreview(subject: string, bodyHtml: string, dark: boolean): str
     <div style="padding: 12px 16px; border-bottom: 1px solid ${border}; font-size: 13px;">
       <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 6px;">
         <span style="color: ${muted}; min-width: 52px;">From:</span>
-        <span>Bond Back &lt;notifications@bondback.com&gt;</span>
+        <span>Bond Back &lt;noreply@bondback.io&gt;</span>
       </div>
       <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 6px;">
         <span style="color: ${muted}; min-width: 52px;">To:</span>

@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminNotificationsLogPagination } from "@/components/admin/admin-notifications-log-pagination";
 import { AdminEmailDiagnosticsCard } from "@/components/admin/admin-email-diagnostics-card";
 import { getEmailDiagnostics } from "@/lib/actions/admin-email-diagnostics";
 import {
@@ -59,41 +60,95 @@ async function requireAdmin() {
   return { profile, supabase };
 }
 
-export default async function AdminNotificationsPage() {
+const LOG_PAGE_SIZE = 10;
+
+interface AdminNotificationsPageProps {
+  searchParams?: Promise<{
+    emailPage?: string;
+    inAppPage?: string;
+  }>;
+}
+
+export default async function AdminNotificationsPage({
+  searchParams,
+}: AdminNotificationsPageProps) {
   const { profile, supabase } = await requireAdmin();
   const admin = createSupabaseAdminClient();
   const globalSettings = await getGlobalSettings();
   const emailDiagnostics = await getEmailDiagnostics();
   const emailsEnabled = globalSettings?.emails_enabled !== false;
 
+  const sp = (await searchParams) ?? {};
+  const emailPageRaw = Math.max(1, parseInt(String(sp.emailPage ?? "1"), 10) || 1);
+  const inAppPageRaw = Math.max(1, parseInt(String(sp.inAppPage ?? "1"), 10) || 1);
+
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  // In-app notifications (last 100)
-  const { data: notificationsData } = await supabase
-    .from("notifications")
-    .select("id, user_id, type, job_id, message_text, is_read, created_at")
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  const notifications = (notificationsData ?? []) as NotificationRow[];
-
-  // Counts for in-app: total last 7 days, unread
-  const notificationsLast7d = notifications.filter((n) => n.created_at >= sevenDaysAgo);
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
-
-  // Email logs: use admin client so we can read all (RLS may restrict)
   const client = (admin ?? supabase) as SupabaseClient<Database>;
-  const { data: emailLogsData } = await client
-    .from("email_logs")
-    .select("id, user_id, type, sent_at, subject")
-    .order("sent_at", { ascending: false })
-    .limit(150);
+
+  const [
+    inApp7dCountRes,
+    unreadCountRes,
+    emailsTodayRes,
+    emails7dRes,
+    emailLogsTotalRes,
+    notificationsTotalRes,
+  ] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", sevenDaysAgo),
+    supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("is_read", false),
+    client
+      .from("email_logs")
+      .select("*", { count: "exact", head: true })
+      .gte("sent_at", todayStart),
+    client
+      .from("email_logs")
+      .select("*", { count: "exact", head: true })
+      .gte("sent_at", sevenDaysAgo),
+    client.from("email_logs").select("*", { count: "exact", head: true }),
+    supabase.from("notifications").select("*", { count: "exact", head: true }),
+  ]);
+
+  const notificationsLast7dCount = inApp7dCountRes.count ?? 0;
+  const unreadCount = unreadCountRes.count ?? 0;
+  const emailsToday = emailsTodayRes.count ?? 0;
+  const emailsLast7d = emails7dRes.count ?? 0;
+
+  const emailTotalCount = emailLogsTotalRes.count ?? 0;
+  const notificationsTotalCount = notificationsTotalRes.count ?? 0;
+
+  const emailTotalPages = Math.max(1, Math.ceil(emailTotalCount / LOG_PAGE_SIZE));
+  const inAppTotalPages = Math.max(1, Math.ceil(notificationsTotalCount / LOG_PAGE_SIZE));
+  const emailPage = Math.min(emailPageRaw, emailTotalPages);
+  const inAppPage = Math.min(inAppPageRaw, inAppTotalPages);
+
+  const emailFrom = (emailPage - 1) * LOG_PAGE_SIZE;
+  const emailTo = emailFrom + LOG_PAGE_SIZE - 1;
+  const inAppFrom = (inAppPage - 1) * LOG_PAGE_SIZE;
+  const inAppTo = inAppFrom + LOG_PAGE_SIZE - 1;
+
+  const [{ data: emailLogsData }, { data: notificationsData }] = await Promise.all([
+    client
+      .from("email_logs")
+      .select("id, user_id, type, sent_at, subject")
+      .order("sent_at", { ascending: false })
+      .range(emailFrom, emailTo),
+    supabase
+      .from("notifications")
+      .select("id, user_id, type, job_id, message_text, is_read, created_at")
+      .order("created_at", { ascending: false })
+      .range(inAppFrom, inAppTo),
+  ]);
 
   const emailLogs = (emailLogsData ?? []) as EmailLogRow[];
-  const emailsToday = emailLogs.filter((e) => e.sent_at >= todayStart).length;
-  const emailsLast7d = emailLogs.filter((e) => e.sent_at >= sevenDaysAgo).length;
+  const notifications = (notificationsData ?? []) as NotificationRow[];
 
   const notificationUserIds = Array.from(new Set(notifications.map((n) => n.user_id)));
   const emailLogUserIds = Array.from(new Set(emailLogs.map((e) => e.user_id)));
@@ -137,7 +192,7 @@ export default async function AdminNotificationsPage() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-semibold tabular-nums dark:text-gray-100">
-                {notificationsLast7d.length}
+                {notificationsLast7dCount}
               </p>
               <p className="text-xs text-muted-foreground">
                 {unreadCount} unread
@@ -230,11 +285,11 @@ export default async function AdminNotificationsPage() {
                 Email delivery log
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Sent notification emails (last 150). Subject and type per recipient.
+                Sent notification emails — {LOG_PAGE_SIZE} per page, newest first.
               </p>
             </div>
             <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-              {emailLogs.length} rows
+              {emailTotalCount} total
             </Badge>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
@@ -287,6 +342,12 @@ export default async function AdminNotificationsPage() {
                 </TableBody>
               </Table>
             )}
+            <AdminNotificationsLogPagination
+              currentPage={emailPage}
+              totalCount={emailTotalCount}
+              paramKey="emailPage"
+              otherPage={inAppPage}
+            />
           </CardContent>
         </Card>
 
@@ -298,11 +359,11 @@ export default async function AdminNotificationsPage() {
                 In-app delivery log
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Notifications created in the app (bell icon). Last 100.
+                Notifications created in the app (bell icon) — {LOG_PAGE_SIZE} per page, newest first.
               </p>
             </div>
             <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-              {notifications.length} rows
+              {notificationsTotalCount} total
             </Badge>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
@@ -378,6 +439,12 @@ export default async function AdminNotificationsPage() {
                 </TableBody>
               </Table>
             )}
+            <AdminNotificationsLogPagination
+              currentPage={inAppPage}
+              totalCount={notificationsTotalCount}
+              paramKey="inAppPage"
+              otherPage={emailPage}
+            />
           </CardContent>
         </Card>
 

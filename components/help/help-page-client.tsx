@@ -696,10 +696,10 @@ export function HelpPageClient({ initialArticles }: HelpPageClientProps) {
           <p className="mt-4 text-xs text-muted-foreground dark:text-gray-500">
             Email{" "}
             <a
-              href="mailto:support@bondback.com"
+              href="mailto:support@bondback.io"
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
-              support@bondback.com
+              support@bondback.io
             </a>
           </p>
         </CardContent>

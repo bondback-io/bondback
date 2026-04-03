@@ -9,7 +9,7 @@ import {
 } from "@react-email/components";
 import * as React from "react";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
 
 export type AdminNotificationEventType = "new_user" | "new_listing" | "dispute_opened";
 
@@ -64,7 +64,7 @@ function internalFooter(): React.ReactNode {
         </Link>
         {" · "}
         <Link href={APP_URL} style={link}>
-          bondback.com
+          www.bondback.io
         </Link>
       </Text>
     </Section>

@@ -139,7 +139,7 @@ export function isTwilioSmsAllowedForType(
   return map[type] !== false;
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
 
 /**
  * Send "new job near you" SMS to a cleaner. Uses rate limit (max 5/day unless overridden by global_settings).

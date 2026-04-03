@@ -192,7 +192,7 @@ export async function sendPushToUser(
 /** Alias for `sendPushToUser` (server-side Expo push). */
 export const sendPush = sendPushToUser;
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
 
 /** Event types we send as push (same as SMS: critical / high-value only). */
 export const PUSH_NOTIFICATION_TYPES = new Set<string>([

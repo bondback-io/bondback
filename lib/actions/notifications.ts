@@ -194,7 +194,7 @@ export async function createNotification(
     isTwilioSmsAllowedForType(globalSettings, type)
   ) {
     const { sendSmsToUser } = await import("@/lib/notifications/sms");
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://bondback.com";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
     let body: string;
     if (type === "new_bid") {
       const who = (options?.senderName ?? "").trim();
