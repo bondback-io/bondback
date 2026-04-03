@@ -139,7 +139,13 @@ export function DisputeRow({
             <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted">
               {lister?.profile_photo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={lister.profile_photo_url} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={lister.profile_photo_url}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-xs font-medium text-muted-foreground">
                   {(lister?.full_name ?? "?").slice(0, 1).toUpperCase()}
@@ -154,7 +160,13 @@ export function DisputeRow({
             <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted">
               {cleaner?.profile_photo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={cleaner.profile_photo_url} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={cleaner.profile_photo_url}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-xs font-medium text-muted-foreground">
                   {(cleaner?.full_name ?? "?").slice(0, 1).toUpperCase()}
@@ -196,7 +208,13 @@ export function DisputeRow({
                   aria-label={`View evidence photo ${idx + 1}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={url}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                  />
                 </button>
               ))}
               {evidence.length > 3 && (
@@ -269,7 +287,13 @@ export function DisputeRow({
                   {evidence.map((url, idx) => (
                     <div key={idx} className="relative aspect-square overflow-hidden rounded-md border bg-muted dark:border-gray-800">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`Evidence ${idx + 1}`} className="h-full w-full object-cover" />
+                      <img
+                        src={url}
+                        alt={`Evidence ${idx + 1}`}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover"
+                      />
                     </div>
                   ))}
                 </div>
@@ -288,7 +312,13 @@ export function DisputeRow({
                   {responseEvidence.map((url, idx) => (
                     <div key={idx} className="relative aspect-square overflow-hidden rounded-md border bg-muted dark:border-gray-800">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`Response ${idx + 1}`} className="h-full w-full object-cover" />
+                      <img
+                        src={url}
+                        alt={`Response ${idx + 1}`}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover"
+                      />
                     </div>
                   ))}
                 </div>

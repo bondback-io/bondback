@@ -521,7 +521,13 @@ export function GuidedDisputeForm({
                     className="relative h-20 w-20 overflow-hidden rounded-lg border border-border dark:border-gray-700"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={url}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover"
+                    />
                     <button
                       type="button"
                       aria-label={`Remove photo ${index + 1}`}

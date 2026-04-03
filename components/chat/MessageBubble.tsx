@@ -73,6 +73,8 @@ export function MessageBubble({
               <img
                 src={avatarUrl}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 className="h-full w-full rounded-full object-cover"
               />
             ) : (
@@ -144,7 +146,8 @@ export function MessageBubble({
                     alt="Attachment"
                     fill
                     className="object-cover"
-                    sizes="260px"
+                    sizes="(max-width: 640px) min(92vw, 260px), 260px"
+                    loading="lazy"
                     unoptimized
                   />
                 </button>

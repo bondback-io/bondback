@@ -515,6 +515,8 @@ export default async function CleanerProfilePage({
                           <img
                             src={makePhotoUrl(path)}
                             alt="Review"
+                            loading="lazy"
+                            decoding="async"
                             className="h-full w-full object-cover"
                           />
                         </div>

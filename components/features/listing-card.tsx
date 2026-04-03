@@ -49,6 +49,7 @@ import { JobCardMarketplaceMobile, formatAuctionTimeLeftShort } from "@/componen
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { useDistanceUnit } from "@/hooks/use-distance-unit";
 import { formatDistanceKmLabel } from "@/lib/distance-format";
+import { NEXT_IMAGE_SIZES_LISTING_CARD_DESKTOP } from "@/lib/next-image-sizes";
 
 export type ListingCardProps = {
   listing: ListingRow;
@@ -434,7 +435,7 @@ function ListingCardInner({
               src={thumb}
               alt={thumbAlt}
               fill
-              sizes="(max-width: 768px) 100vw, 50vw"
+              sizes={NEXT_IMAGE_SIZES_LISTING_CARD_DESKTOP}
               quality={75}
               className="object-cover transition-transform duration-200 group-hover:scale-[1.02]"
               priority={priority}

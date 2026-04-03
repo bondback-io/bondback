@@ -1,9 +1,10 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoadingShell } from "@/components/skeletons/page-loading-shell";
 
 export default function AdminDashboardLoading() {
   return (
-    <section className="page-inner space-y-6">
+    <PageLoadingShell className="space-y-6">
       <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
         <CardHeader className="pb-3">
           <Skeleton className="h-7 w-48 dark:bg-gray-800" />
@@ -31,6 +32,6 @@ export default function AdminDashboardLoading() {
           </Card>
         ))}
       </div>
-    </section>
+    </PageLoadingShell>
   );
 }

@@ -105,6 +105,8 @@ function MessagesTabLink({
   return (
     <Link
       href="/messages"
+      prefetch
+      onPointerDown={() => router.prefetch("/messages")}
       className={cn(
         "relative flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
         active
@@ -282,6 +284,9 @@ export function MobileBottomNav({
       router.prefetch("/messages");
       router.prefetch("/dashboard");
       router.prefetch("/profile");
+      router.prefetch("/my-listings");
+      router.prefetch("/listings/new");
+      router.prefetch("/earnings");
     };
     const w = typeof window !== "undefined" ? window : undefined;
     if (!w) return;
@@ -347,6 +352,8 @@ export function MobileBottomNav({
         <div className="mx-auto flex max-w-lg items-end justify-between gap-0.5 px-1">
           <Link
             href="/dashboard"
+            prefetch
+            onPointerDown={() => router.prefetch("/dashboard")}
             className={cn(
               "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
               isItemActive(currentPath, "/dashboard")
@@ -388,6 +395,8 @@ export function MobileBottomNav({
 
           <Link
             href={secondaryTabHref}
+            prefetch
+            onPointerDown={() => router.prefetch(secondaryTabHref)}
             className={cn(
               "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
               isSecondaryTabActive(currentPath, effectiveRole)
@@ -430,6 +439,8 @@ export function MobileBottomNav({
 
           <Link
             href="/profile"
+            prefetch
+            onPointerDown={() => router.prefetch("/profile")}
             className={cn(
               "flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors active:scale-[0.98]",
               isItemActive(currentPath, "/profile")

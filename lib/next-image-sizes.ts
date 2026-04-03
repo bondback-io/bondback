@@ -17,3 +17,9 @@ export const NEXT_IMAGE_SIZES_UPLOAD_TILE =
 /** 96×96 listing cover picker */
 export const NEXT_IMAGE_SIZES_LISTING_PREVIEW =
   "(max-width: 768px) 28vw, 96px";
+
+/**
+ * Listing card hero on md+ only (grid ~2–3 columns). Omit 100vw — this block is hidden below md.
+ */
+export const NEXT_IMAGE_SIZES_LISTING_CARD_DESKTOP =
+  "(max-width: 1024px) 50vw, 33vw";

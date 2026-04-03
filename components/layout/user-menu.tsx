@@ -212,6 +212,8 @@ export function UserMenu({ session }: UserMenuProps) {
           <img
             src={avatarUrl}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="h-8 w-8 rounded-full object-cover"
           />
         ) : (
@@ -305,6 +307,8 @@ export function UserMenu({ session }: UserMenuProps) {
                     <img
                       src={avatarUrl}
                       alt=""
+                      loading="lazy"
+                      decoding="async"
                       className="h-full w-full rounded-full object-cover"
                     />
                   ) : (

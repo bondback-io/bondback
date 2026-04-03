@@ -1,10 +1,11 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SkeletonTable } from "@/components/skeletons";
+import { PageLoadingShell } from "@/components/skeletons/page-loading-shell";
 
 export default function AdminDisputesLoading() {
   return (
-    <section className="page-inner space-y-6">
+    <PageLoadingShell className="space-y-6">
       <div>
         <Skeleton className="h-8 w-48 md:h-9 md:w-64" />
         <Skeleton className="mt-2 h-4 w-72 max-w-full" />
@@ -36,6 +37,6 @@ export default function AdminDisputesLoading() {
       </Card>
 
       <SkeletonTable rows={6} columns={5} />
-    </section>
+    </PageLoadingShell>
   );
 }

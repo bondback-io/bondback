@@ -1,4 +1,5 @@
 import { PrimaryPageHeaderSkeleton } from "@/components/skeletons/navigation-chrome-skeleton";
+import { PageLoadingShell } from "@/components/skeletons/page-loading-shell";
 import { SkeletonStatRow, SkeletonActivityFeed } from "@/components/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 /** Job detail — heavy queries; show layout shell immediately. */
 export default function JobDetailLoading() {
   return (
-    <section className="page-inner space-y-6 sm:space-y-5">
+    <PageLoadingShell>
       <PrimaryPageHeaderSkeleton showFilterRow={false} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
@@ -29,6 +30,6 @@ export default function JobDetailLoading() {
           <Skeleton className="h-12 w-full rounded-lg" aria-hidden />
         </div>
       </div>
-    </section>
+    </PageLoadingShell>
   );
 }

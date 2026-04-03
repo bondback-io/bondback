@@ -106,9 +106,11 @@ function DesktopNavLinks({
               >
                 <Link
                   href="/listings/new"
+                  prefetch
                   className="inline-flex items-center gap-2 whitespace-nowrap"
                   title="Create listing"
                   aria-label="Create listing"
+                  onMouseEnter={() => router.prefetch("/listings/new")}
                 >
                   <PlusCircle className="h-4 w-4 shrink-0" aria-hidden />
                   <span className="max-2xl:sr-only">Create Listing</span>
@@ -254,10 +256,12 @@ function MobileNavContent({
             <SheetClose asChild>
               <Link
                 href="/listings/new"
+                prefetch
                 className={cn(
                   MOBILE_ROW,
                   "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                 )}
+                onPointerDown={() => router.prefetch("/listings/new")}
                 onClick={onNavigate}
               >
                 <PlusCircle className="h-5 w-5 shrink-0" aria-hidden />

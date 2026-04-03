@@ -5,10 +5,11 @@ import {
   SkeletonFormField,
   SkeletonPhotoGrid,
 } from "@/components/skeletons";
+import { PageLoadingShell } from "@/components/skeletons/page-loading-shell";
 
 export default function ProfileLoading() {
   return (
-    <section className="page-inner space-y-6 sm:space-y-5">
+    <PageLoadingShell className="space-y-6 sm:space-y-5">
       <div className="flex flex-col gap-5 sm:gap-4">
         <Skeleton className="h-10 w-56 max-w-full sm:h-9 sm:w-48" />
         <div className="flex flex-wrap gap-2">
@@ -41,6 +42,6 @@ export default function ProfileLoading() {
         <Skeleton className="h-6 w-36 sm:h-5 sm:w-28" />
         <SkeletonPhotoGrid count={6} />
       </div>
-    </section>
+    </PageLoadingShell>
   );
 }

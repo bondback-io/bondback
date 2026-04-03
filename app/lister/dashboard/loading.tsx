@@ -7,10 +7,11 @@ import {
   SkeletonActivityFeed,
 } from "@/components/skeletons";
 import { PrimaryPageHeaderSkeleton } from "@/components/skeletons/navigation-chrome-skeleton";
+import { PageLoadingShell } from "@/components/skeletons/page-loading-shell";
 
 export default function ListerDashboardLoading() {
   return (
-    <section className="page-inner space-y-8 pb-20 sm:space-y-7 sm:pb-8">
+    <PageLoadingShell className="space-y-8 pb-20 sm:space-y-7 sm:pb-8">
       <PrimaryPageHeaderSkeleton showMeta showFilterRow={false} />
 
       <SkeletonStatRow count={4} scrollOnMobile />
@@ -41,6 +42,6 @@ export default function ListerDashboardLoading() {
           <SkeletonActivityFeed count={5} />
         </div>
       </Card>
-    </section>
+    </PageLoadingShell>
   );
 }

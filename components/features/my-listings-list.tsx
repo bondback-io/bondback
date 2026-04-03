@@ -1128,7 +1128,13 @@ export function MyListingsList({
             onClick={(e) => e.stopPropagation()}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={previewUrl} alt="Listing photo" className="h-full w-full object-contain" />
+            <img
+              src={previewUrl}
+              alt="Listing photo"
+              loading="eager"
+              decoding="async"
+              className="h-full w-full object-contain"
+            />
           </div>
         </div>
       )}

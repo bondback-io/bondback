@@ -2,10 +2,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SkeletonFormField, SkeletonToggleRow } from "@/components/skeletons";
 import { PrimaryPageHeaderSkeleton } from "@/components/skeletons/navigation-chrome-skeleton";
+import { PageLoadingShell } from "@/components/skeletons/page-loading-shell";
 
 export default function SettingsLoading() {
   return (
-    <section className="page-inner space-y-6 sm:space-y-5">
+    <PageLoadingShell className="space-y-6 sm:space-y-5">
       <PrimaryPageHeaderSkeleton showMeta showFilterRow={false} showTabRow tabSlots={5} />
 
       <Card className="border-border dark:border-gray-800">
@@ -39,6 +40,6 @@ export default function SettingsLoading() {
           <Skeleton className="h-12 w-full max-w-xs rounded-md sm:h-11" />
         </CardContent>
       </Card>
-    </section>
+    </PageLoadingShell>
   );
 }

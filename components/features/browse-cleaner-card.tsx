@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { memo } from "react";
 import { Star, Shield, FileCheck, Briefcase, Camera, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/optimized-image";
@@ -8,13 +10,15 @@ import { VerificationBadges } from "@/components/shared/verification-badges";
 import { cn } from "@/lib/utils";
 import { CLEANER_TIER_META } from "@/lib/cleaner-browse-tier";
 import type { BrowseCleanerRow } from "@/lib/data/browse-cleaners";
+import { NEXT_IMAGE_SIZES_AVATAR_80 } from "@/lib/next-image-sizes";
 
 function formatKm(km: number): string {
   if (km < 10) return km.toFixed(1);
   return String(Math.round(km));
 }
 
-export function BrowseCleanerCard({ cleaner }: { cleaner: BrowseCleanerRow }) {
+function BrowseCleanerCardInner({ cleaner }: { cleaner: BrowseCleanerRow }) {
+  const router = useRouter();
   const tierMeta = CLEANER_TIER_META[cleaner.tier];
   const name =
     cleaner.fullName?.trim() ||
@@ -45,6 +49,7 @@ export function BrowseCleanerCard({ cleaner }: { cleaner: BrowseCleanerRow }) {
               alt=""
               width={64}
               height={64}
+              sizes={NEXT_IMAGE_SIZES_AVATAR_80}
               className="h-full w-full object-cover"
             />
           </div>
@@ -192,9 +197,17 @@ export function BrowseCleanerCard({ cleaner }: { cleaner: BrowseCleanerRow }) {
           size="lg"
           className="mt-auto min-h-[48px] w-full rounded-xl text-base font-semibold"
         >
-          <Link href={`/cleaners/${cleaner.id}`}>View full profile</Link>
+          <Link
+            href={`/cleaners/${cleaner.id}`}
+            prefetch
+            onMouseEnter={() => router.prefetch(`/cleaners/${cleaner.id}`)}
+          >
+            View full profile
+          </Link>
         </Button>
       </div>
     </article>
   );
 }
+
+export const BrowseCleanerCard = memo(BrowseCleanerCardInner);
