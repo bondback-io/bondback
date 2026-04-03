@@ -50,6 +50,7 @@ function isProtected(pathname: string): boolean {
   return PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
+/** Edge entry — also exported as `middleware` for Next.js compatibility. */
 export async function proxy(request: NextRequest) {
   const apexRedirect = redirectApexToWww(request);
   if (apexRedirect) return apexRedirect;
@@ -106,3 +107,6 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
+
+/** Use `proxy.ts` only (no `middleware.ts`) — Vercel/Next reject both files together. */
+export { proxy as middleware };
