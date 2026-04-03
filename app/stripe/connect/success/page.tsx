@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { handleConnectSuccess } from "@/lib/actions/stripe-connect";
 import { useToast } from "@/components/ui/use-toast";
 import { scheduleRouterAction } from "@/lib/deferred-router";
 import { Loader2, CheckCircle2 } from "lucide-react";
+import {
+  STRIPE_POPUP_MESSAGE_CONNECT,
+  type StripePopupConnectMessage,
+} from "@/lib/stripe-popup-messaging";
 
-export default function StripeConnectSuccessPage() {
+function StripeConnectSuccessInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
 
@@ -29,12 +34,29 @@ export default function StripeConnectSuccessPage() {
       const result = await handleConnectSuccess(session.user.id);
       if (cancelled) return;
 
+      const popup = searchParams.get("popup") === "1";
+
       if (result.ok) {
         setStatus("done");
         toast({
           title: "Bank account connected successfully!",
           description: "You can now receive payouts when listers release payment.",
         });
+
+        if (popup && typeof window !== "undefined" && window.opener) {
+          const msg: StripePopupConnectMessage = {
+            type: STRIPE_POPUP_MESSAGE_CONNECT,
+            ok: true,
+          };
+          try {
+            window.opener.postMessage(msg, window.location.origin);
+          } catch {
+            /* ignore */
+          }
+          window.close();
+          return;
+        }
+
         scheduleRouterAction(() => router.replace("/cleaner/dashboard"));
       } else {
         setStatus("error");
@@ -43,6 +65,20 @@ export default function StripeConnectSuccessPage() {
           title: "Something went wrong",
           description: result.error,
         });
+        if (popup && typeof window !== "undefined" && window.opener) {
+          const msg: StripePopupConnectMessage = {
+            type: STRIPE_POPUP_MESSAGE_CONNECT,
+            ok: false,
+            error: result.error,
+          };
+          try {
+            window.opener.postMessage(msg, window.location.origin);
+          } catch {
+            /* ignore */
+          }
+          window.close();
+          return;
+        }
         scheduleRouterAction(() => router.replace("/profile"));
       }
     }
@@ -51,7 +87,7 @@ export default function StripeConnectSuccessPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, toast]);
+  }, [router, toast, searchParams]);
 
   return (
     <section className="page-inner flex min-h-[50vh] flex-col items-center justify-center">
@@ -77,5 +113,19 @@ export default function StripeConnectSuccessPage() {
         </p>
       )}
     </section>
+  );
+}
+
+export default function StripeConnectSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <section className="page-inner flex min-h-[50vh] flex-col items-center justify-center">
+          <Loader2 className="h-12 w-12 animate-spin text-emerald-600 dark:text-emerald-400" aria-hidden />
+        </section>
+      }
+    >
+      <StripeConnectSuccessInner />
+    </Suspense>
   );
 }

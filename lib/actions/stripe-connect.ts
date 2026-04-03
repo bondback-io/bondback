@@ -1,6 +1,7 @@
 "use server";
 
 import type Stripe from "stripe";
+import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getEffectivePayoutSchedule, type PayoutScheduleInterval } from "@/lib/payout-schedule";
@@ -105,12 +106,18 @@ export type CreateConnectAccountResult =
   | { ok: true; onboardingUrl: string }
   | { ok: false; error: string };
 
+export type CreateConnectAccountOptions = {
+  /** Return URLs include ?popup=1 so /stripe/connect/success can postMessage to opener and close. */
+  popupReturn?: boolean;
+};
+
 /**
  * Create or reuse a Stripe Connect Express account for the user and return the onboarding link.
  * Caller must be the user (cleaner). Stores stripe_connect_id in profiles via admin client.
  */
 export async function createConnectAccount(
-  userId: string
+  userId: string,
+  options?: CreateConnectAccountOptions
 ): Promise<CreateConnectAccountResult> {
   try {
     const supabase = await createServerSupabaseClient();
@@ -199,8 +206,13 @@ export async function createConnectAccount(
     }
 
     const appUrl = getAppBaseUrl();
-    const returnUrl = `${appUrl}/stripe/connect/success`;
-    const refreshUrl = `${appUrl}/stripe/connect/success?refresh=1`;
+    const popup = options?.popupReturn === true;
+    const returnUrl = popup
+      ? `${appUrl}/stripe/connect/success?popup=1`
+      : `${appUrl}/stripe/connect/success`;
+    const refreshUrl = popup
+      ? `${appUrl}/stripe/connect/success?popup=1&refresh=1`
+      : `${appUrl}/stripe/connect/success?refresh=1`;
 
     let accountId = (profileRow?.stripe_connect_id ?? "").trim() || null;
 
@@ -283,6 +295,71 @@ export async function createConnectAccount(
 
 /** Alias for createConnectAccount (Stripe Connect Express onboarding). */
 export const createStripeConnectAccount = createConnectAccount;
+
+export type DisconnectStripeConnectResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Clear Connect payout linkage so the cleaner can connect a different Stripe account.
+ * Attempts to delete the Connect account in Stripe (best-effort); always clears profile fields.
+ */
+export async function disconnectStripeConnect(): Promise<DisconnectStripeConnectResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Server configuration error." };
+  }
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("stripe_connect_id, roles")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  const row = profile as { stripe_connect_id?: string | null; roles?: unknown } | null;
+  const roles = Array.isArray(row?.roles)
+    ? (row!.roles as string[]).filter((r) => r === "lister" || r === "cleaner")
+    : [];
+  if (!roles.includes("cleaner")) {
+    return { ok: false, error: "Only cleaners can disconnect payout settings." };
+  }
+
+  const connectId = row?.stripe_connect_id?.trim();
+  if (connectId) {
+    try {
+      const stripe = await getStripeServer();
+      await stripe.accounts.del(connectId);
+    } catch (e) {
+      console.warn("[disconnectStripeConnect] Stripe accounts.del (non-fatal)", e);
+    }
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({
+      stripe_connect_id: null,
+      stripe_onboarding_complete: false,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", session.user.id);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/profile");
+  revalidatePath("/settings");
+  revalidatePath("/earnings");
+  return { ok: true };
+}
 
 export type HandleConnectSuccessResult =
   | { ok: true }

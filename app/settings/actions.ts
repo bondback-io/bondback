@@ -348,8 +348,15 @@ export type CreateListerSetupSessionResult =
   | { ok: true; url: string }
   | { ok: false; error: string };
 
+export type CreateListerSetupSessionOptions = {
+  /** Use return URLs that postMessage to opener and close popup instead of full-page redirect. */
+  popup?: boolean;
+};
+
 /** Create Stripe Checkout Setup Session for lister to save a card. Redirects to Stripe; on success webhook or return-URL fulfillment saves payment method to profile. */
-export async function createListerSetupSession(): Promise<CreateListerSetupSessionResult> {
+export async function createListerSetupSession(
+  options?: CreateListerSetupSessionOptions
+): Promise<CreateListerSetupSessionResult> {
   const supabase = await createServerSupabaseClient();
   const {
     data: { session },
@@ -361,13 +368,65 @@ export async function createListerSetupSession(): Promise<CreateListerSetupSessi
 
   try {
     const { createSetupIntentCheckoutSessionUrl } = await import("@/lib/stripe");
-    const url = await createSetupIntentCheckoutSessionUrl(session.user.id);
+    const url = await createSetupIntentCheckoutSessionUrl(session.user.id, {
+      popupReturn: options?.popup === true,
+    });
     if (!url) return { ok: false, error: "Failed to create setup session." };
     return { ok: true, url };
   } catch (e) {
     const err = e as Error;
     return { ok: false, error: err.message ?? "Failed to create setup session." };
   }
+}
+
+export type DisconnectListerPaymentResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/** Clear saved card / Stripe customer so the lister can connect a different payment method. */
+export async function disconnectListerPaymentMethod(): Promise<DisconnectListerPaymentResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Server configuration error." };
+  }
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("roles")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  const roles = Array.isArray((profile as { roles?: string[] } | null)?.roles)
+    ? ((profile as { roles: string[] }).roles ?? []).filter((r) => r === "lister" || r === "cleaner")
+    : [];
+  if (!roles.includes("lister")) {
+    return { ok: false, error: "Only listers can disconnect saved payment methods." };
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({
+      stripe_payment_method_id: null,
+      stripe_customer_id: null,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", session.user.id);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/profile");
+  revalidatePath("/settings");
+  return { ok: true };
 }
 
 export type FulfillListerSetupResult = { ok: true } | { ok: false; error: string };

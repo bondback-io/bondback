@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -11,15 +12,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Landmark } from "lucide-react";
-import { createStripeConnectAccount } from "@/lib/actions/stripe-connect";
+import { ExternalLink, Landmark, Loader2 } from "lucide-react";
+import { createConnectAccount } from "@/lib/actions/stripe-connect";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  STRIPE_POPUP_MESSAGE_CONNECT,
+  isStripePopupConnectMessage,
+  openStripePopup,
+} from "@/lib/stripe-popup-messaging";
 
 export type ConnectRequiredModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
-  /** When true, primary action starts Stripe onboarding (redirect). Otherwise link to profile. */
+  /** When true, primary action opens Stripe Connect in a popup. Otherwise link to profile. */
   startOnboarding?: boolean;
 };
 
@@ -29,16 +35,49 @@ export function ConnectRequiredModal({
   userId,
   startOnboarding = true,
 }: ConnectRequiredModalProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleConnect = async () => {
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      if (!isStripePopupConnectMessage(e.data)) return;
+      if (e.data.type !== STRIPE_POPUP_MESSAGE_CONNECT) return;
+      if (e.data.ok) {
+        toast({
+          title: "Payout account updated",
+          description: "Your Stripe Connect status has been refreshed.",
+        });
+        onOpenChange(false);
+        router.refresh();
+      } else if (e.data.error) {
+        toast({
+          variant: "destructive",
+          title: "Connect setup issue",
+          description: e.data.error,
+        });
+        router.refresh();
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [onOpenChange, router, toast]);
+
+  const handleOpenStripe = useCallback(async () => {
     if (!startOnboarding) return;
     setLoading(true);
     try {
-      const result = await createStripeConnectAccount(userId);
+      const result = await createConnectAccount(userId, { popupReturn: true });
       if (result.ok) {
-        window.location.href = result.onboardingUrl;
+        const win = openStripePopup(result.onboardingUrl, "bondback_stripe_connect");
+        if (!win) {
+          toast({
+            variant: "destructive",
+            title: "Popup blocked",
+            description: "Allow popups for this site to connect payouts.",
+          });
+        }
         return;
       }
       toast({
@@ -55,28 +94,36 @@ export function ConnectRequiredModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [startOnboarding, userId, toast]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md dark:border-gray-800 dark:bg-gray-950">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Landmark className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-            <DialogTitle>Connect bank account</DialogTitle>
+            <DialogTitle className="dark:text-gray-100">Connect bank account</DialogTitle>
           </div>
-          <DialogDescription>
-            Please connect your bank account to receive payment. You need to complete Stripe Connect onboarding before you can receive payouts from jobs.
+          <DialogDescription className="dark:text-gray-400">
+            Complete Stripe Connect onboarding to receive payouts. Stripe opens in a new window so you can stay on this page; we’ll refresh when you’re done.
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="flex flex-col gap-2 sm:flex-row">
+        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-start">
           {startOnboarding ? (
             <Button
-              onClick={handleConnect}
+              type="button"
+              onClick={() => void handleOpenStripe()}
               disabled={loading}
               className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
             >
-              {loading ? "Starting…" : "Connect Bank Account for Payouts"}
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <ExternalLink className="h-4 w-4" />
+                  Open Stripe
+                </>
+              )}
             </Button>
           ) : null}
           <Button variant="outline" asChild>

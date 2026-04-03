@@ -145,18 +145,33 @@ export async function createJobCheckoutSessionUrl(
   return session.url ?? null;
 }
 
+export type CreateSetupIntentCheckoutSessionOptions = {
+  /** Return URLs point at /stripe/lister-setup-return for postMessage + window.close from popup. */
+  popupReturn?: boolean;
+};
+
 /**
  * Create Stripe Checkout Session in mode=setup for lister to save a card (Setup Intent).
  * On success, webhook saves setup_intent.payment_method and session.customer to profile.
  */
-export async function createSetupIntentCheckoutSessionUrl(userId: string): Promise<string | null> {
+export async function createSetupIntentCheckoutSessionUrl(
+  userId: string,
+  options?: CreateSetupIntentCheckoutSessionOptions
+): Promise<string | null> {
   const baseUrl = getStripeCheckoutAppUrl();
   const stripe = await getStripeServer();
+  const popup = options?.popupReturn === true;
+  const success_url = popup
+    ? `${baseUrl}/stripe/lister-setup-return?session_id={CHECKOUT_SESSION_ID}`
+    : `${baseUrl}/profile?payments=success&session_id={CHECKOUT_SESSION_ID}`;
+  const cancel_url = popup
+    ? `${baseUrl}/stripe/lister-setup-return?cancelled=1`
+    : `${baseUrl}/profile?payments=cancelled`;
   const session = await stripe.checkout.sessions.create({
     mode: "setup",
     payment_method_types: ["card"],
-    success_url: `${baseUrl}/profile?payments=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/profile?payments=cancelled`,
+    success_url,
+    cancel_url,
     metadata: {
       setup_for_lister: userId,
       type: "setup_payment_method",
