@@ -33,9 +33,12 @@ export function PwaRegisterSw() {
     if (document.readyState === "complete") register();
     else window.addEventListener("load", register);
 
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      window.location.reload();
-    });
+    /**
+     * Do **not** call `location.reload()` on `controllerchange`. The service worker already uses
+     * `skipWaiting()` during `install`, so a forced reload here caused a refresh loop on production
+     * (activate → controllerchange → reload → register → …). New worker code applies on the next
+     * navigation or a later visit without a full-page loop.
+     */
 
     return () => {
       window.removeEventListener("load", register);
