@@ -165,15 +165,19 @@ export async function redirectAfterAuthSessionEstablished(
   }
 
   const roles = normalizeProfileRolesFromDb(p?.roles ?? null, !!p);
-  const hasNoRole = roles.length === 0;
+  const activeRoleRaw = p?.active_role;
+  const hasActiveRole =
+    typeof activeRoleRaw === "string" && activeRoleRaw.trim().length > 0;
+  /** New signups and anyone who has not chosen a default role yet. */
+  const needsRoleChoice = roles.length === 0 || !hasActiveRole;
   let redirectTo = next;
 
-  if (hasNoRole && (next === "/dashboard" || next === "/onboarding/role-choice")) {
+  if (needsRoleChoice && (next === "/dashboard" || next === "/onboarding/role-choice")) {
     redirectTo =
       signupFlow === "onboarding"
         ? "/onboarding/complete-profile"
         : "/onboarding/role-choice";
-  } else if (!hasNoRole && next === "/dashboard") {
+  } else if (!needsRoleChoice && next === "/dashboard") {
     redirectTo = getPostLoginDashboardPath(p);
   }
 

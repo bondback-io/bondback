@@ -5,36 +5,16 @@
  * ROLE CHOICE — POST-SIGNUP (auth required; middleware + server page enforce)
  * ============================================================================
  *
- * ONBOARDING FLOW DIAGRAM
- * -----------------------
- *   /signup (email, password, name, suburb, postcode)
- *        │
- *        ▼
- *   /onboarding/role-choice   ◄── you are here
- *        │
- *        ├──► saveRoleChoice("lister")
- *        │         ▼
- *        │    /onboarding/lister/quick-setup ──► /lister/dashboard (or /listings/new)
- *        │
- *        └──► saveRoleChoice("cleaner")
- *                  ▼
- *             /onboarding/cleaner/quick-setup ──► /cleaner/dashboard
- *
- * Dual-role backend: `profiles.roles[]` + `active_role` updated in saveRoleChoice.
- * Legacy "both" remains available via API / older routes — this UI is two paths only.
+ * Client session after `/auth/confirm` can lag behind the server on mobile: we use a single
+ * `onAuthStateChange` subscription plus `getSession`, a deferred `router.refresh()`, and light
+ * polling until the browser Supabase client sees the session (then we show Lister/Cleaner UI).
  * ============================================================================
- *
- * ROLE CHOICE — KEY JSX STRUCTURE
- * -------------------------------
- * - Full-viewport-friendly stack: title → two large Cards (House vs Brush)
- * - Pros/cons bullet lines under each card
- * - Primary actions: "Start as Lister" | "Start as Cleaner" (Button size="lg", full width on mobile)
  */
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Home, Brush } from "lucide-react";
+import { Brush, Home, Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { saveRoleChoice, upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
 import { PENDING_MINIMAL_PROFILE_KEY } from "@/components/onboarding/onboarding-storage";
@@ -47,62 +27,98 @@ export function RoleChoiceClient() {
   const router = useRouter();
   const [, startChoiceTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(true);
+  /** False until the browser client observes a Supabase session (avoids stall after email confirm). */
+  const [authReady, setAuthReady] = useState(false);
   const [savingChoice, setSavingChoice] = useState<"lister" | "cleaner" | null>(null);
   const [optimisticChoice, setOptimisticChoice] = useState<"lister" | "cleaner" | null>(null);
 
+  const readyRef = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
+    const supabase = createBrowserSupabaseClient();
 
-    (async () => {
-      const supabase = createBrowserSupabaseClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    const markReady = () => {
+      if (cancelled || readyRef.current) return;
+      readyRef.current = true;
+      setAuthReady(true);
+    };
 
-      if (!session) {
-        if (!cancelled) setSyncing(false);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) markReady();
+    });
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) markReady();
+    });
+
+    const refreshTimer = window.setTimeout(() => {
+      if (!cancelled && !readyRef.current) {
+        router.refresh();
+      }
+    }, 450);
+
+    let pollCount = 0;
+    const pollId = window.setInterval(() => {
+      if (cancelled || readyRef.current) return;
+      pollCount += 1;
+      if (pollCount > 24) {
+        window.clearInterval(pollId);
         return;
       }
+      void supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) markReady();
+      });
+    }, 200);
 
-      /** Profile is created on `/auth/confirm` — unblock role buttons immediately (no long await). */
-      if (!cancelled) setSyncing(false);
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+      window.clearTimeout(refreshTimer);
+      window.clearInterval(pollId);
+    };
+  }, [router]);
 
+  useEffect(() => {
+    if (!authReady) return;
+
+    let cancelled = false;
+    void (async () => {
       let raw: string | null = null;
       try {
         raw = localStorage.getItem(PENDING_MINIMAL_PROFILE_KEY);
       } catch {
         return;
       }
+      if (!raw || cancelled) return;
 
-      if (raw) {
-        try {
-          const payload = JSON.parse(raw) as {
-            full_name?: string;
-            suburb?: string | null;
-            postcode?: string | null;
-            referralCode?: string | null;
-          };
-          if (payload?.full_name?.trim()) {
-            void upsertMinimalProfileAfterSignup({
-              full_name: payload.full_name,
-              suburb: payload.suburb ?? null,
-              postcode: payload.postcode ?? null,
-              referralCode: payload.referralCode ?? null,
-            }).then(() => {
-              try {
-                localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
-              } catch {
-                /* ignore */
-              }
-            });
-          }
-        } catch {
+      try {
+        const payload = JSON.parse(raw) as {
+          full_name?: string;
+          suburb?: string | null;
+          postcode?: string | null;
+          referralCode?: string | null;
+        };
+        if (payload?.full_name?.trim()) {
+          await upsertMinimalProfileAfterSignup({
+            full_name: payload.full_name,
+            suburb: payload.suburb ?? null,
+            postcode: payload.postcode ?? null,
+            referralCode: payload.referralCode ?? null,
+          });
           try {
             localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
           } catch {
             /* ignore */
           }
+        }
+      } catch {
+        try {
+          localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
+        } catch {
+          /* ignore */
         }
       }
     })();
@@ -110,7 +126,7 @@ export function RoleChoiceClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authReady]);
 
   const handleChoice = (choice: "lister" | "cleaner") => {
     setError(null);
@@ -131,6 +147,24 @@ export function RoleChoiceClient() {
     })();
   };
 
+  if (!authReady) {
+    return (
+      <div
+        className="flex min-h-[calc(100dvh-6rem)] w-full max-w-lg flex-col items-center justify-center gap-5 px-4 py-16 sm:max-w-2xl md:max-w-4xl"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <Loader2 className="h-10 w-10 shrink-0 animate-spin text-primary" aria-hidden />
+        <div className="space-y-2 text-center">
+          <p className="text-base font-medium text-foreground dark:text-gray-100">Preparing your profile…</p>
+          <p className="max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+            Almost there — connecting your account.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex min-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col justify-center gap-6 px-3 py-8 sm:max-w-2xl md:max-w-4xl md:py-12">
       <FormSavingOverlay
@@ -148,12 +182,6 @@ export function RoleChoiceClient() {
         </p>
       </div>
 
-      {syncing && (
-        <p className="text-center text-sm text-muted-foreground" aria-live="polite">
-          Preparing your profile…
-        </p>
-      )}
-
       {error && (
         <div
           className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-center text-sm text-destructive"
@@ -164,7 +192,6 @@ export function RoleChoiceClient() {
       )}
 
       <div className="grid gap-5 md:grid-cols-2 md:gap-8">
-        {/* Lister path */}
         <Card
           className={cn(
             "flex flex-col border-2 shadow-md transition-colors dark:border-gray-800 dark:bg-gray-900 dark:shadow-none",
@@ -201,7 +228,7 @@ export function RoleChoiceClient() {
               type="button"
               size="lg"
               className="w-full min-h-14 shrink-0 text-base font-semibold sm:min-h-12"
-              disabled={savingChoice != null || syncing}
+              disabled={savingChoice != null}
               onClick={() => handleChoice("lister")}
             >
               {savingChoice === "lister" ? "Starting…" : "Start as Lister"}
@@ -209,7 +236,6 @@ export function RoleChoiceClient() {
           </CardContent>
         </Card>
 
-        {/* Cleaner path */}
         <Card
           className={cn(
             "flex flex-col border-2 shadow-md transition-colors dark:border-gray-800 dark:bg-gray-900 dark:shadow-none",
@@ -247,7 +273,7 @@ export function RoleChoiceClient() {
               size="lg"
               variant="secondary"
               className="w-full min-h-14 shrink-0 border border-emerald-600/30 bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-600/90 dark:border-emerald-500/30 sm:min-h-12"
-              disabled={savingChoice != null || syncing}
+              disabled={savingChoice != null}
               onClick={() => handleChoice("cleaner")}
             >
               {savingChoice === "cleaner" ? "Starting…" : "Start as Cleaner"}

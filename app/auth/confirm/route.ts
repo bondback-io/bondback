@@ -173,6 +173,9 @@ export async function GET(request: NextRequest) {
         hasSession: Boolean(exchangeData.session),
       });
 
+      /** Brief pause so Set-Cookie + client storage can stabilize before the browser follows the redirect (reduces race on mobile). */
+      await new Promise((r) => setTimeout(r, 400));
+
       const res = await redirectAfterAuthSessionEstablished({
         supabase,
         request,
@@ -222,6 +225,9 @@ export async function GET(request: NextRequest) {
       typeUsed: resolvedOtpType,
       ms: Date.now() - started,
     });
+
+    /** Brief pause so session cookies persist before redirect (helps first paint on `/onboarding/role-choice`). */
+    await new Promise((r) => setTimeout(r, 400));
 
     const res = await redirectAfterAuthSessionEstablished({
       supabase,

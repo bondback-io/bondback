@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { RoleChoiceClient } from "@/components/onboarding/role-choice-client";
 
@@ -26,11 +25,12 @@ export default async function RoleChoicePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("roles")
+    .select("roles, active_role")
     .eq("id", session.user.id)
     .maybeSingle();
 
-  const raw = (profile as { roles?: unknown } | null)?.roles;
+  const row = profile as { roles?: unknown; active_role?: unknown } | null;
+  const raw = row?.roles;
   let roles: string[] = [];
   if (Array.isArray(raw)) {
     roles = raw as string[];
@@ -43,19 +43,15 @@ export default async function RoleChoicePage() {
     }
   }
 
-  if (roles.length > 0) {
+  const hasActiveRole =
+    typeof row?.active_role === "string" && row.active_role.trim().length > 0;
+  if (roles.length > 0 && hasActiveRole) {
     redirect("/dashboard");
   }
 
   return (
     <section className="page-inner flex min-h-[60vh] flex-col items-center justify-center">
-      <Suspense
-        fallback={
-          <div className="text-muted-foreground dark:text-gray-400">Loading…</div>
-        }
-      >
-        <RoleChoiceClient />
-      </Suspense>
+      <RoleChoiceClient />
     </section>
   );
 }
