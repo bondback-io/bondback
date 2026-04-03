@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { checkBanAfterLogin } from "@/lib/actions/admin-users";
 import { scheduleRouterAction } from "@/lib/deferred-router";
+import { AuthPageBackLink } from "@/components/auth/auth-page-back-link";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { PostLoginBrandedScreen } from "@/components/auth/post-login-branded-screen";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
@@ -190,6 +191,9 @@ export function LoginForm({
 
   return (
     <section className="page-inner flex min-h-[70vh] flex-col justify-center px-4 py-8 sm:min-h-[60vh] sm:py-12">
+      <div className="mx-auto mb-4 w-full max-w-md">
+        <AuthPageBackLink />
+      </div>
       <Card className="mx-auto w-full max-w-md shadow-sm">
         <CardHeader className="space-y-1 pb-2 sm:pb-4">
           <CardTitle className="text-xl sm:text-2xl">Log in to Bond Back</CardTitle>

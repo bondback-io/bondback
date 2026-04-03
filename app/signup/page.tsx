@@ -39,6 +39,7 @@ import {
   type AccountCreationProgressPhase,
   type AccountCreationStep,
 } from "@/components/auth/account-creation-progress-modal";
+import { AuthPageBackLink } from "@/components/auth/auth-page-back-link";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { RegistrationCheckEmailModal } from "@/components/auth/registration-check-email-modal";
 import { PENDING_MINIMAL_PROFILE_KEY } from "@/components/onboarding/onboarding-storage";
@@ -277,6 +278,9 @@ function SignupForm() {
 
   return (
     <section className="page-inner flex min-h-[70vh] flex-col items-center justify-center px-3 py-8">
+      <div className="mb-4 w-full max-w-md self-center">
+        <AuthPageBackLink />
+      </div>
       <RegistrationCheckEmailModal
         open={checkEmailOpen}
         onOpenChange={handleCheckEmailOpenChange}

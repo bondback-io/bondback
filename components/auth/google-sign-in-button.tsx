@@ -4,6 +4,14 @@ import { useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { buildAuthCallbackUrl } from "@/lib/auth/oauth-callback-url";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 type GoogleSignInButtonProps = {
@@ -44,6 +52,7 @@ export function GoogleSignInButton({
   className,
   variant = "login",
 }: GoogleSignInButtonProps) {
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +60,7 @@ export function GoogleSignInButton({
     nextPath?.trim() ||
     (variant === "signup" ? "/onboarding/role-choice" : "/dashboard");
 
-  const handleClick = async () => {
+  const startGoogleOAuth = async () => {
     setError(null);
     setLoading(true);
     try {
@@ -84,13 +93,51 @@ export function GoogleSignInButton({
         type="button"
         variant="outline"
         className="w-full gap-2 border-border/80 bg-background font-medium"
-        onClick={handleClick}
+        onClick={() => setDialogOpen(true)}
         disabled={loading}
       >
         <GoogleMark />
-        {loading ? "Continuing…" : "Continue with Google"}
+        Continue with Google
       </Button>
-      {error ? <p className="text-center text-xs text-destructive">{error}</p> : null}
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(next) => {
+          if (!next) {
+            setError(null);
+            setLoading(false);
+          }
+          setDialogOpen(next);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Continue with Google</DialogTitle>
+            <DialogDescription className="text-left leading-relaxed">
+              You’ll open Google’s sign-in page in this tab. To stay on Bond Back, tap Cancel below. If
+              you’ve already gone to Google, use your browser’s back button to return here.
+            </DialogDescription>
+          </DialogHeader>
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void startGoogleOAuth()} disabled={loading}>
+              {loading ? "Opening Google…" : "Continue to Google"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
