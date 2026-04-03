@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
+import { extractGoogleProfileFields } from "@/lib/auth/google-user-metadata";
+import { syncGoogleIdentityToProfile } from "@/lib/auth/sync-google-profile";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
@@ -105,21 +107,16 @@ export async function redirectAfterAuthSessionEstablished(
 
   const provider = session.user.app_metadata?.provider;
   if (provider === "google") {
-    const meta = session.user.user_metadata ?? {};
-    const givenName = typeof meta.given_name === "string" ? meta.given_name.trim() : "";
-    const familyName = typeof meta.family_name === "string" ? meta.family_name.trim() : "";
-    const combinedGivenFamily = `${givenName} ${familyName}`.trim();
-    const fullName =
-      combinedGivenFamily ||
-      (typeof meta.full_name === "string" && meta.full_name.trim()) ||
-      (typeof meta.name === "string" && meta.name.trim()) ||
-      session.user.email?.split("@")[0] ||
-      "User";
+    const fields = extractGoogleProfileFields(session.user);
     await upsertMinimalProfileAfterSignup({
-      full_name: fullName,
+      full_name: fields.fullName,
       postcode: null,
       referralCode: refParam?.trim() || null,
+      first_name: fields.givenName,
+      last_name: fields.familyName,
+      avatar_url: fields.pictureUrl,
     });
+    await syncGoogleIdentityToProfile(session.user.id, fields);
   }
 
   const { data: profile } = await supabase

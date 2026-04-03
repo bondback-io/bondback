@@ -78,6 +78,12 @@ export function syntheticProfileFromAuthUser(u: User): ProfileRow {
   return {
     id: u.id,
     full_name: (typeof md.full_name === "string" ? md.full_name : null) ?? u.email ?? null,
+    first_name: typeof md.given_name === "string" ? md.given_name : null,
+    last_name: typeof md.family_name === "string" ? md.family_name : null,
+    avatar_url:
+      (typeof md.picture === "string" && md.picture) ||
+      (typeof md.avatar_url === "string" && md.avatar_url) ||
+      null,
     created_at: u.created_at,
     updated_at: u.updated_at ?? u.created_at,
     profile_photo_url: null,

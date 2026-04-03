@@ -79,6 +79,10 @@ export async function upsertMinimalProfileAfterSignup(input: {
   postcode: string | null;
   suburb?: string | null;
   referralCode?: string | null;
+  /** Google OAuth given_name / family_name / picture when present. */
+  first_name?: string | null;
+  last_name?: string | null;
+  avatar_url?: string | null;
 }): Promise<SaveOnboardingResult> {
   const supabase = await createServerSupabaseClient();
   const {
@@ -128,13 +132,18 @@ export async function upsertMinimalProfileAfterSignup(input: {
 
   const alreadyReferred = (existing as { referred_by?: string | null } | null)?.referred_by;
 
+  const avatar = input.avatar_url?.trim() || null;
   const row: ProfileInsert = {
     id: userId,
     full_name: input.full_name.trim() || null,
+    first_name: input.first_name?.trim() || null,
+    last_name: input.last_name?.trim() || null,
+    avatar_url: avatar,
     postcode: input.postcode?.trim() || null,
     suburb: input.suburb?.trim() ?? "",
     max_travel_km: 30,
     roles: [],
+    ...(avatar ? { profile_photo_url: avatar } : {}),
     ...(!alreadyReferred && referredBy ? { referred_by: referredBy } : {}),
   };
 

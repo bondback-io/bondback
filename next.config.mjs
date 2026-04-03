@@ -4,6 +4,23 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const reactNativeShim = path.resolve(__dirname, "lib/shims/react-native.js");
 
+/** Supabase Storage public URLs — hostname comes from env (no hardcoded project ref). */
+function supabaseStorageRemotePattern() {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  if (!raw) return null;
+  try {
+    const hostname = new URL(raw).hostname;
+    if (!hostname) return null;
+    return {
+      protocol: "https",
+      hostname,
+      pathname: "/storage/v1/object/public/**",
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Expo SDK packages (expo-notifications → expo-modules-core) ship TypeScript sources as the
  * package entry; Turbopack cannot bundle them reliably. Use `next dev --webpack` / `next build --webpack`
@@ -55,13 +72,10 @@ const nextConfig = {
   images: {
     /** Cache optimized `/_next/image` derivatives (reduces repeat work on mobile revisits). */
     minimumCacheTTL: 60 * 60 * 24 * 30,
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "olidrzdufyewiocquhtb.supabase.co",
-        pathname: "/storage/v1/object/public/**",
-      },
-    ],
+    remotePatterns: (() => {
+      const storagePattern = supabaseStorageRemotePattern();
+      return storagePattern ? [storagePattern] : [];
+    })(),
   },
 };
 

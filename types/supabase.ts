@@ -20,6 +20,12 @@ export interface Database {
           postcode: string | null;
           max_travel_km: number;
           full_name: string | null;
+          /** Given name (e.g. Google OAuth). */
+          first_name: string | null;
+          /** Family name (e.g. Google OAuth). */
+          last_name: string | null;
+          /** OAuth provider avatar URL (e.g. Google `picture`). */
+          avatar_url: string | null;
           phone: string | null;
           date_of_birth: string | null;
           years_experience: number | null;
@@ -66,6 +72,9 @@ export interface Database {
           postcode?: string | null;
           max_travel_km?: number;
           full_name?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          avatar_url?: string | null;
           phone?: string | null;
           date_of_birth?: string | null;
           years_experience?: number | null;
@@ -109,6 +118,9 @@ export interface Database {
           postcode?: string | null;
           max_travel_km?: number;
           full_name?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          avatar_url?: string | null;
           phone?: string | null;
           date_of_birth?: string | null;
           years_experience?: number | null;

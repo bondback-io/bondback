@@ -207,6 +207,26 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
           <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300 sm:text-sm">
             Secure payments · Verified cleaners · Australia-wide
           </p>
+          <nav
+            className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-zinc-600 dark:text-zinc-400"
+            aria-label="Legal"
+          >
+            <Link
+              href="/privacy"
+              className="font-medium text-zinc-800 underline-offset-4 hover:text-primary hover:underline dark:text-zinc-200"
+            >
+              Privacy Policy
+            </Link>
+            <span className="text-zinc-400 dark:text-zinc-500" aria-hidden>
+              ·
+            </span>
+            <Link
+              href="/terms"
+              className="font-medium text-zinc-800 underline-offset-4 hover:text-primary hover:underline dark:text-zinc-200"
+            >
+              Terms of Service
+            </Link>
+          </nav>
         </section>
       </div>
     </main>

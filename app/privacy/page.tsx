@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-/** Static legal copy — prerender for fast TTFB and CDN caching. */
-export const dynamic = "force-static";
+/** Must be dynamic so the root layout reads auth cookies (logged-in header). */
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",

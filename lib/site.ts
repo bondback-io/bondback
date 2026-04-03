@@ -46,6 +46,11 @@ export function getAppBaseUrl(): string {
     }
   }
 
+  /** Vercel Production: use canonical www host for redirects/emails (not *.vercel.app). */
+  if (vercelEnv === "production") {
+    return DEFAULT_PUBLIC_APP_URL;
+  }
+
   if (vercel) {
     const o = originFromVercelUrl(vercel);
     if (o) return o;

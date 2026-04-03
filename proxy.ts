@@ -1,6 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+const CANONICAL_WWW_HOST = "www.bondback.io";
+
+/** Apex → www so OAuth, cookies, and NEXT_PUBLIC_APP_URL stay aligned with https://www.bondback.io */
+function redirectApexToWww(request: NextRequest): NextResponse | null {
+  const host = request.headers.get("host")?.split(":")[0]?.toLowerCase();
+  if (host === "bondback.io") {
+    const url = request.nextUrl.clone();
+    url.hostname = CANONICAL_WWW_HOST;
+    url.protocol = "https:";
+    return NextResponse.redirect(url, 308);
+  }
+  return null;
+}
+
 const PROTECTED_PATHS = [
   "/dashboard",
   "/cleaner",
@@ -36,6 +50,9 @@ function isProtected(pathname: string): boolean {
 }
 
 export async function proxy(request: NextRequest) {
+  const apexRedirect = redirectApexToWww(request);
+  if (apexRedirect) return apexRedirect;
+
   const supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
