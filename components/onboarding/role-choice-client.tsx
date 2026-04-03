@@ -1,13 +1,11 @@
 "use client";
 
 /**
- * ROLE CHOICE — Post-signup. Session may lag the server after `/auth/confirm`; we resolve via
- * `onAuthStateChange` + `getSession` + deferred `router.refresh()` + short polling.
- * Role → next step uses full-page navigation (`location.assign`) so the overlay never clears
- * before the next document loads (avoids flicker back to this screen).
+ * ROLE CHOICE — Post-signup. One Supabase client, one auth subscription, light follow-up checks
+ * (rAF + short poll cap) so mobile isn’t hammered with getSession every 120ms.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Brush, Home } from "lucide-react";
@@ -21,6 +19,7 @@ import { cn } from "@/lib/utils";
 
 export function RoleChoiceClient() {
   const router = useRouter();
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [error, setError] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [savingChoice, setSavingChoice] = useState<"lister" | "cleaner" | null>(null);
@@ -34,7 +33,8 @@ export function RoleChoiceClient() {
 
   useEffect(() => {
     let cancelled = false;
-    const supabase = createBrowserSupabaseClient();
+    let raf1 = 0;
+    let raf2 = 0;
 
     const markReady = () => {
       if (cancelled || readyRef.current) return;
@@ -52,32 +52,47 @@ export function RoleChoiceClient() {
       if (session?.user) markReady();
     });
 
+    /** After paint, re-read session (helps WebKit after redirect cookies land). */
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (cancelled || readyRef.current) return;
+        void supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user) markReady();
+        });
+      });
+    });
+
     const refreshTimer = window.setTimeout(() => {
       if (!cancelled && !readyRef.current) {
         router.refresh();
       }
-    }, 400);
+    }, 280);
 
     let pollCount = 0;
     const pollId = window.setInterval(() => {
-      if (cancelled || readyRef.current) return;
+      if (cancelled || readyRef.current) {
+        window.clearInterval(pollId);
+        return;
+      }
       pollCount += 1;
-      if (pollCount > 40) {
+      if (pollCount > 8) {
         window.clearInterval(pollId);
         return;
       }
       void supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) markReady();
       });
-    }, 120);
+    }, 350);
 
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
       window.clearTimeout(refreshTimer);
       window.clearInterval(pollId);
     };
-  }, [router]);
+  }, [router, supabase]);
 
   useEffect(() => {
     if (!authReady) return;
@@ -126,7 +141,7 @@ export function RoleChoiceClient() {
     };
   }, [authReady]);
 
-  const handleChoice = (choice: "lister" | "cleaner") => {
+  const handleChoice = useCallback((choice: "lister" | "cleaner") => {
     setError(null);
     setOptimisticChoice(choice);
     setSavingChoice(choice);
@@ -155,7 +170,10 @@ export function RoleChoiceClient() {
         setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
       }
     })();
-  };
+  }, []);
+
+  const btnTouch =
+    "touch-manipulation min-h-[3.25rem] w-full shrink-0 text-base font-semibold transition-transform duration-150 active:scale-[0.98] sm:min-h-12";
 
   return (
     <>
@@ -184,7 +202,7 @@ export function RoleChoiceClient() {
           <div className="grid gap-5 md:grid-cols-2 md:gap-8">
             <Card
               className={cn(
-                "flex flex-col border-2 shadow-md transition-colors dark:border-gray-800 dark:bg-gray-900 dark:shadow-none",
+                "flex flex-col border-2 shadow-md transition-colors duration-200 dark:border-gray-800 dark:bg-gray-900 dark:shadow-none",
                 optimisticChoice === "lister"
                   ? "border-sky-500/70 ring-2 ring-sky-500/25 dark:border-sky-500/60"
                   : "border-transparent"
@@ -217,7 +235,7 @@ export function RoleChoiceClient() {
                 <Button
                   type="button"
                   size="lg"
-                  className="w-full min-h-14 shrink-0 text-base font-semibold sm:min-h-12"
+                  className={cn(btnTouch)}
                   disabled={savingChoice != null}
                   onClick={() => handleChoice("lister")}
                 >
@@ -228,7 +246,7 @@ export function RoleChoiceClient() {
 
             <Card
               className={cn(
-                "flex flex-col border-2 shadow-md transition-colors dark:border-gray-800 dark:bg-gray-900 dark:shadow-none",
+                "flex flex-col border-2 shadow-md transition-colors duration-200 dark:border-gray-800 dark:bg-gray-900 dark:shadow-none",
                 optimisticChoice === "cleaner"
                   ? "border-emerald-500/70 ring-2 ring-emerald-500/25 dark:border-emerald-500/60"
                   : "border-transparent"
@@ -262,7 +280,10 @@ export function RoleChoiceClient() {
                   type="button"
                   size="lg"
                   variant="secondary"
-                  className="w-full min-h-14 shrink-0 border border-emerald-600/30 bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-600/90 dark:border-emerald-500/30 sm:min-h-12"
+                  className={cn(
+                    btnTouch,
+                    "border border-emerald-600/30 bg-emerald-600 text-white hover:bg-emerald-600/90 dark:border-emerald-500/30"
+                  )}
                   disabled={savingChoice != null}
                   onClick={() => handleChoice("cleaner")}
                 >

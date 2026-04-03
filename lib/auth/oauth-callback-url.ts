@@ -1,7 +1,10 @@
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 
 /**
- * Build the app URL Supabase redirects to after OAuth (must match Dashboard → Auth → Redirect URLs).
+ * Build the app URL Supabase redirects to after OAuth.
+ * **Origin** must come from {@link getClientAuthRedirectOrigin} / `getClientAuthEmailRedirectOrigin`
+ * — only `https://www.bondback.io` (+ localhost for dev) should appear in Supabase Redirect URLs,
+ * never `*.vercel.app`.
  */
 export function buildAuthCallbackUrl(
   origin: string,

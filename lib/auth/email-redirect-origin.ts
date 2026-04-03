@@ -1,12 +1,36 @@
 /**
- * Origin for Supabase `emailRedirectTo` / `resend` (client components only).
+ * Origins for Supabase **emailRedirectTo**, **signInWithOAuth redirectTo**, and **resetPassword redirectTo**.
  *
- * Prefer `NEXT_PUBLIC_APP_URL` (production: `https://www.bondback.io`) so confirmation links open
- * your **canonical** app instead of a transient preview hostname. Preview URLs are often
- * behind **Vercel Deployment Protection**, which shows a Vercel login to unauthenticated visitors —
- * exactly what users see when the email link points at a protected preview.
+ * ## Only list these in Supabase Dashboard → Authentication → URL Configuration → Redirect URLs
+ * - `https://www.bondback.io/**` (production; canonical host — see `proxy.ts` apex→www)
+ * - `http://localhost:3000/**` (local dev)
  *
- * Falls back to `window.location.origin` when unset (local dev without env, or tests).
+ * **Do not** add `https://*.vercel.app/**` — Vercel preview hostnames change per deployment and will
+ * clutter / auto-resurface in Supabase. This module **never** uses `*.vercel.app` for auth redirects
+ * when `NEXT_PUBLIC_APP_URL` is unset (preview falls back to {@link CANONICAL_AUTH_PUBLIC_ORIGIN}).
+ *
+ * ## Vercel env
+ * Set **`NEXT_PUBLIC_APP_URL=https://www.bondback.io`** for **Production** (required) and **Preview**
+ * (recommended) so client auth always targets the canonical site. Stripe/server code may still use
+ * `VERCEL_URL` in preview via `getAppBaseUrl()` in `lib/site.ts` — that is separate from Supabase.
+ */
+export const CANONICAL_AUTH_PUBLIC_ORIGIN = "https://www.bondback.io" as const;
+
+function isLocalHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function isVercelPreviewHostname(hostname: string): boolean {
+  return hostname.endsWith(".vercel.app");
+}
+
+/**
+ * Origin for Supabase `emailRedirectTo` / OAuth `redirectTo` / password reset (client components only).
+ *
+ * 1. **`NEXT_PUBLIC_APP_URL`** when set — always wins (use `https://www.bondback.io` in Vercel Production + Preview).
+ * 2. **Localhost** — `window.location.origin` for local dev without env.
+ * 3. **Vercel preview (`*.vercel.app`)** — {@link CANONICAL_AUTH_PUBLIC_ORIGIN} so Supabase never receives preview URLs.
+ * 4. Else — `window.location.origin` (e.g. LAN dev hostname).
  */
 export function getClientAuthEmailRedirectOrigin(): string {
   const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
@@ -14,11 +38,27 @@ export function getClientAuthEmailRedirectOrigin(): string {
     try {
       return new URL(explicit.replace(/\/$/, "")).origin;
     } catch {
-      /* invalid env — fall back */
+      /* fallthrough */
     }
   }
-  if (typeof window !== "undefined") {
+
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const hostname = window.location.hostname;
+  if (isLocalHostname(hostname)) {
     return window.location.origin;
   }
-  return "";
+
+  if (isVercelPreviewHostname(hostname)) {
+    return CANONICAL_AUTH_PUBLIC_ORIGIN;
+  }
+
+  return window.location.origin;
+}
+
+/** Alias — same rules as {@link getClientAuthEmailRedirectOrigin} (OAuth / email / recovery). */
+export function getClientAuthRedirectOrigin(): string {
+  return getClientAuthEmailRedirectOrigin();
 }

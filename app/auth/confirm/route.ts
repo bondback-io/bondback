@@ -173,9 +173,11 @@ export async function GET(request: NextRequest) {
         hasSession: Boolean(exchangeData.session),
       });
 
-      await supabase.auth.getSession();
-      /** Pause so Set-Cookie + client storage can stabilize before the browser follows the redirect. */
-      await new Promise((r) => setTimeout(r, 500));
+      /**
+       * Short buffer so Set-Cookie headers from exchange are ordered before redirect response.
+       * `redirectAfterAuthSessionEstablished` receives `sessionFromAuth` — no extra getSession here (saves latency).
+       */
+      await new Promise((r) => setTimeout(r, 150));
 
       const res = await redirectAfterAuthSessionEstablished({
         supabase,
@@ -227,9 +229,11 @@ export async function GET(request: NextRequest) {
       ms: Date.now() - started,
     });
 
-    await supabase.auth.getSession();
-    /** Pause so session cookies persist before redirect (helps first paint on `/onboarding/role-choice`). */
-    await new Promise((r) => setTimeout(r, 500));
+    /**
+     * Brief buffer after verifyOtp; session is already in `otpData.session` for `redirectAfterAuthSessionEstablished`.
+     * Avoids an extra getSession round-trip on the critical path (mobile latency).
+     */
+    await new Promise((r) => setTimeout(r, 150));
 
     const res = await redirectAfterAuthSessionEstablished({
       supabase,

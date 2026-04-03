@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { getClientAuthRedirectOrigin } from "@/lib/auth/email-redirect-origin";
 import { buildAuthCallbackUrl } from "@/lib/auth/oauth-callback-url";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,7 +66,7 @@ export function GoogleSignInButton({
     setLoading(true);
     try {
       const supabase = createBrowserSupabaseClient();
-      const redirectTo = buildAuthCallbackUrl(window.location.origin, {
+      const redirectTo = buildAuthCallbackUrl(getClientAuthRedirectOrigin(), {
         next: resolvedNext,
         ref: referralCode,
       });

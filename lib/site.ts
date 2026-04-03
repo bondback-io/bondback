@@ -19,7 +19,11 @@ function originFromVercelUrl(vercel: string): string | null {
 /**
  * Base origin for Stripe success/cancel redirects, Connect return URLs, and server actions.
  *
- * **Preview deployments:** Uses `VERCEL_URL` so redirects return to the same host as the
+ * **Not** used for Supabase `redirectTo` / `emailRedirectTo` from the browser — those use
+ * `getClientAuthEmailRedirectOrigin` in `lib/auth/email-redirect-origin.ts` so preview
+ * hostnames never pollute Supabase Dashboard redirect allowlists.
+ *
+ * **Preview deployments:** Uses `VERCEL_URL` so Stripe returns to the same host as the
  * user’s session cookies. If `NEXT_PUBLIC_APP_URL` pointed at production while testing on a
  * preview URL, Stripe would send users to production without a session → login loop.
  *

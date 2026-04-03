@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+/** Public site host — keep Supabase Auth “Redirect URLs” to `https://www.bondback.io/**` only (+ localhost). */
 const CANONICAL_WWW_HOST = "www.bondback.io";
 
 /** Apex → www so OAuth, cookies, and NEXT_PUBLIC_APP_URL stay aligned with https://www.bondback.io */

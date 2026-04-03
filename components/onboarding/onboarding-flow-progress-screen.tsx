@@ -1,8 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/** ms between step label advances — snappier on narrow viewports (typical phones). */
+function useAuthStepIntervalMs(): number {
+  const [ms, setMs] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches
+      ? 680
+      : 900
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const apply = () => setMs(mq.matches ? 680 : 900);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  return ms;
+}
 
 const AUTH_STEPS = [
   "Confirming your email…",
@@ -56,20 +73,21 @@ export function OnboardingRouteLoadingFallback() {
   );
 }
 
-export function OnboardingFlowProgressScreen({
+function OnboardingFlowProgressScreenInner({
   authReady,
   roleTransition,
   className,
 }: OnboardingFlowProgressScreenProps) {
   const [stepIndex, setStepIndex] = useState(0);
+  const stepMs = useAuthStepIntervalMs();
 
   useEffect(() => {
     if (authReady) return;
     const id = window.setInterval(() => {
       setStepIndex((i) => Math.min(i + 1, AUTH_STEPS.length - 1));
-    }, 1000);
+    }, stepMs);
     return () => clearInterval(id);
-  }, [authReady]);
+  }, [authReady, stepMs]);
 
   if (roleTransition) {
     return (
@@ -157,11 +175,11 @@ export function OnboardingFlowProgressScreen({
             <Loader2 className="relative h-8 w-8 text-primary sm:h-9 sm:w-9" strokeWidth={1.75} aria-hidden />
           </div>
           <div className="space-y-3">
-            <p className="min-h-[1.5rem] text-base font-medium text-foreground transition-all duration-300 dark:text-gray-100">
+            <p className="min-h-[1.5rem] text-base font-medium text-foreground transition-[opacity,transform] duration-200 dark:text-gray-100">
               {AUTH_STEPS[stepIndex]}
             </p>
-            <p className="text-sm text-muted-foreground dark:text-gray-400">
-              This usually takes just a moment — stay on this screen.
+            <p className="text-sm text-muted-foreground dark:text-gray-400 max-sm:text-[0.8125rem]">
+              Almost there — stay on this screen.
             </p>
           </div>
           <ol className="flex w-full max-w-[18rem] justify-center gap-2 sm:gap-2.5" aria-hidden>
@@ -169,7 +187,7 @@ export function OnboardingFlowProgressScreen({
               <li
                 key={i}
                 className={cn(
-                  "h-2 flex-1 max-w-[3.5rem] rounded-full transition-all duration-500",
+                  "h-2 flex-1 max-w-[3.5rem] rounded-full transition-colors duration-300 ease-out",
                   i <= stepIndex ? "bg-primary/85 dark:bg-primary/75" : "bg-muted dark:bg-gray-800"
                 )}
               />
@@ -180,3 +198,5 @@ export function OnboardingFlowProgressScreen({
     </div>
   );
 }
+
+export const OnboardingFlowProgressScreen = memo(OnboardingFlowProgressScreenInner);

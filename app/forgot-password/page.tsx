@@ -7,6 +7,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { getClientAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ function ForgotPasswordForm() {
     setInfo(null);
     setIsSubmitting(true);
     const supabase = createBrowserSupabaseClient();
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const origin = getClientAuthEmailRedirectOrigin();
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         values.email.trim(),
