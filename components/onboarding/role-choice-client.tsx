@@ -5,9 +5,11 @@
  * the UI renders immediately (no client polling). Otherwise one `onAuthStateChange` + initial `getSession`.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { markPostLoginFullPageNavigation } from "@/lib/auth/post-login-navigation-flag";
+import { isAuthPerfDev } from "@/lib/auth/auth-perf-dev";
 import { saveRoleChoice, upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
 import { PENDING_MINIMAL_PROFILE_KEY } from "@/components/onboarding/onboarding-storage";
 import { OnboardingFlowProgressScreen } from "@/components/onboarding/onboarding-flow-progress-screen";
@@ -21,6 +23,10 @@ export type RoleChoiceClientProps = {
 export function RoleChoiceClient({ serverSessionReady }: RoleChoiceClientProps) {
   const router = useRouter();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const mountedAtRef = useRef<number | null>(null);
+  if (mountedAtRef.current === null) {
+    mountedAtRef.current = Date.now();
+  }
   const [error, setError] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(serverSessionReady);
   const [savingChoice, setSavingChoice] = useState<"lister" | "cleaner" | null>(null);
@@ -29,6 +35,11 @@ export function RoleChoiceClient({ serverSessionReady }: RoleChoiceClientProps) 
     title: string;
     subtitle: string;
   } | null>(null);
+
+  useEffect(() => {
+    /** Skip SessionSync’s debounced `router.refresh()` right after email-confirm full navigation (saves layout+RSC churn). */
+    markPostLoginFullPageNavigation();
+  }, []);
 
   useEffect(() => {
     const {
@@ -53,10 +64,19 @@ export function RoleChoiceClient({ serverSessionReady }: RoleChoiceClientProps) 
   }, [serverSessionReady, supabase, router]);
 
   useEffect(() => {
+    if (!authReady || !isAuthPerfDev || mountedAtRef.current === null) return;
+    console.info("[auth:perf] role-choice:authReady → role UI", {
+      msSinceClientMount: Date.now() - mountedAtRef.current,
+      serverSessionReady,
+    });
+  }, [authReady, serverSessionReady]);
+
+  useEffect(() => {
     if (!authReady) return;
 
     let cancelled = false;
-    void (async () => {
+    const run = () => {
+      void (async () => {
       let raw: string | null = null;
       try {
         raw = localStorage.getItem(PENDING_MINIMAL_PROFILE_KEY);
@@ -93,9 +113,12 @@ export function RoleChoiceClient({ serverSessionReady }: RoleChoiceClientProps) 
         }
       }
     })();
+    };
 
+    const t = window.setTimeout(run, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(t);
     };
   }, [authReady]);
 

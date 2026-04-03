@@ -9,6 +9,7 @@ import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import { sendWelcomeEmailAfterEmailVerification } from "@/lib/actions/onboarding-transactional-emails";
+import { authPerfDevLog, isAuthPerfDev } from "@/lib/auth/auth-perf-dev";
 
 type SessionFinalizeParams = {
   /** Matches `@supabase/ssr` server client (differs from bare `SupabaseClient<Database>` generics). */
@@ -73,14 +74,19 @@ export async function redirectAfterAuthSessionEstablished(
   } = params;
   const origin = request.nextUrl.origin;
   const next = sanitizeInternalNextPath(nextRaw, "/dashboard");
+  const callbackT0 = Date.now();
 
   /** Prefer session from exchange/verify — cookie jar may not be readable yet in this request. */
   let sessionFromCookies: Session | null = null;
   let session: Session | null = sessionFromAuth?.user?.id ? sessionFromAuth : null;
   if (!session?.user?.id) {
+    const getSessionT0 = Date.now();
     const {
       data: { session: fromCookie },
     } = await supabase.auth.getSession();
+    authPerfDevLog("auth-callback-session:getSession_fallback", {
+      ms: Date.now() - getSessionT0,
+    });
     sessionFromCookies = fromCookie?.user?.id ? fromCookie : null;
     session = sessionFromCookies;
   }
@@ -107,6 +113,7 @@ export async function redirectAfterAuthSessionEstablished(
   }
 
   const provider = session.user.app_metadata?.provider;
+  const upsertT0 = Date.now();
   if (provider === "google") {
     const fields = extractGoogleProfileFields(session.user);
     await upsertMinimalProfileAfterSignup(
@@ -142,12 +149,22 @@ export async function redirectAfterAuthSessionEstablished(
       { sessionOverride: session }
     );
   }
+  authPerfDevLog("auth-callback-session:minimal_profile_upsert", {
+    ms: Date.now() - upsertT0,
+    provider: provider === "google" ? "google" : "email",
+  });
 
+  const profileT0 = Date.now();
   const { data: profile } = await supabase
     .from("profiles")
     .select("is_banned, banned_reason, roles, active_role")
     .eq("id", session.user.id)
     .maybeSingle();
+  const profileMs = Date.now() - profileT0;
+  authPerfDevLog("auth-callback-session:profiles_select", { ms: profileMs });
+  if (isAuthPerfDev && profileMs > 800) {
+    console.warn("[auth:perf] auth-callback-session:profiles_select_SLOW", { ms: profileMs });
+  }
   const p = profile as {
     is_banned?: boolean;
     banned_reason?: string | null;
@@ -213,5 +230,6 @@ export async function redirectAfterAuthSessionEstablished(
     }, 0);
   }
 
+  authPerfDevLog("auth-callback-session:total", { ms: Date.now() - callbackT0 });
   return redirectWithAuthCookies(authCookieResponse, new URL(redirectTo, origin));
 }

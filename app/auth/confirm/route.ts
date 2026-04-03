@@ -3,6 +3,7 @@ import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
 import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
+import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
  * the redirect. Keeps the browser’s next navigation consistent without stacking multiple delays.
  * Capped at 400ms per product requirements.
  */
-const POST_AUTH_COOKIE_SYNC_MS = 280;
+const POST_AUTH_COOKIE_SYNC_MS = 150;
 
 async function waitForAuthCookieSync(): Promise<void> {
   await new Promise((r) => setTimeout(r, POST_AUTH_COOKIE_SYNC_MS));
@@ -154,7 +155,7 @@ export async function GET(request: NextRequest) {
         error ||
         "Email confirmation was cancelled or could not be completed.";
       console.warn("[auth/confirm] oauth_error", { error, error_code, msg });
-      return confirmErrorRedirect(origin, msg, "oauth_error");
+      return confirmErrorRedirect(origin, msg, "oauth_error", emailHint);
     }
 
     if (!code && !token_hash) {
@@ -176,7 +177,12 @@ export async function GET(request: NextRequest) {
 
     if (code) {
       console.log("[auth/confirm] pkce_exchange_start", { code_preview: `${code.slice(0, 8)}…` });
+      const pkceT0 = Date.now();
       const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      authPerfDevLog("auth/confirm:exchangeCodeForSession", {
+        ms: Date.now() - pkceT0,
+        ok: !exchangeError,
+      });
 
       if (exchangeError) {
         console.error("[auth/confirm] exchangeCodeForSession_failed", {
@@ -195,8 +201,11 @@ export async function GET(request: NextRequest) {
         hasSession: Boolean(exchangeData.session),
       });
 
+      const syncPkceT0 = Date.now();
       await waitForAuthCookieSync();
+      authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncPkceT0 });
 
+      const finalizePkceT0 = Date.now();
       const res = await redirectAfterAuthSessionEstablished({
         supabase,
         request,
@@ -206,10 +215,15 @@ export async function GET(request: NextRequest) {
         authCookieResponse,
         sessionFromAuth: exchangeData.session ?? null,
       });
+      authPerfDevLog("auth/confirm:redirectAfterAuthSessionEstablished", {
+        ms: Date.now() - finalizePkceT0,
+        source: "pkce",
+      });
       console.log("[auth/confirm] redirect_after_session", {
         source: "pkce",
         location: res.headers.get("location"),
       });
+      authPerfDevLog("auth/confirm:GET_total", { ms: Date.now() - started });
       return noStoreHeaders(res);
     }
 
@@ -219,8 +233,14 @@ export async function GET(request: NextRequest) {
       typeFromQuery,
     });
 
+    const verifyT0 = Date.now();
     const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
       token_hash: token_hash!,
+      type: resolvedOtpType,
+    });
+    authPerfDevLog("auth/confirm:verifyOtp", {
+      ms: Date.now() - verifyT0,
+      ok: !otpError,
       type: resolvedOtpType,
     });
 
@@ -247,8 +267,11 @@ export async function GET(request: NextRequest) {
       ms: Date.now() - started,
     });
 
+    const syncT0 = Date.now();
     await waitForAuthCookieSync();
+    authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncT0 });
 
+    const finalizeT0 = Date.now();
     const res = await redirectAfterAuthSessionEstablished({
       supabase,
       request,
@@ -258,10 +281,15 @@ export async function GET(request: NextRequest) {
       authCookieResponse,
       sessionFromAuth: session ?? null,
     });
+    authPerfDevLog("auth/confirm:redirectAfterAuthSessionEstablished", {
+      ms: Date.now() - finalizeT0,
+      source: "verifyOtp",
+    });
     console.log("[auth/confirm] redirect_after_session", {
       source: "verifyOtp",
       location: res.headers.get("location"),
     });
+    authPerfDevLog("auth/confirm:GET_total", { ms: Date.now() - started });
     return noStoreHeaders(res);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

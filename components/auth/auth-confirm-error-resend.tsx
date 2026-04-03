@@ -1,15 +1,34 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Loader2, Mail } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { getClientAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
+import {
+  CANONICAL_AUTH_PUBLIC_ORIGIN,
+  getClientAuthEmailRedirectOrigin,
+} from "@/lib/auth/email-redirect-origin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+/**
+ * Absolute URL for `emailRedirectTo` — must work during SSR (no `window`) and in the browser.
+ * Empty origin + `new URL("/auth/confirm")` is invalid and breaks Supabase resend validation.
+ */
 function buildAuthConfirmRedirectUrl(): string {
-  const origin = getClientAuthEmailRedirectOrigin();
+  let origin = getClientAuthEmailRedirectOrigin();
+  if (!origin) {
+    const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
+    if (explicit) {
+      try {
+        origin = new URL(explicit.replace(/\/$/, "")).origin;
+      } catch {
+        origin = CANONICAL_AUTH_PUBLIC_ORIGIN;
+      }
+    } else {
+      origin = CANONICAL_AUTH_PUBLIC_ORIGIN;
+    }
+  }
   const u = new URL(`${origin}/auth/confirm`);
   u.searchParams.set("next", "/dashboard");
   return u.toString();
@@ -30,7 +49,9 @@ export function AuthConfirmErrorResend({ initialEmail = "" }: AuthConfirmErrorRe
   const [hint, setHint] = useState<string | null>(null);
   const [sentOnce, setSentOnce] = useState(false);
 
-  const emailRedirectTo = useMemo(() => buildAuthConfirmRedirectUrl(), []);
+  useEffect(() => {
+    setEmail(initialEmail.trim());
+  }, [initialEmail]);
 
   const handleResend = useCallback(async () => {
     const trimmed = email.trim();
@@ -38,6 +59,8 @@ export function AuthConfirmErrorResend({ initialEmail = "" }: AuthConfirmErrorRe
     setHint(null);
     setLoading(true);
     try {
+      /** Build at click time so `window` + env always produce a valid allowlisted URL for Supabase. */
+      const emailRedirectTo = buildAuthConfirmRedirectUrl();
       const supabase = createBrowserSupabaseClient();
       const { error } = await supabase.auth.resend({
         type: "signup",
@@ -50,10 +73,12 @@ export function AuthConfirmErrorResend({ initialEmail = "" }: AuthConfirmErrorRe
       }
       setSentOnce(true);
       setHint("We sent a new confirmation link. Check your inbox and spam folder, then open the latest email.");
+    } catch (e) {
+      setHint(e instanceof Error ? e.message : "Something went wrong. Try again in a moment.");
     } finally {
       setLoading(false);
     }
-  }, [email, emailRedirectTo, sentOnce]);
+  }, [email, sentOnce]);
 
   return (
     <div className="space-y-4 rounded-xl border border-primary/25 bg-primary/[0.04] px-4 py-4 dark:border-primary/30 dark:bg-primary/[0.06]">

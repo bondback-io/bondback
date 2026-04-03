@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { scheduleRouterAction } from "@/lib/deferred-router";
-import { shouldSkipSignInSessionRefresh } from "@/lib/auth/post-login-navigation-flag";
+import {
+  markPostLoginFullPageNavigation,
+  shouldSkipSignInSessionRefresh,
+} from "@/lib/auth/post-login-navigation-flag";
 
 /** Debounce rapid auth events (OAuth emits several); one coalesced RSC refresh. */
 const SIGN_IN_DEBOUNCE_MS = 600;
@@ -24,10 +27,16 @@ const MIN_REFRESH_GAP_MS = 2800;
  */
 export function SessionSync() {
   const router = useRouter();
+  const pathname = usePathname();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRefreshAtRef = useRef(0);
 
   useEffect(() => {
+    /** Before auth events fire: avoid SIGNED_IN vs RoleChoiceClient mount race on iOS (SessionSync runs first in tree). */
+    if (pathname.startsWith("/onboarding")) {
+      markPostLoginFullPageNavigation();
+    }
+
     const runRefresh = () => {
       const now = Date.now();
       if (now - lastRefreshAtRef.current < MIN_REFRESH_GAP_MS) {
@@ -77,6 +86,14 @@ export function SessionSync() {
         if (shouldSkipSignInSessionRefresh()) {
           return;
         }
+        /**
+         * Full document load to `/onboarding/*` (e.g. email confirm → role-choice) already
+         * delivers fresh RSC + cookies. A debounced `router.refresh()` here duplicates work and
+         * stalls weak devices / iOS Safari; skip unless user client-navigates from elsewhere.
+         */
+        if (pathname.startsWith("/onboarding")) {
+          return;
+        }
         scheduleSignInRefresh();
         return;
       }
@@ -88,7 +105,7 @@ export function SessionSync() {
       subscription.unsubscribe();
       if (debounceRef.current != null) clearTimeout(debounceRef.current);
     };
-  }, [router]);
+  }, [pathname, router]);
 
   return null;
 }

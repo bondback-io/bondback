@@ -73,17 +73,27 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // Refresh session (e.g. after long Stripe Checkout) so JWT is valid before getUser
+  const pathname = request.nextUrl.pathname;
+
+  /**
+   * Always refresh the session cookie (cheap local read + optional refresh).
+   * Only call `getUser()` (network JWT validation) for **protected** routes — skipping it on
+   * `/auth/confirm`, `/login`, marketing pages, etc. removes a full Supabase Auth round-trip
+   * on every navigation. That round-trip is especially painful on mobile Safari / iOS Mail → Safari.
+   */
   await supabase.auth.getSession();
+
+  if (!isProtected(pathname)) {
+    return supabaseResponse;
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (isProtected(request.nextUrl.pathname) && !user) {
+  if (!user) {
     const loginUrl = new URL("/login", request.url);
-    const nextDest =
-      request.nextUrl.pathname +
-      (request.nextUrl.search ?? "");
+    const nextDest = pathname + (request.nextUrl.search ?? "");
     loginUrl.searchParams.set("next", nextDest);
     return NextResponse.redirect(loginUrl);
   }

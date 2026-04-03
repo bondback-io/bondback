@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getSessionWithProfile } from "@/lib/supabase/session";
+import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
 import { OnboardingRouteLoadingFallback } from "@/components/onboarding/onboarding-flow-progress-screen";
 import { RoleChoiceClient } from "@/components/onboarding/role-choice-client";
 
@@ -16,37 +17,23 @@ export const metadata: Metadata = {
 };
 
 export default async function RoleChoicePage() {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const rscT0 = Date.now();
+  /**
+   * Same cached fetch as root layout — avoids a second `getSession` + `profiles` round-trip
+   * on this navigation (major win after email confirm when layout + page both need session).
+   */
+  const sessionData = await getSessionWithProfile();
+  authPerfDevLog("onboarding/role-choice:getSessionWithProfile", {
+    ms: Date.now() - rscT0,
+    note: "React.cache — same request as layout; second call is ~0ms",
+  });
 
-  if (!session) {
+  if (!sessionData) {
     redirect("/login?next=/onboarding/role-choice");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("roles, active_role")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
-  const row = profile as { roles?: unknown; active_role?: unknown } | null;
-  const raw = row?.roles;
-  let roles: string[] = [];
-  if (Array.isArray(raw)) {
-    roles = raw as string[];
-  } else if (typeof raw === "string") {
-    try {
-      const p = JSON.parse(raw) as unknown;
-      if (Array.isArray(p)) roles = p as string[];
-    } catch {
-      roles = [];
-    }
-  }
-
-  const hasActiveRole =
-    typeof row?.active_role === "string" && row.active_role.trim().length > 0;
+  const { roles, activeRole } = sessionData;
+  const hasActiveRole = activeRole != null;
   if (roles.length > 0 && hasActiveRole) {
     redirect("/dashboard");
   }

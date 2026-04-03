@@ -5,7 +5,8 @@
  */
 const STORAGE_KEY = "bb_skip_sign_in_refresh_until";
 
-const TTL_MS = 6000;
+/** Long enough for slow mobile networks + iOS WebKit after email-link full-page loads. */
+const TTL_MS = 12_000;
 
 export function markPostLoginFullPageNavigation(): void {
   if (typeof window === "undefined") return;
