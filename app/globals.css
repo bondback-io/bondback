@@ -10,6 +10,9 @@
      * Light-mode chrome: soft sky-tinted surfaces for nav, sheets, and menus.
      * Dark mode keeps existing gray stack via .dark overrides below.
      */
+    /** Top header only — slightly richer blue than generic chrome; keeps text/icons readable */
+    --nav-header-surface: 212 58% 91%;
+    --nav-header-border: 214 46% 80%;
     --chrome-surface: 210 55% 97%;
     --chrome-border: 214 42% 88%;
     --chrome-elevated: 210 48% 99%;

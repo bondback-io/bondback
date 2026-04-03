@@ -55,6 +55,8 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))"
         },
         /** Nav / sheets / menus — see `app/globals.css` */
+        navHeaderSurface: "hsl(var(--nav-header-surface))",
+        navHeaderBorder: "hsl(var(--nav-header-border))",
         chromeSurface: "hsl(var(--chrome-surface))",
         chromeBorder: "hsl(var(--chrome-border))",
         chromeElevated: "hsl(var(--chrome-elevated))",
