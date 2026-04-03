@@ -6,6 +6,18 @@ import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-ot
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Single buffer after `verifyOtp` / `exchangeCodeForSession` so Supabase `Set-Cookie` on the
+ * route `response` is settled before `redirectAfterAuthSessionEstablished` copies cookies onto
+ * the redirect. Keeps the browser’s next navigation consistent without stacking multiple delays.
+ * Capped at 400ms per product requirements.
+ */
+const POST_AUTH_COOKIE_SYNC_MS = 280;
+
+async function waitForAuthCookieSync(): Promise<void> {
+  await new Promise((r) => setTimeout(r, POST_AUTH_COOKIE_SYNC_MS));
+}
+
 function noStoreHeaders(res: NextResponse) {
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
   res.headers.set("Pragma", "no-cache");
@@ -18,10 +30,18 @@ function redactTokenHash(token: string | null): string | null {
   return `${token.slice(0, 4)}…${token.slice(-4)} (len=${token.length})`;
 }
 
-function confirmErrorRedirect(origin: string, message: string, reason?: string) {
+function confirmErrorRedirect(
+  origin: string,
+  message: string,
+  reason?: string,
+  /** Forward from confirm link `?email=` when present so the error page can prefill resend. */
+  emailHint?: string | null
+) {
   const url = new URL("/auth/confirm/error", origin);
   url.searchParams.set("message", message);
   if (reason) url.searchParams.set("reason", reason);
+  const trimmed = emailHint?.trim();
+  if (trimmed) url.searchParams.set("email", trimmed);
   const res = NextResponse.redirect(url);
   return noStoreHeaders(res);
 }
@@ -111,6 +131,7 @@ export async function GET(request: NextRequest) {
   const next = sanitizeInternalNextPath(searchParams.get("next"), "/dashboard");
   const signupFlow = searchParams.get("flow");
   const refParam = searchParams.get("ref");
+  const emailHint = searchParams.get("email")?.trim() || null;
 
   console.log("[auth/confirm] GET incoming", {
     fullUrl: fullUrl.slice(0, 2000),
@@ -144,7 +165,8 @@ export async function GET(request: NextRequest) {
       return confirmErrorRedirect(
         origin,
         "This confirmation link is missing a token. Open the latest email from Bond Back, or request a new confirmation link from the sign-up page.",
-        "missing_token"
+        "missing_token",
+        emailHint
       );
     }
 
@@ -164,7 +186,7 @@ export async function GET(request: NextRequest) {
           status: exchangeError.status,
         });
         const { userMessage, reason } = mapExchangeFailure(exchangeError as AuthLikeError);
-        return confirmErrorRedirect(origin, userMessage, reason);
+        return confirmErrorRedirect(origin, userMessage, reason, emailHint);
       }
 
       console.log("[auth/confirm] exchangeCodeForSession_ok", {
@@ -173,11 +195,7 @@ export async function GET(request: NextRequest) {
         hasSession: Boolean(exchangeData.session),
       });
 
-      /**
-       * Short buffer so Set-Cookie headers from exchange are ordered before redirect response.
-       * `redirectAfterAuthSessionEstablished` receives `sessionFromAuth` — no extra getSession here (saves latency).
-       */
-      await new Promise((r) => setTimeout(r, 150));
+      await waitForAuthCookieSync();
 
       const res = await redirectAfterAuthSessionEstablished({
         supabase,
@@ -216,7 +234,7 @@ export async function GET(request: NextRequest) {
         ms: Date.now() - started,
       });
       const { userMessage, reason } = mapVerifyOtpFailure(otpError as AuthLikeError);
-      return confirmErrorRedirect(origin, userMessage, reason);
+      return confirmErrorRedirect(origin, userMessage, reason, emailHint);
     }
 
     const session = otpData.session;
@@ -229,11 +247,7 @@ export async function GET(request: NextRequest) {
       ms: Date.now() - started,
     });
 
-    /**
-     * Brief buffer after verifyOtp; session is already in `otpData.session` for `redirectAfterAuthSessionEstablished`.
-     * Avoids an extra getSession round-trip on the critical path (mobile latency).
-     */
-    await new Promise((r) => setTimeout(r, 150));
+    await waitForAuthCookieSync();
 
     const res = await redirectAfterAuthSessionEstablished({
       supabase,
@@ -258,7 +272,8 @@ export async function GET(request: NextRequest) {
     return confirmErrorRedirect(
       origin,
       "Something went wrong confirming your email. Try the link again or log in from the sign-up page.",
-      "exception"
+      "exception",
+      emailHint
     );
   }
 }

@@ -1,32 +1,9 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-/** ms between step label advances — snappier on narrow viewports (typical phones). */
-function useAuthStepIntervalMs(): number {
-  const [ms, setMs] = useState(() =>
-    typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches
-      ? 680
-      : 900
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const apply = () => setMs(mq.matches ? 680 : 900);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
-  return ms;
-}
-
-const AUTH_STEPS = [
-  "Confirming your email…",
-  "Logging you in…",
-  "Preparing your profile…",
-  "Loading role selection…",
-] as const;
+import { AuthEmailConfirmTransitionLoader } from "@/components/onboarding/auth-email-confirm-transition-loader";
 
 type RoleTransitionCopy = {
   title: string;
@@ -78,17 +55,6 @@ function OnboardingFlowProgressScreenInner({
   roleTransition,
   className,
 }: OnboardingFlowProgressScreenProps) {
-  const [stepIndex, setStepIndex] = useState(0);
-  const stepMs = useAuthStepIntervalMs();
-
-  useEffect(() => {
-    if (authReady) return;
-    const id = window.setInterval(() => {
-      setStepIndex((i) => Math.min(i + 1, AUTH_STEPS.length - 1));
-    }, stepMs);
-    return () => clearInterval(id);
-  }, [authReady, stepMs]);
-
   if (roleTransition) {
     return (
       <div
@@ -142,61 +108,7 @@ function OnboardingFlowProgressScreenInner({
 
   if (authReady) return null;
 
-  return (
-    <div
-      className={cn(
-        "relative flex min-h-[calc(100dvh-6rem)] w-full max-w-lg flex-col items-center justify-center gap-8 overflow-hidden px-4 py-16 sm:max-w-2xl md:max-w-4xl",
-        className
-      )}
-      aria-live="polite"
-      aria-busy="true"
-      role="status"
-    >
-      <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/[0.05] via-transparent to-muted/20 dark:from-primary/10 dark:to-gray-950/60"
-        aria-hidden
-      />
-      <div className="relative flex w-full max-w-md flex-col items-center text-center">
-        <p className="text-xl font-semibold tracking-tight text-primary sm:text-2xl">Bond Back</p>
-        <p className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-          Getting you set up
-        </p>
-        <div className="relative mt-10 flex flex-col items-center gap-6">
-          <div className="relative flex h-16 w-16 items-center justify-center sm:h-[4.5rem] sm:w-[4.5rem]">
-            <span
-              className="absolute inset-0 rounded-full border-2 border-primary/20 dark:border-primary/30"
-              aria-hidden
-            />
-            <span
-              className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary border-r-primary/35 dark:border-t-primary/85"
-              style={{ animationDuration: "1.15s" }}
-              aria-hidden
-            />
-            <Loader2 className="relative h-8 w-8 text-primary sm:h-9 sm:w-9" strokeWidth={1.75} aria-hidden />
-          </div>
-          <div className="space-y-3">
-            <p className="min-h-[1.5rem] text-base font-medium text-foreground transition-[opacity,transform] duration-200 dark:text-gray-100">
-              {AUTH_STEPS[stepIndex]}
-            </p>
-            <p className="text-sm text-muted-foreground dark:text-gray-400 max-sm:text-[0.8125rem]">
-              Almost there — stay on this screen.
-            </p>
-          </div>
-          <ol className="flex w-full max-w-[18rem] justify-center gap-2 sm:gap-2.5" aria-hidden>
-            {AUTH_STEPS.map((_, i) => (
-              <li
-                key={i}
-                className={cn(
-                  "h-2 flex-1 max-w-[3.5rem] rounded-full transition-colors duration-300 ease-out",
-                  i <= stepIndex ? "bg-primary/85 dark:bg-primary/75" : "bg-muted dark:bg-gray-800"
-                )}
-              />
-            ))}
-          </ol>
-        </div>
-      </div>
-    </div>
-  );
+  return <AuthEmailConfirmTransitionLoader variant="full" className={className} />;
 }
 
 export const OnboardingFlowProgressScreen = memo(OnboardingFlowProgressScreenInner);

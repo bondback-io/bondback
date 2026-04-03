@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AuthConfirmErrorResend } from "@/components/auth/auth-confirm-error-resend";
 
 function firstMessage(
   sp: Record<string, string | string[] | undefined>
@@ -20,6 +21,18 @@ function firstReason(sp: Record<string, string | string[] | undefined>): string 
   return typeof s === "string" && s.trim() ? s.trim() : null;
 }
 
+function firstOptionalEmail(sp: Record<string, string | string[] | undefined>): string | undefined {
+  const v = sp.email;
+  if (v === undefined) return undefined;
+  const s = Array.isArray(v) ? v[0] : v;
+  if (typeof s !== "string" || !s.trim()) return undefined;
+  try {
+    return decodeURIComponent(s.trim());
+  } catch {
+    return s.trim();
+  }
+}
+
 export default async function AuthConfirmErrorPage({
   searchParams,
 }: {
@@ -28,8 +41,11 @@ export default async function AuthConfirmErrorPage({
   const sp = await searchParams;
   const message = firstMessage(sp);
   const reason = firstReason(sp);
+  const optionalEmail = firstOptionalEmail(sp);
   const isMissingToken = reason === "missing_token";
   const isAlreadyUsed = reason === "already_used";
+  /** Second tap / expired OTP — offer resend. Hide for “already used” (try log in). */
+  const showResendConfirmation = !isAlreadyUsed;
 
   return (
     <section className="page-inner flex min-h-[70vh] flex-col items-center justify-center px-4 py-10">
@@ -60,6 +76,9 @@ export default async function AuthConfirmErrorPage({
               Your account may already be active. Use <strong>Log in</strong> with the same email and password you
               registered with.
             </p>
+          ) : null}
+          {showResendConfirmation ? (
+            <AuthConfirmErrorResend initialEmail={optionalEmail ?? ""} />
           ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button asChild className="min-h-12 w-full text-base font-semibold sm:flex-1" size="lg">

@@ -51,10 +51,11 @@ export default async function RoleChoicePage() {
     redirect("/dashboard");
   }
 
+  /** Session + profile already validated above — client can render role UI without waiting on browser `getSession`. */
   return (
     <section className="page-inner flex min-h-[60vh] flex-col items-center justify-center">
       <Suspense fallback={<OnboardingRouteLoadingFallback />}>
-        <RoleChoiceClient />
+        <RoleChoiceClient serverSessionReady />
       </Suspense>
     </section>
   );
