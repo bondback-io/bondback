@@ -192,6 +192,11 @@ function SignupForm() {
         password: values.password,
         options: {
           emailRedirectTo: confirmUrl,
+          data: {
+            full_name: values.fullName.trim(),
+            suburb: suburb ?? "",
+            postcode: postcode ?? "",
+          },
         },
       });
 

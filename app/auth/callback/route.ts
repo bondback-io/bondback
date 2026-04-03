@@ -56,6 +56,7 @@ export const GET = async (request: NextRequest) => {
       signupFlow,
       refParam,
       authCookieResponse,
+      sessionFromAuth: exchangeData.session ?? null,
     });
   }
 

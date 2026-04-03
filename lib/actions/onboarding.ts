@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Session } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
@@ -74,21 +75,34 @@ export async function saveOnboardingProfile(profile: {
  * until the user picks lister vs cleaner on `/onboarding/role-choice`.
  * Preserves dual-role backend; first concrete role is applied in `saveRoleChoice`.
  */
-export async function upsertMinimalProfileAfterSignup(input: {
-  full_name: string;
-  postcode: string | null;
-  suburb?: string | null;
-  referralCode?: string | null;
-  /** Google OAuth given_name / family_name / picture when present. */
-  first_name?: string | null;
-  last_name?: string | null;
-  avatar_url?: string | null;
-}): Promise<SaveOnboardingResult> {
+export async function upsertMinimalProfileAfterSignup(
+  input: {
+    full_name: string;
+    postcode: string | null;
+    suburb?: string | null;
+    referralCode?: string | null;
+    /** Google OAuth given_name / family_name / picture when present. */
+    first_name?: string | null;
+    last_name?: string | null;
+    avatar_url?: string | null;
+  },
+  opts?: {
+    /**
+     * Use when the caller already has a verified session (e.g. `/auth/confirm` right after
+     * `exchangeCodeForSession`) — cookies may not be on the request yet, so `getSession()` can miss.
+     */
+    sessionOverride?: Session | null;
+  }
+): Promise<SaveOnboardingResult> {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) {
+  let session: Session | null = opts?.sessionOverride?.user?.id ? opts.sessionOverride : null;
+  if (!session?.user?.id) {
+    const {
+      data: { session: fromCookie },
+    } = await supabase.auth.getSession();
+    session = fromCookie?.user?.id ? fromCookie : null;
+  }
+  if (!session?.user?.id) {
     return { ok: false, error: "You must be logged in." };
   }
 

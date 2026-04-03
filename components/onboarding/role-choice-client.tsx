@@ -65,11 +65,13 @@ export function RoleChoiceClient() {
         return;
       }
 
+      /** Profile is created on `/auth/confirm` — unblock role buttons immediately (no long await). */
+      if (!cancelled) setSyncing(false);
+
       let raw: string | null = null;
       try {
         raw = localStorage.getItem(PENDING_MINIMAL_PROFILE_KEY);
       } catch {
-        if (!cancelled) setSyncing(false);
         return;
       }
 
@@ -82,17 +84,18 @@ export function RoleChoiceClient() {
             referralCode?: string | null;
           };
           if (payload?.full_name?.trim()) {
-            await upsertMinimalProfileAfterSignup({
+            void upsertMinimalProfileAfterSignup({
               full_name: payload.full_name,
               suburb: payload.suburb ?? null,
               postcode: payload.postcode ?? null,
               referralCode: payload.referralCode ?? null,
+            }).then(() => {
+              try {
+                localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
+              } catch {
+                /* ignore */
+              }
             });
-            try {
-              localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
-            } catch {
-              /* ignore */
-            }
           }
         } catch {
           try {
@@ -102,8 +105,6 @@ export function RoleChoiceClient() {
           }
         }
       }
-
-      if (!cancelled) setSyncing(false);
     })();
 
     return () => {

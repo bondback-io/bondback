@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
   AU_STATES,
   filterSuburbs,
@@ -30,6 +31,11 @@ export type SuburbPostcodeAutocompleteProps = {
   error?: string;
   /** When true, only suburb/postcode field is shown; all states are searched (optional state filter). */
   hideStateSelect?: boolean;
+  /**
+   * When true, suggestions come from the `suburbs` table (same as new listing / find jobs).
+   * Defaults to `hideStateSelect` so signup gets full DB coverage; set false to use the static list only.
+   */
+  useDatabaseSuburbs?: boolean;
   /** Override default "Suburb & postcode" label */
   label?: string;
   className?: string;
@@ -57,6 +63,7 @@ export function SuburbPostcodeAutocomplete({
   disabled,
   error,
   hideStateSelect = false,
+  useDatabaseSuburbs = hideStateSelect,
   label = "Suburb & postcode",
   className,
   inputClassName,
@@ -66,15 +73,44 @@ export function SuburbPostcodeAutocomplete({
     formatDisplayFromValues(suburbValue, postcodeValue)
   );
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [dbSuggestions, setDbSuggestions] = useState<
+    { suburb: string; postcode: string | number; state: string | null }[]
+  >([]);
+  const [, startSuburbTransition] = useTransition();
   const listRef = useRef<HTMLUListElement>(null);
   const blurCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   useEffect(() => {
     setInputValue(formatDisplayFromValues(suburbValue, postcodeValue));
   }, [suburbValue, postcodeValue]);
 
   const stateCode = stateValue as AuStateCode | undefined;
-  const suggestions = filterSuburbs(inputValue, stateCode ?? null);
+  const staticSuggestions = filterSuburbs(inputValue, stateCode ?? null);
+
+  useEffect(() => {
+    if (!useDatabaseSuburbs) {
+      setDbSuggestions([]);
+      return;
+    }
+    const q = inputValue.trim();
+    if (q.length < 2) {
+      setDbSuggestions([]);
+      return;
+    }
+    startSuburbTransition(async () => {
+      const { data, error } = await supabase
+        .from("suburbs")
+        .select("suburb, postcode, state")
+        .ilike("suburb", `%${q}%`)
+        .order("suburb", { ascending: true })
+        .limit(10);
+      if (!error) setDbSuggestions((data ?? []) as typeof dbSuggestions);
+      else setDbSuggestions([]);
+    });
+  }, [inputValue, supabase, useDatabaseSuburbs]);
+
+  const suggestions = useDatabaseSuburbs ? dbSuggestions : staticSuggestions;
 
   const handleStateChange = useCallback(
     (v: string) => onStateChange(v as AuStateCode),
@@ -82,9 +118,14 @@ export function SuburbPostcodeAutocomplete({
   );
 
   const handleSelect = useCallback(
-    (entry: SuburbEntry) => {
-      onSuburbPostcodeChange(entry.suburb, entry.postcode);
-      setInputValue(`${entry.suburb} ${entry.postcode}`);
+    (
+      entry:
+        | SuburbEntry
+        | { suburb: string; postcode: string | number; state: string | null }
+    ) => {
+      const pc = String(entry.postcode ?? "");
+      onSuburbPostcodeChange(entry.suburb, pc);
+      setInputValue(`${entry.suburb} ${pc}`);
       setOpen(false);
     },
     [onSuburbPostcodeChange]
@@ -132,7 +173,10 @@ export function SuburbPostcodeAutocomplete({
       setHighlightIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const selected = suggestions[highlightIndex];
+      const selected = suggestions[highlightIndex] as
+        | SuburbEntry
+        | { suburb: string; postcode: string | number; state: string | null }
+        | undefined;
       if (selected) handleSelect(selected);
     } else if (e.key === "Escape") {
       setOpen(false);
@@ -203,9 +247,12 @@ export function SuburbPostcodeAutocomplete({
                 aria-label="Suburb suggestions"
                 className="absolute left-0 right-0 z-[100] mt-1 max-h-[min(50vh,16rem)] w-full touch-pan-y overflow-y-auto overscroll-contain rounded-md border border-chromeBorder bg-chromeElevated py-1 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-900"
               >
-                {suggestions.map((s, i) => (
+                {suggestions.map((s, i) => {
+                  const st = "state" in s && s.state != null ? s.state : "";
+                  const key = `${st}-${s.suburb}-${s.postcode}`;
+                  return (
                   <li
-                    key={`${s.state}-${s.suburb}-${s.postcode}`}
+                    key={key}
                     role="option"
                     aria-selected={i === highlightIndex}
                     className={cn(
@@ -217,9 +264,10 @@ export function SuburbPostcodeAutocomplete({
                       handleSelect(s);
                     }}
                   >
-                    {s.suburb}, {s.postcode} ({s.state})
+                    {st ? `${s.suburb}, ${s.postcode} (${st})` : `${s.suburb}, ${s.postcode}`}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>

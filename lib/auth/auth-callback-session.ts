@@ -74,15 +74,16 @@ export async function redirectAfterAuthSessionEstablished(
   const origin = request.nextUrl.origin;
   const next = sanitizeInternalNextPath(nextRaw, "/dashboard");
 
-  const {
-    data: { session: sessionFromCookies },
-  } = await supabase.auth.getSession();
-  const session =
-    sessionFromCookies?.user?.id
-      ? sessionFromCookies
-      : sessionFromAuth?.user?.id
-        ? sessionFromAuth
-        : null;
+  /** Prefer session from exchange/verify — cookie jar may not be readable yet in this request. */
+  let sessionFromCookies: Session | null = null;
+  let session: Session | null = sessionFromAuth?.user?.id ? sessionFromAuth : null;
+  if (!session?.user?.id) {
+    const {
+      data: { session: fromCookie },
+    } = await supabase.auth.getSession();
+    sessionFromCookies = fromCookie?.user?.id ? fromCookie : null;
+    session = sessionFromCookies;
+  }
 
   if (!session?.user?.id) {
     console.warn("[auth-callback-session] no_session_after_auth", {
@@ -108,15 +109,38 @@ export async function redirectAfterAuthSessionEstablished(
   const provider = session.user.app_metadata?.provider;
   if (provider === "google") {
     const fields = extractGoogleProfileFields(session.user);
-    await upsertMinimalProfileAfterSignup({
-      full_name: fields.fullName,
-      postcode: null,
-      referralCode: refParam?.trim() || null,
-      first_name: fields.givenName,
-      last_name: fields.familyName,
-      avatar_url: fields.pictureUrl,
-    });
+    await upsertMinimalProfileAfterSignup(
+      {
+        full_name: fields.fullName,
+        postcode: null,
+        referralCode: refParam?.trim() || null,
+        first_name: fields.givenName,
+        last_name: fields.familyName,
+        avatar_url: fields.pictureUrl,
+      },
+      { sessionOverride: session }
+    );
     await syncGoogleIdentityToProfile(session.user.id, fields);
+  } else {
+    const meta = session.user.user_metadata ?? {};
+    const fullName =
+      (typeof meta.full_name === "string" && meta.full_name.trim()) ||
+      (typeof meta.name === "string" && meta.name.trim()) ||
+      session.user.email?.split("@")[0] ||
+      "User";
+    const suburb =
+      typeof meta.suburb === "string" && meta.suburb.trim() ? meta.suburb.trim() : null;
+    const postcode =
+      typeof meta.postcode === "string" && meta.postcode.trim() ? meta.postcode.trim() : null;
+    await upsertMinimalProfileAfterSignup(
+      {
+        full_name: fullName,
+        suburb,
+        postcode,
+        referralCode: refParam?.trim() || null,
+      },
+      { sessionOverride: session }
+    );
   }
 
   const { data: profile } = await supabase
@@ -154,30 +178,35 @@ export async function redirectAfterAuthSessionEstablished(
   }
 
   if (sendWelcomeEmail && session.user.id) {
-    console.info("[auth-callback-session] email_confirmed_attempting_welcome", {
-      userId: session.user.id,
-      trigger: "auth_redirect_after_verify",
-      note: "non_blocking",
-    });
-    void sendWelcomeEmailAfterEmailVerification({
-      userId: session.user.id,
-      session,
-      trigger: "auth_redirect_after_verify",
-    })
-      .then((result) => {
-        console.info("[auth-callback-session] welcome_email_result", {
-          userId: session.user.id,
-          ok: result.ok,
-          skipped: result.skipped,
-          error: result.error,
-        });
-      })
-      .catch((e) => {
-        console.error("[auth-callback-session] welcome_email_failed", {
-          userId: session.user.id,
-          message: e instanceof Error ? e.message : String(e),
-        });
+    const userId = session.user.id;
+    const sessionForWelcome = session;
+    /** Defer so the redirect response is not blocked by Resend / global_settings / prefs reads. */
+    setTimeout(() => {
+      console.info("[auth-callback-session] email_confirmed_attempting_welcome", {
+        userId,
+        trigger: "auth_redirect_after_verify",
+        note: "deferred",
       });
+      void sendWelcomeEmailAfterEmailVerification({
+        userId,
+        session: sessionForWelcome,
+        trigger: "auth_redirect_after_verify",
+      })
+        .then((result) => {
+          console.info("[auth-callback-session] welcome_email_result", {
+            userId,
+            ok: result.ok,
+            skipped: result.skipped,
+            error: result.error,
+          });
+        })
+        .catch((e) => {
+          console.error("[auth-callback-session] welcome_email_failed", {
+            userId,
+            message: e instanceof Error ? e.message : String(e),
+          });
+        });
+    }, 0);
   }
 
   return redirectWithAuthCookies(authCookieResponse, new URL(redirectTo, origin));
