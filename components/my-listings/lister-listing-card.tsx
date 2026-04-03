@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { BadgeTone } from "@/lib/my-listings/lister-listing-helpers";
+import { NEXT_IMAGE_SIZES_LISTER_LISTING_THUMB } from "@/lib/next-image-sizes";
 
 const toneClasses: Record<BadgeTone, string> = {
   emerald: "border-emerald-200/80 bg-emerald-50 text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/50 dark:text-emerald-100",
@@ -81,7 +82,7 @@ export function ListerListingCard({
             src={cover}
             alt=""
             fill
-            sizes="112px"
+            sizes={NEXT_IMAGE_SIZES_LISTER_LISTING_THUMB}
             className="object-cover"
           />
         </Link>
