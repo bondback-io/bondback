@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { categorizeSupportTicket, type CategorizeResult } from "@/lib/support-categorize";
+import { render } from "@react-email/render";
+import React from "react";
+import { SupportTicketConfirmation } from "@/emails/SupportTicketConfirmation";
 import { sendEmail } from "@/lib/notifications/email";
-import { emailPublicOrigin } from "@/emails/email-public-url";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { SUPPORT_CATEGORY_OPTIONS } from "@/lib/support-categorize";
 
@@ -195,18 +197,21 @@ export async function submitSupportTicket(
   revalidatePath("/support");
   revalidatePath("/admin/support");
 
-  const appUrl = emailPublicOrigin();
   const userName = (session as any).user?.user_metadata?.full_name ?? "there";
-  const confirmHtml = `
-    <p>Hi ${userName},</p>
-    <p>We&apos;ve got your message — thanks for reaching out.</p>
-    <p><strong>Ticket #${displayId}</strong><br/>
-    Subject: ${sub}</p>
-    <p>Our team typically replies within 24 hours. You can also reply to this email to add more detail.</p>
-    <p><a href="${appUrl}/support">View your ticket on Bond Back</a></p>
-    <p>— The Bond Back team</p>
-  `;
-  if (email) {
+  const greeting =
+    typeof userName === "string" && userName.trim() ? userName.trim().split(/\s+/)[0]! : "there";
+  const element = React.createElement(SupportTicketConfirmation, {
+    greetingName: greeting,
+    ticketDisplayId: displayId,
+    ticketSubject: sub,
+  });
+  let confirmHtml: string | null = null;
+  try {
+    confirmHtml = await render(element);
+  } catch (e) {
+    console.error("[support-ticket-email-render]", e);
+  }
+  if (email && confirmHtml) {
     await sendEmail(email, `We’ve received your message — ticket #${displayId} – Bond Back`, confirmHtml, {
       log: { userId: session.user.id, kind: "support_ticket_confirmation" },
     });

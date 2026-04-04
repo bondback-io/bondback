@@ -24,19 +24,20 @@ export const EMAIL_TEMPLATE_TYPES = [
 
 export type EmailTemplateType = (typeof EMAIL_TEMPLATE_TYPES)[number];
 
+/** Short labels in Admin → Emails (aligned with production template names). */
 const LABELS: Record<string, string> = {
-  welcome: "Welcome",
-  tutorial_lister: "Tutorial (Lister)",
-  tutorial_cleaner: "Tutorial (Cleaner)",
-  new_bid: "New bid on listing",
-  new_message: "New message in job",
-  job_created: "Job created",
-  job_accepted: "Job accepted / job created (coordination)",
-  job_approved_to_start: "Lister approved — start work (cleaner)",
-  job_completed: "Job marked complete",
+  welcome: "Welcome (signup)",
+  tutorial_lister: "Lister tutorial",
+  tutorial_cleaner: "Cleaner tutorial",
+  new_bid: "New bid on your listing",
+  new_message: "New message in job chat",
+  job_created: "Job created — pay & start",
+  job_accepted: "Cleaner: job accepted / go ahead",
+  job_approved_to_start: "Cleaner: lister approved — start work",
+  job_completed: "Job marked complete — review",
   job_cancelled_by_lister: "Job cancelled by lister",
-  payment_released: "Payment released",
-  funds_ready: "Funds ready to release",
+  payment_released: "Payment released (cleaner)",
+  funds_ready: "Funds ready to release (lister)",
   dispute_opened: "Dispute opened",
   dispute_resolved: "Dispute resolved",
   birthday: "Birthday",
@@ -56,69 +57,69 @@ export type SampleData = {
 
 export const SAMPLE_DATA: Record<string, SampleData> = {
   welcome: {
-    messageText: "Welcome to Bond Back! Complete your profile to get started.",
+    messageText: "Welcome to Bond Back — jump into your dashboard to finish setup.",
     jobId: null,
     senderName: "Bond Back",
   },
   tutorial_lister: {
-    messageText: "Quick start: post your listing, review bids, and hire a cleaner.",
+    messageText: "Quick start: create a listing, compare bids, and book your bond clean.",
     jobId: null,
     senderName: "Bond Back",
   },
   tutorial_cleaner: {
-    messageText: "Quick start: browse jobs, place bids, and get hired.",
+    messageText: "Quick start: browse jobs near you, bid or Buy Now, then upload proof and get paid.",
     jobId: null,
     senderName: "Bond Back",
   },
   new_bid: {
-    messageText: "I can do this bond clean for $280. Available this weekend.",
+    messageText: "I can do this bond clean for $280 — available Saturday or Sunday arvo.",
     jobId: 10042,
     listingId: 10042,
   },
   new_message: {
-    messageText: "Hi, would Tuesday 2pm work for the clean?",
+    messageText: "Hi — would Tuesday 2pm work for access? Happy to shuffle if needed.",
     jobId: 10042,
     senderName: "Alex Smith",
   },
   job_created: {
-    messageText: "Your job has been accepted. Start coordinating with your cleaner.",
+    messageText: "Your cleaner accepted — pay & start when you’re ready so they get the checklist and address.",
     jobId: 10042,
   },
   job_accepted: {
-    messageText: "The lister has approved you. You can now start the job.",
+    messageText: "The lister approved you — you’re clear to start. Check the job for address and checklist.",
     jobId: 10042,
   },
   job_approved_to_start: {
     messageText:
-      "The lister has approved the job — you can start the bond clean. Check the job for address and checklist.",
+      "Green light from the lister — you can start the bond clean. Open the job for address and checklist.",
     jobId: 10042,
   },
   job_completed: {
-    messageText: "Cleaner marked the job complete. Please review and release payment.",
+    messageText: "The clean’s done and after photos are in — please review and release payment when happy.",
     jobId: 10042,
   },
   job_cancelled_by_lister: {
-    messageText: "This job listing has been cancelled by the property lister. You have been unassigned from the job.",
+    messageText: "This listing was cancelled by the lister — you’ve been unassigned. Browse other jobs anytime.",
     jobId: 10042,
   },
   payment_released: {
-    messageText: "Payment of $280 has been released to your account. Thank you!",
+    messageText: "Payment of $280.00 has been released to your account — thanks for a great clean.",
     jobId: 10042,
   },
   funds_ready: {
-    messageText: "Funds are ready to release for Job #10042. Review and release when satisfied.",
+    messageText: "Funds for Job #10042 are ready to release — review photos and the checklist, then release when satisfied.",
     jobId: 10042,
   },
   dispute_opened: {
-    messageText: "A dispute has been opened for Job #10042. Please respond in the app.",
+    messageText: "A dispute was opened for Job #10042 — please open the job and add your side.",
     jobId: 10042,
   },
   dispute_resolved: {
-    messageText: "The dispute for Job #10042 has been resolved.",
+    messageText: "The dispute for Job #10042 is resolved — check the job for the outcome and next steps.",
     jobId: 10042,
   },
   birthday: {
-    messageText: "Happy birthday from Bond Back!",
+    messageText: "Happy birthday from the Bond Back team — thanks for being part of the community.",
     jobId: null,
     senderName: "Bond Back",
   },
@@ -127,7 +128,7 @@ export const SAMPLE_DATA: Record<string, SampleData> = {
 export function getSampleDataForType(type: string): SampleData {
   return (
     SAMPLE_DATA[type] ?? {
-      messageText: "Sample notification message for " + type,
+      messageText: "Sample notification for " + type + " — open Bond Back for full details.",
       jobId: 10042,
       senderName: "Sample User",
       listingId: 10042,

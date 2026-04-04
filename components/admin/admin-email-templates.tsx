@@ -230,7 +230,9 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
 
   const livePreview = React.useMemo(() => {
     const subj = replacePlaceholdersClient(editSubject || "(No subject)", testData);
-    const rawBody = editBody?.trim() || "<p><em>No template body. Add subject and body to see preview.</em></p>";
+    const rawBody =
+      editBody?.trim() ||
+      "<p><em>No template body yet — add subject and body to see preview.</em></p>";
     const bodyHtml = markdownToHtml(rawBody);
     const bodyWithPlaceholders = replacePlaceholdersClient(bodyHtml, testData);
     const fullHtml = bodyWithPlaceholders + UNSUBSCRIBE_FOOTER_HTML;

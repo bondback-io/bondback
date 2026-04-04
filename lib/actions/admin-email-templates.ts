@@ -24,13 +24,13 @@ import {
 } from "@/lib/admin-email-templates-utils";
 import { getAllDefaultTemplates, getDefaultTemplate } from "@/lib/default-email-templates";
 import { logAdminActivity } from "@/lib/admin-activity-log";
+import { emailPublicOrigin } from "@/emails/email-public-url";
 
 const TEST_SEND_LIMIT_PER_HOUR = 10;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
-const UNSUBSCRIBE_PATH = "/profile";
+const UNSUBSCRIBE_PATH = "/profile?tab=notifications";
 
 function getUnsubscribeFooterHtml(): string {
-  const url = `${APP_URL}${UNSUBSCRIBE_PATH}`;
+  const url = `${emailPublicOrigin()}${UNSUBSCRIBE_PATH}`;
   return `
 <div style="margin-top:2em;padding-top:1em;border-top:1px solid #eee;font-size:12px;color:#666;">
   <p>You received this email because of your Bond Back notification settings.</p>
@@ -76,7 +76,7 @@ export async function getTestUserProfileForPreview(): Promise<{
         name,
         role,
         senderName: name,
-        messageText: "Hi, would Tuesday 2pm work for the clean?",
+        messageText: "Hi — would Tuesday 2pm work for access? Happy to shuffle if needed.",
         jobId: "10042",
         amount: "$280",
         listingTitle: "3br House Bond Clean – Sydney",
@@ -335,12 +335,12 @@ export async function getPreviewContent(
     : "(No subject)";
   const html = rawHtml
     ? rawHtml + getUnsubscribeFooterHtml()
-    : "<p><em>No template body set. Add subject and body to see preview.</em></p>" + getUnsubscribeFooterHtml();
+    : "<p><em>No template body yet — add subject and body to see preview.</em></p>" + getUnsubscribeFooterHtml();
   return {
     subject: subj,
     html,
     sampleData: sample,
-    unsubscribeUrl: `${APP_URL}${UNSUBSCRIBE_PATH}`,
+    unsubscribeUrl: `${emailPublicOrigin()}${UNSUBSCRIBE_PATH}`,
   };
 }
 
