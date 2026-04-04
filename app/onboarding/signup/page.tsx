@@ -25,7 +25,7 @@ import {
   type AccountCreationProgressPhase,
   type AccountCreationStep,
 } from "@/components/auth/account-creation-progress-modal";
-import { getClientAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
+import { getResolvedAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
 
 type ModalFlow = "bootstrap" | "signup" | null;
 
@@ -156,7 +156,7 @@ function OnboardingSignupInner() {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${getClientAuthEmailRedirectOrigin()}/auth/callback?flow=onboarding`,
+          emailRedirectTo: `${getResolvedAuthEmailRedirectOrigin()}/auth/callback?flow=onboarding`,
         },
       });
 

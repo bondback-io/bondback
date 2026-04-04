@@ -3,12 +3,13 @@ import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
 import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
-import { getEmailRedirectAuthCode } from "@/lib/auth/resolve-email-auth-exchange";
+import { establishSessionFromEmailRedirectParams } from "@/lib/auth/establish-email-session";
 
 export const GET = async (request: NextRequest) => {
   const { searchParams, origin } = request.nextUrl;
-  const code = searchParams.get("code");
-  const token_hash = searchParams.get("token_hash") ?? searchParams.get("token");
+  const code = searchParams.get("code")?.trim() || null;
+  const token_hash_raw = searchParams.get("token_hash") ?? searchParams.get("token");
+  const token_hash = token_hash_raw?.trim() || null;
   const error = searchParams.get("error");
   const error_code = searchParams.get("error_code");
   const error_description = searchParams.get("error_description");
@@ -39,59 +40,28 @@ export const GET = async (request: NextRequest) => {
   const authCookieResponse = NextResponse.redirect(new URL("/dashboard", origin));
   const supabase = createSupabaseRouteHandlerClient(request, authCookieResponse);
 
-  const authExchange = getEmailRedirectAuthCode(code, token_hash);
+  const resolvedOtpType = resolveEmailOtpTypeFromSearchParams(searchParams);
 
-  if (authExchange) {
-    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(
-      authExchange.authCode
-    );
-    if (exchangeError) {
-      console.error("[auth/callback] exchangeCodeForSession", {
-        message: exchangeError.message,
-        source: authExchange.source,
-      });
-      return NextResponse.redirect(
-        new URL(
-          `/login?message=${encodeURIComponent("This sign-in link failed or expired. Request a new confirmation email or log in.")}`,
-          origin
-        )
-      );
-    }
-    return redirectAfterAuthSessionEstablished({
-      supabase,
-      request,
-      next,
-      signupFlow,
-      refParam,
-      authCookieResponse,
-      sessionFromAuth: exchangeData.session ?? null,
-    });
-  }
-
-  if (!token_hash) {
-    return NextResponse.redirect(
-      new URL(
-        `/login?message=${encodeURIComponent("Invalid or missing confirmation link. Open the latest email from Bond Back or log in.")}`,
-        origin
-      )
-    );
-  }
-
-  const otpType = resolveEmailOtpTypeFromSearchParams(searchParams);
-
-  const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
-    token_hash,
-    type: otpType,
+  const outcome = await establishSessionFromEmailRedirectParams(supabase, {
+    code,
+    tokenHash: token_hash,
+    otpType: resolvedOtpType,
   });
-  if (otpError) {
-    console.error("[auth/callback] verifyOtp", otpError.message);
+
+  if (!outcome.ok) {
+    const msg =
+      outcome.method === "exchange"
+        ? "This sign-in link failed or expired. Request a new confirmation email or log in."
+        : "This confirmation link failed or expired. Request a new email from the sign-up page.";
+    console.error("[auth/callback] establish_session_failed", {
+      method: outcome.method,
+      message: outcome.error.message,
+    });
     return NextResponse.redirect(
-      new URL(
-        `/login?message=${encodeURIComponent("This confirmation link failed or expired. Request a new email from the sign-up page.")}`,
-        origin
-      )
+      new URL(`/login?message=${encodeURIComponent(msg)}`, origin)
     );
   }
+
   return redirectAfterAuthSessionEstablished({
     supabase,
     request,
@@ -99,6 +69,6 @@ export const GET = async (request: NextRequest) => {
     signupFlow,
     refParam,
     authCookieResponse,
-    sessionFromAuth: otpData.session ?? null,
+    sessionFromAuth: outcome.session,
   });
 };

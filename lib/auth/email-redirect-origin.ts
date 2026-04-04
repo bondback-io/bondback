@@ -24,6 +24,11 @@ function isVercelPreviewHostname(hostname: string): boolean {
   return hostname.endsWith(".vercel.app");
 }
 
+/** Production apex — must match Supabase Redirect URLs (`https://www.bondback.io/**`), not bare apex. */
+function isBondBackProductionApex(hostname: string): boolean {
+  return hostname === "bondback.io";
+}
+
 /**
  * Origin for Supabase `emailRedirectTo` / OAuth `redirectTo` / password reset (client components only).
  *
@@ -55,7 +60,29 @@ export function getClientAuthEmailRedirectOrigin(): string {
     return CANONICAL_AUTH_PUBLIC_ORIGIN;
   }
 
+  if (isBondBackProductionApex(hostname)) {
+    return CANONICAL_AUTH_PUBLIC_ORIGIN;
+  }
+
   return window.location.origin;
+}
+
+/**
+ * Same rules as {@link getClientAuthEmailRedirectOrigin}, but never returns empty (SSR-safe fallbacks).
+ * Use when building `emailRedirectTo` so Supabase always receives an allowlisted absolute URL.
+ */
+export function getResolvedAuthEmailRedirectOrigin(): string {
+  const o = getClientAuthEmailRedirectOrigin();
+  if (o) return o;
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (explicit) {
+    try {
+      return new URL(explicit.replace(/\/$/, "")).origin;
+    } catch {
+      return CANONICAL_AUTH_PUBLIC_ORIGIN;
+    }
+  }
+  return CANONICAL_AUTH_PUBLIC_ORIGIN;
 }
 
 /** Alias — same rules as {@link getClientAuthEmailRedirectOrigin} (OAuth / email / recovery). */

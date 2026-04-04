@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { AuthPageBackLink } from "@/components/auth/auth-page-back-link";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
-import { getClientAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
+import { getResolvedAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
 import {
   loadCachedSignupLocation,
   reverseGeocodeAuForSignupPrefill,
@@ -193,7 +193,7 @@ export function SignupPath2Wizard() {
       const postcode = values.postcode?.trim() || null;
       const suburb = values.suburb?.trim() || null;
       const state = values.state?.trim() || null;
-      const confirmUrl = buildPath2AuthConfirmUrl(getClientAuthEmailRedirectOrigin(), refParam);
+      const confirmUrl = buildPath2AuthConfirmUrl(getResolvedAuthEmailRedirectOrigin(), refParam);
 
       try {
         const { data, error: signUpError } = await supabase.auth.signUp({

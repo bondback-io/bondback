@@ -3,7 +3,7 @@ import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
 import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
-import { getEmailRedirectAuthCode } from "@/lib/auth/resolve-email-auth-exchange";
+import { establishSessionFromEmailRedirectParams } from "@/lib/auth/establish-email-session";
 import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
 
 /** Avoid oversized query strings when attaching the original link for “Open in Safari” / copy. */
@@ -265,60 +265,63 @@ export async function handleAuthConfirmRequest(request: NextRequest): Promise<Ne
     noStoreHeaders(authCookieResponse);
     const supabase = createSupabaseRouteHandlerClient(request, authCookieResponse);
 
-    const authExchange = getEmailRedirectAuthCode(code, token_hash);
+    const authT0 = Date.now();
+    console.log("[auth/confirm] establish_session_start", {
+      hasCode: Boolean(code),
+      hasTokenHash: Boolean(token_hash),
+      token_hash_preview: redactTokenHash(token_hash),
+      typeFromQuery,
+      resolvedOtpType,
+      token_len: token_hash?.length ?? 0,
+    });
 
-    if (authExchange) {
-      console.log("[auth/confirm] exchangeCodeForSession_start", {
-        source: authExchange.source,
-        code_preview: `${authExchange.authCode.slice(0, 8)}…`,
-      });
-      const pkceT0 = Date.now();
-      const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(
-        authExchange.authCode
-      );
-      authPerfDevLog("auth/confirm:exchangeCodeForSession", {
-        ms: Date.now() - pkceT0,
-        ok: !exchangeError,
-        source: authExchange.source,
-      });
+    const outcome = await establishSessionFromEmailRedirectParams(supabase, {
+      code,
+      tokenHash: token_hash,
+      otpType: resolvedOtpType,
+    });
+    authPerfDevLog("auth/confirm:establishSessionFromEmailRedirectParams", {
+      ms: Date.now() - authT0,
+      ok: outcome.ok,
+      method: outcome.method,
+    });
 
-      if (exchangeError) {
-        const e = exchangeError as AuthLikeError;
+    if (!outcome.ok) {
+      const e = outcome.error as AuthLikeError;
+      if (outcome.method === "exchange") {
         console.error("[auth/confirm] exchangeCodeForSession_failed", {
           message: e.message,
           code: e.code,
-          name: exchangeError.name,
-          status: exchangeError.status,
-          source: authExchange.source,
+          name: e.name,
+          status: e.status,
           raw: JSON.stringify(e),
         });
         const { userMessage, reason } = mapExchangeFailure(e);
         return confirmErrorRedirect(origin, userMessage, reason, emailHint, fullUrl);
       }
+      console.error("[auth/confirm] verifyOtp_failed", {
+        message: e.message,
+        code: e.code,
+        status: e.status,
+        name: e.name,
+        typeUsed: resolvedOtpType,
+        ms: Date.now() - started,
+        raw: JSON.stringify(e),
+      });
+      const { userMessage, reason } = mapVerifyOtpFailure(e);
+      return confirmErrorRedirect(origin, userMessage, reason, emailHint, fullUrl);
+    }
 
+    if (outcome.method === "exchange") {
       console.log("[auth/confirm] exchangeCodeForSession_ok", {
         ms: Date.now() - started,
-        userId: exchangeData.session?.user?.id ?? null,
-        hasSession: Boolean(exchangeData.session),
-        source: authExchange.source,
+        userId: outcome.session.user.id,
+        hasSession: true,
       });
-
-      if (!exchangeData.session?.user?.id) {
-        console.error("[auth/confirm] exchange_ok_but_no_user");
-        return confirmErrorRedirect(
-          origin,
-          "We couldn’t finish signing you in. Request a new confirmation email or try logging in.",
-          "exchange_failed",
-          emailHint,
-          fullUrl
-        );
-      }
 
       const syncPkceT0 = Date.now();
       await waitForAuthCookieSync();
       authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncPkceT0 });
-
-      const sessionForFinalize = exchangeData.session;
 
       const finalizePkceT0 = Date.now();
       const res = await redirectAfterAuthSessionEstablished({
@@ -328,7 +331,7 @@ export async function handleAuthConfirmRequest(request: NextRequest): Promise<Ne
         signupFlow,
         refParam,
         authCookieResponse,
-        sessionFromAuth: sessionForFinalize,
+        sessionFromAuth: outcome.session,
       });
       authPerfDevLog("auth/confirm:redirectAfterAuthSessionEstablished", {
         ms: Date.now() - finalizePkceT0,
@@ -342,56 +345,10 @@ export async function handleAuthConfirmRequest(request: NextRequest): Promise<Ne
       return noStoreHeaders(res);
     }
 
-    if (!token_hash) {
-      console.error("[auth/confirm] verifyOtp_missing_token_hash");
-      return confirmErrorRedirect(
-        origin,
-        "This confirmation link is missing a token. Open the latest email from Bond Back, or request a new confirmation link from the sign-up page.",
-        "missing_token",
-        emailHint,
-        fullUrl
-      );
-    }
-
-    console.log("[auth/confirm] verifyOtp_call", {
-      type: resolvedOtpType,
-      token_hash_preview: redactTokenHash(token_hash),
-      typeFromQuery,
-      token_len: token_hash.length,
-    });
-
-    const verifyT0 = Date.now();
-    const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
-      token_hash,
-      type: resolvedOtpType,
-    });
-    authPerfDevLog("auth/confirm:verifyOtp", {
-      ms: Date.now() - verifyT0,
-      ok: !otpError,
-      type: resolvedOtpType,
-    });
-
-    if (otpError) {
-      const e = otpError as AuthLikeError;
-      console.error("[auth/confirm] verifyOtp_failed", {
-        message: e.message,
-        code: e.code,
-        status: otpError.status,
-        name: otpError.name,
-        typeUsed: resolvedOtpType,
-        ms: Date.now() - started,
-        raw: JSON.stringify(e),
-      });
-      const { userMessage, reason } = mapVerifyOtpFailure(e);
-      return confirmErrorRedirect(origin, userMessage, reason, emailHint, fullUrl);
-    }
-
-    const session = otpData.session;
-    const user = otpData.user;
     console.log("[auth/confirm] verifyOtp_ok", {
-      userId: user?.id ?? null,
-      hasSession: Boolean(session),
-      emailConfirmed: Boolean(user?.email_confirmed_at),
+      userId: outcome.user.id,
+      hasSession: true,
+      emailConfirmed: Boolean(outcome.user.email_confirmed_at),
       typeUsed: resolvedOtpType,
       ms: Date.now() - started,
     });
@@ -400,8 +357,8 @@ export async function handleAuthConfirmRequest(request: NextRequest): Promise<Ne
     await waitForSessionReadable(500);
     authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncT0 });
 
-    let sessionForFinalize = session?.user?.id ? session : null;
-    if (!sessionForFinalize) {
+    let sessionForFinalize = outcome.session;
+    if (!sessionForFinalize?.user?.id) {
       const attempts = [0, 50, 120, 200];
       for (const delay of attempts) {
         if (delay > 0) await new Promise((r) => setTimeout(r, delay));
@@ -412,7 +369,7 @@ export async function handleAuthConfirmRequest(request: NextRequest): Promise<Ne
           break;
         }
       }
-      if (!sessionForFinalize) {
+      if (!sessionForFinalize?.user?.id) {
         console.warn("[auth/confirm] getSession_still_empty_after_retries", {
           delaysMs: attempts,
         });
