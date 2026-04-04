@@ -3,6 +3,7 @@ import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
 import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
+import { getEmailRedirectAuthCode } from "@/lib/auth/resolve-email-auth-exchange";
 
 export const GET = async (request: NextRequest) => {
   const { searchParams, origin } = request.nextUrl;
@@ -38,10 +39,17 @@ export const GET = async (request: NextRequest) => {
   const authCookieResponse = NextResponse.redirect(new URL("/dashboard", origin));
   const supabase = createSupabaseRouteHandlerClient(request, authCookieResponse);
 
-  if (code) {
-    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+  const authExchange = getEmailRedirectAuthCode(code, token_hash);
+
+  if (authExchange) {
+    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(
+      authExchange.authCode
+    );
     if (exchangeError) {
-      console.error("[auth/callback] exchangeCodeForSession", exchangeError.message);
+      console.error("[auth/callback] exchangeCodeForSession", {
+        message: exchangeError.message,
+        source: authExchange.source,
+      });
       return NextResponse.redirect(
         new URL(
           `/login?message=${encodeURIComponent("This sign-in link failed or expired. Request a new confirmation email or log in.")}`,
@@ -60,10 +68,19 @@ export const GET = async (request: NextRequest) => {
     });
   }
 
+  if (!token_hash) {
+    return NextResponse.redirect(
+      new URL(
+        `/login?message=${encodeURIComponent("Invalid or missing confirmation link. Open the latest email from Bond Back or log in.")}`,
+        origin
+      )
+    );
+  }
+
   const otpType = resolveEmailOtpTypeFromSearchParams(searchParams);
 
   const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
-    token_hash: token_hash!,
+    token_hash,
     type: otpType,
   });
   if (otpError) {

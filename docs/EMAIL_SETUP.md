@@ -100,6 +100,7 @@ So the “Confirm your email” link sends users back to your app on localhost:
    - **Site URL:** set to `http://localhost:3000` when testing locally (use your production URL in production).
    - **Redirect URLs:** add `http://localhost:3000/**` so Supabase allows redirects to your local app.
 2. The app passes `emailRedirectTo` with your app origin and `/auth/confirm` (plus `next`, `flow`, optional `ref`) on email/password sign-up, so after the user confirms, Supabase redirects to e.g. `http://localhost:3000/auth/confirm?...` and the route verifies the token and sends the user to the right dashboard.
+3. **PKCE:** Supabase may put the one-time auth code in `?code=…` **or** `?token_hash=pkce_…`. Both are exchanged with `exchangeCodeForSession` in `/auth/confirm`. Legacy non-PKCE hashes still use `verifyOtp`.
 
 ### C. “Email rate limit exceeded” when signing up
 

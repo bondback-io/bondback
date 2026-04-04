@@ -3,6 +3,7 @@ import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
 import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
+import { getEmailRedirectAuthCode } from "@/lib/auth/resolve-email-auth-exchange";
 import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
 
 export const dynamic = "force-dynamic";
@@ -100,6 +101,18 @@ function mapVerifyOtpFailure(err: AuthLikeError): { userMessage: string; reason:
 function mapExchangeFailure(err: AuthLikeError): { userMessage: string; reason: string } {
   const mapped = mapVerifyOtpFailure(err);
   if (mapped.reason === "already_used") return mapped;
+  const lower = (err.message ?? "").toLowerCase();
+  if (
+    lower.includes("code verifier") ||
+    lower.includes("code_verifier") ||
+    lower.includes("pkce")
+  ) {
+    return {
+      userMessage:
+        "This link could not complete sign-in in this browser. Open the link in Safari or Chrome (not the in-app preview), or request a new confirmation email from the sign-up page.",
+      reason: "pkce_verifier_missing",
+    };
+  }
   return {
     userMessage:
       err.message?.trim() ||
@@ -111,7 +124,8 @@ function mapExchangeFailure(err: AuthLikeError): { userMessage: string; reason: 
 /**
  * Email confirmation — GET only.
  * Supabase redirects here with `token_hash` + `type` (use `type=signup` in the email template — see project docs / handoff).
- * PKCE flows may send `code` instead.
+ * PKCE flows send `?code=…` **or** `?token_hash=pkce_…` (same auth code; must use
+ * `exchangeCodeForSession`, not `verifyOtp`).
  *
  * After `verifyOtp` / `exchangeCodeForSession`, the user is logged in and redirected in one response.
  * `next` (default `/dashboard`) is passed to `redirectAfterAuthSessionEstablished`, which resolves the
@@ -147,7 +161,9 @@ export async function GET(request: NextRequest) {
     hasTokenHash: Boolean(token_hash),
     token_hash_preview: redactTokenHash(token_hash),
     typeFromQuery,
-    resolvedOtpType: code ? "pkce_exchange" : resolvedOtpType,
+    resolvedOtpType: getEmailRedirectAuthCode(code, token_hash)
+      ? "pkce_exchange"
+      : resolvedOtpType,
     next,
     queryKeys: [...searchParams.keys()],
   });
@@ -179,13 +195,21 @@ export async function GET(request: NextRequest) {
     noStoreHeaders(authCookieResponse);
     const supabase = createSupabaseRouteHandlerClient(request, authCookieResponse);
 
-    if (code) {
-      console.log("[auth/confirm] pkce_exchange_start", { code_preview: `${code.slice(0, 8)}…` });
+    const authExchange = getEmailRedirectAuthCode(code, token_hash);
+
+    if (authExchange) {
+      console.log("[auth/confirm] exchangeCodeForSession_start", {
+        source: authExchange.source,
+        code_preview: `${authExchange.authCode.slice(0, 8)}…`,
+      });
       const pkceT0 = Date.now();
-      const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(
+        authExchange.authCode
+      );
       authPerfDevLog("auth/confirm:exchangeCodeForSession", {
         ms: Date.now() - pkceT0,
         ok: !exchangeError,
+        source: authExchange.source,
       });
 
       if (exchangeError) {
@@ -194,6 +218,7 @@ export async function GET(request: NextRequest) {
           code: (exchangeError as AuthLikeError).code,
           name: exchangeError.name,
           status: exchangeError.status,
+          source: authExchange.source,
         });
         const { userMessage, reason } = mapExchangeFailure(exchangeError as AuthLikeError);
         return confirmErrorRedirect(origin, userMessage, reason, emailHint);
@@ -203,6 +228,7 @@ export async function GET(request: NextRequest) {
         ms: Date.now() - started,
         userId: exchangeData.session?.user?.id ?? null,
         hasSession: Boolean(exchangeData.session),
+        source: authExchange.source,
       });
 
       if (!exchangeData.session?.user?.id) {
@@ -241,6 +267,16 @@ export async function GET(request: NextRequest) {
       return noStoreHeaders(res);
     }
 
+    if (!token_hash) {
+      console.error("[auth/confirm] verifyOtp_missing_token_hash");
+      return confirmErrorRedirect(
+        origin,
+        "This confirmation link is missing a token. Open the latest email from Bond Back, or request a new confirmation link from the sign-up page.",
+        "missing_token",
+        emailHint
+      );
+    }
+
     console.log("[auth/confirm] verifyOtp_call", {
       type: resolvedOtpType,
       token_hash_preview: redactTokenHash(token_hash),
@@ -249,7 +285,7 @@ export async function GET(request: NextRequest) {
 
     const verifyT0 = Date.now();
     const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
-      token_hash: token_hash!,
+      token_hash,
       type: resolvedOtpType,
     });
     authPerfDevLog("auth/confirm:verifyOtp", {
