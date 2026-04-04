@@ -1,25 +1,20 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { formatDistanceToNow, format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getEmailTypeLabel } from "@/lib/admin-email-templates-utils";
+import { ADMIN_NOTIFICATION_LOG_PAGE_SIZE } from "@/lib/actions/admin-notification-logs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { AdminShell } from "@/components/admin/admin-shell";
-import { AdminNotificationsLogPagination } from "@/components/admin/admin-notifications-log-pagination";
+import {
+  AdminEmailDeliveryLogTable,
+  AdminInAppDeliveryLogTable,
+} from "@/components/admin/admin-notification-logs-load-more";
 import { AdminEmailDiagnosticsCard } from "@/components/admin/admin-email-diagnostics-card";
 import { getEmailDiagnostics } from "@/lib/actions/admin-email-diagnostics";
 import {
@@ -60,27 +55,12 @@ async function requireAdmin() {
   return { profile, supabase };
 }
 
-const LOG_PAGE_SIZE = 10;
-
-interface AdminNotificationsPageProps {
-  searchParams?: Promise<{
-    emailPage?: string;
-    inAppPage?: string;
-  }>;
-}
-
-export default async function AdminNotificationsPage({
-  searchParams,
-}: AdminNotificationsPageProps) {
+export default async function AdminNotificationsPage() {
   const { profile, supabase } = await requireAdmin();
   const admin = createSupabaseAdminClient();
   const globalSettings = await getGlobalSettings();
   const emailDiagnostics = await getEmailDiagnostics();
   const emailsEnabled = globalSettings?.emails_enabled !== false;
-
-  const sp = (await searchParams) ?? {};
-  const emailPageRaw = Math.max(1, parseInt(String(sp.emailPage ?? "1"), 10) || 1);
-  const inAppPageRaw = Math.max(1, parseInt(String(sp.inAppPage ?? "1"), 10) || 1);
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -124,27 +104,20 @@ export default async function AdminNotificationsPage({
   const emailTotalCount = emailLogsTotalRes.count ?? 0;
   const notificationsTotalCount = notificationsTotalRes.count ?? 0;
 
-  const emailTotalPages = Math.max(1, Math.ceil(emailTotalCount / LOG_PAGE_SIZE));
-  const inAppTotalPages = Math.max(1, Math.ceil(notificationsTotalCount / LOG_PAGE_SIZE));
-  const emailPage = Math.min(emailPageRaw, emailTotalPages);
-  const inAppPage = Math.min(inAppPageRaw, inAppTotalPages);
-
-  const emailFrom = (emailPage - 1) * LOG_PAGE_SIZE;
-  const emailTo = emailFrom + LOG_PAGE_SIZE - 1;
-  const inAppFrom = (inAppPage - 1) * LOG_PAGE_SIZE;
-  const inAppTo = inAppFrom + LOG_PAGE_SIZE - 1;
+  const emailTo = ADMIN_NOTIFICATION_LOG_PAGE_SIZE - 1;
+  const inAppTo = ADMIN_NOTIFICATION_LOG_PAGE_SIZE - 1;
 
   const [{ data: emailLogsData }, { data: notificationsData }] = await Promise.all([
     client
       .from("email_logs")
       .select("id, user_id, type, sent_at, subject")
       .order("sent_at", { ascending: false })
-      .range(emailFrom, emailTo),
+      .range(0, emailTo),
     supabase
       .from("notifications")
       .select("id, user_id, type, job_id, message_text, is_read, created_at")
       .order("created_at", { ascending: false })
-      .range(inAppFrom, inAppTo),
+      .range(0, inAppTo),
   ]);
 
   const emailLogs = (emailLogsData ?? []) as EmailLogRow[];
@@ -163,6 +136,11 @@ export default async function AdminNotificationsPage({
       profilesMap.set(p.id, { full_name: p.full_name });
     });
   }
+
+  const profilesForClient = Object.fromEntries(profilesMap) as Record<
+    string,
+    { full_name: string | null }
+  >;
 
   return (
     <AdminShell activeHref="/admin/notifications">
@@ -285,68 +263,19 @@ export default async function AdminNotificationsPage({
                 Email delivery log
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Sent notification emails — {LOG_PAGE_SIZE} per page, newest first.
+                Sent notification emails — {ADMIN_NOTIFICATION_LOG_PAGE_SIZE} at a time, newest first. Use Load
+                more for older entries.
               </p>
             </div>
             <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
               {emailTotalCount} total
             </Badge>
           </CardHeader>
-          <CardContent className="overflow-x-auto p-0">
-            {emailLogs.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground dark:text-gray-400">
-                No emails logged yet. Emails are recorded when sent via the notification system.
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="dark:border-gray-800">
-                    <TableHead>Recipient</TableHead>
-                    <TableHead className="w-36">Type</TableHead>
-                    <TableHead className="hidden md:table-cell max-w-[240px]">Subject</TableHead>
-                    <TableHead className="w-36 text-right">Sent</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {emailLogs.map((e) => {
-                    const user = profilesMap.get(e.user_id) ?? null;
-                    const sentAt = new Date(e.sent_at);
-                    return (
-                      <TableRow key={e.id} className="dark:border-gray-800">
-                        <TableCell className="text-xs sm:text-sm">
-                          <Link
-                            href={`/admin/users/${e.user_id}`}
-                            className="font-medium text-primary hover:underline"
-                          >
-                            {user?.full_name ?? "User"}
-                          </Link>
-                          <span className="block truncate max-w-[120px] text-[11px] text-muted-foreground">
-                            {e.user_id}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {getEmailTypeLabel(e.type)}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell max-w-[240px] truncate text-xs text-muted-foreground">
-                          {e.subject ?? "—"}
-                        </TableCell>
-                        <TableCell className="w-36 text-right text-[11px] text-muted-foreground">
-                          {formatDistanceToNow(sentAt, { addSuffix: true })}
-                          <span className="block text-[10px] opacity-80">
-                            {format(sentAt, "MMM d, HH:mm")}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-            <AdminNotificationsLogPagination
-              currentPage={emailPage}
+          <CardContent className="p-0">
+            <AdminEmailDeliveryLogTable
               totalCount={emailTotalCount}
-              paramKey="emailPage"
-              otherPage={inAppPage}
+              initialRows={emailLogs}
+              initialProfiles={profilesForClient}
             />
           </CardContent>
         </Card>
@@ -359,91 +288,19 @@ export default async function AdminNotificationsPage({
                 In-app delivery log
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Notifications created in the app (bell icon) — {LOG_PAGE_SIZE} per page, newest first.
+                Notifications created in the app (bell icon) — {ADMIN_NOTIFICATION_LOG_PAGE_SIZE} at a time,
+                newest first. Use Load more for older entries.
               </p>
             </div>
             <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
               {notificationsTotalCount} total
             </Badge>
           </CardHeader>
-          <CardContent className="overflow-x-auto p-0">
-            {notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground dark:text-gray-400">
-                No in-app notifications yet.
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="dark:border-gray-800">
-                    <TableHead>User</TableHead>
-                    <TableHead className="w-40">Type</TableHead>
-                    <TableHead className="hidden md:table-cell">Message</TableHead>
-                    <TableHead className="hidden sm:table-cell w-20">Job</TableHead>
-                    <TableHead className="w-20">Status</TableHead>
-                    <TableHead className="w-36 text-right">Created</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {notifications.map((n) => {
-                    const user = profilesMap.get(n.user_id) ?? null;
-                    const created = new Date(n.created_at);
-                    const timeAgo = formatDistanceToNow(created, { addSuffix: true });
-                    return (
-                      <TableRow key={n.id} className="dark:border-gray-800">
-                        <TableCell className="text-xs sm:text-sm">
-                          <Link
-                            href={`/admin/users/${n.user_id}`}
-                            className="font-medium text-primary hover:underline"
-                          >
-                            {user?.full_name ?? "User"}
-                          </Link>
-                          <span className="block truncate max-w-[120px] text-[11px] text-muted-foreground">
-                            {n.user_id}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {getEmailTypeLabel(n.type)}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell max-w-xs truncate text-xs text-muted-foreground">
-                          {n.message_text ?? "—"}
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell text-xs">
-                          {n.job_id ? (
-                            <Link
-                              href={`/jobs/${n.job_id}`}
-                              className="text-primary hover:underline"
-                            >
-                              #{n.job_id}
-                            </Link>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={n.is_read ? "default" : "outline"}
-                            className="text-[10px]"
-                          >
-                            {n.is_read ? "Read" : "Unread"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="w-36 text-right text-[11px] text-muted-foreground">
-                          {timeAgo}
-                          <span className="block text-[10px] opacity-80">
-                            {format(created, "MMM d, HH:mm")}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-            <AdminNotificationsLogPagination
-              currentPage={inAppPage}
+          <CardContent className="p-0">
+            <AdminInAppDeliveryLogTable
               totalCount={notificationsTotalCount}
-              paramKey="inAppPage"
-              otherPage={emailPage}
+              initialRows={notifications}
+              initialProfiles={profilesForClient}
             />
           </CardContent>
         </Card>
