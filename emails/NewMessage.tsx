@@ -1,8 +1,9 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export interface NewMessageProps {
   jobId: number | string;
@@ -16,44 +17,48 @@ export function NewMessage({ jobId, messageSnippet, senderName }: NewMessageProp
 
   return (
     <EmailLayout
-      preview={`New message from ${senderName ?? "someone"} in Job #${jobId}`}
+      preview={`New message${fromLine} on Job #${jobId}`}
       viewJobUrl={viewJobUrl}
-      viewJobLabel="View in Bond Back"
+      viewJobLabel="Open chat"
     >
       <Section>
-        <Text style={title}>New message from {senderName ?? "someone"} in Job #{jobId}</Text>
+        <Text style={title}>Ping! New message on Job #{jobId} 💬</Text>
         <Text style={body}>
           {fromLine && (
             <>
-              <strong>New message{fromLine}:</strong>
+              <strong>Message{fromLine}:</strong>
               <br />
             </>
           )}
           &ldquo;{messageSnippet}&rdquo;
         </Text>
-        <Text style={subtext}>Reply in the job chat to keep everything in one place.</Text>
+        <Text style={subtext}>
+          Reply in Bond Back so dates, keys, and expectations stay in one thread—much easier than digging
+          through SMS.
+        </Text>
       </Section>
     </EmailLayout>
   );
 }
 
 const title = {
-  color: "#111827",
-  fontSize: "18px",
-  fontWeight: "600",
+  color: "#0f172a",
+  fontSize: "19px",
+  fontWeight: "700" as const,
   margin: "0 0 12px 0",
   lineHeight: 1.3,
 };
 
 const body = {
-  color: "#374151",
+  color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.6,
+  lineHeight: 1.65,
   margin: "0 0 16px 0",
 };
 
 const subtext = {
-  color: "#6b7280",
+  color: "#64748b",
   fontSize: "13px",
   margin: "0",
+  lineHeight: 1.5,
 };

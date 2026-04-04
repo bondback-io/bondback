@@ -1,8 +1,9 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export interface WelcomeProps {
   /** First name or display name */
@@ -13,7 +14,7 @@ export interface WelcomeProps {
 
 /** Preheader text (hidden, shown in inbox preview by some clients) */
 export const WELCOME_PREHEADER =
-  "Start saving time and money on bond cleans today";
+  "Fair bids, secure pay, and one less thing to worry about before handover";
 
 export function Welcome({ firstName, role }: WelcomeProps) {
   const dashboardUrl = `${APP_URL}/dashboard`;
@@ -22,31 +23,30 @@ export function Welcome({ firstName, role }: WelcomeProps) {
 
   const roleBenefits =
     role === "lister"
-      ? "Create listings, receive competitive bids, get your bond back fast."
+      ? "Post your bond clean, watch cleaners compete on price, and pick someone you trust—without the ring-around."
       : role === "cleaner"
-        ? "Browse local jobs, bid or Buy Now, build your reputation and earnings."
-        : "As a lister: create listings and get competitive bids. As a cleaner: browse jobs, bid or Buy Now, and grow your earnings.";
+        ? "Browse local bond-clean jobs, bid with confidence, and get paid when the work’s done—escrow keeps everyone honest."
+        : "List a clean when you’re moving out, or pick up jobs when you’re on the tools—both roles live in one account.";
 
   return (
     <EmailLayout
       preview={WELCOME_PREHEADER}
       viewJobUrl={dashboardUrl}
-      viewJobLabel="Go to Dashboard"
+      viewJobLabel="Open your dashboard"
     >
       <Section style={contentSection}>
-        <Text style={heading}>
-          Welcome to Bond Back – Your Bond Cleaning Solution Awaits!
-        </Text>
+        <Text style={heading}>You’re in — welcome to Bond Back 🇦🇺</Text>
         <Text style={body}>{greeting}</Text>
         <Text style={body}>
-          Thanks for joining Bond Back – the easiest way to find trusted
-          cleaners for your bond clean.
+          Thanks for joining Australia&apos;s bond-clean marketplace. We built this because end-of-lease
+          stress is real—and your bond shouldn&apos;t depend on luck (or a dodgy flyer).
         </Text>
         <Text style={body}>
           <strong>What you can do:</strong> {roleBenefits}
         </Text>
         <Text style={trustLine}>
-          Secure payments • Verified cleaners • 48-hour protection
+          Secure payments · Escrow protection · Disputes handled fairly — no worries, we&apos;re not here to
+          make moving harder, we&apos;re here to help you cross the finish line.
         </Text>
       </Section>
     </EmailLayout>
@@ -58,23 +58,26 @@ const contentSection = {
 };
 
 const heading = {
-  color: "#111827",
-  fontSize: "20px",
-  fontWeight: "600",
+  color: "#0f172a",
+  fontSize: "22px",
+  fontWeight: "700" as const,
   margin: "0 0 16px 0",
   lineHeight: 1.3,
 };
 
 const body = {
-  color: "#374151",
+  color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.6,
+  lineHeight: 1.65,
   margin: "0 0 16px 0",
 };
 
 const trustLine = {
-  color: "#6b7280",
-  fontSize: "12px",
+  color: "#64748b",
+  fontSize: "13px",
   margin: "20px 0 0 0",
+  lineHeight: 1.5,
   fontWeight: "500" as const,
+  borderLeft: "4px solid #0ea5e9",
+  paddingLeft: "14px",
 };

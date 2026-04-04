@@ -16,6 +16,7 @@ import { getSuburbLatLon } from "@/lib/geo/suburb-lat-lon";
 import { shouldSendEmailForType } from "@/lib/notification-preferences";
 import type { Database } from "@/types/supabase";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { emailPublicOrigin } from "@/emails/email-public-url";
 
 const safeTrim = (v: unknown) => String(v ?? "").trim();
 
@@ -113,7 +114,7 @@ async function buildDigestPropsForUser(
   const isCleaner = roles.includes("cleaner");
   const isLister = roles.includes("lister");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+  const appUrl = emailPublicOrigin();
   const dashboardUrl = `${appUrl}/dashboard`;
 
   let cleaner: DailyDigestEmailProps["cleaner"];
@@ -279,7 +280,7 @@ export async function runDailyDigestJob(): Promise<{
 
       const element = React.createElement(DailyDigestEmail, digestProps);
       const html = await render(element);
-      const subject = `Your Bond Back daily digest — ${new Date().toLocaleDateString("en-AU", {
+      const subject = `Your Bond Back snapshot — ${new Date().toLocaleDateString("en-AU", {
         weekday: "short",
         day: "numeric",
         month: "short",
@@ -363,7 +364,7 @@ export async function sendTestDailyDigestEmail(): Promise<{ ok: boolean; error?:
   const email = await getEmailForUserId(session.user.id);
   if (!email) return { ok: false, error: "No email on account." };
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+  const appUrl = emailPublicOrigin();
   const fn =
     (profile as { display_name?: string | null; full_name?: string | null } | null)?.display_name?.trim() ||
     (profile as { full_name?: string | null } | null)?.full_name?.trim() ||
@@ -405,7 +406,7 @@ export async function sendTestDailyDigestEmail(): Promise<{ ok: boolean; error?:
 
   const element = React.createElement(DailyDigestEmail, digestProps);
   const html = await render(element);
-  const subject = `[Test] Your Bond Back daily digest — ${new Date().toLocaleDateString("en-AU")}`;
+  const subject = `[Test] Your Bond Back snapshot — ${new Date().toLocaleDateString("en-AU")}`;
 
   const result = await sendEmail(email, subject, html, {
     log: { userId: session.user.id, kind: "daily_digest_test" },

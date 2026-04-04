@@ -1,8 +1,9 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export interface JobCancelledByListerProps {
   jobId: number | string;
@@ -14,36 +15,40 @@ export function JobCancelledByLister({ jobId, messageText }: JobCancelledByListe
 
   return (
     <EmailLayout
-      preview="This job listing has been cancelled by the property lister."
+      preview="This listing was cancelled — plenty more fish in the feed"
       viewJobUrl={viewJobUrl}
-      viewJobLabel="View job details"
+      viewJobLabel="Browse other jobs"
     >
       <Section>
-        <Text style={title}>Job listing cancelled</Text>
+        <Text style={title}>Listing cancelled — you’re free to move on</Text>
         <Text style={body}>{messageText}</Text>
-        <Text style={subtext}>You have been unassigned from this job. You can browse other jobs from your dashboard.</Text>
+        <Text style={subtext}>
+          The lister pulled this one—no stress. Jump back to the job board; there’s always another bond
+          clean around the corner.
+        </Text>
       </Section>
     </EmailLayout>
   );
 }
 
 const title = {
-  color: "#111827",
+  color: "#0f172a",
   fontSize: "18px",
-  fontWeight: "600",
+  fontWeight: "700" as const,
   margin: "0 0 12px 0",
   lineHeight: 1.3,
 };
 
 const body = {
-  color: "#374151",
+  color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.6,
+  lineHeight: 1.65,
   margin: "0 0 16px 0",
 };
 
 const subtext = {
-  color: "#6b7280",
+  color: "#64748b",
   fontSize: "13px",
   margin: "0",
+  lineHeight: 1.5,
 };

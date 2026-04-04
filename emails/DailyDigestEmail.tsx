@@ -2,8 +2,6 @@ import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
-
 export type DigestListingRow = {
   id: string;
   title: string;
@@ -69,28 +67,29 @@ export function DailyDigestEmail({
 
   return (
     <EmailLayout
-      preview={`Your Bond Back summary for ${periodLabel}`}
+      preview={`Your Bond Back snapshot — ${periodLabel}`}
       viewJobUrl={dashboardUrl}
-      viewJobLabel="View in App"
+      viewJobLabel="Open your dashboard"
     >
       <Section>
-        <Text style={headline}>Your daily digest</Text>
+        <Text style={headline}>☕ Your Bond Back snapshot</Text>
         <Text style={lead}>{greeting}</Text>
         <Text style={body}>
-          Here&apos;s what happened on Bond Back during {periodLabel}.
+          Quick catch-up on what&apos;s moved while you were off doing life — here&apos;s Bond Back during{" "}
+          {periodLabel}.
         </Text>
       </Section>
 
       {hasCleaner && cleaner && (
         <Section style={block}>
-          <Text style={sectionTitle}>As a cleaner</Text>
+          <Text style={sectionTitle}>🧹 Cleaner</Text>
           <Text style={stat}>
             <strong>{cleaner.newJobsInAreaCount}</strong> new job
-            {cleaner.newJobsInAreaCount === 1 ? "" : "s"} in your area
+            {cleaner.newJobsInAreaCount === 1 ? "" : "s"} in your neck of the woods
           </Text>
           {cleaner.topListings.length > 0 && (
             <>
-              <Text style={subhead}>Top listings to explore</Text>
+              <Text style={subhead}>Worth a squiz</Text>
               {cleaner.topListings.map((row) => (
                 <Text key={row.id} style={listingLine}>
                   • <strong>{row.title}</strong>
@@ -107,25 +106,25 @@ export function DailyDigestEmail({
 
       {hasLister && lister && (
         <Section style={block}>
-          <Text style={sectionTitle}>As a lister</Text>
+          <Text style={sectionTitle}>🏠 Lister</Text>
           <Text style={stat}>
             <strong>{lister.newBidsCount}</strong> new bid
-            {lister.newBidsCount === 1 ? "" : "s"} on your listings
+            {lister.newBidsCount === 1 ? "" : "s"} to review
           </Text>
           <Text style={stat}>
             <strong>{lister.pendingApprovalsCount}</strong> job
-            {lister.pendingApprovalsCount === 1 ? "" : "s"} awaiting your approval
+            {lister.pendingApprovalsCount === 1 ? "" : "s"} waiting on your thumbs-up
           </Text>
           <Text style={stat}>
             <strong>{lister.activeJobsCount}</strong> active job
-            {lister.activeJobsCount === 1 ? "" : "s"} (accepted or in progress)
+            {lister.activeJobsCount === 1 ? "" : "s"} (accepted or underway)
           </Text>
         </Section>
       )}
 
       {!hasCleaner && !hasLister && (
         <Section>
-          <Text style={body}>No new activity to report for this period.</Text>
+          <Text style={body}>All quiet — no new activity for this period.</Text>
         </Section>
       )}
     </EmailLayout>

@@ -1,8 +1,9 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export interface GenericNotificationProps {
   headline: string;
@@ -21,7 +22,7 @@ export function GenericNotification({
   preview,
 }: GenericNotificationProps) {
   const url = hrefPath.startsWith("http") ? hrefPath : `${APP_URL}${hrefPath.startsWith("/") ? "" : "/"}${hrefPath}`;
-  const bodyCopy = (messageText ?? "").trim() || "You have an update in Bond Back.";
+  const bodyCopy = (messageText ?? "").trim() || "You’ve got an update waiting on Bond Back.";
 
   return (
     <EmailLayout preview={preview ?? headline} viewJobUrl={url} viewJobLabel={ctaLabel}>
@@ -34,16 +35,16 @@ export function GenericNotification({
 }
 
 const title = {
-  color: "#111827",
-  fontSize: "18px",
-  fontWeight: "600",
+  color: "#0f172a",
+  fontSize: "19px",
+  fontWeight: "700" as const,
   margin: "0 0 12px 0",
-  lineHeight: 1.3,
+  lineHeight: 1.35,
 };
 
 const body = {
-  color: "#374151",
+  color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.55,
+  lineHeight: 1.65,
   margin: "0 0 8px 0",
 };

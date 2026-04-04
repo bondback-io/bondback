@@ -8,8 +8,9 @@ import {
   Text,
 } from "@react-email/components";
 import * as React from "react";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export type AdminNotificationEventType = "new_user" | "new_listing" | "dispute_opened";
 
@@ -43,11 +44,13 @@ export type AdminNotificationEmailProps =
       openedAtFormatted: string;
     };
 
+const HEADER_GRADIENT = "linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 55%, #059669 100%)";
+
 function header(): React.ReactNode {
   return (
     <Section style={headerSection}>
       <Text style={logo}>Bond Back</Text>
-      <Text style={tagline}>Admin notification</Text>
+      <Text style={tagline}>🔔 Admin · internal only</Text>
     </Section>
   );
 }
@@ -189,34 +192,40 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const main = {
-  backgroundColor: "#f4f4f5",
+  backgroundColor: "#e2e8f0",
   fontFamily:
     '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
 };
 
 const container = {
   margin: "0 auto",
-  padding: "24px 20px 32px",
+  padding: "24px 16px 32px",
   maxWidth: "560px",
 };
 
 const headerSection = {
+  backgroundColor: "#1d4ed8",
+  backgroundImage: HEADER_GRADIENT,
+  borderRadius: "12px",
+  padding: "22px 20px 20px",
   marginBottom: "16px",
+  textAlign: "center" as const,
 };
 
 const logo = {
-  color: "#111827",
-  fontSize: "20px",
-  fontWeight: "700" as const,
-  margin: "0 0 4px 0",
+  color: "#ffffff",
+  fontSize: "22px",
+  fontWeight: "800" as const,
+  margin: "0 0 6px 0",
+  letterSpacing: "-0.03em",
 };
 
 const tagline = {
-  color: "#6b7280",
+  color: "rgba(255,255,255,0.92)",
   fontSize: "12px",
   margin: "0",
-  textTransform: "uppercase" as const,
-  letterSpacing: "0.06em",
+  fontWeight: "600" as const,
+  letterSpacing: "0.04em",
 };
 
 const previewText = {

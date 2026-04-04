@@ -1,8 +1,9 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export interface JobCreatedProps {
   jobId: number | string;
@@ -13,40 +14,44 @@ export function JobCreated({ jobId, messageText }: JobCreatedProps) {
   const viewJobUrl = `${APP_URL}/jobs/${jobId}`;
   const bodyCopy =
     (messageText ?? "").trim() ||
-    "Your job is ready—open Bond Back to coordinate timing and details with the other party.";
+    "Your cleaner accepted your job—now’s the time to pay & start so they can see the address and checklist.";
 
   return (
     <EmailLayout
-      preview="Your job has been accepted – start coordinating!"
+      preview="Cleaner locked in — next step: pay & start the job"
       viewJobUrl={viewJobUrl}
-      viewJobLabel="View Job"
+      viewJobLabel="View job"
     >
       <Section>
-        <Text style={title}>Your job has been accepted – start coordinating!</Text>
+        <Text style={title}>You’ve got a cleaner — let’s get this bond clean moving ✨</Text>
         <Text style={body}>{bodyCopy}</Text>
-        <Text style={subtext}>Open the job to message the other party and agree on timing.</Text>
+        <Text style={subtext}>
+          Use the in-app chat to sort keys, access, and timing—everything stays in one place so no one’s
+          playing phone tag.
+        </Text>
       </Section>
     </EmailLayout>
   );
 }
 
 const title = {
-  color: "#111827",
-  fontSize: "18px",
-  fontWeight: "600",
+  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: "700" as const,
   margin: "0 0 12px 0",
   lineHeight: 1.3,
 };
 
 const body = {
-  color: "#374151",
+  color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.6,
+  lineHeight: 1.65,
   margin: "0 0 16px 0",
 };
 
 const subtext = {
-  color: "#6b7280",
+  color: "#64748b",
   fontSize: "13px",
   margin: "0",
+  lineHeight: 1.5,
 };

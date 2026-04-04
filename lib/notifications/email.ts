@@ -30,7 +30,6 @@ const resend = process.env.RESEND_API_KEY?.trim()
 
 const FROM = process.env.RESEND_FROM ?? "Bond Back <noreply@bondback.io>";
 const REPLY_TO = process.env.RESEND_REPLY_TO?.trim() || undefined;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
 
 /** Log once per server process: Resend env (no secrets). Helps diagnose Vercel/local “no emails”. */
 let loggedResendEnvSnapshot = false;
@@ -360,27 +359,29 @@ export async function buildNotificationEmail(
     id > 0 ? `/jobs/${idStr}` : listingUuid?.trim() ? `/jobs/${listingUuid.trim()}` : "/dashboard";
 
   const subjects: Record<NotificationType, string> = {
-    new_message: `New message from ${senderName ?? "someone"} in Job #${id} – Bond Back`,
-    new_bid: `New bid on your listing – Bond Back`,
-    job_created: `Your job has been accepted – start coordinating! – Bond Back`,
-    job_accepted: `Lister approved – time to clean! – Bond Back`,
-    job_approved_to_start: `Go ahead — start Job #${id} – Bond Back`,
-    job_completed: `Cleaner marked job complete – review & approve – Bond Back`,
+    new_message: `${senderName ?? "Someone"} messaged you — Job #${id} – Bond Back`,
+    new_bid: `Fresh bid on your listing — worth a look – Bond Back`,
+    job_created: `Cleaner locked in — pay & start when you’re ready – Bond Back`,
+    job_accepted: `Green light: start Job #${id} – Bond Back`,
+    job_approved_to_start: `You’re cleared to begin Job #${id} – Bond Back`,
+    job_completed: `Clean’s done — review & release when happy – Bond Back`,
     payment_released: (() => {
       const amt = parseAmountFromMessageForEmail(messageText);
-      return amt ? `Payment of ${amt} released – thank you! – Bond Back` : `Payment released – Job #${id} – Bond Back`;
+      return amt
+        ? `Cha-ching: ${amt} released to you – Bond Back`
+        : `Payment released — Job #${id} – Bond Back`;
     })(),
-    funds_ready: `Ready to release funds – Job #${id} – Bond Back`,
-    dispute_opened: `Dispute update on Job #${id} – Bond Back`,
-    dispute_resolved: `Dispute resolved – Job #${id} – Bond Back`,
-    job_cancelled_by_lister: `Job #${id} cancelled by lister – Bond Back`,
-    listing_live: `Your listing is live – Bond Back`,
-    after_photos_uploaded: `After photos uploaded – Job #${id} – Bond Back`,
-    auto_release_warning: `Auto-release reminder – Job #${id} – Bond Back`,
-    checklist_all_complete: `Checklist complete – Job #${id} – Bond Back`,
-    new_job_in_area: `New job nearby – Bond Back`,
-    job_status_update: `Job update – Job #${id} – Bond Back`,
-    early_accept_declined: `Early acceptance update – Bond Back`,
+    funds_ready: `Funds ready to release — Job #${id} – Bond Back`,
+    dispute_opened: `Dispute opened — Job #${id} needs your input – Bond Back`,
+    dispute_resolved: `Dispute wrapped up — Job #${id} – Bond Back`,
+    job_cancelled_by_lister: `Job #${id} cancelled by the lister – Bond Back`,
+    listing_live: `You’re live — cleaners can start bidding – Bond Back`,
+    after_photos_uploaded: `After photos are in — Job #${id} – Bond Back`,
+    auto_release_warning: `Auto-release heads-up — Job #${id} – Bond Back`,
+    checklist_all_complete: `Checklist all ticked — Job #${id} – Bond Back`,
+    new_job_in_area: `New bond clean near you — have a squiz – Bond Back`,
+    job_status_update: `Job update — #${id} – Bond Back`,
+    early_accept_declined: `Early pick update — your bid – Bond Back`,
   };
 
   let element: React.ReactElement;
@@ -448,10 +449,10 @@ export async function buildNotificationEmail(
     case "listing_live":
       templateProps = { headline: "Listing published", messageText, hrefForJob };
       element = React.createElement(GenericNotification, {
-        headline: "Your listing is live",
-        messageText: messageText || "Cleaners can now bid.",
+        headline: "You’re on the board — listing’s live",
+        messageText: messageText || "Cleaners can see your job and start bidding.",
         hrefPath: hrefForJob,
-        preview: "Your listing is live on Bond Back",
+        preview: "Your listing is live — cleaners can bid now",
       });
       break;
     case "after_photos_uploaded":
@@ -461,20 +462,20 @@ export async function buildNotificationEmail(
     case "early_accept_declined":
     case "new_job_in_area": {
       const headlines: Record<string, string> = {
-        after_photos_uploaded: "After photos uploaded",
+        after_photos_uploaded: "After photos are in",
         auto_release_warning: "Auto-release reminder",
-        checklist_all_complete: "Checklist complete",
-        job_status_update: "Job update",
-        early_accept_declined: "Early acceptance",
-        new_job_in_area: "New job nearby",
+        checklist_all_complete: "Every box ticked",
+        job_status_update: "Something changed on your job",
+        early_accept_declined: "Early pick update",
+        new_job_in_area: "New job in your area",
       };
       const h = headlines[type] ?? "Update";
       templateProps = { headline: h, messageText, hrefForJob };
       element = React.createElement(GenericNotification, {
         headline: h,
-        messageText: messageText || "Open Bond Back for details.",
+        messageText: messageText || "Jump into Bond Back for the full story.",
         hrefPath: hrefForJob,
-        preview: `${h} – Bond Back`,
+        preview: `${h} — Bond Back`,
       });
       break;
     }
@@ -510,7 +511,7 @@ export async function buildWelcomeEmail(
   firstName: string | undefined,
   role: "lister" | "cleaner" | "both"
 ): Promise<{ subject: string; html: string }> {
-  const subject = "Welcome to Bond Back – Your Bond Cleaning Solution Awaits!";
+  const subject = "Welcome to Bond Back — fair cleans, secure pay 🇦🇺";
   const templateProps = { firstName: firstName?.trim() || undefined, role };
   console.info("[email:react-template]", { type: "welcome", templateProps });
   const element = React.createElement(Welcome, templateProps);
@@ -538,8 +539,8 @@ export async function buildTutorialEmail(
 ): Promise<{ subject: string; html: string }> {
   const subject =
     role === "lister"
-      ? "Your Quick Start Guide as a Lister on Bond Back"
-      : "Your Quick Start Guide as a Cleaner on Bond Back";
+      ? "Your lister playbook — four steps to handover – Bond Back"
+      : "Your cleaner playbook — browse, clean, get paid – Bond Back";
   const templateProps = { firstName: firstName?.trim() || undefined };
   console.info("[email:react-template]", { type: `tutorial_${role}`, templateProps });
   const element =
@@ -603,10 +604,10 @@ export async function buildPaymentReceiptEmail(params: {
   }
   const subject =
     params.variant === "refund"
-      ? `Refund receipt – Job #${params.jobId} – Bond Back`
+      ? `Refund receipt — Job #${params.jobId} – Bond Back`
       : params.variant === "lister"
-        ? `Payment receipt – Job #${params.jobId} – Bond Back`
-        : `Payout receipt – Job #${params.jobId} – Bond Back`;
+        ? `Payment receipt — Job #${params.jobId} – Bond Back`
+        : `Payout receipt — Job #${params.jobId} – Bond Back`;
   return { subject, html };
 }
 

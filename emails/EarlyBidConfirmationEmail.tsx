@@ -2,6 +2,9 @@ import { Button, Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
 
+const BRAND_EMERALD = "#059669";
+const BRAND_BLUE = "#1d4ed8";
+
 export type EarlyBidConfirmationEmailProps = {
   jobTitle: string;
   /** e.g. Suburb, Postcode */
@@ -23,21 +26,24 @@ export function EarlyBidConfirmationEmail({
   expiresSummary,
 }: EarlyBidConfirmationEmailProps) {
   return (
-    <EmailLayout preview={`Your bid on ${jobTitle} was selected — please confirm`}>
+    <EmailLayout
+      preview={`You’re front of the queue on “${jobTitle}” — tap to confirm`}
+    >
       <Section>
-        <Text style={headline}>Your bid has been selected — please confirm</Text>
+        <Text style={headline}>🎯 You&apos;re picked — lock it in?</Text>
         <Text style={lead}>
-          The lister has chosen your bid early. Please confirm to win the job and start working.
+          The lister has chosen your bid early (nice one). Confirm to accept the job and get cracking — or
+          decline if the timing&apos;s not right. No stress either way.
         </Text>
       </Section>
 
       <Section style={detailBox}>
-        <Text style={detailTitle}>Job details</Text>
+        <Text style={detailTitle}>Job snapshot</Text>
         <Text style={detailRow}>
-          <strong>Title:</strong> {jobTitle}
+          <strong>Job:</strong> {jobTitle}
         </Text>
         <Text style={detailRow}>
-          <strong>Location:</strong> {addressLine}
+          <strong>Where:</strong> {addressLine}
         </Text>
         <Text style={detailRow}>
           <strong>Your bid:</strong> {bidAmountDisplay}
@@ -49,7 +55,7 @@ export function EarlyBidConfirmationEmail({
 
       <Section style={btnRow}>
         <Button href={confirmUrl} style={btnPrimary}>
-          Confirm &amp; Accept Job
+          Confirm &amp; accept job
         </Button>
       </Section>
       <Section style={btnRow}>
@@ -60,10 +66,11 @@ export function EarlyBidConfirmationEmail({
 
       <Section>
         <Text style={note}>
-          <strong>Note:</strong> This offer will expire in {expiresSummary} if not confirmed.
+          <strong>Heads up:</strong> This offer expires in {expiresSummary} if you don&apos;t confirm — fair
+          dinkum, jump on it when you can.
         </Text>
         <Text style={footerHint}>
-          If the buttons don&apos;t work, copy and paste these links into your browser:
+          Buttons playing up? Paste into your browser:
           <br />
           <span style={mono}>Confirm: {confirmUrl}</span>
           <br />
@@ -76,7 +83,7 @@ export function EarlyBidConfirmationEmail({
 
 const headline = {
   color: "#0f172a",
-  fontSize: "20px",
+  fontSize: "22px",
   fontWeight: "700" as const,
   margin: "0 0 12px 0",
   lineHeight: 1.3,
@@ -85,12 +92,13 @@ const headline = {
 const lead = {
   color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.55,
+  lineHeight: 1.65,
   margin: "0 0 20px 0",
 };
 
 const detailBox = {
   backgroundColor: "#f8fafc",
+  borderLeft: `4px solid ${BRAND_EMERALD}`,
   borderRadius: "8px",
   padding: "16px 18px",
   marginBottom: "24px",
@@ -108,7 +116,7 @@ const detailTitle = {
 const detailRow = {
   color: "#475569",
   fontSize: "14px",
-  lineHeight: 1.5,
+  lineHeight: 1.55,
   margin: "0 0 6px 0",
 };
 
@@ -118,34 +126,35 @@ const btnRow = {
 };
 
 const btnPrimary = {
-  backgroundColor: "#2563eb",
-  borderRadius: "8px",
+  backgroundColor: BRAND_EMERALD,
+  borderRadius: "999px",
   color: "#ffffff",
   fontSize: "15px",
-  fontWeight: "600" as const,
+  fontWeight: "700" as const,
   textDecoration: "none",
   textAlign: "center" as const,
   display: "inline-block",
   padding: "14px 28px",
+  boxShadow: "0 4px 14px rgba(5, 150, 105, 0.35)",
 };
 
 const btnSecondary = {
   backgroundColor: "#ffffff",
-  border: "1px solid #cbd5e1",
-  borderRadius: "8px",
-  color: "#334155",
+  border: `2px solid ${BRAND_BLUE}`,
+  borderRadius: "999px",
+  color: BRAND_BLUE,
   fontSize: "15px",
   fontWeight: "600" as const,
   textDecoration: "none",
   textAlign: "center" as const,
   display: "inline-block",
-  padding: "14px 28px",
+  padding: "12px 26px",
 };
 
 const note = {
   color: "#475569",
   fontSize: "14px",
-  lineHeight: 1.55,
+  lineHeight: 1.6,
   margin: "20px 0 12px 0",
 };
 

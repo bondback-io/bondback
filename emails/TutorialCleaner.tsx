@@ -1,8 +1,9 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export interface TutorialCleanerProps {
   firstName?: string;
@@ -15,55 +16,53 @@ export function TutorialCleaner({ firstName }: TutorialCleanerProps) {
 
   return (
     <EmailLayout
-      preview="Your Quick Start Guide as a Cleaner"
+      preview="Cleaner quick start — browse, bid, shine, get paid"
       viewJobUrl={jobsUrl}
       viewJobLabel="Browse jobs"
     >
       <Section>
-        <Text style={title}>Your Quick Start Guide as a Cleaner</Text>
+        <Text style={title}>🧹 Bond Back for cleaners (the short version)</Text>
         <Text style={body}>{greeting}</Text>
         <Text style={body}>
-          Here&apos;s how to win jobs and get paid on Bond Back:
+          Win work, deliver a cracker clean, and get paid with funds held safely until handover.
         </Text>
 
-        <Text style={step}>1. Browse live jobs</Text>
+        <Text style={step}>1. Browse jobs near you</Text>
         <Text style={stepBody}>
-          Listings show location, move-out date, and details. Place a lower bid
-          to compete, or use Buy Now if the price works for you.
+          Listings show what matters: location, timing, scope. Place a competitive bid or tap Buy Now when the
+          numbers work.
         </Text>
         <Text style={link}>
           <a href={jobsUrl} style={linkStyle}>
-            Browse jobs →
+            See what&apos;s live →
           </a>
         </Text>
 
         <Text style={step}>2. Bid or Buy Now</Text>
         <Text style={stepBody}>
-          In a reverse auction, the lowest bid wins. You can also Buy Now at the
-          listed price for an instant booking.
+          Lowest bid wins in the auction — or lock it in with Buy Now when the price is right.
         </Text>
 
-        <Text style={step}>3. Upload photos and complete the job</Text>
+        <Text style={step}>3. Complete & upload proof</Text>
         <Text style={stepBody}>
-          Once the lister approves you, coordinate via messages. After the
-          clean, upload before/after photos. The lister reviews and approves,
-          then releases payment.
+          Approved? Coordinate in chat, nail the clean, then upload before/after photos so the lister can sign
+          off with confidence.
         </Text>
 
         <Text style={step}>4. Get paid</Text>
         <Text style={stepBody}>
-          When the lister releases payment, funds go to your account. Track
-          payouts in Earnings.
+          The lister releases payment when they&apos;re happy. Track payouts and history in Earnings — your
+          accountant will love you.
         </Text>
         <Text style={link}>
           <a href={earningsUrl} style={linkStyle}>
-            View earnings →
+            Earnings →
           </a>
         </Text>
 
         <Text style={proTip}>
-          <strong>Pro tip:</strong> Set your travel radius and suburb in your
-          profile so you only see jobs you can realistically do.
+          <strong>Hot tip:</strong> Tighten your travel radius in profile so you only see jobs that make
+          sense after petrol and coffee.
         </Text>
 
         <Text style={signOff}>– The Bond Back team</Text>
@@ -73,31 +72,31 @@ export function TutorialCleaner({ firstName }: TutorialCleanerProps) {
 }
 
 const title = {
-  color: "#111827",
-  fontSize: "18px",
-  fontWeight: "600",
+  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: "700" as const,
   margin: "0 0 12px 0",
-  lineHeight: 1.3,
+  lineHeight: 1.35,
 };
 
 const body = {
-  color: "#374151",
+  color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.6,
+  lineHeight: 1.65,
   margin: "0 0 16px 0",
 };
 
 const step = {
-  color: "#111827",
+  color: "#0f172a",
   fontSize: "15px",
-  fontWeight: "600",
+  fontWeight: "600" as const,
   margin: "20px 0 6px 0",
 };
 
 const stepBody = {
-  color: "#374151",
+  color: "#475569",
   fontSize: "14px",
-  lineHeight: 1.5,
+  lineHeight: 1.55,
   margin: "0 0 8px 0",
 };
 
@@ -106,22 +105,24 @@ const link = {
 };
 
 const linkStyle = {
-  color: "#3b82f6",
+  color: "#1d4ed8",
+  fontWeight: "600" as const,
   textDecoration: "underline",
 };
 
 const proTip = {
-  backgroundColor: "#eff6ff",
-  borderLeft: "4px solid #3b82f6",
-  color: "#1e40af",
+  backgroundColor: "#ecfdf5",
+  borderLeft: "4px solid #059669",
+  color: "#065f46",
   fontSize: "14px",
   padding: "12px 16px",
   margin: "20px 0 0 0",
-  borderRadius: "0 4px 4px 0",
+  borderRadius: "0 6px 6px 0",
+  lineHeight: 1.55,
 };
 
 const signOff = {
-  color: "#6b7280",
+  color: "#64748b",
   fontSize: "14px",
   margin: "24px 0 0 0",
 };

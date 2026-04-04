@@ -12,6 +12,8 @@ import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/notifications/email";
+import { emailPublicOrigin } from "@/emails/email-public-url";
+
 const EARLY_ACCEPT_HOURS = 24;
 
 function safeEqualToken(a: string, b: string): boolean {
@@ -162,7 +164,7 @@ export async function requestEarlyBidAcceptance(
     };
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+  const appUrl = emailPublicOrigin();
   const confirmUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=confirm`;
   const declineUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=decline`;
 
@@ -186,7 +188,7 @@ export async function requestEarlyBidAcceptance(
     expiresSummary: `${EARLY_ACCEPT_HOURS} hours`,
   });
   const html = await render(element);
-  const subject = `Your bid on ${jobTitle} has been selected \u2013 please confirm`;
+  const subject = `You’re first pick on “${jobTitle}” — tap to confirm – Bond Back`;
 
   const cleanerEmail = await getEmailForUserId(b.cleaner_id);
   if (!cleanerEmail?.trim()) {

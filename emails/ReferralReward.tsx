@@ -1,7 +1,9 @@
 import * as React from "react";
 import { Section, Text } from "@react-email/components";
+import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export type ReferralRewardVariant = "referred" | "referrer";
 
@@ -16,30 +18,63 @@ export type ReferralRewardProps = {
  */
 export function ReferralReward({ variant, creditDollars, jobId }: ReferralRewardProps) {
   const isReferred = variant === "referred";
+  const profileUrl = `${APP_URL}/profile`;
+
   return (
-    <Section style={{ fontFamily: "system-ui, sans-serif", padding: "24px" }}>
-      <Text style={{ fontSize: 18, fontWeight: 600, color: "#0f172a" }}>
-        {isReferred ? "You earned referral credit!" : "Your referral earned you credit!"}
-      </Text>
-      <Text style={{ fontSize: 15, color: "#334155", lineHeight: 1.5 }}>
-        {isReferred ? (
-          <>
-            Congratulations on completing your first job (Job #{jobId}).{" "}
-            <strong>{creditDollars}</strong> has been added to your Bond Back account credit.
-          </>
-        ) : (
-          <>
-            Someone you referred just completed their first job (Job #{jobId}).{" "}
-            <strong>{creditDollars}</strong> has been added to your account credit as a thank-you.
-          </>
-        )}
-      </Text>
-      <Text style={{ fontSize: 14, color: "#64748b" }}>
-        Credit applies toward future platform fees where applicable. View your profile:{" "}
-        <a href={`${APP_URL}/profile`} style={{ color: "#0284c7" }}>
-          {APP_URL}/profile
-        </a>
-      </Text>
-    </Section>
+    <EmailLayout
+      preview={
+        isReferred
+          ? `You’ve earned ${creditDollars} referral credit — legend`
+          : `Your referral just earned you ${creditDollars} credit`
+      }
+      viewJobUrl={profileUrl}
+      viewJobLabel="View your profile"
+    >
+      <Section>
+        <Text style={heading}>
+          {isReferred ? "First job done — here’s a little thank-you 🎉" : "Your referral came good — credit’s yours"}
+        </Text>
+        <Text style={body}>
+          {isReferred ? (
+            <>
+              Massive congrats on wrapping your first job (Job #{jobId}). We&apos;ve added{" "}
+              <strong>{creditDollars}</strong> to your Bond Back account credit—use it toward platform fees
+              where applicable.
+            </>
+          ) : (
+            <>
+              Someone you referred just finished their first job (Job #{jobId}).{" "}
+              <strong>{creditDollars}</strong> is now sitting in your account credit as a cheers for spreading
+              the word.
+            </>
+          )}
+        </Text>
+        <Text style={finePrint}>
+          Credit applies to eligible fees—see your profile for balance and details.
+        </Text>
+      </Section>
+    </EmailLayout>
   );
 }
+
+const heading = {
+  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: "700" as const,
+  lineHeight: 1.35,
+  margin: "0 0 14px 0",
+};
+
+const body = {
+  color: "#334155",
+  fontSize: "15px",
+  lineHeight: 1.65,
+  margin: "0 0 12px 0",
+};
+
+const finePrint = {
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.5,
+  margin: "0",
+};

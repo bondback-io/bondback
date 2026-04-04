@@ -1,8 +1,9 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export interface JobMarkedCompleteProps {
   jobId: number | string;
@@ -14,36 +15,40 @@ export function JobMarkedComplete({ jobId, messageText }: JobMarkedCompleteProps
 
   return (
     <EmailLayout
-      preview="Cleaner marked job complete – review & approve"
+      preview="Cleaner says it’s done — time for your final look"
       viewJobUrl={viewJobUrl}
-      viewJobLabel="View Job"
+      viewJobLabel="Review job"
     >
       <Section>
-        <Text style={title}>Cleaner marked job complete – review & approve</Text>
+        <Text style={title}>Photos are in — have a squiz before you pay 👀</Text>
         <Text style={body}>{messageText}</Text>
-        <Text style={subtext}>Review the work and release payment when you&apos;re satisfied.</Text>
+        <Text style={subtext}>
+          If everything matches the checklist, release funds and leave a review. You’ve got a 48-hour
+          window to raise a dispute if something’s off.
+        </Text>
       </Section>
     </EmailLayout>
   );
 }
 
 const title = {
-  color: "#111827",
-  fontSize: "18px",
-  fontWeight: "600",
+  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: "700" as const,
   margin: "0 0 12px 0",
   lineHeight: 1.3,
 };
 
 const body = {
-  color: "#374151",
+  color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.6,
+  lineHeight: 1.65,
   margin: "0 0 16px 0",
 };
 
 const subtext = {
-  color: "#6b7280",
+  color: "#64748b",
   fontSize: "13px",
   margin: "0",
+  lineHeight: 1.5,
 };

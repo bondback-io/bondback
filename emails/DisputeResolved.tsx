@@ -1,8 +1,9 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export interface DisputeResolvedProps {
   jobId: number | string;
@@ -14,12 +15,12 @@ export function DisputeResolved({ jobId, messageText }: DisputeResolvedProps) {
 
   return (
     <EmailLayout
-      preview="Dispute resolved"
+      preview="Dispute closed — here’s what happens next"
       viewJobUrl={viewJobUrl}
-      viewJobLabel="View Job"
+      viewJobLabel="View outcome"
     >
       <Section>
-        <Text style={title}>Dispute resolved</Text>
+        <Text style={title}>Dispute resolved — moving forward 🤝</Text>
         <Text style={body}>{messageText}</Text>
       </Section>
     </EmailLayout>
@@ -27,16 +28,16 @@ export function DisputeResolved({ jobId, messageText }: DisputeResolvedProps) {
 }
 
 const title = {
-  color: "#111827",
-  fontSize: "18px",
-  fontWeight: "600",
+  color: "#0f172a",
+  fontSize: "19px",
+  fontWeight: "700" as const,
   margin: "0 0 12px 0",
   lineHeight: 1.3,
 };
 
 const body = {
-  color: "#374151",
+  color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.6,
+  lineHeight: 1.65,
   margin: "0",
 };

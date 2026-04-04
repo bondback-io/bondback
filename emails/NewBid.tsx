@@ -1,8 +1,9 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
+import { emailPublicOrigin } from "./email-public-url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+const APP_URL = emailPublicOrigin();
 
 export interface NewBidProps {
   listingId?: number | string;
@@ -14,38 +15,43 @@ export function NewBid({ listingId, messageText }: NewBidProps) {
 
   return (
     <EmailLayout
-      preview="New bid on your listing – Bond Back"
+      preview="Someone just bid on your bond clean — have a peek"
       viewJobUrl={viewUrl}
-      viewJobLabel="View listing"
+      viewJobLabel="Review bids"
     >
       <Section>
-        <Text style={title}>New bid on your listing</Text>
+        <Text style={title}>Fresh bid on your listing 🎯</Text>
         <Text style={body}>
-          {messageText || "A cleaner has placed a bid on your bond clean listing. View the listing to see the bid and accept or wait for more."}
+          {messageText ||
+            "A cleaner has placed a bid on your bond clean. Compare their offer, check their profile, and reply in-app when you’re ready."}
         </Text>
-        <Text style={subtext}>You can view and manage bids from your listing page.</Text>
+        <Text style={subtext}>
+          The reverse auction means lower bids win—so take your time, or jump in if the price already feels
+          fair dinkum.
+        </Text>
       </Section>
     </EmailLayout>
   );
 }
 
 const title = {
-  color: "#111827",
-  fontSize: "18px",
-  fontWeight: "600",
+  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: "700" as const,
   margin: "0 0 12px 0",
   lineHeight: 1.3,
 };
 
 const body = {
-  color: "#374151",
+  color: "#334155",
   fontSize: "15px",
-  lineHeight: 1.6,
+  lineHeight: 1.65,
   margin: "0 0 16px 0",
 };
 
 const subtext = {
-  color: "#6b7280",
+  color: "#64748b",
   fontSize: "13px",
   margin: "0",
+  lineHeight: 1.5,
 };
