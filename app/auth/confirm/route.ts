@@ -8,13 +8,14 @@ import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
 
 export const dynamic = "force-dynamic";
 
+/** Avoid oversized query strings when attaching the original link for “Open in Safari” / copy. */
+const MAX_RETRY_URL_PARAM_CHARS = 2048;
+
 /**
- * After `verifyOtp` / `exchangeCodeForSession`, yield so the route handler’s `Set-Cookie` writes
- * can flush before we read `getSession()` / merge onto the redirect. Double microtask only — no
- * fixed timer (keeps confirm → redirect latency low; session fallback still uses OTP/exchange result).
+ * After `verifyOtp` / `exchangeCodeForSession`, one microtask so the route handler’s `Set-Cookie`
+ * writes can run before optional `getSession()` (keeps confirm → redirect fast).
  */
 async function waitForAuthCookieSync(): Promise<void> {
-  await new Promise<void>((resolve) => queueMicrotask(resolve));
   await new Promise<void>((resolve) => queueMicrotask(resolve));
 }
 
@@ -35,13 +36,19 @@ function confirmErrorRedirect(
   message: string,
   reason?: string,
   /** Forward from confirm link `?email=` when present so the error page can prefill resend. */
-  emailHint?: string | null
+  emailHint?: string | null,
+  /** Original `/auth/confirm?...` URL so the error page can offer Copy / Safari (PKCE + in-app browsers). */
+  retryUrl?: string | null
 ) {
   const url = new URL("/auth/confirm/error", origin);
   url.searchParams.set("message", message);
   if (reason) url.searchParams.set("reason", reason);
   const trimmed = emailHint?.trim();
   if (trimmed) url.searchParams.set("email", trimmed);
+  const r = retryUrl?.trim();
+  if (r && r.length <= MAX_RETRY_URL_PARAM_CHARS) {
+    url.searchParams.set("retry", r);
+  }
   const res = NextResponse.redirect(url);
   return noStoreHeaders(res);
 }
@@ -109,8 +116,8 @@ function mapExchangeFailure(err: AuthLikeError): { userMessage: string; reason: 
   ) {
     return {
       userMessage:
-        "This link could not complete sign-in in this browser. Open the link in Safari or Chrome (not the in-app preview), or request a new confirmation email from the sign-up page.",
-      reason: "pkce_verifier_missing",
+        "Couldn’t complete sign-in in this in-app browser. Open the same link in Safari or Chrome, or copy it from the next screen.",
+      reason: "pkce_in_app_browser",
     };
   }
   return {
@@ -175,7 +182,7 @@ export async function GET(request: NextRequest) {
         error ||
         "Email confirmation was cancelled or could not be completed.";
       console.warn("[auth/confirm] oauth_error", { error, error_code, msg });
-      return confirmErrorRedirect(origin, msg, "oauth_error", emailHint);
+      return confirmErrorRedirect(origin, msg, "oauth_error", emailHint, fullUrl);
     }
 
     if (!code && !token_hash) {
@@ -221,7 +228,7 @@ export async function GET(request: NextRequest) {
           source: authExchange.source,
         });
         const { userMessage, reason } = mapExchangeFailure(exchangeError as AuthLikeError);
-        return confirmErrorRedirect(origin, userMessage, reason, emailHint);
+        return confirmErrorRedirect(origin, userMessage, reason, emailHint, fullUrl);
       }
 
       console.log("[auth/confirm] exchangeCodeForSession_ok", {
@@ -237,7 +244,8 @@ export async function GET(request: NextRequest) {
           origin,
           "We couldn’t finish signing you in. Request a new confirmation email or try logging in.",
           "exchange_failed",
-          emailHint
+          emailHint,
+          fullUrl
         );
       }
 
@@ -245,10 +253,8 @@ export async function GET(request: NextRequest) {
       await waitForAuthCookieSync();
       authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncPkceT0 });
 
-      /** Prefer cookie-backed session when readable (aligns SSR client with Set-Cookie). */
-      const { data: postExchangeSession } = await supabase.auth.getSession();
-      const sessionForFinalize =
-        postExchangeSession.session?.user?.id ? postExchangeSession.session : exchangeData.session;
+      /** Session is present after the guard above; avoid an extra getSession round-trip. */
+      const sessionForFinalize = exchangeData.session;
 
       const finalizePkceT0 = Date.now();
       const res = await redirectAfterAuthSessionEstablished({
@@ -258,7 +264,7 @@ export async function GET(request: NextRequest) {
         signupFlow,
         refParam,
         authCookieResponse,
-        sessionFromAuth: sessionForFinalize ?? null,
+        sessionFromAuth: sessionForFinalize,
       });
       authPerfDevLog("auth/confirm:redirectAfterAuthSessionEstablished", {
         ms: Date.now() - finalizePkceT0,
@@ -278,7 +284,8 @@ export async function GET(request: NextRequest) {
         origin,
         "This confirmation link is missing a token. Open the latest email from Bond Back, or request a new confirmation link from the sign-up page.",
         "missing_token",
-        emailHint
+        emailHint,
+        null
       );
     }
 
@@ -309,7 +316,7 @@ export async function GET(request: NextRequest) {
         ms: Date.now() - started,
       });
       const { userMessage, reason } = mapVerifyOtpFailure(otpError as AuthLikeError);
-      return confirmErrorRedirect(origin, userMessage, reason, emailHint);
+      return confirmErrorRedirect(origin, userMessage, reason, emailHint, fullUrl);
     }
 
     const session = otpData.session;
@@ -326,9 +333,11 @@ export async function GET(request: NextRequest) {
     await waitForAuthCookieSync();
     authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncT0 });
 
-    const { data: postVerifySession } = await supabase.auth.getSession();
-    const sessionForFinalize =
-      postVerifySession.session?.user?.id ? postVerifySession.session : session ?? null;
+    let sessionForFinalize = session?.user?.id ? session : null;
+    if (!sessionForFinalize) {
+      const { data: postVerifySession } = await supabase.auth.getSession();
+      sessionForFinalize = postVerifySession.session?.user?.id ? postVerifySession.session : null;
+    }
 
     const finalizeT0 = Date.now();
     const res = await redirectAfterAuthSessionEstablished({
@@ -360,7 +369,8 @@ export async function GET(request: NextRequest) {
       origin,
       "Something went wrong confirming your email. Try the link again or log in from the sign-up page.",
       "exception",
-      emailHint
+      emailHint,
+      fullUrl
     );
   }
 }

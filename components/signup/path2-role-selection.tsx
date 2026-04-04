@@ -47,7 +47,7 @@ export type Path2RoleSelectionProps = {
   role: "lister" | "cleaner" | undefined;
   /** One tap: set Lister and submit the sign-up (no extra fields). */
   onStartAsLister: () => void;
-  /** Set Cleaner and reveal optional fields; user completes via Create account. */
+  /** Set Cleaner and reveal ABN + travel fields; user completes via Create account. */
   onChooseCleaner: () => void;
   maxTravelKm: number;
   onMaxTravelChange: (n: number) => void;
@@ -358,16 +358,22 @@ export function Path2RoleSelection({
           transition={{ duration: tFast, ease: EASE }}
           className="space-y-4 overflow-hidden rounded-2xl border border-border/70 bg-muted/25 p-5 dark:border-gray-700/80 dark:bg-gray-950/50"
         >
-          <p className="text-sm font-medium text-foreground">Cleaner details (optional)</p>
+          <p className="text-sm font-medium text-foreground">Cleaner details</p>
           <div className="space-y-2">
             <Label htmlFor="p2-abn" className="text-base">
-              ABN
+              ABN <span className="text-destructive">*</span>
             </Label>
             <Input
               id="p2-abn"
               className="min-h-12 text-base"
-              placeholder="11 digits, optional for now"
+              placeholder="11 digits"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={11}
+              required
+              aria-required
               {...abnInputProps}
+              aria-invalid={Boolean(abnError)}
             />
             {abnError && <p className="text-sm text-destructive">{abnError}</p>}
           </div>

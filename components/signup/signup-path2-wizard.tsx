@@ -66,10 +66,10 @@ const path2Schema = z
   .superRefine((data, ctx) => {
     if (data.role !== "cleaner") return;
     const digits = (data.abn ?? "").replace(/\D/g, "");
-    if (digits.length > 0 && digits.length !== 11) {
+    if (digits.length !== 11) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "ABN must be 11 digits if provided",
+        message: "Enter your 11-digit ABN",
         path: ["abn"],
       });
     }
@@ -502,7 +502,12 @@ export function SignupPath2Wizard() {
                       onChooseCleaner={handleChooseCleaner}
                       maxTravelKm={maxTravelKm}
                       onMaxTravelChange={(n) => form.setValue("maxTravelKm", n, { shouldValidate: true })}
-                      abnInputProps={form.register("abn")}
+                      abnInputProps={form.register("abn", {
+                        onChange: (e) => {
+                          const el = e.target as HTMLInputElement;
+                          el.value = el.value.replace(/\D/g, "").slice(0, 11);
+                        },
+                      })}
                       abnError={form.formState.errors.abn?.message}
                       roleError={form.formState.errors.role?.message}
                       submitting={submitting}

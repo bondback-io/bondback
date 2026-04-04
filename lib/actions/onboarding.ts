@@ -7,6 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
 import type { ProfileRole } from "@/lib/types";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
+import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 
@@ -423,7 +424,7 @@ export type FinalizePath2SignupInput = {
   suburb: string | null;
   postcode: string | null;
   referralCode?: string | null;
-  /** Cleaner only — optional; 11 digits stored when valid. */
+  /** Cleaner only — required 11 digits; validated with {@link validateAbnIfRequired}. */
   abn?: string | null;
   /** Cleaner only — defaults to 30 km. */
   max_travel_km?: number;
@@ -490,8 +491,17 @@ export async function finalizePath2Signup(
   const roles: ProfileRole[] = [input.role];
   const active_role: ProfileRole = input.role;
   const digits = (input.abn ?? "").replace(/\D/g, "");
-  const abn =
-    input.role === "cleaner" && digits.length === 11 ? digits : null;
+  let abn: string | null = null;
+  if (input.role === "cleaner") {
+    if (digits.length !== 11) {
+      return { ok: false, error: "Enter your 11-digit ABN." };
+    }
+    const v = await validateAbnIfRequired(digits);
+    if (!v.ok) {
+      return { ok: false, error: v.error };
+    }
+    abn = digits;
+  }
   const maxTravel =
     input.role === "cleaner"
       ? Math.min(200, Math.max(5, Math.round(input.max_travel_km ?? 30)))
