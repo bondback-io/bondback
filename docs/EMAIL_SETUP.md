@@ -99,8 +99,8 @@ So the “Confirm your email” link sends users back to your app on localhost:
 1. In Supabase Dashboard → **Authentication** → **URL Configuration**:
    - **Site URL:** set to `http://localhost:3000` when testing locally (use your production URL in production).
    - **Redirect URLs:** add `http://localhost:3000/**` so Supabase allows redirects to your local app.
-2. The app passes `emailRedirectTo` with your app origin and `/auth/confirm` (plus `next`, `flow`, optional `ref`) on email/password sign-up, so after the user confirms, Supabase redirects to e.g. `http://localhost:3000/auth/confirm?...` and the **GET** route handler (`app/auth/confirm/route.ts`) exchanges the code or verifies the token and redirects into the app.
-3. **PKCE:** Supabase may put the one-time auth code in `?code=…` **or** `?token_hash=pkce_…`. Both are exchanged with `exchangeCodeForSession` in the confirm handler. Legacy non-PKCE hashes still use `verifyOtp` with `type=signup` (or default signup when `type` is omitted).
+2. On **`/signup`**, `emailRedirectTo` targets `{origin}/auth/confirm` (with optional `next`, `flow`, `ref` query params from the wizard). The confirmation email template should use **OTP** `token_hash` + `type=signup` (see `docs/supabase-email-confirm-note.md`). The **GET** route (`app/auth/confirm/route.ts`) calls `verifyOtp({ type: 'signup', token_hash })` and redirects into the app via the shared post-auth helper. **PKCE `?code=` links without a usable OTP `token_hash` are not handled** on `/auth/confirm` — use the template link with `{{ .TokenHash }}`.
+3. **OAuth** and other flows continue to use `/auth/callback` (PKCE exchange there).
 
 ### C. “Email rate limit exceeded” when signing up
 
