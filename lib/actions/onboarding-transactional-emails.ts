@@ -382,3 +382,57 @@ export async function sendTutorialEmailsForRoles(params: {
       .eq("id", params.userId);
   }
 }
+
+/**
+ * After email verification: send role tutorial emails when the profile already has roles
+ * (e.g. combined Path 2 signup). Path 1 users typically have `roles: []` until `saveRoleChoice`,
+ * which sends tutorials in-session instead.
+ */
+export async function sendTutorialEmailsAfterEmailVerificationIfNeeded(params: {
+  userId: string;
+  session: Session;
+  trigger?: string;
+}): Promise<void> {
+  const trigger = params.trigger ?? "after_email_verify";
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    console.warn("[email:tutorial:after_verify] skipped_no_admin", { userId: params.userId });
+    return;
+  }
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("full_name, roles")
+    .eq("id", params.userId)
+    .maybeSingle();
+
+  const roles = normalizeProfileRolesFromDb(
+    (profile as { roles?: unknown } | null)?.roles ?? null,
+    !!profile
+  );
+  if (roles.length === 0) {
+    console.info("[email:tutorial:after_verify] skipped_no_roles", {
+      userId: params.userId,
+      trigger,
+    });
+    return;
+  }
+
+  const tutorialRoles = roles.filter((r): r is TutorialRole => r === "lister" || r === "cleaner");
+  if (tutorialRoles.length === 0) return;
+
+  const firstName = (profile as { full_name?: string | null } | null)?.full_name?.trim()?.split(" ")[0];
+
+  console.info("[email:tutorial:after_verify] attempt", {
+    userId: params.userId,
+    trigger,
+    roles: tutorialRoles,
+  });
+
+  await sendTutorialEmailsForRoles({
+    userId: params.userId,
+    session: params.session,
+    firstName,
+    roles: tutorialRoles,
+  });
+}

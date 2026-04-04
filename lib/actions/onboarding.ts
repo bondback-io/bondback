@@ -410,6 +410,117 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
   return { ok: true, redirect: "/onboarding/lister/quick-setup" };
 }
 
+export type FinalizePath2SignupInput = {
+  userId: string;
+  email: string;
+  role: "lister" | "cleaner";
+  full_name: string;
+  suburb: string | null;
+  postcode: string | null;
+  referralCode?: string | null;
+  /** Cleaner only — optional; 11 digits stored when valid. */
+  abn?: string | null;
+  /** Cleaner only — defaults to 30 km. */
+  max_travel_km?: number;
+};
+
+export type FinalizePath2SignupResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Combined signup (Path 2): after `signUp` returns a user id, persist role + location via
+ * service role. Verifies `email` matches Auth before writing. Does not send tutorial emails
+ * (those run after email confirmation in `sendTutorialEmailsAfterEmailVerificationIfNeeded`).
+ */
+export async function finalizePath2Signup(
+  input: FinalizePath2SignupInput
+): Promise<FinalizePath2SignupResult> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      error: "Server configuration error (admin client unavailable).",
+    };
+  }
+
+  const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(input.userId);
+  if (authErr || !authUser?.user?.email?.trim()) {
+    return { ok: false, error: "Could not verify your account. Try again or log in." };
+  }
+  const emailNorm = authUser.user.email.trim().toLowerCase();
+  if (emailNorm !== input.email.trim().toLowerCase()) {
+    return { ok: false, error: "Could not verify your account." };
+  }
+
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("roles, referred_by")
+    .eq("id", input.userId)
+    .maybeSingle();
+
+  const existingRoles = (existing?.roles as string[] | null) ?? [];
+  if (existingRoles.length > 0) {
+    revalidatePath("/dashboard");
+    return { ok: true };
+  }
+
+  let referredBy: string | null = null;
+  const rawRef = input.referralCode?.trim();
+  if (rawRef) {
+    const normalized = rawRef.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (normalized.length >= 4) {
+      const { data: refProfile } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("referral_code", normalized)
+        .maybeSingle();
+      const rid = (refProfile as { id?: string } | null)?.id;
+      if (rid && rid !== input.userId) {
+        referredBy = rid;
+      }
+    }
+  }
+
+  const alreadyReferred = (existing as { referred_by?: string | null } | null)?.referred_by;
+
+  const roles: ProfileRole[] = [input.role];
+  const active_role: ProfileRole = input.role;
+  const digits = (input.abn ?? "").replace(/\D/g, "");
+  const abn =
+    input.role === "cleaner" && digits.length === 11 ? digits : null;
+  const maxTravel =
+    input.role === "cleaner"
+      ? Math.min(200, Math.max(5, Math.round(input.max_travel_km ?? 30)))
+      : 30;
+
+  const row: ProfileInsert = {
+    id: input.userId,
+    full_name: input.full_name.trim() || null,
+    suburb: input.suburb?.trim() ?? "",
+    postcode: input.postcode?.trim() || null,
+    max_travel_km: maxTravel,
+    roles,
+    active_role,
+    abn: input.role === "cleaner" ? abn : null,
+    ...(!alreadyReferred && referredBy ? { referred_by: referredBy } : {}),
+  };
+
+  const { error } = await admin.from("profiles").upsert(row as never, { onConflict: "id" });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  void import("@/lib/actions/admin-notify-email").then((m) =>
+    m.notifyAdminNewUserRegistration(input.userId).catch(() => {})
+  );
+
+  revalidatePath("/onboarding");
+  revalidatePath("/dashboard");
+  revalidatePath("/profile");
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 export type UnlockRoleResult =
   | { ok: true; redirect: string }
   | { ok: false; error: string };

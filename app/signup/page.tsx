@@ -325,6 +325,12 @@ function SignupForm() {
           <CardDescription className="text-base text-muted-foreground">
             One account — choose Lister or Cleaner next. You can unlock the other role later.
           </CardDescription>
+          <Link
+            href="/signup/combined"
+            className="mt-4 flex min-h-[3rem] w-full items-center justify-center rounded-xl border border-primary/40 bg-primary/[0.07] px-4 py-3 text-center text-sm font-semibold text-primary transition-colors hover:bg-primary/10 dark:border-primary/35 dark:bg-primary/10"
+          >
+            Recommended: sign up + choose role in one smooth flow
+          </Link>
         </CardHeader>
         <CardContent className="space-y-6">
           <GoogleSignInButton variant="signup" referralCode={refParam} />

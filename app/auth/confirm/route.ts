@@ -114,6 +114,11 @@ function mapExchangeFailure(err: AuthLikeError): { userMessage: string; reason: 
  * Email confirmation — GET only.
  * Supabase redirects here with `token_hash` + `type` (use `type=signup` in the email template — see project docs / handoff).
  * PKCE flows may send `code` instead.
+ *
+ * After `verifyOtp` / `exchangeCodeForSession`, the user is logged in and redirected in one response.
+ * `next` (default `/dashboard`) is passed to `redirectAfterAuthSessionEstablished`, which resolves the
+ * final path (e.g. `/lister/dashboard` or `/cleaner/dashboard` when profile roles are already set — Path 2).
+ * No extra client page; keep `POST_AUTH_COOKIE_SYNC_MS` small so the redirect stays fast on mobile.
  */
 export async function GET(request: NextRequest) {
   const started = Date.now();
@@ -130,6 +135,7 @@ export async function GET(request: NextRequest) {
   const error_description = searchParams.get("error_description");
 
   const next = sanitizeInternalNextPath(searchParams.get("next"), "/dashboard");
+  /** `onboarding` | `path2` | other — forwarded to `redirectAfterAuthSessionEstablished` (e.g. path2 = combined signup). */
   const signupFlow = searchParams.get("flow");
   const refParam = searchParams.get("ref");
   const emailHint = searchParams.get("email")?.trim() || null;

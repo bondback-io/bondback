@@ -5,56 +5,72 @@ import { Loader2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-/** Shown after `/auth/confirm` → `/onboarding/role-choice` while the browser session syncs (if needed). */
-export const AUTH_EMAIL_CONFIRM_STEPS = [
+/** Post–`/auth/confirm` → onboarding (e.g. role-choice). Short copy — no “preparing profile” stall. */
+export const AUTH_EMAIL_CONFIRM_HANDOFF_STEPS = [
   "Confirming your email...",
   "Logging you in securely...",
-  "Preparing your profile...",
-  "Loading role options...",
+  "Almost there...",
 ] as const;
 
+/** Path 2 combined sign-up: overlay while `signUp` + `finalizePath2Signup` run. */
+export const AUTH_EMAIL_CONFIRM_WIZARD_STEPS = [
+  "Creating your account...",
+  "Sending confirmation email...",
+] as const;
+
+/** @deprecated Use `AUTH_EMAIL_CONFIRM_HANDOFF_STEPS` */
+export const AUTH_EMAIL_CONFIRM_STEPS = AUTH_EMAIL_CONFIRM_HANDOFF_STEPS;
+
 /** Shorter on narrow viewports so steps advance quickly (perceived speed on mobile). */
-function useStepIntervalMs(): number {
-  const [ms, setMs] = useState(() =>
-    typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches ? 300 : 440
-  );
+function useStepIntervalMs(mode: "handoff" | "wizardSubmit"): number {
+  const [ms, setMs] = useState(360);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 640px)");
-    const apply = () => setMs(mq.matches ? 300 : 440);
+    const apply = () => {
+      const mobile = mq.matches;
+      setMs(mode === "wizardSubmit" ? (mobile ? 220 : 300) : mobile ? 240 : 360);
+    };
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
-  }, []);
+  }, [mode]);
   return ms;
 }
 
 export type AuthEmailConfirmTransitionLoaderProps = {
   /** `full` = post–email-confirm handoff; `compact` = chunk / Suspense fallback. */
   variant?: "full" | "compact";
+  /** Post-confirm handoff vs Path 2 sign-up submit overlay. */
+  mode?: "handoff" | "wizardSubmit";
   className?: string;
 };
 
 function AuthEmailConfirmTransitionLoaderInner({
   variant = "full",
+  mode = "handoff",
   className,
 }: AuthEmailConfirmTransitionLoaderProps) {
   const reduceMotion = useReducedMotion();
-  const stepMs = useStepIntervalMs();
+  const stepMs = useStepIntervalMs(mode);
+  const steps =
+    mode === "wizardSubmit" ? AUTH_EMAIL_CONFIRM_WIZARD_STEPS : AUTH_EMAIL_CONFIRM_HANDOFF_STEPS;
   const [stepIndex, setStepIndex] = useState(0);
+
+  useEffect(() => {
+    setStepIndex(0);
+  }, [mode]);
 
   useEffect(() => {
     if (reduceMotion) return;
     const id = window.setInterval(() => {
-      setStepIndex((i) => Math.min(i + 1, AUTH_EMAIL_CONFIRM_STEPS.length - 1));
+      setStepIndex((i) => Math.min(i + 1, steps.length - 1));
     }, stepMs);
     return () => window.clearInterval(id);
-  }, [reduceMotion, stepMs]);
+  }, [reduceMotion, stepMs, steps.length]);
 
   /** Last step on reduced motion — matches “almost done” without cycling timers. */
-  const label = reduceMotion
-    ? AUTH_EMAIL_CONFIRM_STEPS[AUTH_EMAIL_CONFIRM_STEPS.length - 1]
-    : AUTH_EMAIL_CONFIRM_STEPS[stepIndex];
-  const effectiveStepIndex = reduceMotion ? AUTH_EMAIL_CONFIRM_STEPS.length - 1 : stepIndex;
+  const label = reduceMotion ? steps[steps.length - 1] : steps[stepIndex];
+  const effectiveStepIndex = reduceMotion ? steps.length - 1 : stepIndex;
 
   const isCompact = variant === "compact";
 
@@ -145,7 +161,7 @@ function AuthEmailConfirmTransitionLoaderInner({
               {label}
             </motion.p>
           </AnimatePresence>
-          {!isCompact && (
+          {!isCompact && mode === "handoff" && (
             <p className="text-sm text-muted-foreground max-sm:text-[0.8125rem] dark:text-gray-400">
               This usually takes a moment on mobile networks.
             </p>
@@ -159,7 +175,7 @@ function AuthEmailConfirmTransitionLoaderInner({
           )}
           aria-hidden
         >
-          {AUTH_EMAIL_CONFIRM_STEPS.map((_, i) => (
+          {steps.map((_, i) => (
             <li
               key={i}
               className={cn(

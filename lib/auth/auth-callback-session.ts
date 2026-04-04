@@ -8,7 +8,10 @@ import { syncGoogleIdentityToProfile } from "@/lib/auth/sync-google-profile";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
-import { sendWelcomeEmailAfterEmailVerification } from "@/lib/actions/onboarding-transactional-emails";
+import {
+  sendTutorialEmailsAfterEmailVerificationIfNeeded,
+  sendWelcomeEmailAfterEmailVerification,
+} from "@/lib/actions/onboarding-transactional-emails";
 import { authPerfDevLog, isAuthPerfDev } from "@/lib/auth/auth-perf-dev";
 
 type SessionFinalizeParams = {
@@ -198,35 +201,50 @@ export async function redirectAfterAuthSessionEstablished(
     redirectTo = getPostLoginDashboardPath(p);
   }
 
-  if (sendWelcomeEmail && session.user.id) {
+  if (session.user.id) {
     const userId = session.user.id;
-    const sessionForWelcome = session;
+    const sessionForEmails = session;
     /** Defer so the redirect response is not blocked by Resend / global_settings / prefs reads. */
     setTimeout(() => {
-      console.info("[auth-callback-session] email_confirmed_attempting_welcome", {
-        userId,
-        trigger: "auth_redirect_after_verify",
-        note: "deferred",
-      });
-      void sendWelcomeEmailAfterEmailVerification({
-        userId,
-        session: sessionForWelcome,
-        trigger: "auth_redirect_after_verify",
-      })
-        .then((result) => {
-          console.info("[auth-callback-session] welcome_email_result", {
+      void (async () => {
+        if (sendWelcomeEmail) {
+          console.info("[auth-callback-session] email_confirmed_attempting_welcome", {
             userId,
-            ok: result.ok,
-            skipped: result.skipped,
-            error: result.error,
+            trigger: "auth_redirect_after_verify",
+            note: "deferred",
           });
-        })
-        .catch((e) => {
-          console.error("[auth-callback-session] welcome_email_failed", {
+          try {
+            const result = await sendWelcomeEmailAfterEmailVerification({
+              userId,
+              session: sessionForEmails,
+              trigger: "auth_redirect_after_verify",
+            });
+            console.info("[auth-callback-session] welcome_email_result", {
+              userId,
+              ok: result.ok,
+              skipped: result.skipped,
+              error: result.error,
+            });
+          } catch (e) {
+            console.error("[auth-callback-session] welcome_email_failed", {
+              userId,
+              message: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+        try {
+          await sendTutorialEmailsAfterEmailVerificationIfNeeded({
+            userId,
+            session: sessionForEmails,
+            trigger: "auth_redirect_after_verify",
+          });
+        } catch (e) {
+          console.error("[auth-callback-session] tutorial_after_verify_failed", {
             userId,
             message: e instanceof Error ? e.message : String(e),
           });
-        });
+        }
+      })();
     }, 0);
   }
 
