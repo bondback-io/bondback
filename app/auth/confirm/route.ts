@@ -8,15 +8,13 @@ import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
 export const dynamic = "force-dynamic";
 
 /**
- * After `verifyOtp` / `exchangeCodeForSession`, allow the route handler’s `Set-Cookie` writes to
- * flush before `redirectAfterAuthSessionEstablished` merges cookies onto the redirect response.
- * One microtask + short timer — kept minimal to avoid stacking delays (major on mobile).
+ * After `verifyOtp` / `exchangeCodeForSession`, yield so the route handler’s `Set-Cookie` writes
+ * can flush before `redirectAfterAuthSessionEstablished` merges cookies onto the redirect response.
+ * Microtask + 0ms timer (no fixed 50ms buffer — reduces perceived stall on mobile Safari).
  */
-const POST_AUTH_COOKIE_SYNC_MS = 50;
-
 async function waitForAuthCookieSync(): Promise<void> {
   await new Promise<void>((resolve) => queueMicrotask(resolve));
-  await new Promise<void>((resolve) => setTimeout(resolve, POST_AUTH_COOKIE_SYNC_MS));
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 function noStoreHeaders(res: NextResponse) {
@@ -118,7 +116,7 @@ function mapExchangeFailure(err: AuthLikeError): { userMessage: string; reason: 
  * After `verifyOtp` / `exchangeCodeForSession`, the user is logged in and redirected in one response.
  * `next` (default `/dashboard`) is passed to `redirectAfterAuthSessionEstablished`, which resolves the
  * final path (e.g. `/lister/dashboard` or `/cleaner/dashboard` when profile roles are already set — Path 2).
- * No extra client page; keep `POST_AUTH_COOKIE_SYNC_MS` small so the redirect stays fast on mobile.
+ * No extra client page; cookie sync stays a single event-loop turn so the redirect stays fast on mobile.
  */
 export async function GET(request: NextRequest) {
   const started = Date.now();

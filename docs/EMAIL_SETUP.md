@@ -99,7 +99,7 @@ So the “Confirm your email” link sends users back to your app on localhost:
 1. In Supabase Dashboard → **Authentication** → **URL Configuration**:
    - **Site URL:** set to `http://localhost:3000` when testing locally (use your production URL in production).
    - **Redirect URLs:** add `http://localhost:3000/**` so Supabase allows redirects to your local app.
-2. The app already passes `emailRedirectTo: ${window.location.origin}/auth/callback` on signup, so the confirmation link will redirect to your app (e.g. `http://localhost:3000/auth/callback`) after the user confirms.
+2. The app passes `emailRedirectTo` with your app origin and `/auth/confirm` (plus `next`, `flow`, optional `ref`) on email/password sign-up, so after the user confirms, Supabase redirects to e.g. `http://localhost:3000/auth/confirm?...` and the route verifies the token and sends the user to the right dashboard.
 
 ### C. “Email rate limit exceeded” when signing up
 
@@ -114,7 +114,7 @@ Supabase Auth limits how many **auth emails** (signup confirmation, password res
 - [ ] `RESEND_API_KEY` in `.env.local` (you already use this for app emails).
 - [ ] Supabase → Authentication → URL Configuration: **Site URL** = `http://localhost:3000`, **Redirect URLs** includes `http://localhost:3000/**`.
 - [ ] (Optional) Supabase → Authentication → SMTP: Custom SMTP with Resend credentials so the confirm email is sent via Resend and rate limits are more generous.
-- [ ] Sign up a new user → open the confirmation email → click the link → you should land on `http://localhost:3000/auth/callback` and then be redirected into the app.
+- [ ] Sign up a new user → open the confirmation email → click the link → you should land on `http://localhost:3000/auth/confirm?...` and then be redirected into the app (dashboard matches the role chosen at sign-up).
 
 ---
 

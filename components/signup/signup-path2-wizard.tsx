@@ -7,7 +7,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type DefaultValues } from "react-hook-form";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Check, ChevronLeft } from "lucide-react";
+import { Check } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { finalizePath2Signup } from "@/lib/actions/onboarding";
 import { scheduleRouterAction } from "@/lib/deferred-router";
@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { AuthPageBackLink } from "@/components/auth/auth-page-back-link";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { getClientAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
 import {
   loadCachedSignupLocation,
@@ -25,7 +26,6 @@ import {
 } from "@/lib/location/signup-location-prefill";
 import { SuburbPostcodeAutocomplete } from "@/components/features/suburb-postcode-autocomplete";
 import { Path2RoleSelection } from "@/components/signup/path2-role-selection";
-import { cn } from "@/lib/utils";
 
 function buildPath2AuthConfirmUrl(origin: string, ref: string | null): string {
   const u = new URL(`${origin}/auth/confirm`);
@@ -43,15 +43,21 @@ const path2Schema = z
     fullName: z.string().min(1, "Name is required").max(120),
     suburb: z.string().max(120).optional().or(z.literal("")),
     postcode: z.string().max(10).optional().or(z.literal("")),
-    role: z.enum(["lister", "cleaner"], {
-      errorMap: () => ({ message: "Choose how you want to use Bond Back" }),
-    }),
+    role: z
+      .enum(["lister", "cleaner"], {
+        errorMap: () => ({ message: "Choose how you want to use Bond Back" }),
+      })
+      .optional(),
     abn: z.string().optional().or(z.literal("")),
     maxTravelKm: z.number().min(5).max(200),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
+  })
+  .refine((data) => data.role === "lister" || data.role === "cleaner", {
+    message: "Choose how you want to use Bond Back",
+    path: ["role"],
   })
   .superRefine((data, ctx) => {
     if (data.role !== "cleaner") return;
@@ -67,17 +73,13 @@ const path2Schema = z
 
 type Path2Values = z.infer<typeof path2Schema>;
 
-const step1Fields = [
-  "email",
-  "password",
-  "confirmPassword",
-  "fullName",
-  "suburb",
-  "postcode",
-] as const satisfies readonly (keyof Path2Values)[];
-
-const btnTouch =
-  "touch-manipulation min-h-[3.25rem] w-full text-base font-semibold transition-transform duration-150 active:scale-[0.98] sm:min-h-12";
+function assertRole(
+  values: Path2Values
+): asserts values is Path2Values & { role: "lister" | "cleaner" } {
+  if (values.role !== "lister" && values.role !== "cleaner") {
+    throw new Error("Role required");
+  }
+}
 
 const EASE_FLOW = [0.25, 0.1, 0.25, 1] as const;
 
@@ -87,7 +89,7 @@ export function SignupPath2Wizard() {
   const searchParams = useSearchParams();
   const refParam = searchParams.get("ref")?.trim() || null;
 
-  const [phase, setPhase] = useState<"step1" | "step2" | "success">("step1");
+  const [phase, setPhase] = useState<"form" | "success">("form");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [, startTransition] = useTransition();
@@ -108,9 +110,10 @@ export function SignupPath2Wizard() {
       fullName: "",
       suburb: "",
       postcode: "",
+      role: undefined,
       abn: "",
       maxTravelKm: 30,
-    } as DefaultValues<Path2Values>,
+    } satisfies DefaultValues<Path2Values>,
   });
 
   const formRef = useRef(form);
@@ -155,20 +158,9 @@ export function SignupPath2Wizard() {
   const role = form.watch("role");
   const maxTravelKm = form.watch("maxTravelKm");
 
-  const goStep2 = useCallback(() => {
-    setError(null);
-    void form.trigger([...step1Fields]).then((ok) => {
-      if (ok) setPhase("step2");
-    });
-  }, [form]);
-
-  const backToStep1 = useCallback(() => {
-    setPhase("step1");
-    setError(null);
-  }, []);
-
   const handlePath2Signup = useCallback(
     async (values: Path2Values) => {
+      assertRole(values);
       setError(null);
       startTransition(() => setSubmitting(true));
 
@@ -266,34 +258,13 @@ export function SignupPath2Wizard() {
         <AuthPageBackLink />
       </div>
 
-      <div
-        className={cn(
-          "w-full space-y-6 transition-[max-width] duration-300 ease-out",
-          phase === "step2" ? "max-w-2xl" : "max-w-lg"
-        )}
-      >
-        {phase !== "success" && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3 text-sm font-medium">
-              <span className="text-muted-foreground">
-                Step {phase === "step1" ? 1 : 2} of 2
-              </span>
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold tracking-wide text-primary">
-                Bond Back
-              </span>
-            </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-sky-500 via-teal-500 to-emerald-500"
-                initial={false}
-                animate={{ width: phase === "step1" ? "50%" : "100%" }}
-                transition={
-                  reduceMotion
-                    ? { duration: 0 }
-                    : { type: "tween", duration: 0.36, ease: EASE_FLOW }
-                }
-              />
-            </div>
+      <div className="w-full max-w-2xl space-y-6 transition-[max-width] duration-300 ease-out">
+        {phase === "form" && (
+          <div className="flex items-center justify-between gap-3 text-sm font-medium">
+            <span className="text-muted-foreground">Sign up</span>
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold tracking-wide text-primary">
+              Bond Back
+            </span>
           </div>
         )}
 
@@ -360,32 +331,42 @@ export function SignupPath2Wizard() {
             </motion.div>
           ) : (
             <motion.div
-              key={phase}
-              initial={reduceMotion ? false : { opacity: 0, x: phase === "step2" ? 14 : -14 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: phase === "step2" ? -8 : 8 }}
+              key="form"
+              initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
               transition={{ duration: flowDur, ease: EASE_FLOW }}
             >
               <Card className="relative w-full overflow-visible border-border/80 shadow-lg dark:border-gray-800 dark:bg-gray-900">
                 <CardHeader className="space-y-1 pb-4 text-center sm:text-left">
                   <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
-                    {phase === "step1" ? "Your details" : "How will you use Bond Back?"}
+                    Create your account
                   </CardTitle>
                   <CardDescription className="text-base text-muted-foreground">
-                    {phase === "step1"
-                      ? "We’ll ask for Lister or Cleaner next — one smooth flow."
-                      : "Pick a role to start. You can unlock the other anytime in Settings."}
+                    Enter your details, then choose Lister or Cleaner — one smooth sign-up. You can unlock
+                    the other role anytime in Settings.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {error && (
-                    <Alert variant="destructive" className="text-sm">
-                      {error}
-                    </Alert>
-                  )}
+                  <GoogleSignInButton variant="signup" referralCode={refParam} />
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center" aria-hidden>
+                      <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">Or sign up with email</span>
+                    </div>
+                  </div>
 
-                  {phase === "step1" && (
+                  <form className="space-y-8" onSubmit={onCreateAccount} noValidate>
+                    {error && (
+                      <Alert variant="destructive" className="text-sm">
+                        {error}
+                      </Alert>
+                    )}
+
                     <div className="space-y-4">
+                      <h2 className="text-lg font-semibold tracking-tight text-foreground">Your details</h2>
                       <div className="space-y-2">
                         <Label htmlFor="p2-fullName" className="text-base">
                           Full name
@@ -471,61 +452,38 @@ export function SignupPath2Wizard() {
                             undefined
                           }
                         />
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Pick a suggestion or type manually. We may prefill from your location; last values
+                          are remembered on this device.
+                        </p>
                       </div>
-
-                      <motion.div
-                        whileTap={
-                          reduceMotion ? undefined : { scale: 0.98, transition: { duration: 0.2, ease: EASE_FLOW } }
-                        }
-                        className="mt-2 w-full"
-                      >
-                        <Button type="button" size="lg" className={cn(btnTouch, "w-full")} onClick={goStep2}>
-                          Continue
-                        </Button>
-                      </motion.div>
                     </div>
-                  )}
 
-                  {phase === "step2" && (
+                    <div className="h-px w-full bg-border/80" aria-hidden />
+
                     <Path2RoleSelection
                       role={role}
                       onStartAsLister={handleStartAsLister}
                       onChooseCleaner={handleChooseCleaner}
                       maxTravelKm={maxTravelKm}
-                      onMaxTravelChange={(n) =>
-                        form.setValue("maxTravelKm", n, { shouldValidate: true })
-                      }
+                      onMaxTravelChange={(n) => form.setValue("maxTravelKm", n, { shouldValidate: true })}
                       abnInputProps={form.register("abn")}
                       abnError={form.formState.errors.abn?.message}
                       roleError={form.formState.errors.role?.message}
                       submitting={submitting}
-                      onSubmit={onCreateAccount}
-                      backButton={
-                        <button
-                          type="button"
-                          onClick={backToStep1}
-                          className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <ChevronLeft className="h-4 w-4" aria-hidden />
-                          Back
-                        </button>
-                      }
                     />
-                  )}
+
+                    <p className="text-center text-sm text-muted-foreground">
+                      <Link href="/forgot-password" className="font-medium text-primary underline underline-offset-2">
+                        Forgot password?
+                      </Link>
+                    </p>
+                  </form>
                 </CardContent>
               </Card>
             </motion.div>
           )}
         </AnimatePresence>
-
-        {phase === "step1" && (
-          <p className="text-center text-sm text-muted-foreground">
-            Prefer the classic flow?{" "}
-            <Link href="/signup" className="font-medium text-primary underline underline-offset-2">
-              Standard sign-up
-            </Link>
-          </p>
-        )}
       </div>
     </section>
   );

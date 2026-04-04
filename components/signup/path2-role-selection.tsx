@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps, FormEventHandler, ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { Brush, House, Loader2, Sparkles } from "lucide-react";
@@ -55,14 +55,13 @@ export type Path2RoleSelectionProps = {
   abnError?: string;
   roleError?: string;
   submitting: boolean;
-  backButton: ReactNode;
-  onSubmit: FormEventHandler<HTMLFormElement>;
+  /** Optional; omitted on single-page sign-up. */
+  backButton?: ReactNode | null;
 };
 
 /**
- * Path 2 combined sign-up — step 2 only. Welcoming role choice with large touch targets,
- * accordions for deeper context, and scannable benefits. Submit handler is wired from
- * `SignupPath2Wizard` (`react-hook-form` handleSubmit).
+ * Combined sign-up — role block. Large touch targets, “Why choose this role?” accordions.
+ * Parent `<form>` wraps this; Lister uses `type="button"`; Cleaner confirms with `type="submit"`.
  */
 export function Path2RoleSelection({
   role,
@@ -75,7 +74,6 @@ export function Path2RoleSelection({
   roleError,
   submitting,
   backButton,
-  onSubmit,
 }: Path2RoleSelectionProps) {
   const reduceMotion = useReducedMotion();
   const listerActive = role === "lister";
@@ -88,7 +86,7 @@ export function Path2RoleSelection({
   const btnTap = reduceMotion ? undefined : { scale: 0.98, transition: { duration: 0.2, ease: EASE } };
 
   return (
-    <form className="space-y-7 sm:space-y-8" onSubmit={onSubmit} noValidate>
+    <div className="space-y-7 sm:space-y-8">
       {backButton}
 
       <div className="space-y-2 text-center sm:text-left">
@@ -419,6 +417,6 @@ export function Path2RoleSelection({
           Log in
         </Link>
       </p>
-    </form>
+    </div>
   );
 }
