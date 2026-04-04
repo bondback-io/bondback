@@ -20,7 +20,7 @@ type GoogleSignInButtonProps = {
   nextPath?: string;
   referralCode?: string | null;
   className?: string;
-  /** Sign up flow should use `/onboarding/role-choice` so new users pick a role. */
+  /** Sign up flow uses `/onboarding/google-complete` (role + optional ABN) after Google OAuth. */
   variant?: "login" | "signup";
 };
 
@@ -59,7 +59,7 @@ export function GoogleSignInButton({
 
   const resolvedNext =
     nextPath?.trim() ||
-    (variant === "signup" ? "/onboarding/role-choice" : "/dashboard");
+    (variant === "signup" ? "/onboarding/google-complete" : "/dashboard");
 
   const startGoogleOAuth = async () => {
     setError(null);

@@ -78,6 +78,8 @@ export async function saveOnboardingProfile(profile: {
 export async function upsertMinimalProfileAfterSignup(
   input: {
     full_name: string;
+    /** AU state code when known (e.g. from signup metadata). */
+    state?: string | null;
     postcode: string | null;
     suburb?: string | null;
     referralCode?: string | null;
@@ -153,6 +155,7 @@ export async function upsertMinimalProfileAfterSignup(
     first_name: input.first_name?.trim() || null,
     last_name: input.last_name?.trim() || null,
     avatar_url: avatar,
+    state: input.state?.trim() || null,
     postcode: input.postcode?.trim() || null,
     suburb: input.suburb?.trim() ?? "",
     max_travel_km: 30,
@@ -415,6 +418,8 @@ export type FinalizePath2SignupInput = {
   email: string;
   role: "lister" | "cleaner";
   full_name: string;
+  /** Australian state/territory code (e.g. QLD, NSW). */
+  state: string | null;
   suburb: string | null;
   postcode: string | null;
   referralCode?: string | null;
@@ -495,6 +500,7 @@ export async function finalizePath2Signup(
   const row: ProfileInsert = {
     id: input.userId,
     full_name: input.full_name.trim() || null,
+    state: input.state?.trim() || null,
     suburb: input.suburb?.trim() ?? "",
     postcode: input.postcode?.trim() || null,
     max_travel_km: maxTravel,

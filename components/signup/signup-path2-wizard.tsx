@@ -26,6 +26,9 @@ import {
 } from "@/lib/location/signup-location-prefill";
 import { SuburbPostcodeAutocomplete } from "@/components/features/suburb-postcode-autocomplete";
 import { Path2RoleSelection } from "@/components/signup/path2-role-selection";
+import { AU_STATES, type AuStateCode } from "@/lib/au-suburbs";
+
+const AU_STATE_CODES = new Set<string>(AU_STATES.map((s) => s.value));
 
 function buildPath2AuthConfirmUrl(origin: string, ref: string | null): string {
   const u = new URL(`${origin}/auth/confirm`);
@@ -41,6 +44,7 @@ const path2Schema = z
     password: z.string().min(6, "At least 6 characters"),
     confirmPassword: z.string().min(1, "Confirm your password"),
     fullName: z.string().min(1, "Name is required").max(120),
+    state: z.string().max(10).optional().or(z.literal("")),
     suburb: z.string().max(120).optional().or(z.literal("")),
     postcode: z.string().max(10).optional().or(z.literal("")),
     role: z
@@ -67,6 +71,26 @@ const path2Schema = z
         code: z.ZodIssueCode.custom,
         message: "ABN must be 11 digits if provided",
         path: ["abn"],
+      });
+    }
+  })
+  .superRefine((data, ctx) => {
+    const hasLoc = Boolean(data.suburb?.trim() || data.postcode?.trim());
+    if (!hasLoc) return;
+    const st = data.state?.trim();
+    if (!st) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select your state",
+        path: ["state"],
+      });
+      return;
+    }
+    if (!AU_STATE_CODES.has(st)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a valid Australian state or territory",
+        path: ["state"],
       });
     }
   });
@@ -108,6 +132,7 @@ export function SignupPath2Wizard() {
       password: "",
       confirmPassword: "",
       fullName: "",
+      state: "",
       suburb: "",
       postcode: "",
       role: undefined,
@@ -167,6 +192,7 @@ export function SignupPath2Wizard() {
       const supabase = createBrowserSupabaseClient();
       const postcode = values.postcode?.trim() || null;
       const suburb = values.suburb?.trim() || null;
+      const state = values.state?.trim() || null;
       const confirmUrl = buildPath2AuthConfirmUrl(getClientAuthEmailRedirectOrigin(), refParam);
 
       try {
@@ -177,6 +203,7 @@ export function SignupPath2Wizard() {
             emailRedirectTo: confirmUrl,
             data: {
               full_name: values.fullName.trim(),
+              state: state ?? "",
               suburb: suburb ?? "",
               postcode: postcode ?? "",
             },
@@ -208,6 +235,7 @@ export function SignupPath2Wizard() {
           email: emailForVerify,
           role: values.role,
           full_name: values.fullName.trim(),
+          state,
           suburb,
           postcode,
           referralCode: refParam,
@@ -220,7 +248,7 @@ export function SignupPath2Wizard() {
           return;
         }
 
-        saveCachedSignupLocation(values.postcode ?? "", values.suburb ?? "");
+        saveCachedSignupLocation(values.postcode ?? "", values.suburb ?? "", values.state ?? "");
 
         setPhase("success");
 
@@ -348,7 +376,11 @@ export function SignupPath2Wizard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <GoogleSignInButton variant="signup" referralCode={refParam} />
+                  <GoogleSignInButton
+                    variant="signup"
+                    nextPath="/onboarding/google-complete"
+                    referralCode={refParam}
+                  />
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center" aria-hidden>
                       <span className="w-full border-t border-border" />
@@ -434,9 +466,11 @@ export function SignupPath2Wizard() {
 
                       <div className="relative z-10 overflow-visible">
                         <SuburbPostcodeAutocomplete
-                          hideStateSelect
-                          stateValue=""
-                          onStateChange={() => {}}
+                          useDatabaseSuburbs
+                          stateValue={form.watch("state") ?? ""}
+                          onStateChange={(code) =>
+                            form.setValue("state", code, { shouldValidate: true, shouldDirty: true })
+                          }
                           suburbValue={form.watch("suburb") ?? ""}
                           postcodeValue={form.watch("postcode") ?? ""}
                           onSuburbPostcodeChange={(s, p) => {
@@ -444,17 +478,18 @@ export function SignupPath2Wizard() {
                             form.setValue("postcode", p, { shouldValidate: true, shouldDirty: true });
                           }}
                           id="p2-suburb"
-                          label="Where are you based?"
-                          suburbPlaceholder="Type suburb or postcode (e.g. 2000 or Surry)"
+                          label="Suburb & postcode"
+                          suburbPlaceholder="Select state, then type suburb or postcode"
                           error={
                             form.formState.errors.suburb?.message ||
                             form.formState.errors.postcode?.message ||
+                            form.formState.errors.state?.message ||
                             undefined
                           }
                         />
                         <p className="mt-2 text-xs text-muted-foreground">
-                          Pick a suggestion or type manually. We may prefill from your location; last values
-                          are remembered on this device.
+                          Choose state first, then pick a suggestion or type manually. We may prefill from your
+                          location; last values are remembered on this device.
                         </p>
                       </div>
                     </div>

@@ -8,6 +8,8 @@ export const SIGNUP_LOCATION_STORAGE_KEY = "bondback_signup_location";
 export type SignupLocationCache = {
   postcode?: string;
   suburb?: string;
+  /** AU state code (e.g. QLD). */
+  state?: string;
 };
 
 export function loadCachedSignupLocation(): SignupLocationCache | null {
@@ -20,21 +22,24 @@ export function loadCachedSignupLocation(): SignupLocationCache | null {
     return {
       postcode: typeof parsed.postcode === "string" ? parsed.postcode.trim() : undefined,
       suburb: typeof parsed.suburb === "string" ? parsed.suburb.trim() : undefined,
+      state: typeof parsed.state === "string" ? parsed.state.trim() : undefined,
     };
   } catch {
     return null;
   }
 }
 
-export function saveCachedSignupLocation(postcode: string, suburb: string): void {
+export function saveCachedSignupLocation(postcode: string, suburb: string, state?: string): void {
   if (typeof window === "undefined") return;
   try {
     const payload: SignupLocationCache = {};
     const pc = postcode.trim();
     const sub = suburb.trim();
+    const st = state?.trim();
     if (pc) payload.postcode = pc;
     if (sub) payload.suburb = sub;
-    if (!payload.postcode && !payload.suburb) {
+    if (st) payload.state = st.toUpperCase();
+    if (!payload.postcode && !payload.suburb && !payload.state) {
       window.localStorage.removeItem(SIGNUP_LOCATION_STORAGE_KEY);
       return;
     }
@@ -52,13 +57,15 @@ async function reverseGeocodeViaApi(lat: number, lon: number): Promise<SignupLoc
       body: JSON.stringify({ lat, lon }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { postcode?: string; suburb?: string };
+    const data = (await res.json()) as { postcode?: string; suburb?: string; state?: string };
     const postcode = typeof data.postcode === "string" ? data.postcode.trim() : "";
     const suburb = typeof data.suburb === "string" ? data.suburb.trim() : "";
-    if (!postcode && !suburb) return null;
+    const state = typeof data.state === "string" ? data.state.trim().toUpperCase() : "";
+    if (!postcode && !suburb && !state) return null;
     return {
       ...(postcode ? { postcode } : {}),
       ...(suburb ? { suburb } : {}),
+      ...(state ? { state } : {}),
     };
   } catch {
     return null;

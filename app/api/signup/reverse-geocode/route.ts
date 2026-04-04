@@ -1,5 +1,28 @@
 import { NextResponse } from "next/server";
 
+const AU_STATE_CODES = new Set(["QLD", "NSW", "VIC", "WA", "SA", "TAS", "NT", "ACT"]);
+
+/** Map Nominatim address fields to Bond Back `profiles.state` (AU state/territory code). */
+function mapNominatimStateToCode(addr: Record<string, string>): string | undefined {
+  const iso = addr["ISO3166-2-lvl4"];
+  if (typeof iso === "string" && iso.toUpperCase().startsWith("AU-")) {
+    const code = iso.slice(3).toUpperCase();
+    if (AU_STATE_CODES.has(code)) return code;
+  }
+  const st = typeof addr.state === "string" ? addr.state.trim().toLowerCase() : "";
+  const map: Record<string, string> = {
+    queensland: "QLD",
+    "new south wales": "NSW",
+    victoria: "VIC",
+    "western australia": "WA",
+    "south australia": "SA",
+    tasmania: "TAS",
+    "northern territory": "NT",
+    "australian capital territory": "ACT",
+  };
+  return map[st];
+}
+
 /**
  * Server-side Nominatim reverse lookup for AU signup suburb/postcode prefill.
  * Browsers cannot call nominatim.openstreetmap.org reliably (CORS); this route proxies it.
@@ -49,9 +72,11 @@ export async function POST(req: Request) {
       addr.neighbourhood ||
       "";
     const suburb = typeof suburbRaw === "string" ? suburbRaw.trim() : "";
+    const state = mapNominatimStateToCode(addr as Record<string, string>) ?? "";
     return NextResponse.json({
       ...(postcode ? { postcode } : {}),
       ...(suburb ? { suburb } : {}),
+      ...(state ? { state } : {}),
     });
   } catch (e) {
     console.error("[api/signup/reverse-geocode]", e instanceof Error ? e.message : e);

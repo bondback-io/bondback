@@ -125,10 +125,17 @@ export function SuburbPostcodeAutocomplete({
     ) => {
       const pc = String(entry.postcode ?? "");
       onSuburbPostcodeChange(entry.suburb, pc);
+      const rawState =
+        "state" in entry && entry.state != null && String(entry.state).trim()
+          ? String(entry.state).trim().toUpperCase()
+          : null;
+      if (rawState && AU_STATES.some((s) => s.value === rawState)) {
+        onStateChange(rawState as AuStateCode);
+      }
       setInputValue(`${entry.suburb} ${pc}`);
       setOpen(false);
     },
-    [onSuburbPostcodeChange]
+    [onSuburbPostcodeChange, onStateChange]
   );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

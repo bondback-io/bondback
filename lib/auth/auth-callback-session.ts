@@ -142,9 +142,12 @@ export async function redirectAfterAuthSessionEstablished(
       typeof meta.suburb === "string" && meta.suburb.trim() ? meta.suburb.trim() : null;
     const postcode =
       typeof meta.postcode === "string" && meta.postcode.trim() ? meta.postcode.trim() : null;
+    const stateFromMeta =
+      typeof meta.state === "string" && meta.state.trim() ? meta.state.trim().toUpperCase() : null;
     await upsertMinimalProfileAfterSignup(
       {
         full_name: fullName,
+        state: stateFromMeta,
         suburb,
         postcode,
         referralCode: refParam?.trim() || null,
@@ -192,14 +195,19 @@ export async function redirectAfterAuthSessionEstablished(
   const needsRoleChoice = roles.length === 0 || !hasActiveRole;
   let redirectTo = next;
 
-  if (needsRoleChoice && (next === "/dashboard" || next === "/onboarding/role-choice")) {
+  if (!needsRoleChoice) {
+    if (next === "/dashboard" || next === "/onboarding/google-complete") {
+      redirectTo = getPostLoginDashboardPath(p);
+    }
+  } else if (needsRoleChoice && (next === "/dashboard" || next === "/onboarding/role-choice")) {
     redirectTo =
       signupFlow === "onboarding"
         ? "/onboarding/complete-profile"
         : "/onboarding/role-choice";
-  } else if (!needsRoleChoice && next === "/dashboard") {
-    redirectTo = getPostLoginDashboardPath(p);
   }
+  /** `needsRoleChoice` + `next === /onboarding/google-complete` keeps `redirectTo` as that URL. */
+
+  const skipDeferredTransactionalEmails = redirectTo === "/onboarding/google-complete";
 
   if (session.user.id) {
     const userId = session.user.id;
@@ -207,6 +215,14 @@ export async function redirectAfterAuthSessionEstablished(
     /** Defer so the redirect response is not blocked by Resend / global_settings / prefs reads. */
     setTimeout(() => {
       void (async () => {
+        if (skipDeferredTransactionalEmails) {
+          console.info("[auth-callback-session] skip_deferred_emails", {
+            userId,
+            reason: "google_signup_pending_profile_complete",
+            redirectTo,
+          });
+          return;
+        }
         if (sendWelcomeEmail) {
           console.info("[auth-callback-session] email_confirmed_attempting_welcome", {
             userId,
