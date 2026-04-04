@@ -81,16 +81,15 @@ function confirmErrorRedirect(
   return noStoreHeaders(res);
 }
 
+/**
+ * Read OTP / legacy token from query. `URLSearchParams.get` already applies URL decoding once;
+ * do not call `decodeURIComponent` again — it can corrupt tokens that contain `%` or `+` sequences.
+ */
 function readTokenHashFromRequest(searchParams: URLSearchParams): string | null {
   const raw = searchParams.get("token_hash") ?? searchParams.get("token");
   if (raw == null) return null;
   const trimmed = raw.trim();
-  if (!trimmed) return null;
-  try {
-    return decodeURIComponent(trimmed);
-  } catch {
-    return trimmed;
-  }
+  return trimmed || null;
 }
 
 type AuthLikeError = { message: string; status?: number; name?: string; code?: string };
@@ -200,25 +199,29 @@ function mapExchangeFailure(err: AuthLikeError): { userMessage: string; reason: 
 }
 
 /**
- * Email confirmation — same logic as legacy GET `/auth/confirm` route.
- * Prefer invoking via POST `/api/auth/confirm` from the client page so users see a loading UI first.
+ * Email confirmation — invoked from GET `/auth/confirm` (and tests).
  */
 export async function handleAuthConfirmRequest(request: NextRequest): Promise<NextResponse> {
   const started = Date.now();
   const fullUrl = request.url;
   const { searchParams, origin } = request.nextUrl;
 
-  logAuthConfirmContext(request, "request_incoming", {
-    fullUrl: fullUrl.slice(0, 2000),
-    pathname: request.nextUrl.pathname,
-    hasCode: Boolean(searchParams.get("code")),
-    hasTokenHash: Boolean(readTokenHashFromRequest(searchParams)),
-  });
-
   const code = searchParams.get("code")?.trim() || null;
   const token_hash = readTokenHashFromRequest(searchParams);
   const typeFromQuery = searchParams.get("type")?.trim() || null;
   const resolvedOtpType = resolveEmailOtpTypeFromSearchParams(searchParams);
+
+  logAuthConfirmContext(request, "request_incoming", {
+    fullUrl: fullUrl.slice(0, 2000),
+    pathname: request.nextUrl.pathname,
+    hasCode: Boolean(code),
+    hasTokenHash: Boolean(token_hash),
+    token_hash_preview: redactTokenHash(token_hash),
+    token_len: token_hash?.length ?? 0,
+    type_raw: typeFromQuery,
+    resolvedOtpType,
+    queryKeys: [...searchParams.keys()],
+  });
 
   const error = searchParams.get("error");
   const error_code = searchParams.get("error_code");
@@ -354,6 +357,7 @@ export async function handleAuthConfirmRequest(request: NextRequest): Promise<Ne
       type: resolvedOtpType,
       token_hash_preview: redactTokenHash(token_hash),
       typeFromQuery,
+      token_len: token_hash.length,
     });
 
     const verifyT0 = Date.now();

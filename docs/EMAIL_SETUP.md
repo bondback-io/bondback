@@ -99,8 +99,8 @@ So the “Confirm your email” link sends users back to your app on localhost:
 1. In Supabase Dashboard → **Authentication** → **URL Configuration**:
    - **Site URL:** set to `http://localhost:3000` when testing locally (use your production URL in production).
    - **Redirect URLs:** add `http://localhost:3000/**` so Supabase allows redirects to your local app.
-2. The app passes `emailRedirectTo` with your app origin and `/auth/confirm` (plus `next`, `flow`, optional `ref`) on email/password sign-up, so after the user confirms, Supabase redirects to e.g. `http://localhost:3000/auth/confirm?...`. The **page** shows a progress UI, then **POST `/api/auth/confirm`** runs the same server logic as before (`exchangeCodeForSession` / `verifyOtp`) and redirects into the app.
-3. **PKCE:** Supabase may put the one-time auth code in `?code=…` **or** `?token_hash=pkce_…`. Both are exchanged with `exchangeCodeForSession` in the confirm handler. Legacy non-PKCE hashes still use `verifyOtp`.
+2. The app passes `emailRedirectTo` with your app origin and `/auth/confirm` (plus `next`, `flow`, optional `ref`) on email/password sign-up, so after the user confirms, Supabase redirects to e.g. `http://localhost:3000/auth/confirm?...` and the **GET** route handler (`app/auth/confirm/route.ts`) exchanges the code or verifies the token and redirects into the app.
+3. **PKCE:** Supabase may put the one-time auth code in `?code=…` **or** `?token_hash=pkce_…`. Both are exchanged with `exchangeCodeForSession` in the confirm handler. Legacy non-PKCE hashes still use `verifyOtp` with `type=signup` (or default signup when `type` is omitted).
 
 ### C. “Email rate limit exceeded” when signing up
 

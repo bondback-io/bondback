@@ -10,12 +10,12 @@ function firstMessage(
 ): string {
   const v = sp.message;
   if (v === undefined) {
-    return "We couldn’t confirm your email. The link may be expired, invalid, or opened in a browser that blocked sign-in.";
+    return "We couldn’t complete email confirmation. The link may be expired, invalid, or already used. You can resend below or go back to sign up.";
   }
   const s = Array.isArray(v) ? v[0] : v;
   return typeof s === "string" && s.trim()
     ? s
-    : "We couldn’t confirm your email. The link may be expired, invalid, or opened in a browser that blocked sign-in.";
+    : "We couldn’t complete email confirmation. The link may be expired, invalid, or already used. You can resend below or go back to sign up.";
 }
 
 function firstReason(sp: Record<string, string | string[] | undefined>): string | null {
@@ -61,7 +61,7 @@ function friendlyHeadline(reason: string | null, isAlreadyUsed: boolean): string
   }
   if (reason === "missing_token") return "This link looks incomplete";
   if (reason === "oauth_error") return "Sign-in couldn’t be completed";
-  return "We couldn’t confirm your email";
+  return "We couldn’t complete email confirmation";
 }
 
 function friendlySubhead(
@@ -124,7 +124,14 @@ export default async function AuthConfirmErrorPage({
             {friendlySubhead(reason, isAlreadyUsed, isMissingToken)}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-6 pt-6">
+        <CardContent className="space-y-6 pt-6">
+          <p className="text-center text-sm leading-relaxed text-muted-foreground">
+            If you&apos;re in <strong className="text-foreground">private mode</strong> or an{" "}
+            <strong className="text-foreground">in-app browser</strong> (e.g. Mail preview), try again in{" "}
+            <strong className="text-foreground">regular Safari</strong> — open Safari from your home screen,
+            paste the link, or use the options below.
+          </p>
+
           <div className="rounded-2xl border border-sky-500/30 bg-sky-500/[0.08] px-4 py-3 text-center text-[0.9375rem] font-medium leading-relaxed text-sky-950 dark:border-sky-500/25 dark:bg-sky-950/35 dark:text-sky-100">
             <strong className="font-semibold">Best fix:</strong> open this link in{" "}
             <span className="whitespace-nowrap">regular Safari or Chrome</span> — not the Mail app preview, not
@@ -169,6 +176,10 @@ export default async function AuthConfirmErrorPage({
               <Link href="/login">Log in</Link>
             </Button>
           </div>
+
+          <p className="text-center text-xs text-muted-foreground">
+            Use <strong className="text-foreground">Resend confirmation email</strong> above with the same address you signed up with.
+          </p>
 
           <p className="text-center text-sm leading-relaxed text-muted-foreground">
             Already confirmed? Try{" "}

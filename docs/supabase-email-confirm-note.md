@@ -1,10 +1,18 @@
 # Supabase “Confirm signup” email — copy for the dashboard
 
-Supabase sends confirmation emails from **Authentication → Email Templates** (not from this repo). Use your production **Site URL** / redirect so links hit `https://www.bondback.io/auth/confirm?...`.
+Supabase sends confirmation emails from **Authentication → Email Templates** (not from this repo). Use your production **Site URL** `https://www.bondback.io` so redirects stay on the canonical host.
 
-## Required note at the top (add above the main button)
+## Confirm link (required format)
 
-Plain text or HTML paragraph:
+Use this as the **confirmation URL** (Confirm sign up template). `token_hash` and `type` must be present for the legacy OTP path:
+
+```text
+https://www.bondback.io/auth/confirm?token_hash={{ .TokenHash }}&type=signup
+```
+
+If your template uses `{{ .ConfirmationURL }}` instead, ensure Supabase’s URL still resolves to the path above (same query params).
+
+## Note at the top (above the button)
 
 ```text
 For best results, open this link in Safari or Chrome (not in the Mail app preview or private mode).
@@ -19,16 +27,10 @@ HTML example:
 </p>
 ```
 
-## Extra paragraph (below the confirmation button)
+## If sign-in doesn’t finish (below the button)
 
 ```text
-If sign-in doesn’t finish, long-press the link, tap Copy, then paste it into Safari or Chrome’s address bar.
+If sign-in doesn’t finish, long-press the link, tap Copy, then paste it into Safari’s address bar.
 ```
 
-## Short variant (narrow templates)
-
-```text
-Best in Safari or Chrome — not Mail preview or private mode. Copy the link if needed.
-```
-
-After saving, send a test email and confirm the link still includes `redirect_to` / your Site URL and lands on `/auth/confirm`.
+After saving, send a test email and confirm the opened URL includes `token_hash` and `type=signup` (or PKCE `code=`).
