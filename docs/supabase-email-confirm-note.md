@@ -1,19 +1,34 @@
-# Supabase “Confirm signup” email — add this note
+# Supabase “Confirm signup” email — copy for the dashboard
 
-Supabase sends confirmation emails from the **Auth → Email Templates** editor (not from this repo). Add the following so users open links in a real browser (avoids Mail/Gmail in-app PKCE issues).
+Supabase sends confirmation emails from **Authentication → Email Templates** (not from this repo). Use your production **Site URL** / redirect so links hit `https://www.bondback.io/auth/confirm?...`.
 
-## Suggested paragraph (plain text or HTML)
+## Required note at the top (add above the main button)
 
-Place **below** the main confirmation button / link:
-
-```text
-Tip: For the best experience, open this email in Safari or Chrome and tap the link there. If sign-in doesn’t complete, long-press the link, choose Copy, then paste it into Safari or Chrome’s address bar.
-```
-
-## Short variant (fits narrow templates)
+Plain text or HTML paragraph:
 
 ```text
-Best opened in Safari or Chrome. If it doesn’t work, copy the link and paste it into your browser’s address bar.
+For best results, open this link in Safari or Chrome (not in the Mail app preview or private mode).
 ```
 
-After saving the template in Supabase, send a test email and confirm the link still includes your `redirect_to` / `Site URL` parameters.
+HTML example:
+
+```html
+<p style="margin:0 0 16px 0; font-size: 14px; line-height: 1.5; color: #334155;">
+  <strong>Tip:</strong> For best results, open this link in <strong>Safari</strong> or <strong>Chrome</strong>
+  (not in the Mail app preview or private / incognito mode).
+</p>
+```
+
+## Extra paragraph (below the confirmation button)
+
+```text
+If sign-in doesn’t finish, long-press the link, tap Copy, then paste it into Safari or Chrome’s address bar.
+```
+
+## Short variant (narrow templates)
+
+```text
+Best in Safari or Chrome — not Mail preview or private mode. Copy the link if needed.
+```
+
+After saving, send a test email and confirm the link still includes `redirect_to` / your Site URL and lands on `/auth/confirm`.

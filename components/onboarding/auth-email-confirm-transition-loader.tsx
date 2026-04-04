@@ -22,17 +22,31 @@ export const AUTH_EMAIL_CONFIRM_WIZARD_STEPS = [
   "Sending confirmation email...",
 ] as const;
 
+/** In-email link → `/auth/confirm` (client POSTs to API; keeps users oriented during exchange). */
+export const AUTH_EMAIL_CONFIRM_LINK_STEPS = [
+  "Opening your confirmation…",
+  "Verifying your email…",
+  "Signing you in securely…",
+  "Almost there…",
+] as const;
+
 /** @deprecated Use `AUTH_EMAIL_CONFIRM_HANDOFF_STEPS` */
 export const AUTH_EMAIL_CONFIRM_STEPS = AUTH_EMAIL_CONFIRM_HANDOFF_STEPS;
 
 /** Shorter on narrow viewports so all handoff steps appear quickly (perceived responsiveness). */
-function useStepIntervalMs(mode: "handoff" | "wizardSubmit"): number {
+function useStepIntervalMs(mode: "handoff" | "wizardSubmit" | "linkConfirm"): number {
   const [ms, setMs] = useState(280);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 640px)");
     const apply = () => {
       const mobile = mq.matches;
-      setMs(mode === "wizardSubmit" ? (mobile ? 220 : 300) : mobile ? 180 : 260);
+      if (mode === "wizardSubmit") {
+        setMs(mobile ? 220 : 300);
+      } else if (mode === "linkConfirm") {
+        setMs(mobile ? 160 : 220);
+      } else {
+        setMs(mobile ? 180 : 260);
+      }
     };
     apply();
     mq.addEventListener("change", apply);
@@ -44,20 +58,27 @@ function useStepIntervalMs(mode: "handoff" | "wizardSubmit"): number {
 export type AuthEmailConfirmTransitionLoaderProps = {
   /** `full` = post–email-confirm handoff; `compact` = chunk / Suspense fallback. */
   variant?: "full" | "compact";
-  /** Post-confirm handoff vs Path 2 sign-up submit overlay. */
-  mode?: "handoff" | "wizardSubmit";
+  /** Post-confirm handoff vs Path 2 sign-up submit vs email link confirm page. */
+  mode?: "handoff" | "wizardSubmit" | "linkConfirm";
+  /** When set, overrides rotating steps (e.g. final “redirecting” message). */
+  phaseLabel?: string;
   className?: string;
 };
 
 function AuthEmailConfirmTransitionLoaderInner({
   variant = "full",
   mode = "handoff",
+  phaseLabel,
   className,
 }: AuthEmailConfirmTransitionLoaderProps) {
   const reduceMotion = useReducedMotion();
   const stepMs = useStepIntervalMs(mode);
   const steps =
-    mode === "wizardSubmit" ? AUTH_EMAIL_CONFIRM_WIZARD_STEPS : AUTH_EMAIL_CONFIRM_HANDOFF_STEPS;
+    mode === "wizardSubmit"
+      ? AUTH_EMAIL_CONFIRM_WIZARD_STEPS
+      : mode === "linkConfirm"
+        ? AUTH_EMAIL_CONFIRM_LINK_STEPS
+        : AUTH_EMAIL_CONFIRM_HANDOFF_STEPS;
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
@@ -65,16 +86,21 @@ function AuthEmailConfirmTransitionLoaderInner({
   }, [mode]);
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion || phaseLabel) return;
     const id = window.setInterval(() => {
       setStepIndex((i) => Math.min(i + 1, steps.length - 1));
     }, stepMs);
     return () => window.clearInterval(id);
-  }, [reduceMotion, stepMs, steps.length]);
+  }, [reduceMotion, phaseLabel, stepMs, steps.length]);
 
   /** Last step on reduced motion — matches “almost done” without cycling timers. */
-  const label = reduceMotion ? steps[steps.length - 1] : steps[stepIndex];
-  const effectiveStepIndex = reduceMotion ? steps.length - 1 : stepIndex;
+  const label = phaseLabel
+    ? phaseLabel
+    : reduceMotion
+      ? steps[steps.length - 1]
+      : steps[stepIndex];
+  const effectiveStepIndex =
+    phaseLabel || reduceMotion ? steps.length - 1 : stepIndex;
 
   const isCompact = variant === "compact";
 
@@ -168,6 +194,12 @@ function AuthEmailConfirmTransitionLoaderInner({
           {!isCompact && mode === "handoff" && (
             <p className="text-sm text-muted-foreground max-sm:text-[0.8125rem] dark:text-gray-400">
               Hang tight — we&apos;re finishing sign-in in this tab.
+            </p>
+          )}
+          {!isCompact && mode === "linkConfirm" && !phaseLabel && (
+            <p className="text-sm text-muted-foreground max-sm:text-[0.8125rem] dark:text-gray-400">
+              If this takes more than a few seconds, private mode or an in-app browser may be blocking cookies — use
+              Safari or Chrome from your home screen.
             </p>
           )}
         </div>

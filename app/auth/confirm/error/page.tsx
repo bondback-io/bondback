@@ -10,10 +10,12 @@ function firstMessage(
 ): string {
   const v = sp.message;
   if (v === undefined) {
-    return "We couldn’t confirm your email. The link may be expired or invalid.";
+    return "We couldn’t confirm your email. The link may be expired, invalid, or opened in a browser that blocked sign-in.";
   }
   const s = Array.isArray(v) ? v[0] : v;
-  return typeof s === "string" && s.trim() ? s : "We couldn’t confirm your email. The link may be expired or invalid.";
+  return typeof s === "string" && s.trim()
+    ? s
+    : "We couldn’t confirm your email. The link may be expired, invalid, or opened in a browser that blocked sign-in.";
 }
 
 function firstReason(sp: Record<string, string | string[] | undefined>): string | null {
@@ -54,6 +56,9 @@ function friendlyHeadline(reason: string | null, isAlreadyUsed: boolean): string
   if (reason === "pkce_in_app_browser" || reason === "pkce_verifier_missing") {
     return "Your mail app couldn’t finish sign-in";
   }
+  if (reason === "restricted_browser") {
+    return "This browser couldn’t finish sign-in";
+  }
   if (reason === "missing_token") return "This link looks incomplete";
   if (reason === "oauth_error") return "Sign-in couldn’t be completed";
   return "We couldn’t confirm your email";
@@ -68,7 +73,10 @@ function friendlySubhead(
     return "That usually means your email is already verified — you can log in with your password.";
   }
   if (reason === "pkce_in_app_browser" || reason === "pkce_verifier_missing") {
-    return "That’s common in Mail or Gmail’s in-app browser. The same link usually works in Safari or Chrome.";
+    return "Mail and Gmail’s in-app browsers often block the last step. The same link usually works in full Safari or Chrome.";
+  }
+  if (reason === "restricted_browser") {
+    return "Private / incognito windows and some in-app browsers block cookies or storage that Bond Back needs to finish sign-in.";
   }
   if (isMissingToken) {
     return "The confirmation address may have been shortened or opened in the wrong app.";
@@ -82,7 +90,8 @@ function shouldShowBrowserHints(reason: string | null): boolean {
     reason === "pkce_in_app_browser" ||
     reason === "pkce_verifier_missing" ||
     reason === "oauth_error" ||
-    reason === "exchange_failed"
+    reason === "exchange_failed" ||
+    reason === "restricted_browser"
   );
 }
 
@@ -116,6 +125,12 @@ export default async function AuthConfirmErrorPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-6 pt-6">
+          <div className="rounded-2xl border border-sky-500/30 bg-sky-500/[0.08] px-4 py-3 text-center text-[0.9375rem] font-medium leading-relaxed text-sky-950 dark:border-sky-500/25 dark:bg-sky-950/35 dark:text-sky-100">
+            <strong className="font-semibold">Best fix:</strong> open this link in{" "}
+            <span className="whitespace-nowrap">regular Safari or Chrome</span> — not the Mail app preview, not
+            private mode.
+          </div>
+
           <div className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-4 text-center text-[0.9375rem] leading-relaxed text-foreground dark:border-gray-700/80 dark:bg-gray-950/50 dark:text-gray-200">
             {message}
           </div>
@@ -127,7 +142,11 @@ export default async function AuthConfirmErrorPage({
           {isMissingToken ? (
             <ul className="list-inside list-disc space-y-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3 text-sm leading-relaxed text-foreground/95 dark:border-amber-500/20 dark:bg-amber-950/25 dark:text-gray-200">
               <li>Open the latest email from Bond Back (not an older one).</li>
-              <li>Long-press the link → <strong>Copy</strong>, then paste into Safari or Chrome.</li>
+              <li>
+                Long-press the confirmation link → <strong>Copy</strong>, then paste into{" "}
+                <strong>Safari</strong> or <strong>Chrome</strong> (address bar).
+              </li>
+              <li>Turn off private / incognito for this step if you can.</li>
               <li>Or request a new confirmation email below using the same address you signed up with.</li>
             </ul>
           ) : null}
@@ -152,7 +171,10 @@ export default async function AuthConfirmErrorPage({
           </div>
 
           <p className="text-center text-sm leading-relaxed text-muted-foreground">
-            Already confirmed? Try <Link href="/login" className="font-medium text-primary underline underline-offset-2">Log in</Link>{" "}
+            Already confirmed? Try{" "}
+            <Link href="/login" className="font-medium text-primary underline underline-offset-2">
+              Log in
+            </Link>{" "}
             with your email and password.
           </p>
         </CardContent>

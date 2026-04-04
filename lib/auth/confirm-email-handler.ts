@@ -6,17 +6,27 @@ import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-ot
 import { getEmailRedirectAuthCode } from "@/lib/auth/resolve-email-auth-exchange";
 import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
 
-export const dynamic = "force-dynamic";
-
 /** Avoid oversized query strings when attaching the original link for “Open in Safari” / copy. */
 const MAX_RETRY_URL_PARAM_CHARS = 2048;
 
 /**
- * After `verifyOtp` / `exchangeCodeForSession`, one microtask so the route handler’s `Set-Cookie`
- * writes can run before optional `getSession()` (keeps confirm → redirect fast).
+ * After `verifyOtp` / `exchangeCodeForSession`, yield so `Set-Cookie` can flush before `getSession()`.
+ * Private / restricted browsers may need extra ticks before cookies are readable.
  */
 async function waitForAuthCookieSync(): Promise<void> {
   await new Promise<void>((resolve) => queueMicrotask(resolve));
+}
+
+/** Extra short delays for Safari private mode / ITP where cookie jar lags behind verify/exchange. */
+async function waitForSessionReadable(maxMs = 450): Promise<void> {
+  const delays = [0, 15, 35, 80, 120, 200];
+  let acc = 0;
+  for (const d of delays) {
+    if (acc + d > maxMs) break;
+    if (d > 0) await new Promise((r) => setTimeout(r, d));
+    acc += d;
+    await waitForAuthCookieSync();
+  }
 }
 
 function noStoreHeaders(res: NextResponse) {
@@ -31,13 +41,31 @@ function redactTokenHash(token: string | null): string | null {
   return `${token.slice(0, 4)}…${token.slice(-4)} (len=${token.length})`;
 }
 
+function logAuthConfirmContext(
+  request: NextRequest,
+  phase: string,
+  extra: Record<string, unknown> = {}
+): void {
+  const ua = request.headers.get("user-agent") ?? "";
+  const chMobile = request.headers.get("sec-ch-ua-mobile");
+  const chPlatform = request.headers.get("sec-ch-ua-platform");
+  const xfwd = request.headers.get("x-forwarded-for");
+  console.log(`[auth/confirm] ${phase}`, {
+    ...extra,
+    host: request.nextUrl.host,
+    uaSnippet: ua.slice(0, 220),
+    uaLength: ua.length,
+    secChUaMobile: chMobile,
+    secChUaPlatform: chPlatform,
+    xForwardedForFirst: xfwd?.split(",")[0]?.trim() ?? null,
+  });
+}
+
 function confirmErrorRedirect(
   origin: string,
   message: string,
   reason?: string,
-  /** Forward from confirm link `?email=` when present so the error page can prefill resend. */
   emailHint?: string | null,
-  /** Original `/auth/confirm?...` URL so the error page can offer Copy / Safari (PKCE + in-app browsers). */
   retryUrl?: string | null
 ) {
   const url = new URL("/auth/confirm/error", origin);
@@ -67,10 +95,6 @@ function readTokenHashFromRequest(searchParams: URLSearchParams): string | null 
 
 type AuthLikeError = { message: string; status?: number; name?: string; code?: string };
 
-/**
- * Map Supabase Auth errors to a safe user message + query reason.
- * Same English copy may be used for "expired" vs "reused" in some Auth versions — we still try keywords.
- */
 function mapVerifyOtpFailure(err: AuthLikeError): { userMessage: string; reason: string } {
   const raw = (err.message ?? "").trim();
   const lower = raw.toLowerCase();
@@ -80,7 +104,7 @@ function mapVerifyOtpFailure(err: AuthLikeError): { userMessage: string; reason:
     lower.includes("already been used") ||
     lower.includes("already used") ||
     lower.includes("link has already") ||
-    lower.includes("one-time") && lower.includes("already")
+    (lower.includes("one-time") && lower.includes("already"))
   ) {
     return {
       userMessage:
@@ -97,6 +121,21 @@ function mapVerifyOtpFailure(err: AuthLikeError): { userMessage: string; reason:
     };
   }
 
+  if (
+    lower.includes("storage") ||
+    lower.includes("indexeddb") ||
+    lower.includes("local storage") ||
+    lower.includes("private") ||
+    lower.includes("blocked") ||
+    lower.includes("not available")
+  ) {
+    return {
+      userMessage:
+        "Your browser blocked part of the sign-in step (common in private mode). Try again in a regular Safari or Chrome window, or open the link from a desktop browser.",
+      reason: "restricted_browser",
+    };
+  }
+
   return {
     userMessage:
       raw ||
@@ -107,42 +146,74 @@ function mapVerifyOtpFailure(err: AuthLikeError): { userMessage: string; reason:
 
 function mapExchangeFailure(err: AuthLikeError): { userMessage: string; reason: string } {
   const mapped = mapVerifyOtpFailure(err);
-  if (mapped.reason === "already_used") return mapped;
-  const lower = (err.message ?? "").toLowerCase();
+  if (mapped.reason === "already_used" || mapped.reason === "restricted_browser") return mapped;
+
+  const raw = (err.message ?? "").trim();
+  const lower = raw.toLowerCase();
+
   if (
     lower.includes("code verifier") ||
     lower.includes("code_verifier") ||
-    lower.includes("pkce")
+    lower.includes("pkce") ||
+    lower.includes("nonces") ||
+    lower.includes("nonce")
   ) {
     return {
       userMessage:
-        "Couldn’t complete sign-in in this in-app browser. Open the same link in Safari or Chrome, or copy it from the next screen.",
+        "This link couldn’t finish sign-in in this browser (often the Mail or Gmail in-app browser). Open the same link in Safari or Chrome, or use Copy link on the next screen.",
       reason: "pkce_in_app_browser",
     };
   }
+
+  if (
+    lower.includes("could not complete") ||
+    lower.includes("couldn't complete") ||
+    lower.includes("complete sign-in") ||
+    lower.includes("finish sign-in") ||
+    lower.includes("not complete") ||
+    lower.includes("in-app") ||
+    lower.includes("webview") ||
+    lower.includes("embedded") ||
+    lower.includes("browser may not be supported")
+  ) {
+    return {
+      userMessage:
+        "Sign-in couldn’t complete in this browser. Open the link in Safari or Chrome (not the Mail app preview), or paste the link into the address bar.",
+      reason: "restricted_browser",
+    };
+  }
+
+  if (lower.includes("storage") || lower.includes("indexeddb") || lower.includes("private")) {
+    return {
+      userMessage:
+        "Your browser blocked part of sign-in (common in private / incognito mode). Try a normal Safari or Chrome tab.",
+      reason: "restricted_browser",
+    };
+  }
+
   return {
     userMessage:
-      err.message?.trim() ||
+      raw ||
       "This sign-in link failed or expired. Request a new confirmation email or log in.",
     reason: "exchange_failed",
   };
 }
 
 /**
- * Email confirmation — GET only.
- * Supabase redirects here with `token_hash` + `type` (use `type=signup` in the email template — see project docs / handoff).
- * PKCE flows send `?code=…` **or** `?token_hash=pkce_…` (same auth code; must use
- * `exchangeCodeForSession`, not `verifyOtp`).
- *
- * After `verifyOtp` / `exchangeCodeForSession`, the user is logged in and redirected in one response.
- * `next` (default `/dashboard`) is passed to `redirectAfterAuthSessionEstablished`, which resolves the
- * final path (e.g. `/lister/dashboard` or `/cleaner/dashboard` when profile roles are already set — Path 2).
- * No extra client page; cookie sync stays a single event-loop turn so the redirect stays fast on mobile.
+ * Email confirmation — same logic as legacy GET `/auth/confirm` route.
+ * Prefer invoking via POST `/api/auth/confirm` from the client page so users see a loading UI first.
  */
-export async function GET(request: NextRequest) {
+export async function handleAuthConfirmRequest(request: NextRequest): Promise<NextResponse> {
   const started = Date.now();
   const fullUrl = request.url;
   const { searchParams, origin } = request.nextUrl;
+
+  logAuthConfirmContext(request, "request_incoming", {
+    fullUrl: fullUrl.slice(0, 2000),
+    pathname: request.nextUrl.pathname,
+    hasCode: Boolean(searchParams.get("code")),
+    hasTokenHash: Boolean(readTokenHashFromRequest(searchParams)),
+  });
 
   const code = searchParams.get("code")?.trim() || null;
   const token_hash = readTokenHashFromRequest(searchParams);
@@ -154,26 +225,9 @@ export async function GET(request: NextRequest) {
   const error_description = searchParams.get("error_description");
 
   const next = sanitizeInternalNextPath(searchParams.get("next"), "/dashboard");
-  /** `onboarding` | `path2` | other — forwarded to `redirectAfterAuthSessionEstablished` (e.g. path2 = combined signup). */
   const signupFlow = searchParams.get("flow");
   const refParam = searchParams.get("ref");
   const emailHint = searchParams.get("email")?.trim() || null;
-
-  console.log("[auth/confirm] GET incoming", {
-    fullUrl: fullUrl.slice(0, 2000),
-    host: request.nextUrl.host,
-    pathname: request.nextUrl.pathname,
-    forwardedHost: request.headers.get("x-forwarded-host"),
-    hasCode: Boolean(code),
-    hasTokenHash: Boolean(token_hash),
-    token_hash_preview: redactTokenHash(token_hash),
-    typeFromQuery,
-    resolvedOtpType: getEmailRedirectAuthCode(code, token_hash)
-      ? "pkce_exchange"
-      : resolvedOtpType,
-    next,
-    queryKeys: [...searchParams.keys()],
-  });
 
   try {
     if (error || error_code) {
@@ -181,7 +235,12 @@ export async function GET(request: NextRequest) {
         error_description?.replace(/\+/g, " ") ||
         error ||
         "Email confirmation was cancelled or could not be completed.";
-      console.warn("[auth/confirm] oauth_error", { error, error_code, msg });
+      console.warn("[auth/confirm] oauth_error", {
+        error,
+        error_code,
+        msg,
+        ...{ detail: error_description },
+      });
       return confirmErrorRedirect(origin, msg, "oauth_error", emailHint, fullUrl);
     }
 
@@ -194,7 +253,8 @@ export async function GET(request: NextRequest) {
         origin,
         "This confirmation link is missing a token. Open the latest email from Bond Back, or request a new confirmation link from the sign-up page.",
         "missing_token",
-        emailHint
+        emailHint,
+        fullUrl
       );
     }
 
@@ -220,14 +280,16 @@ export async function GET(request: NextRequest) {
       });
 
       if (exchangeError) {
+        const e = exchangeError as AuthLikeError;
         console.error("[auth/confirm] exchangeCodeForSession_failed", {
-          message: exchangeError.message,
-          code: (exchangeError as AuthLikeError).code,
+          message: e.message,
+          code: e.code,
           name: exchangeError.name,
           status: exchangeError.status,
           source: authExchange.source,
+          raw: JSON.stringify(e),
         });
-        const { userMessage, reason } = mapExchangeFailure(exchangeError as AuthLikeError);
+        const { userMessage, reason } = mapExchangeFailure(e);
         return confirmErrorRedirect(origin, userMessage, reason, emailHint, fullUrl);
       }
 
@@ -253,7 +315,6 @@ export async function GET(request: NextRequest) {
       await waitForAuthCookieSync();
       authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncPkceT0 });
 
-      /** Session is present after the guard above; avoid an extra getSession round-trip. */
       const sessionForFinalize = exchangeData.session;
 
       const finalizePkceT0 = Date.now();
@@ -285,7 +346,7 @@ export async function GET(request: NextRequest) {
         "This confirmation link is missing a token. Open the latest email from Bond Back, or request a new confirmation link from the sign-up page.",
         "missing_token",
         emailHint,
-        null
+        fullUrl
       );
     }
 
@@ -307,15 +368,17 @@ export async function GET(request: NextRequest) {
     });
 
     if (otpError) {
+      const e = otpError as AuthLikeError;
       console.error("[auth/confirm] verifyOtp_failed", {
-        message: otpError.message,
-        code: (otpError as AuthLikeError).code,
+        message: e.message,
+        code: e.code,
         status: otpError.status,
         name: otpError.name,
         typeUsed: resolvedOtpType,
         ms: Date.now() - started,
+        raw: JSON.stringify(e),
       });
-      const { userMessage, reason } = mapVerifyOtpFailure(otpError as AuthLikeError);
+      const { userMessage, reason } = mapVerifyOtpFailure(e);
       return confirmErrorRedirect(origin, userMessage, reason, emailHint, fullUrl);
     }
 
@@ -330,13 +393,26 @@ export async function GET(request: NextRequest) {
     });
 
     const syncT0 = Date.now();
-    await waitForAuthCookieSync();
+    await waitForSessionReadable(500);
     authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncT0 });
 
     let sessionForFinalize = session?.user?.id ? session : null;
     if (!sessionForFinalize) {
-      const { data: postVerifySession } = await supabase.auth.getSession();
-      sessionForFinalize = postVerifySession.session?.user?.id ? postVerifySession.session : null;
+      const attempts = [0, 50, 120, 200];
+      for (const delay of attempts) {
+        if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+        const { data: postVerifySession } = await supabase.auth.getSession();
+        if (postVerifySession.session?.user?.id) {
+          sessionForFinalize = postVerifySession.session;
+          logAuthConfirmContext(request, "getSession_retry_ok", { delayMs: delay });
+          break;
+        }
+      }
+      if (!sessionForFinalize) {
+        console.warn("[auth/confirm] getSession_still_empty_after_retries", {
+          delaysMs: attempts,
+        });
+      }
     }
 
     const finalizeT0 = Date.now();
@@ -364,6 +440,7 @@ export async function GET(request: NextRequest) {
     console.error("[auth/confirm] unhandled_exception", {
       message,
       stack: e instanceof Error ? e.stack : undefined,
+      name: e instanceof Error ? e.name : typeof e,
     });
     return confirmErrorRedirect(
       origin,
