@@ -13,13 +13,14 @@ export const AUTH_EMAIL_CONFIRM_STEPS = [
   "Loading role options...",
 ] as const;
 
+/** Shorter on narrow viewports so steps advance quickly (perceived speed on mobile). */
 function useStepIntervalMs(): number {
   const [ms, setMs] = useState(() =>
-    typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches ? 420 : 540
+    typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches ? 300 : 440
   );
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 640px)");
-    const apply = () => setMs(mq.matches ? 420 : 540);
+    const apply = () => setMs(mq.matches ? 300 : 440);
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
@@ -49,7 +50,11 @@ function AuthEmailConfirmTransitionLoaderInner({
     return () => window.clearInterval(id);
   }, [reduceMotion, stepMs]);
 
-  const label = reduceMotion ? AUTH_EMAIL_CONFIRM_STEPS[0] : AUTH_EMAIL_CONFIRM_STEPS[stepIndex];
+  /** Last step on reduced motion — matches “almost done” without cycling timers. */
+  const label = reduceMotion
+    ? AUTH_EMAIL_CONFIRM_STEPS[AUTH_EMAIL_CONFIRM_STEPS.length - 1]
+    : AUTH_EMAIL_CONFIRM_STEPS[stepIndex];
+  const effectiveStepIndex = reduceMotion ? AUTH_EMAIL_CONFIRM_STEPS.length - 1 : stepIndex;
 
   const isCompact = variant === "compact";
 
@@ -159,7 +164,7 @@ function AuthEmailConfirmTransitionLoaderInner({
               key={i}
               className={cn(
                 "h-2 flex-1 max-w-[3.5rem] rounded-full transition-colors duration-300 ease-out",
-                i <= stepIndex ? "bg-primary/85 dark:bg-primary/75" : "bg-muted dark:bg-gray-800"
+                i <= effectiveStepIndex ? "bg-primary/85 dark:bg-primary/75" : "bg-muted dark:bg-gray-800"
               )}
             />
           ))}

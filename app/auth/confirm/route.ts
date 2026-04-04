@@ -8,15 +8,15 @@ import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
 export const dynamic = "force-dynamic";
 
 /**
- * Single buffer after `verifyOtp` / `exchangeCodeForSession` so Supabase `Set-Cookie` on the
- * route `response` is settled before `redirectAfterAuthSessionEstablished` copies cookies onto
- * the redirect. Keeps the browser’s next navigation consistent without stacking multiple delays.
- * Capped at 400ms per product requirements.
+ * After `verifyOtp` / `exchangeCodeForSession`, allow the route handler’s `Set-Cookie` writes to
+ * flush before `redirectAfterAuthSessionEstablished` merges cookies onto the redirect response.
+ * One microtask + short timer — kept minimal to avoid stacking delays (major on mobile).
  */
-const POST_AUTH_COOKIE_SYNC_MS = 150;
+const POST_AUTH_COOKIE_SYNC_MS = 50;
 
 async function waitForAuthCookieSync(): Promise<void> {
-  await new Promise((r) => setTimeout(r, POST_AUTH_COOKIE_SYNC_MS));
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  await new Promise<void>((resolve) => setTimeout(resolve, POST_AUTH_COOKIE_SYNC_MS));
 }
 
 function noStoreHeaders(res: NextResponse) {
@@ -200,6 +200,16 @@ export async function GET(request: NextRequest) {
         userId: exchangeData.session?.user?.id ?? null,
         hasSession: Boolean(exchangeData.session),
       });
+
+      if (!exchangeData.session?.user?.id) {
+        console.error("[auth/confirm] exchange_ok_but_no_user");
+        return confirmErrorRedirect(
+          origin,
+          "We couldn’t finish signing you in. Request a new confirmation email or try logging in.",
+          "exchange_failed",
+          emailHint
+        );
+      }
 
       const syncPkceT0 = Date.now();
       await waitForAuthCookieSync();

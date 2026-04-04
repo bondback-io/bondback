@@ -5,7 +5,7 @@
  * the UI renders immediately (no client polling). Otherwise one `onAuthStateChange` + initial `getSession`.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { markPostLoginFullPageNavigation } from "@/lib/auth/post-login-navigation-flag";
@@ -20,7 +20,7 @@ export type RoleChoiceClientProps = {
   serverSessionReady: boolean;
 };
 
-export function RoleChoiceClient({ serverSessionReady }: RoleChoiceClientProps) {
+function RoleChoiceClientInner({ serverSessionReady }: RoleChoiceClientProps) {
   const router = useRouter();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const mountedAtRef = useRef<number | null>(null);
@@ -135,10 +135,12 @@ export function RoleChoiceClient({ serverSessionReady }: RoleChoiceClientProps) 
           setSavingChoice(null);
           return;
         }
-        setRoleTransition({
-          title:
-            choice === "cleaner" ? "Taking you to cleaner setup…" : "Taking you to lister setup…",
-          subtitle: "Hang tight — opening the next step.",
+        startTransition(() => {
+          setRoleTransition({
+            title:
+              choice === "cleaner" ? "Taking you to cleaner setup…" : "Taking you to lister setup…",
+            subtitle: "Hang tight — opening the next step.",
+          });
         });
         requestAnimationFrame(() => {
           window.location.assign(result.redirect);
@@ -168,3 +170,5 @@ export function RoleChoiceClient({ serverSessionReady }: RoleChoiceClientProps) 
     </>
   );
 }
+
+export const RoleChoiceClient = memo(RoleChoiceClientInner);

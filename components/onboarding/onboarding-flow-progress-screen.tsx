@@ -21,31 +21,11 @@ type OnboardingFlowProgressScreenProps = {
 /**
  * Branded multi-step loader for post-email-confirm → role-choice, plus role → quick-setup transition.
  */
-/** Route-level `loading.tsx` / Suspense fallback — calm branded shell without step timers. */
+/** Route-level `loading.tsx` / Suspense — same step language as post-confirm handoff (compact). */
 export function OnboardingRouteLoadingFallback() {
   return (
-    <div
-      className="relative flex min-h-[50vh] w-full flex-col items-center justify-center gap-6 px-4 py-20"
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/[0.05] via-transparent to-muted/15 dark:from-primary/10 dark:to-gray-950/50"
-        aria-hidden
-      />
-      <div className="relative flex flex-col items-center gap-5 text-center">
-        <p className="text-lg font-semibold text-primary">Bond Back</p>
-        <div className="relative flex h-14 w-14 items-center justify-center">
-          <span
-            className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary border-r-primary/35"
-            style={{ animationDuration: "1.1s" }}
-            aria-hidden
-          />
-          <Loader2 className="relative h-7 w-7 text-primary" strokeWidth={1.75} aria-hidden />
-        </div>
-        <p className="max-w-xs text-sm text-muted-foreground">Loading your onboarding…</p>
-      </div>
+    <div className="min-h-[50vh] w-full py-6">
+      <AuthEmailConfirmTransitionLoader variant="compact" />
     </div>
   );
 }
