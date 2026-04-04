@@ -99,8 +99,8 @@ So the “Confirm your email” link sends users back to your app on localhost:
 1. In Supabase Dashboard → **Authentication** → **URL Configuration**:
    - **Site URL:** set to `http://localhost:3000` when testing locally (use your production URL in production).
    - **Redirect URLs:** add `http://localhost:3000/**` so Supabase allows redirects to your local app.
-2. The app passes `emailRedirectTo` with your app origin and `/auth/confirm` (plus `next`, `flow`, optional `ref`) on email/password sign-up, so after the user confirms, Supabase redirects to e.g. `http://localhost:3000/auth/confirm?...` and the **GET** route handler (`app/auth/confirm/route.ts`) exchanges the code or verifies the token and redirects into the app.
-3. **PKCE:** Supabase may put the one-time auth code in `?code=…` **or** `?token_hash=pkce_…`. Both are exchanged with `exchangeCodeForSession` in the confirm handler. Legacy non-PKCE hashes still use `verifyOtp` with `type=signup` (or default signup when `type` is omitted).
+2. On **`/signup`**, the app sets `emailRedirectTo` to `{origin}/auth/confirm` (no extra query params). The Supabase “Confirm signup” template should append `token_hash` and `type=signup` (see `docs/supabase-email-confirm-note.md`). The **GET** route (`app/auth/confirm/route.ts`) calls `verifyOtp({ type: 'signup', token_hash })` and redirects into the app. **OAuth / other flows** still use `/auth/callback` with PKCE where applicable.
+3. **PKCE `code` links** are **not** handled on `/auth/confirm`; use the OTP `token_hash` link in the email template so confirmation works on any device.
 
 ### C. “Email rate limit exceeded” when signing up
 
@@ -115,7 +115,7 @@ Supabase Auth limits how many **auth emails** (signup confirmation, password res
 - [ ] `RESEND_API_KEY` in `.env.local` (you already use this for app emails).
 - [ ] Supabase → Authentication → URL Configuration: **Site URL** = `http://localhost:3000`, **Redirect URLs** includes `http://localhost:3000/**`.
 - [ ] (Optional) Supabase → Authentication → SMTP: Custom SMTP with Resend credentials so the confirm email is sent via Resend and rate limits are more generous.
-- [ ] Sign up a new user → open the confirmation email → click the link → you should land on `http://localhost:3000/auth/confirm?...` and then be redirected into the app (dashboard matches the role chosen at sign-up).
+- [ ] Sign up a new user → open the confirmation email → click the link → you should land on `http://localhost:3000/auth/confirm?...` and then be redirected into the app (dashboard follows the profile created at sign-up).
 
 ---
 

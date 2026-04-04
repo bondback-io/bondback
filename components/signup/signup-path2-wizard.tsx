@@ -19,91 +19,20 @@ import { Alert } from "@/components/ui/alert";
 import { AuthPageBackLink } from "@/components/auth/auth-page-back-link";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { getResolvedAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
-import {
-  loadCachedSignupLocation,
-  reverseGeocodeAuForSignupPrefill,
-  saveCachedSignupLocation,
-} from "@/lib/location/signup-location-prefill";
-import { SuburbPostcodeAutocomplete } from "@/components/features/suburb-postcode-autocomplete";
-import { Path2RoleSelection } from "@/components/signup/path2-role-selection";
-import { AU_STATES, type AuStateCode } from "@/lib/au-suburbs";
 
-const AU_STATE_CODES = new Set<string>(AU_STATES.map((s) => s.value));
-
-function buildPath2AuthConfirmUrl(origin: string, ref: string | null): string {
-  const u = new URL(`${origin}/auth/confirm`);
-  u.searchParams.set("next", "/dashboard");
-  u.searchParams.set("flow", "path2");
-  if (ref) u.searchParams.set("ref", ref);
-  return u.toString();
-}
-
-const path2Schema = z
+const signupSchema = z
   .object({
+    fullName: z.string().min(1, "Name is required").max(120),
     email: z.string().email("Enter a valid email"),
     password: z.string().min(6, "At least 6 characters"),
     confirmPassword: z.string().min(1, "Confirm your password"),
-    fullName: z.string().min(1, "Name is required").max(120),
-    state: z.string().max(10).optional().or(z.literal("")),
-    suburb: z.string().max(120).optional().or(z.literal("")),
-    postcode: z.string().max(10).optional().or(z.literal("")),
-    role: z
-      .enum(["lister", "cleaner"], {
-        errorMap: () => ({ message: "Choose how you want to use Bond Back" }),
-      })
-      .optional(),
-    abn: z.string().optional().or(z.literal("")),
-    maxTravelKm: z.number().min(5).max(200),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
-  })
-  .refine((data) => data.role === "lister" || data.role === "cleaner", {
-    message: "Choose how you want to use Bond Back",
-    path: ["role"],
-  })
-  .superRefine((data, ctx) => {
-    if (data.role !== "cleaner") return;
-    const digits = (data.abn ?? "").replace(/\D/g, "");
-    if (digits.length !== 11) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enter your 11-digit ABN",
-        path: ["abn"],
-      });
-    }
-  })
-  .superRefine((data, ctx) => {
-    const hasLoc = Boolean(data.suburb?.trim() || data.postcode?.trim());
-    if (!hasLoc) return;
-    const st = data.state?.trim();
-    if (!st) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Select your state",
-        path: ["state"],
-      });
-      return;
-    }
-    if (!AU_STATE_CODES.has(st)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Select a valid Australian state or territory",
-        path: ["state"],
-      });
-    }
   });
 
-type Path2Values = z.infer<typeof path2Schema>;
-
-function assertRole(
-  values: Path2Values
-): asserts values is Path2Values & { role: "lister" | "cleaner" } {
-  if (values.role !== "lister" && values.role !== "cleaner") {
-    throw new Error("Role required");
-  }
-}
+type SignupValues = z.infer<typeof signupSchema>;
 
 const EASE_FLOW = [0.25, 0.1, 0.25, 1] as const;
 
@@ -125,87 +54,33 @@ export function SignupPath2Wizard() {
     };
   }, []);
 
-  const form = useForm<Path2Values>({
-    resolver: zodResolver(path2Schema),
+  const form = useForm<SignupValues>({
+    resolver: zodResolver(signupSchema),
     defaultValues: {
       email: "",
       password: "",
       confirmPassword: "",
       fullName: "",
-      state: "",
-      suburb: "",
-      postcode: "",
-      role: undefined,
-      abn: "",
-      maxTravelKm: 30,
-    } satisfies DefaultValues<Path2Values>,
+    } satisfies DefaultValues<SignupValues>,
   });
 
-  const formRef = useRef(form);
-  formRef.current = form;
+  const confirmRedirectUrl = `${getResolvedAuthEmailRedirectOrigin()}/auth/confirm`;
 
-  useEffect(() => {
-    let cancelled = false;
-    const opts = { shouldDirty: false, shouldTouch: false } as const;
-
-    const sync = async () => {
-      const { setValue, getValues } = formRef.current;
-
-      const cached = loadCachedSignupLocation();
-      if (cached?.postcode?.trim()) {
-        setValue("postcode", cached.postcode.trim(), opts);
-      }
-      if (cached?.suburb?.trim()) {
-        setValue("suburb", cached.suburb.trim(), opts);
-      }
-
-      const needPostcode = !getValues("postcode")?.trim();
-      const needSuburb = !getValues("suburb")?.trim();
-      if (!needPostcode && !needSuburb) return;
-
-      const geo = await reverseGeocodeAuForSignupPrefill();
-      if (cancelled || !geo) return;
-
-      if (geo.postcode && !getValues("postcode")?.trim()) {
-        setValue("postcode", geo.postcode, opts);
-      }
-      if (geo.suburb && !getValues("suburb")?.trim()) {
-        setValue("suburb", geo.suburb, opts);
-      }
-    };
-
-    void sync();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const role = form.watch("role");
-  const maxTravelKm = form.watch("maxTravelKm");
-
-  const handlePath2Signup = useCallback(
-    async (values: Path2Values) => {
-      assertRole(values);
+  const handleSignup = useCallback(
+    async (values: SignupValues) => {
       setError(null);
       startTransition(() => setSubmitting(true));
 
       const supabase = createBrowserSupabaseClient();
-      const postcode = values.postcode?.trim() || null;
-      const suburb = values.suburb?.trim() || null;
-      const state = values.state?.trim() || null;
-      const confirmUrl = buildPath2AuthConfirmUrl(getResolvedAuthEmailRedirectOrigin(), refParam);
 
       try {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: values.email.trim(),
           password: values.password,
           options: {
-            emailRedirectTo: confirmUrl,
+            emailRedirectTo: confirmRedirectUrl,
             data: {
               full_name: values.fullName.trim(),
-              state: state ?? "",
-              suburb: suburb ?? "",
-              postcode: postcode ?? "",
             },
           },
         });
@@ -233,22 +108,19 @@ export function SignupPath2Wizard() {
         const fin = await finalizePath2Signup({
           userId: user.id,
           email: emailForVerify,
-          role: values.role,
+          role: "lister",
           full_name: values.fullName.trim(),
-          state,
-          suburb,
-          postcode,
+          state: null,
+          suburb: null,
+          postcode: null,
           referralCode: refParam,
-          abn: values.role === "cleaner" ? values.abn : null,
-          max_travel_km: values.role === "cleaner" ? values.maxTravelKm : undefined,
+          abn: null,
         });
 
         if (!fin.ok) {
           setError(fin.error);
           return;
         }
-
-        saveCachedSignupLocation(values.postcode ?? "", values.suburb ?? "", values.state ?? "");
 
         setPhase("success");
 
@@ -262,21 +134,10 @@ export function SignupPath2Wizard() {
         setSubmitting(false);
       }
     },
-    [refParam, router, startTransition]
+    [confirmRedirectUrl, refParam, router, startTransition]
   );
 
-  const onCreateAccount = form.handleSubmit(handlePath2Signup);
-
-  const handleStartAsLister = useCallback(() => {
-    form.setValue("role", "lister", { shouldValidate: true });
-    queueMicrotask(() => {
-      void form.handleSubmit(handlePath2Signup)();
-    });
-  }, [form, handlePath2Signup]);
-
-  const handleChooseCleaner = useCallback(() => {
-    form.setValue("role", "cleaner", { shouldValidate: true });
-  }, [form]);
+  const onSubmit = form.handleSubmit(handleSignup);
 
   const flowDur = reduceMotion ? 0 : 0.32;
 
@@ -327,7 +188,7 @@ export function SignupPath2Wizard() {
                 className="space-y-2"
               >
                 <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
-                  Account created!
+                  Check your email
                 </h1>
                 <motion.p
                   initial={reduceMotion ? false : { opacity: 0 }}
@@ -339,8 +200,7 @@ export function SignupPath2Wizard() {
                   }}
                   className="text-pretty text-base text-muted-foreground sm:text-lg"
                 >
-                  Confirmation email sent. Open the link to verify your email and jump straight to your
-                  dashboard.
+                  We sent a confirmation link. Open it to verify your email and sign in.
                 </motion.p>
               </motion.div>
               <motion.div
@@ -371,8 +231,7 @@ export function SignupPath2Wizard() {
                     Create your account
                   </CardTitle>
                   <CardDescription className="text-base text-muted-foreground">
-                    Enter your details, then choose Lister or Cleaner — one smooth sign-up. You can unlock
-                    the other role anytime in Settings.
+                    Enter your details. We&apos;ll email you a link to confirm your account.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -390,7 +249,7 @@ export function SignupPath2Wizard() {
                     </div>
                   </div>
 
-                  <form className="space-y-8" onSubmit={onCreateAccount} noValidate>
+                  <form className="space-y-6" onSubmit={onSubmit} noValidate>
                     {error && (
                       <Alert variant="destructive" className="text-sm">
                         {error}
@@ -398,13 +257,12 @@ export function SignupPath2Wizard() {
                     )}
 
                     <div className="space-y-4">
-                      <h2 className="text-lg font-semibold tracking-tight text-foreground">Your details</h2>
                       <div className="space-y-2">
-                        <Label htmlFor="p2-fullName" className="text-base">
+                        <Label htmlFor="su-fullName" className="text-base">
                           Full name
                         </Label>
                         <Input
-                          id="p2-fullName"
+                          id="su-fullName"
                           autoComplete="name"
                           className="min-h-12 text-base"
                           {...form.register("fullName")}
@@ -415,11 +273,11 @@ export function SignupPath2Wizard() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="p2-email" className="text-base">
+                        <Label htmlFor="su-email" className="text-base">
                           Email
                         </Label>
                         <Input
-                          id="p2-email"
+                          id="su-email"
                           type="email"
                           autoComplete="email"
                           className="min-h-12 text-base"
@@ -431,11 +289,11 @@ export function SignupPath2Wizard() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="p2-password" className="text-base">
+                        <Label htmlFor="su-password" className="text-base">
                           Password
                         </Label>
                         <Input
-                          id="p2-password"
+                          id="su-password"
                           type="password"
                           autoComplete="new-password"
                           className="min-h-12 text-base"
@@ -447,11 +305,11 @@ export function SignupPath2Wizard() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="p2-confirmPassword" className="text-base">
+                        <Label htmlFor="su-confirmPassword" className="text-base">
                           Confirm password
                         </Label>
                         <Input
-                          id="p2-confirmPassword"
+                          id="su-confirmPassword"
                           type="password"
                           autoComplete="new-password"
                           className="min-h-12 text-base"
@@ -463,55 +321,16 @@ export function SignupPath2Wizard() {
                           </p>
                         )}
                       </div>
-
-                      <div className="relative z-10 overflow-visible">
-                        <SuburbPostcodeAutocomplete
-                          useDatabaseSuburbs
-                          stateValue={form.watch("state") ?? ""}
-                          onStateChange={(code) =>
-                            form.setValue("state", code, { shouldValidate: true, shouldDirty: true })
-                          }
-                          suburbValue={form.watch("suburb") ?? ""}
-                          postcodeValue={form.watch("postcode") ?? ""}
-                          onSuburbPostcodeChange={(s, p) => {
-                            form.setValue("suburb", s, { shouldValidate: true, shouldDirty: true });
-                            form.setValue("postcode", p, { shouldValidate: true, shouldDirty: true });
-                          }}
-                          id="p2-suburb"
-                          label="Suburb & postcode"
-                          suburbPlaceholder="Select state, then type suburb or postcode"
-                          error={
-                            form.formState.errors.suburb?.message ||
-                            form.formState.errors.postcode?.message ||
-                            form.formState.errors.state?.message ||
-                            undefined
-                          }
-                        />
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Choose state first, then pick a suggestion or type manually. We may prefill from your
-                          location; last values are remembered on this device.
-                        </p>
-                      </div>
                     </div>
 
-                    <div className="h-px w-full bg-border/80" aria-hidden />
-
-                    <Path2RoleSelection
-                      role={role}
-                      onStartAsLister={handleStartAsLister}
-                      onChooseCleaner={handleChooseCleaner}
-                      maxTravelKm={maxTravelKm}
-                      onMaxTravelChange={(n) => form.setValue("maxTravelKm", n, { shouldValidate: true })}
-                      abnInputProps={form.register("abn", {
-                        onChange: (e) => {
-                          const el = e.target as HTMLInputElement;
-                          el.value = el.value.replace(/\D/g, "").slice(0, 11);
-                        },
-                      })}
-                      abnError={form.formState.errors.abn?.message}
-                      roleError={form.formState.errors.role?.message}
-                      submitting={submitting}
-                    />
+                    <Button
+                      type="submit"
+                      className="min-h-12 w-full text-base font-semibold"
+                      size="lg"
+                      disabled={submitting}
+                    >
+                      {submitting ? "Creating account…" : "Create account"}
+                    </Button>
 
                     <p className="text-center text-sm text-muted-foreground">
                       <Link href="/forgot-password" className="font-medium text-primary underline underline-offset-2">

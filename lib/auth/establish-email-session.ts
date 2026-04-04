@@ -2,9 +2,15 @@ import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { getEmailRedirectAuthCode } from "@/lib/auth/resolve-email-auth-exchange";
 import type { EmailOtpType } from "@/lib/auth/resolve-email-otp-type";
-import { redactTokenHashForLog } from "@/lib/auth/auth-confirm-log";
 
-/** Matches `@supabase/ssr` route handler client (third generic differs from bare `SupabaseClient<Database>`). */
+function redactTokenHashForLog(token: string | null | undefined): string | null {
+  if (token == null || token === "") return null;
+  const t = token.trim();
+  if (t.length <= 12) return `[len=${t.length}]`;
+  return `${t.slice(0, 4)}…${t.slice(-4)} (len=${t.length})`;
+}
+
+/** Matches `@supabase/ssr` route handler (third generic differs from bare `SupabaseClient<Database>`). */
 type AppSupabaseClient = SupabaseClient<Database, "public", any>;
 
 type AuthLikeError = { message: string; status?: number; name?: string; code?: string };
