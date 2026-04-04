@@ -5,7 +5,16 @@
  * the UI renders immediately (no client polling). Otherwise one `onAuthStateChange` + initial `getSession`.
  */
 
-import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { markPostLoginFullPageNavigation } from "@/lib/auth/post-login-navigation-flag";
@@ -41,24 +50,43 @@ function RoleChoiceClientInner({ serverSessionReady }: RoleChoiceClientProps) {
     markPostLoginFullPageNavigation();
   }, []);
 
+  /** Same paint as server HTML — avoids one frame of loader when RSC already validated session. */
+  useLayoutEffect(() => {
+    if (serverSessionReady) {
+      setAuthReady(true);
+    }
+  }, [serverSessionReady]);
+
   useEffect(() => {
+    const loginPath = "/login?next=/onboarding/role-choice";
+
+    if (serverSessionReady) {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_OUT" || !session) {
+          router.replace(loginPath);
+        }
+      });
+      return () => subscription.unsubscribe();
+    }
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (serverSessionReady) {
-        if (event === "SIGNED_OUT" || !session) {
-          router.replace("/login?next=/onboarding/role-choice");
-        }
-        return;
+      if (session?.user) {
+        startTransition(() => setAuthReady(true));
       }
-      if (session?.user) setAuthReady(true);
+      if (event === "SIGNED_OUT" || !session) {
+        router.replace(loginPath);
+      }
     });
 
-    if (!serverSessionReady) {
-      void supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) setAuthReady(true);
-      });
-    }
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        startTransition(() => setAuthReady(true));
+      }
+    });
 
     return () => subscription.unsubscribe();
   }, [serverSessionReady, supabase, router]);

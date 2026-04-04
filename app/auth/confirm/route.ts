@@ -10,12 +10,12 @@ export const dynamic = "force-dynamic";
 
 /**
  * After `verifyOtp` / `exchangeCodeForSession`, yield so the route handler’s `Set-Cookie` writes
- * can flush before `redirectAfterAuthSessionEstablished` merges cookies onto the redirect response.
- * Microtask + 0ms timer (no fixed 50ms buffer — reduces perceived stall on mobile Safari).
+ * can flush before we read `getSession()` / merge onto the redirect. Double microtask only — no
+ * fixed timer (keeps confirm → redirect latency low; session fallback still uses OTP/exchange result).
  */
 async function waitForAuthCookieSync(): Promise<void> {
   await new Promise<void>((resolve) => queueMicrotask(resolve));
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
 }
 
 function noStoreHeaders(res: NextResponse) {
@@ -245,6 +245,11 @@ export async function GET(request: NextRequest) {
       await waitForAuthCookieSync();
       authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncPkceT0 });
 
+      /** Prefer cookie-backed session when readable (aligns SSR client with Set-Cookie). */
+      const { data: postExchangeSession } = await supabase.auth.getSession();
+      const sessionForFinalize =
+        postExchangeSession.session?.user?.id ? postExchangeSession.session : exchangeData.session;
+
       const finalizePkceT0 = Date.now();
       const res = await redirectAfterAuthSessionEstablished({
         supabase,
@@ -253,7 +258,7 @@ export async function GET(request: NextRequest) {
         signupFlow,
         refParam,
         authCookieResponse,
-        sessionFromAuth: exchangeData.session ?? null,
+        sessionFromAuth: sessionForFinalize ?? null,
       });
       authPerfDevLog("auth/confirm:redirectAfterAuthSessionEstablished", {
         ms: Date.now() - finalizePkceT0,
@@ -321,6 +326,10 @@ export async function GET(request: NextRequest) {
     await waitForAuthCookieSync();
     authPerfDevLog("auth/confirm:cookieSyncBuffer", { ms: Date.now() - syncT0 });
 
+    const { data: postVerifySession } = await supabase.auth.getSession();
+    const sessionForFinalize =
+      postVerifySession.session?.user?.id ? postVerifySession.session : session ?? null;
+
     const finalizeT0 = Date.now();
     const res = await redirectAfterAuthSessionEstablished({
       supabase,
@@ -329,7 +338,7 @@ export async function GET(request: NextRequest) {
       signupFlow,
       refParam,
       authCookieResponse,
-      sessionFromAuth: session ?? null,
+      sessionFromAuth: sessionForFinalize,
     });
     authPerfDevLog("auth/confirm:redirectAfterAuthSessionEstablished", {
       ms: Date.now() - finalizeT0,

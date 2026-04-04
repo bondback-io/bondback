@@ -3,8 +3,8 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
-import { OnboardingRouteLoadingFallback } from "@/components/onboarding/onboarding-flow-progress-screen";
 import { RoleChoiceClient } from "@/components/onboarding/role-choice-client";
+import { RoleChoiceSegmentLoading } from "./role-choice-segment-loading";
 
 /**
  * Auth-only: user arrives after `/signup` (or `/dashboard` when `roles` is empty).
@@ -16,12 +16,20 @@ export const metadata: Metadata = {
     "Choose lister or cleaner to continue onboarding on Bond Back — bond cleaning and end of lease jobs.",
 };
 
-export default async function RoleChoicePage() {
+/**
+ * Sync shell streams immediately; `RoleChoicePageContent` suspends until session + profile resolve.
+ * Avoids a single long async page boundary so the handoff loader can show as soon as React hydrates.
+ */
+export default function RoleChoicePage() {
+  return (
+    <Suspense fallback={<RoleChoiceSegmentLoading />}>
+      <RoleChoicePageContent />
+    </Suspense>
+  );
+}
+
+async function RoleChoicePageContent() {
   const rscT0 = Date.now();
-  /**
-   * Same cached fetch as root layout — avoids a second `getSession` + `profiles` round-trip
-   * on this navigation (major win after email confirm when layout + page both need session).
-   */
   const sessionData = await getSessionWithProfile();
   authPerfDevLog("onboarding/role-choice:getSessionWithProfile", {
     ms: Date.now() - rscT0,
@@ -38,12 +46,9 @@ export default async function RoleChoicePage() {
     redirect("/dashboard");
   }
 
-  /** Session + profile already validated above — client can render role UI without waiting on browser `getSession`. */
   return (
     <section className="page-inner flex min-h-[60vh] flex-col items-center justify-center">
-      <Suspense fallback={<OnboardingRouteLoadingFallback />}>
-        <RoleChoiceClient serverSessionReady />
-      </Suspense>
+      <RoleChoiceClient serverSessionReady />
     </section>
   );
 }

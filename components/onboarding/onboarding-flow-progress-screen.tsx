@@ -21,11 +21,11 @@ type OnboardingFlowProgressScreenProps = {
 /**
  * Branded multi-step loader for post-email-confirm → role-choice, plus role → quick-setup transition.
  */
-/** Route-level `loading.tsx` / Suspense — same step language as post-confirm handoff (compact). */
+/** Route-level `loading.tsx` / Suspense — same 4-step handoff as email confirm → onboarding. */
 export function OnboardingRouteLoadingFallback() {
   return (
-    <div className="min-h-[50vh] w-full py-6">
-      <AuthEmailConfirmTransitionLoader variant="compact" />
+    <div className="min-h-[min(100dvh,720px)] w-full py-6">
+      <AuthEmailConfirmTransitionLoader variant="compact" mode="handoff" />
     </div>
   );
 }

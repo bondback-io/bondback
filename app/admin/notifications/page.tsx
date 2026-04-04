@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getEmailTypeLabel } from "@/lib/admin-email-templates-utils";
-import { ADMIN_NOTIFICATION_LOG_PAGE_SIZE } from "@/lib/actions/admin-notification-logs";
+import { ADMIN_NOTIFICATION_LOG_PAGE_SIZE } from "@/lib/admin/admin-notification-logs-shared";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

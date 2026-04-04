@@ -5,11 +5,15 @@ import { Loader2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-/** Post–`/auth/confirm` → onboarding (e.g. role-choice). Short copy — no “preparing profile” stall. */
+/**
+ * Post–`/auth/confirm` → onboarding (e.g. role-choice).
+ * Four short steps so progress reads clearly on mobile Safari (avoids one static “stuck” line).
+ */
 export const AUTH_EMAIL_CONFIRM_HANDOFF_STEPS = [
   "Confirming your email...",
   "Logging you in securely...",
-  "Almost there...",
+  "Preparing your profile...",
+  "Loading role options...",
 ] as const;
 
 /** Path 2 combined sign-up: overlay while `signUp` + `finalizePath2Signup` run. */
@@ -21,14 +25,14 @@ export const AUTH_EMAIL_CONFIRM_WIZARD_STEPS = [
 /** @deprecated Use `AUTH_EMAIL_CONFIRM_HANDOFF_STEPS` */
 export const AUTH_EMAIL_CONFIRM_STEPS = AUTH_EMAIL_CONFIRM_HANDOFF_STEPS;
 
-/** Shorter on narrow viewports so steps advance quickly (perceived speed on mobile). */
+/** Shorter on narrow viewports so all handoff steps appear quickly (perceived responsiveness). */
 function useStepIntervalMs(mode: "handoff" | "wizardSubmit"): number {
-  const [ms, setMs] = useState(360);
+  const [ms, setMs] = useState(280);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 640px)");
     const apply = () => {
       const mobile = mq.matches;
-      setMs(mode === "wizardSubmit" ? (mobile ? 220 : 300) : mobile ? 240 : 360);
+      setMs(mode === "wizardSubmit" ? (mobile ? 220 : 300) : mobile ? 180 : 260);
     };
     apply();
     mq.addEventListener("change", apply);
@@ -163,7 +167,7 @@ function AuthEmailConfirmTransitionLoaderInner({
           </AnimatePresence>
           {!isCompact && mode === "handoff" && (
             <p className="text-sm text-muted-foreground max-sm:text-[0.8125rem] dark:text-gray-400">
-              This usually takes a moment on mobile networks.
+              Hang tight — we&apos;re finishing sign-in in this tab.
             </p>
           )}
         </div>

@@ -1,9 +1,6 @@
-import { OnboardingRouteLoadingFallback } from "@/components/onboarding/onboarding-flow-progress-screen";
+import { RoleChoiceSegmentLoading } from "./role-choice-segment-loading";
 
+/** Client navigations to this segment — same UI as Suspense fallback on the page. */
 export default function RoleChoiceLoading() {
-  return (
-    <section className="page-inner flex min-h-[50vh] flex-col items-center justify-center">
-      <OnboardingRouteLoadingFallback />
-    </section>
-  );
+  return <RoleChoiceSegmentLoading />;
 }

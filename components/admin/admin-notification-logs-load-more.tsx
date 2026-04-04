@@ -18,11 +18,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { getEmailTypeLabel } from "@/lib/admin-email-templates-utils";
 import {
   ADMIN_NOTIFICATION_LOG_PAGE_SIZE,
-  loadMoreEmailLogsForAdmin,
-  loadMoreInAppNotificationsForAdmin,
   type AdminEmailLogRow,
   type AdminInAppNotificationRow,
   type ProfileNameMap,
+} from "@/lib/admin/admin-notification-logs-shared";
+import {
+  loadMoreEmailLogsForAdmin,
+  loadMoreInAppNotificationsForAdmin,
 } from "@/lib/actions/admin-notification-logs";
 import { cn } from "@/lib/utils";
 
