@@ -107,6 +107,7 @@ export default async function AuthConfirmErrorPage({
   const retryUrl = firstRetryUrl(sp);
   const isMissingToken = reason === "missing_token";
   const isAlreadyUsed = reason === "already_used";
+  const isVerifyFailed = reason === "verify_failed" || reason === "exchange_failed" || reason === "exception";
   const showResendConfirmation = !isAlreadyUsed;
   const showBrowserHints = shouldShowBrowserHints(reason) && Boolean(retryUrl);
 
@@ -125,11 +126,32 @@ export default async function AuthConfirmErrorPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
+          <div className="rounded-2xl border border-sky-500/35 bg-sky-500/[0.09] px-4 py-4 dark:border-sky-500/25 dark:bg-sky-950/40">
+            <p className="text-center text-sm font-semibold text-sky-950 dark:text-sky-100">
+              Try opening in regular Safari (not private mode or Mail’s in-app browser)
+            </p>
+            <ul className="mt-3 list-inside list-disc space-y-2 text-left text-sm leading-relaxed text-sky-950/95 dark:text-sky-50/95">
+              <li>
+                On <strong className="font-semibold">iPhone/iPad</strong>: close the Mail preview, long-press the
+                confirmation link → <strong>Copy</strong>, open the <strong>Safari</strong> app (from your home
+                screen), paste into the address bar, then go.
+              </li>
+              <li>
+                Avoid <strong className="font-semibold">Private Browsing</strong> and the small browser window
+                inside Mail or Gmail — they often block the cookies Bond Back needs.
+              </li>
+              <li>
+                If the link still fails, request a <strong className="font-semibold">new confirmation email</strong>{" "}
+                below (same address you used to sign up).
+              </li>
+            </ul>
+          </div>
+
           <p className="text-center text-sm leading-relaxed text-muted-foreground">
             If you&apos;re in <strong className="text-foreground">private mode</strong> or an{" "}
             <strong className="text-foreground">in-app browser</strong> (e.g. Mail preview), try again in{" "}
-            <strong className="text-foreground">regular Safari</strong> — open Safari from your home screen,
-            paste the link, or use the options below.
+            <strong className="text-foreground">regular Safari</strong> — open Safari from your home screen, paste the
+            link, or use the options below.
           </p>
 
           <div className="rounded-2xl border border-sky-500/30 bg-sky-500/[0.08] px-4 py-3 text-center text-[0.9375rem] font-medium leading-relaxed text-sky-950 dark:border-sky-500/25 dark:bg-sky-950/35 dark:text-sky-100">
@@ -141,6 +163,13 @@ export default async function AuthConfirmErrorPage({
           <div className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-4 text-center text-[0.9375rem] leading-relaxed text-foreground dark:border-gray-700/80 dark:bg-gray-950/50 dark:text-gray-200">
             {message}
           </div>
+
+          {isVerifyFailed ? (
+            <p className="text-center text-sm font-medium text-foreground dark:text-gray-200">
+              If this link is invalid or expired, use <strong>Resend confirmation email</strong> below — we&apos;ll
+              send a fresh link to your inbox.
+            </p>
+          ) : null}
 
           {showBrowserHints ? (
             <AuthConfirmErrorActions retryUrl={retryUrl} showOpenInBrowserHints />
@@ -165,7 +194,12 @@ export default async function AuthConfirmErrorPage({
           ) : null}
 
           {showResendConfirmation ? (
-            <AuthConfirmErrorResend initialEmail={optionalEmail ?? ""} />
+            <div className="space-y-3">
+              <p className="text-center text-sm font-semibold text-foreground dark:text-gray-100">
+                Resend confirmation email
+              </p>
+              <AuthConfirmErrorResend initialEmail={optionalEmail ?? ""} />
+            </div>
           ) : null}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
@@ -178,7 +212,8 @@ export default async function AuthConfirmErrorPage({
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
-            Use <strong className="text-foreground">Resend confirmation email</strong> above with the same address you signed up with.
+            Use <strong className="text-foreground">Resend confirmation email</strong> above with the same address you
+            signed up with.
           </p>
 
           <p className="text-center text-sm leading-relaxed text-muted-foreground">

@@ -5,6 +5,7 @@ import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-se
 import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
 import { establishSessionFromEmailRedirectParams } from "@/lib/auth/establish-email-session";
 import { authPerfDevLog } from "@/lib/auth/auth-perf-dev";
+import { redactTokenHashForLog } from "@/lib/auth/auth-confirm-log";
 
 /** Avoid oversized query strings when attaching the original link for “Open in Safari” / copy. */
 const MAX_RETRY_URL_PARAM_CHARS = 2048;
@@ -33,12 +34,6 @@ function noStoreHeaders(res: NextResponse) {
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
   res.headers.set("Pragma", "no-cache");
   return res;
-}
-
-function redactTokenHash(token: string | null): string | null {
-  if (!token) return null;
-  if (token.length <= 12) return `[len=${token.length}]`;
-  return `${token.slice(0, 4)}…${token.slice(-4)} (len=${token.length})`;
 }
 
 function logAuthConfirmContext(
@@ -216,7 +211,7 @@ export async function handleAuthConfirmRequest(request: NextRequest): Promise<Ne
     pathname: request.nextUrl.pathname,
     hasCode: Boolean(code),
     hasTokenHash: Boolean(token_hash),
-    token_hash_preview: redactTokenHash(token_hash),
+    token_hash_preview: redactTokenHashForLog(token_hash),
     token_len: token_hash?.length ?? 0,
     type_raw: typeFromQuery,
     resolvedOtpType,
@@ -269,7 +264,7 @@ export async function handleAuthConfirmRequest(request: NextRequest): Promise<Ne
     console.log("[auth/confirm] establish_session_start", {
       hasCode: Boolean(code),
       hasTokenHash: Boolean(token_hash),
-      token_hash_preview: redactTokenHash(token_hash),
+      token_hash_preview: redactTokenHashForLog(token_hash),
       typeFromQuery,
       resolvedOtpType,
       token_len: token_hash?.length ?? 0,

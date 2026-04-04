@@ -2,6 +2,18 @@
 
 Supabase sends confirmation emails from **Authentication → Email Templates** (not from this repo). Use your production **Site URL** `https://www.bondback.io` so redirects stay on the canonical host.
 
+## URL configuration (must match production)
+
+In **Authentication → URL Configuration**:
+
+| Setting | Required value |
+|--------|----------------|
+| **Site URL** | `https://www.bondback.io` |
+| **Redirect URLs** | Include at least: `https://www.bondback.io/**` and `https://www.bondback.io/auth/confirm` (the wildcard usually covers the path; add the explicit path if your project requires it). |
+| **Additional redirects** | `http://localhost:3000/**` for local dev. |
+
+If **Site URL** or **Redirect URLs** omit `www`, confirmation links that use `https://bondback.io` or an unlisted host can fail or redirect incorrectly (especially on mobile).
+
 ## Confirm link (required format)
 
 Use this as the **confirmation URL** (Confirm sign up template). `token_hash` and `type` must be present for the legacy OTP path:
