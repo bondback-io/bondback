@@ -40,6 +40,11 @@ type SessionFinalizeParams = {
    * Set false only if you add another caller that must not trigger welcome.
    */
   sendWelcomeEmail?: boolean;
+  /**
+   * When `"signup"`, redirect to `/auth/email-confirmed` with a `next` param instead of going
+   * straight to the destination (first-time email confirmation from `/auth/confirm` only).
+   */
+  emailConfirmationKind?: "signup" | null;
 };
 
 /** Copy Supabase auth cookies from the provisional route response onto the real redirect. */
@@ -74,6 +79,7 @@ export async function redirectAfterAuthSessionEstablished(
     authCookieResponse,
     sessionFromAuth,
     sendWelcomeEmail = true,
+    emailConfirmationKind = null,
   } = params;
   const origin = request.nextUrl.origin;
   const next = sanitizeInternalNextPath(nextRaw, "/dashboard");
@@ -266,5 +272,13 @@ export async function redirectAfterAuthSessionEstablished(
   }
 
   authPerfDevLog("auth-callback-session:total", { ms: Date.now() - callbackT0 });
-  return redirectWithAuthCookies(authCookieResponse, new URL(redirectTo, origin));
+
+  let destinationPath = redirectTo;
+  if (emailConfirmationKind === "signup") {
+    const celebration = new URL("/auth/email-confirmed", origin);
+    celebration.searchParams.set("next", redirectTo);
+    destinationPath = `${celebration.pathname}${celebration.search}`;
+  }
+
+  return redirectWithAuthCookies(authCookieResponse, new URL(destinationPath, origin));
 }

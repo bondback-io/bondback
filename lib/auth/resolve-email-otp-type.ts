@@ -27,3 +27,11 @@ export function resolveEmailOtpTypeFromSearchParams(
   /** Default when `type` is missing — matches Bond Back template `&type=signup`. */
   return "signup";
 }
+
+/**
+ * True for “confirm your email” signup flows from Supabase (not recovery, magic link, etc.).
+ * Used after `/auth/confirm` only — do not infer from `/auth/callback` (OAuth may omit `type`).
+ */
+export function isSignupEmailConfirmationFlow(otpType: EmailOtpType): boolean {
+  return otpType === "signup" || otpType === "email";
+}

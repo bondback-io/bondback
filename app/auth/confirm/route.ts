@@ -3,7 +3,10 @@ import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/supabase";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
-import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
+import {
+  isSignupEmailConfirmationFlow,
+  resolveEmailOtpTypeFromSearchParams,
+} from "@/lib/auth/resolve-email-otp-type";
 import { establishSessionFromEmailRedirectParams } from "@/lib/auth/establish-email-session";
 
 export const dynamic = "force-dynamic";
@@ -109,5 +112,6 @@ export async function GET(request: NextRequest) {
     refParam: null,
     authCookieResponse,
     sessionFromAuth: outcome.session,
+    emailConfirmationKind: isSignupEmailConfirmationFlow(otpType) ? "signup" : null,
   });
 }
