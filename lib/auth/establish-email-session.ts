@@ -15,6 +15,15 @@ type AppSupabaseClient = SupabaseClient<Database, "public", any>;
 
 type AuthLikeError = { message: string; status?: number; name?: string; code?: string };
 
+/** PKCE exchange needs the code-verifier cookie from the browser that started auth; email clients often break that. */
+function isFlowStateNotFound(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as AuthLikeError & { code?: string };
+  if (e.code === "flow_state_not_found") return true;
+  const msg = String(e.message ?? "").toLowerCase();
+  return msg.includes("flow state") && msg.includes("no valid");
+}
+
 export type EstablishEmailSessionMethod = "exchange" | "verifyOtp";
 
 export type EstablishEmailSessionResult =
@@ -213,8 +222,16 @@ export async function establishSessionFromEmailRedirectParams(
     if (exchangeError) {
       const e = exchangeError as AuthLikeError;
       const otpToken = tokenHash;
-      if (otpToken && !otpToken.startsWith("pkce_")) {
-        const { data, error } = await verifyOtpWithEmailSignupFallback(supabase, otpToken, params.otpType);
+      const tryVerifyFallback =
+        Boolean(otpToken) &&
+        (!otpToken!.startsWith("pkce_") || isFlowStateNotFound(e));
+      if (tryVerifyFallback) {
+        console.log("[auth/confirm] exchange_failed_trying_verifyOtp_fallback", {
+          code: e.code ?? null,
+          pkceToken: otpToken!.startsWith("pkce_"),
+          reason: isFlowStateNotFound(e) ? "flow_state_not_found" : "non_pkce_token",
+        });
+        const { data, error } = await verifyOtpWithEmailSignupFallback(supabase, otpToken!, params.otpType);
         if (!error) {
           const pair = sessionUserFromVerifyData(data);
           if (pair) {

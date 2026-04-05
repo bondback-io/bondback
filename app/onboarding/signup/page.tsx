@@ -81,7 +81,7 @@ function OnboardingSignupInner() {
     setModalStepId("session");
     setModalProgress(14);
 
-    const supabase = createBrowserSupabaseClient();
+    const supabase = createBrowserSupabaseClient({ authFlow: "implicit" });
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setStatus("completing");
@@ -148,7 +148,7 @@ function OnboardingSignupInner() {
     setModalStepId("auth");
     setModalOpen(true);
 
-    const supabase = createBrowserSupabaseClient();
+    const supabase = createBrowserSupabaseClient({ authFlow: "implicit" });
 
     try {
       setModalProgress(18);

@@ -59,7 +59,7 @@ export function RegistrationCheckEmailModal({
     setResendHint(null);
     setResending(true);
     try {
-      const supabase = createBrowserSupabaseClient();
+      const supabase = createBrowserSupabaseClient({ authFlow: "implicit" });
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: trimmed,

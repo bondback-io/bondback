@@ -189,7 +189,7 @@ export function SignupPath2Wizard() {
       setError(null);
       startTransition(() => setSubmitting(true));
 
-      const supabase = createBrowserSupabaseClient();
+      const supabase = createBrowserSupabaseClient({ authFlow: "implicit" });
       const postcode = values.postcode?.trim() || null;
       const suburb = values.suburb?.trim() || null;
       const state = values.state?.trim() || null;
