@@ -1,5 +1,7 @@
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
+import type { Database } from "@/types/supabase";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
 import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
 import { establishSessionFromEmailRedirectParams } from "@/lib/auth/establish-email-session";
@@ -16,34 +18,66 @@ function readTokenHash(searchParams: URLSearchParams): string | null {
 /**
  * Email confirmation — GET only.
  *
- * Uses the same session logic as `/auth/callback`: `createSupabaseRouteHandlerClient` wraps
- * `createServerClient` from `@supabase/ssr` with cookies written onto the redirect response (required
- * on Vercel). PKCE links use `token_hash=pkce_…` or `?code=…` — those must go through
- * `exchangeCodeForSession`, not `verifyOtp` alone (see `getEmailRedirectAuthCode`).
+ * `createServerClient` + `cookies()` for reads, but **Set-Cookie must be applied to the redirect
+ * response** (`authCookieResponse.cookies`) — `cookieStore.set` alone often omits cookies on
+ * redirects (Vercel), which breaks sessions and can contribute to PKCE / flow issues.
+ *
+ * PKCE (`?code=` or `token_hash=pkce_…`) uses `exchangeCodeForSession` inside
+ * `establishSessionFromEmailRedirectParams`; legacy OTP uses `verifyOtp`.
  */
 export async function GET(request: NextRequest) {
+  const requestUrl = request.nextUrl;
+  const { searchParams, origin } = requestUrl;
+
+  const token_hash = readTokenHash(searchParams);
+  const typeParam = searchParams.get("type");
+  const otpType = resolveEmailOtpTypeFromSearchParams(searchParams);
+  const code = searchParams.get("code")?.trim() || null;
+
+  const tokenPreview =
+    token_hash && token_hash.length > 20 ? `${token_hash.substring(0, 20)}…` : token_hash;
+
   console.log("=== CONFIRM ROUTE HIT ===", {
     url: request.url,
-    searchParams: Object.fromEntries(request.nextUrl.searchParams),
+    token_hash: tokenPreview,
+    type: typeParam,
+    otpType,
+    code: code ? "[present]" : null,
   });
-
-  const { searchParams, origin } = request.nextUrl;
-  const code = searchParams.get("code")?.trim() || null;
-  const token_hash = readTokenHash(searchParams);
-  const type = searchParams.get("type");
-  const otpType = resolveEmailOtpTypeFromSearchParams(searchParams);
-
-  console.log("Extracted token_hash:", token_hash, "type:", type, "otpType:", otpType, "code:", code ? "[present]" : null);
 
   const redirectToLogin = () => NextResponse.redirect(new URL("/login", origin));
 
   if (!code && !token_hash) {
-    console.log("Verification failed:", { reason: "missing_code_and_token_hash" });
+    console.log("No token_hash or code in URL");
     return redirectToLogin();
   }
 
   const authCookieResponse = NextResponse.redirect(new URL("/dashboard", origin));
-  const supabase = createSupabaseRouteHandlerClient(request, authCookieResponse);
+  const cookieStore = await cookies();
+
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          // Prefer the incoming request cookie jar (PKCE flow state); fall back to `cookies()`.
+          const fromRequest = request.cookies.getAll();
+          if (fromRequest.length > 0) return fromRequest;
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              authCookieResponse.cookies.set(name, value, options as Record<string, unknown>);
+            });
+          } catch {
+            // ignore
+          }
+        },
+      },
+    }
+  );
 
   console.log("Calling establishSessionFromEmailRedirectParams (PKCE exchange or verifyOtp)…");
 
@@ -53,28 +87,15 @@ export async function GET(request: NextRequest) {
     otpType,
   });
 
-  console.log("verifyOtp / exchange result:", {
-    ok: outcome.ok,
-    method: outcome.method,
-    userId: outcome.ok ? outcome.user.id : null,
-    error: outcome.ok ? null : outcome.error.message,
-  });
-
   if (!outcome.ok) {
-    console.log("Verification failed:", outcome.error);
+    console.error("verifyOtp / exchange failed:", {
+      message: outcome.error.message,
+      method: outcome.method,
+    });
     return redirectToLogin();
   }
 
-  const userId = outcome.user.id;
-  const { data: profileRow } = await supabase
-    .from("profiles")
-    .select("active_role")
-    .eq("id", userId)
-    .maybeSingle();
-  const active_role =
-    (profileRow as { active_role?: string | null } | null)?.active_role ?? null;
-
-  console.log("Session created successfully, user ID:", userId, "active_role:", active_role);
+  console.log("Session established — user:", outcome.user.id, "method:", outcome.method);
 
   return redirectAfterAuthSessionEstablished({
     supabase,
