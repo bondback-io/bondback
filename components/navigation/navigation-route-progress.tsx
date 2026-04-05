@@ -9,6 +9,13 @@ function isSameRoute(a: string, b: string): boolean {
   return a === b;
 }
 
+/** Matches `usePathname` + `useSearchParams` route key used in this component. */
+function routeKeyFromWindowLocation(): string {
+  const path = window.location.pathname;
+  const sp = new URLSearchParams(window.location.search);
+  return `${path}?${sp.toString()}`;
+}
+
 /** Wait before showing overlay so fast navigations never flash UI. */
 const OVERLAY_DELAY_MS = 120;
 
@@ -27,6 +34,9 @@ function NavigationRouteProgressInner() {
   const overlayDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstRouteEffectRef = useRef(true);
   const pendingNavigationRef = useRef(false);
+  /** Latest route key — updated every render so popstate can detect “router already committed”. */
+  const routeKeyRef = useRef(routeKey);
+  routeKeyRef.current = routeKey;
 
   const clearTimers = () => {
     if (progressIntervalRef.current) {
@@ -48,9 +58,9 @@ function NavigationRouteProgressInner() {
       isFirstRouteEffectRef.current = false;
       return;
     }
-    if (!pendingNavigationRef.current) {
-      return;
-    }
+    // Any URL change means navigation finished. Do not require pendingNavigationRef: on browser
+    // back, Next/App Router can update pathname before the popstate listener runs, so pending is
+    // still false once — then popstate starts the bar and routeKey never updates again (stuck ~90%).
     pendingNavigationRef.current = false;
     clearTimers();
     setOverlayVisible(false);
@@ -122,6 +132,12 @@ function NavigationRouteProgressInner() {
     };
 
     const onPopState = () => {
+      const keyNow = routeKeyFromWindowLocation();
+      if (keyNow === routeKeyRef.current) {
+        // Next.js often applies the URL before this listener runs; starting the bar here would
+        // leave it stuck (~90%) because routeKey would not change again.
+        return;
+      }
       start("Loading page…");
     };
 

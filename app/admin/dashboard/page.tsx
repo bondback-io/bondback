@@ -24,7 +24,6 @@ import {
   type AdminRevenueSummary,
 } from "@/components/admin/admin-revenue-chart";
 import { AdminShell } from "@/components/admin/admin-shell";
-import { AdminSendTestNotificationGrid } from "@/components/admin/admin-send-test-notification-button";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getEffectivePayoutSchedule } from "@/lib/payout-schedule";
 import {
@@ -278,31 +277,20 @@ export default async function AdminDashboardPage() {
 
   return (
     <AdminShell activeHref="/admin/dashboard">
-      <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-xl font-semibold tracking-tight md:text-2xl dark:text-gray-100">
-            Admin Dashboard
-          </CardTitle>
-          <p className="text-xs text-muted-foreground sm:text-sm dark:text-gray-400">
-            {profile.full_name ?? "Admin"} · Monitor Bond Back health, users, jobs and
-            disputes.
-          </p>
-        </CardHeader>
-      </Card>
+      <div className="space-y-5 sm:space-y-6 lg:space-y-8">
+        <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xl font-semibold tracking-tight md:text-2xl dark:text-gray-100">
+              Admin Dashboard
+            </CardTitle>
+            <p className="text-xs text-muted-foreground sm:text-sm dark:text-gray-400">
+              {profile.full_name ?? "Admin"} · Monitor Bond Back health, users, jobs and
+              disputes.
+            </p>
+          </CardHeader>
+        </Card>
 
-      <Card className="border-dashed border-amber-500/30 bg-amber-50/40 dark:border-amber-800/50 dark:bg-amber-950/20">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Notifications QA</CardTitle>
-          <p className="text-xs text-muted-foreground dark:text-gray-400">
-            Send sample in-app rows per type (no email/SMS/push). Check the bell and /notifications.
-          </p>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <AdminSendTestNotificationGrid />
-        </CardContent>
-      </Card>
-
-      {error && (
+        {error && (
         <Alert
           className="border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30"
           variant="destructive"
@@ -314,10 +302,17 @@ export default async function AdminDashboardPage() {
           </h5>
           <AlertDescription className="text-xs sm:text-sm">{error}</AlertDescription>
         </Alert>
-      )}
+        )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
+        <section aria-labelledby="admin-kpi-heading" className="space-y-3">
+          <h2
+            id="admin-kpi-heading"
+            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-500"
+          >
+            Key metrics
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
+            <Card className="h-full border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Total Users
@@ -337,7 +332,7 @@ export default async function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
+        <Card className="h-full border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Active Listings
@@ -357,7 +352,7 @@ export default async function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
+        <Card className="h-full border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Active Jobs
@@ -377,7 +372,7 @@ export default async function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
+        <Card className="h-full border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Completed Jobs
@@ -397,7 +392,7 @@ export default async function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
+        <Card className="h-full border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Total Platform Revenue
@@ -417,7 +412,7 @@ export default async function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
+        <Card className="h-full border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Open Disputes
@@ -436,15 +431,16 @@ export default async function AdminDashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+          </div>
+        </section>
 
-      <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
+        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold dark:text-gray-100">
             Quick actions
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2">
+        <CardContent className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Link
             href="/admin/users"
             className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
@@ -470,69 +466,79 @@ export default async function AdminDashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <AdminRevenueChart
-            points={revenuePoints ?? []}
-            summary={revenueSummary ?? null}
-          />
-        </div>
-        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80 lg:col-span-1">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold dark:text-gray-100">
-              Payout volume by schedule
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Net payout volume (completed jobs) by cleaner payout schedule.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Daily</span>
-              <span className="font-medium tabular-nums dark:text-gray-100">
-                ${(payoutVolumeBySchedule.dailyCents / 100).toFixed(0)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Weekly</span>
-              <span className="font-medium tabular-nums dark:text-gray-100">
-                ${(payoutVolumeBySchedule.weeklyCents / 100).toFixed(0)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Monthly</span>
-              <span className="font-medium tabular-nums dark:text-gray-100">
-                ${(payoutVolumeBySchedule.monthlyCents / 100).toFixed(0)}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80 lg:col-span-1">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold dark:text-gray-100">
-              Pending Payouts
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Jobs completed but payouts not yet processed (Stripe integration coming soon).
-            </p>
-          </CardHeader>
-          <CardContent>
-            {stats ? (
-              <div className="space-y-1">
-                <p className="text-2xl font-semibold tabular-nums dark:text-gray-100">
-                  ${(stats.pendingPayoutsCents / 100).toFixed(0)}
-                </p>
+      <section aria-labelledby="admin-revenue-heading" className="space-y-3">
+        <h2
+          id="admin-revenue-heading"
+          className="text-xs font-semibold uppercase tracking-wider text-muted-foreground dark:text-gray-500"
+        >
+          Revenue &amp; payouts
+        </h2>
+        <div className="grid gap-4 lg:grid-cols-3 lg:items-start lg:gap-6">
+          <div className="min-w-0 lg:col-span-2">
+            <AdminRevenueChart
+              points={revenuePoints ?? []}
+              summary={revenueSummary ?? null}
+            />
+          </div>
+          <div className="flex flex-col gap-4 lg:col-span-1">
+            <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold dark:text-gray-100">
+                  Payout volume by schedule
+                </CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Currently using a stubbed integration – values will update once Stripe escrow
-                  is live.
+                  Net payout volume (completed jobs) by cleaner payout schedule.
                 </p>
-              </div>
-            ) : (
-              <Skeleton className="h-9 w-32 rounded-md" />
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Daily</span>
+                  <span className="font-medium tabular-nums dark:text-gray-100">
+                    ${(payoutVolumeBySchedule.dailyCents / 100).toFixed(0)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Weekly</span>
+                  <span className="font-medium tabular-nums dark:text-gray-100">
+                    ${(payoutVolumeBySchedule.weeklyCents / 100).toFixed(0)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Monthly</span>
+                  <span className="font-medium tabular-nums dark:text-gray-100">
+                    ${(payoutVolumeBySchedule.monthlyCents / 100).toFixed(0)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold dark:text-gray-100">
+                  Pending payouts
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Jobs completed but payouts not yet processed (Stripe integration coming soon).
+                </p>
+              </CardHeader>
+              <CardContent>
+                {stats ? (
+                  <div className="space-y-1">
+                    <p className="text-2xl font-semibold tabular-nums dark:text-gray-100">
+                      ${(stats.pendingPayoutsCents / 100).toFixed(0)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Currently using a stubbed integration – values will update once Stripe escrow
+                      is live.
+                    </p>
+                  </div>
+                ) : (
+                  <Skeleton className="h-9 w-32 rounded-md" />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
 
       <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">
         <CardHeader className="pb-2">
@@ -638,6 +644,7 @@ export default async function AdminDashboardPage() {
           )}
         </CardContent>
       </Card>
+      </div>
     </AdminShell>
   );
 }

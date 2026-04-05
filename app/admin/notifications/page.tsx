@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminSendTestNotificationGrid } from "@/components/admin/admin-send-test-notification-button";
 import {
   AdminEmailDeliveryLogTable,
   AdminInAppDeliveryLogTable,
@@ -229,6 +230,18 @@ export default async function AdminNotificationsPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="border-dashed border-amber-500/30 bg-amber-50/40 dark:border-amber-800/50 dark:bg-amber-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Notifications QA</CardTitle>
+            <p className="text-xs text-muted-foreground dark:text-gray-400">
+              Send sample in-app rows per type (no email/SMS/push). Check the bell and /notifications.
+            </p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <AdminSendTestNotificationGrid />
+          </CardContent>
+        </Card>
 
         {/* Quick links */}
         <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900/80">

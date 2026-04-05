@@ -20,6 +20,35 @@ export function isDisputedJobStatus(status: string | null | undefined): boolean 
   return DISPUTED.includes(String(status ?? "") as (typeof DISPUTED)[number]);
 }
 
+/** Job states where the auction countdown should not show a future “Ends …” time. */
+export function jobSuppressesListerAuctionCountdown(
+  status: string | null | undefined
+): boolean {
+  const s = String(status ?? "");
+  return (
+    s === "accepted" ||
+    s === "in_progress" ||
+    s === "completed_pending_approval" ||
+    s === "completed" ||
+    s === "disputed" ||
+    s === "in_review" ||
+    s === "dispute_negotiating"
+  );
+}
+
+/** True when the listing is in an open auction (live, before end) and no job has closed bidding. */
+export function isListerAuctionLiveBidding(
+  listing: ListingRow,
+  job: JobSnapshot | null | undefined,
+  nowMs: number
+): boolean {
+  const js = job?.status ?? null;
+  if (js && jobSuppressesListerAuctionCountdown(js)) return false;
+  const st = String(listing.status ?? "").toLowerCase();
+  const endMs = parseUtcTimestamp(String(listing.end_time ?? ""));
+  return st === "live" && endMs > nowMs;
+}
+
 export function classifyListerBadge(
   listing: ListingRow,
   job: JobSnapshot | null | undefined,
@@ -77,6 +106,24 @@ export function buildTimeLabel(listing: ListingRow, job: JobSnapshot | null | un
   }
   const endMs = parseUtcTimestamp(String(listing.end_time ?? ""));
   const st = String(listing.status ?? "").toLowerCase();
+  if (js && jobSuppressesListerAuctionCountdown(js)) {
+    if (Number.isFinite(endMs) && endMs <= nowMs) {
+      try {
+        return `Ended ${formatDistanceToNowStrict(new Date(endMs), { addSuffix: true })}`;
+      } catch {
+        return "Ended";
+      }
+    }
+    const u = job?.updatedAt ? Date.parse(String(job.updatedAt)) : NaN;
+    if (!Number.isNaN(u)) {
+      try {
+        return `Ended ${formatDistanceToNowStrict(new Date(u), { addSuffix: true })}`;
+      } catch {
+        return "Ended";
+      }
+    }
+    return "Ended";
+  }
   if (st === "live" && endMs > nowMs) {
     return `Ends ${formatDistanceToNowStrict(new Date(endMs), { addSuffix: true })}`;
   }

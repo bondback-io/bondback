@@ -36,6 +36,8 @@ export type ListerListingCardProps = {
   highestBidCents: number;
   buyNowCents: number | null;
   timeLabel: string;
+  /** Listing is in an open auction (receives bids until end time). */
+  isLiveBidding?: boolean;
   showEndEarly: boolean;
   href: string;
   onEndEarly?: () => void;
@@ -55,6 +57,7 @@ export function ListerListingCard({
   highestBidCents,
   buyNowCents,
   timeLabel,
+  isLiveBidding = false,
   showEndEarly,
   href,
   onEndEarly,
@@ -69,7 +72,9 @@ export function ListerListingCard({
     <article
       className={cn(
         "overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm ring-1 ring-black/[0.03] dark:border-gray-800 dark:bg-gray-950 dark:ring-white/[0.04]",
-        "transition-[box-shadow,transform] duration-200 hover:shadow-md active:scale-[0.99]"
+        "transition-[box-shadow,transform] duration-200 hover:shadow-md active:scale-[0.99]",
+        isLiveBidding &&
+          "border-emerald-400/70 bg-emerald-50/40 ring-2 ring-emerald-500/25 dark:border-emerald-700/50 dark:bg-emerald-950/25 dark:ring-emerald-500/20"
       )}
     >
       <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">

@@ -48,6 +48,7 @@ import { PullToRefresh } from "@/components/my-listings/pull-to-refresh";
 import {
   classifyListerBadge,
   buildTimeLabel,
+  isListerAuctionLiveBidding,
   passesListFilter,
   listingMatchesCompletedTab,
   isDisputedJobStatus,
@@ -937,10 +938,9 @@ export function MyListingsList({
               const bids = bidCounts[String(listing.id)] ?? 0;
               const highest = listing.current_lowest_bid_cents ?? 0;
               const buyNow = listing.buy_now_cents ?? null;
-              const liveAuction =
-                listing.status === "live" && parseUtcTimestamp(listing.end_time) > nowMs;
+              const liveBidding = isListerAuctionLiveBidding(listing, job, nowMs);
               const showEndEarly =
-                liveAuction && !activeIdSet.has(String(listing.id));
+                liveBidding && !activeIdSet.has(String(listing.id));
               const isExpired =
                 String(listing.status ?? "").toLowerCase() === "expired";
 
@@ -955,6 +955,7 @@ export function MyListingsList({
                   highestBidCents={highest}
                   buyNowCents={buyNow}
                   timeLabel={timeLabel}
+                  isLiveBidding={liveBidding}
                   showEndEarly={showEndEarly}
                   href={`/jobs/${listing.id}`}
                   onEndEarly={showEndEarly ? () => openCancelListingConfirm(listing) : undefined}
