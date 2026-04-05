@@ -339,6 +339,17 @@ export async function getNotificationEmailContent(
   );
 }
 
+async function renderMarkdownEmailFromAdminOverride(
+  adminOverride: AdminEmailOverride,
+  placeholderValues: EmailPlaceholderValues
+): Promise<{ subject: string; html: string }> {
+  const { markdownToHtml } = await import("@/lib/markdown");
+  const bodyHtml = markdownToHtml(adminOverride.body);
+  const html = substituteEmailTemplatePlaceholders(bodyHtml, placeholderValues);
+  const subject = substituteEmailTemplatePlaceholders(adminOverride.subject.trim(), placeholderValues);
+  return { subject, html };
+}
+
 /**
  * Build subject and HTML for a notification type using React Email templates.
  * Optional senderName for new_message; optional listingId for new_bid (link to listing).
@@ -372,7 +383,7 @@ export async function buildNotificationEmail(
         : `Payment released — Job #${id} – Bond Back`;
     })(),
     funds_ready: `Funds ready to release — Job #${id} – Bond Back`,
-    dispute_opened: `Dispute opened — Job #${id} needs your input – Bond Back`,
+    dispute_opened: `Dispute opened — Job #${id} — we’ll sort it fairly – Bond Back`,
     dispute_resolved: `Dispute wrapped up — Job #${id} – Bond Back`,
     job_cancelled_by_lister: `Job #${id} cancelled by the lister – Bond Back`,
     listing_live: `You’re live — cleaners can start bidding – Bond Back`,
@@ -505,12 +516,36 @@ export async function buildNotificationEmail(
 
 /**
  * Build welcome email (sent immediately after signup confirmation).
- * Subject and preheader tuned for engagement.
+ * When `adminOverride` is active with subject + body, sends markdown from Admin → Emails (centralised copy).
+ * Otherwise uses the React Email template in `emails/Welcome.tsx`.
  */
 export async function buildWelcomeEmail(
   firstName: string | undefined,
-  role: "lister" | "cleaner" | "both"
+  role: "lister" | "cleaner" | "both",
+  adminOverride?: AdminEmailOverride | null
 ): Promise<{ subject: string; html: string }> {
+  const displayName = firstName?.trim() || "there";
+  if (adminOverride?.active && adminOverride.subject?.trim() && adminOverride.body?.trim()) {
+    const roleLabel =
+      role === "both" ? "Lister & Cleaner" : role === "lister" ? "Lister" : "Cleaner";
+    const v: EmailPlaceholderValues = {
+      messageText: "",
+      jobId: "—",
+      listingId: "—",
+      senderName: "",
+      name: displayName,
+      recipientName: displayName,
+      listerName: "—",
+      cleanerName: "—",
+      listingTitle: "Your listing",
+      amount: "$0",
+      role: roleLabel,
+      suburb: "—",
+    };
+    console.info("[email:template-props]", { kind: "admin_override", type: "welcome", templateProps: v });
+    return renderMarkdownEmailFromAdminOverride(adminOverride, v);
+  }
+
   const subject = "Welcome to Bond Back — fair cleans, secure pay 🇦🇺";
   const templateProps = { firstName: firstName?.trim() || undefined, role };
   console.info("[email:react-template]", { type: "welcome", templateProps });
@@ -531,12 +566,34 @@ export async function buildWelcomeEmail(
 
 /**
  * Build role-specific tutorial email (sent when the user gains that role, or by 24h cron fallback).
- * Subjects and preheader tuned for engagement.
+ * When `adminOverride` is active with subject + body, sends markdown from Admin → Emails.
+ * Otherwise uses `emails/ListerTutorial.tsx` / `emails/CleanerTutorial.tsx`.
  */
 export async function buildTutorialEmail(
   role: "lister" | "cleaner",
-  firstName?: string
+  firstName?: string,
+  adminOverride?: AdminEmailOverride | null
 ): Promise<{ subject: string; html: string }> {
+  const displayName = firstName?.trim() || "there";
+  if (adminOverride?.active && adminOverride.subject?.trim() && adminOverride.body?.trim()) {
+    const v: EmailPlaceholderValues = {
+      messageText: "",
+      jobId: "—",
+      listingId: "—",
+      senderName: "",
+      name: displayName,
+      recipientName: displayName,
+      listerName: "—",
+      cleanerName: "—",
+      listingTitle: "Your listing",
+      amount: "$0",
+      role: role === "lister" ? "Lister" : "Cleaner",
+      suburb: "—",
+    };
+    console.info("[email:template-props]", { kind: "admin_override", type: `tutorial_${role}`, templateProps: v });
+    return renderMarkdownEmailFromAdminOverride(adminOverride, v);
+  }
+
   const subject =
     role === "lister"
       ? "Your lister playbook — four steps to handover – Bond Back"

@@ -1,7 +1,7 @@
 /**
- * Default professional email template content for all types.
- * Used to pre-fill admin templates and as fallback when a template is empty.
- * Style: clear, actionable, similar to Airtasker/Upwork marketplace notifications.
+ * Default email template copy for all types (admin “Apply defaults” + empty-row fallback).
+ * Tone: Bond Back humour — Aussie, playful, clear — aligned with React Email in `emails/` and
+ * subjects in `lib/notifications/email.ts`. Use markdown; placeholders match `lib/email-placeholders.ts`.
  */
 
 import type { EmailTemplateType } from "./admin-email-templates-utils";
@@ -20,90 +20,206 @@ const PH_SENDER = "{{senderName}}";
 function buildTemplates(): Record<EmailTemplateType, DefaultTemplate> {
   return {
     welcome: {
-      subject: "Welcome to " + APP_NAME + " – your bond cleaning solution",
-      body: "Hi {name},\n\n**Welcome to " + APP_NAME + "** – the marketplace that gets your rental bond back, fast.\n\n**Why " + APP_NAME + "?**\n- **Listers:** Create a listing, receive competitive bids from verified cleaners, and choose the best offer. One place, less stress.\n- **Cleaners:** Browse local bond clean jobs, place bids or Buy Now, and get paid securely when the job is done.\n\n**Your next step:** Complete your profile, then head to your dashboard to create a listing or browse jobs.\n\n**Trust & support:** Secure payments, 48-hour release protection, and dispute resolution. Need help? Reply to this email or visit " + APP_URL + ".\n\n[Go to dashboard](" + APP_URL + "/dashboard)\n\nThe " + APP_NAME + " team",
-    },
-    tutorial_lister: {
-      subject: "3 steps to list your bond clean – " + APP_NAME,
-      body: "Hi {name},\n\nHere’s how to get your bond clean done on " + APP_NAME + ":\n\n**1. Create your listing** – Add property details, move-out date, and any special requirements. Photos and clear instructions get better bids.\n\n**2. Review bids** – Cleaners send you offers. Compare prices and profiles; put must-knows in your listing description upfront.\n\n**3. Accept & pay & start** – Choose a cleaner, then pay & start the job. Job chat unlocks once the job is in progress so you can coordinate in-app; use the checklist and release payment when you’re happy.\n\n**Pro tip:** The more detail you add, the more accurate (and competitive) bids you’ll receive.\n\n[Get started](" + APP_URL + "/dashboard)\n\nThe " + APP_NAME + " team",
-    },
-    tutorial_cleaner: {
-      subject: "3 steps to win bond clean jobs – " + APP_NAME,
-      body: "Hi {name},\n\nHere’s how to win and complete jobs on " + APP_NAME + ":\n\n**1. Browse listings** – Find bond cleans in your area. Filter by location and move-out date.\n\n**2. Place a bid** – Send a clear offer and a short message. A complete profile and quick replies help listers choose you.\n\n**3. Get hired & complete** – When the lister accepts, they’ll approve the job so you get the address and checklist. Complete the work, upload after-photos, and get paid when they release funds.\n\n**Pro tip:** Stand out with your experience and a friendly, professional message.\n\n[Browse jobs](" + APP_URL + "/dashboard)\n\nThe " + APP_NAME + " team",
-    },
-    new_bid: {
-      subject: "New bid on {listingTitle} – " + APP_NAME,
-      body: "Hi {name},\n\nYou’ve received a **new bid** on your listing.\n\n**Listing:** {listingTitle}\n**Bid amount:** [Amount]\n**Message:** " + PH_MESSAGE + "\n\nReview the cleaner’s profile and bid note — accept or decline. Job chat opens after you pay & start the job (in progress) so you can coordinate on-platform. Secure payments and 48-hour protection included.\n\n[View bid](" + APP_URL + "/listings/" + PH_LISTING + ")\n\nThe " + APP_NAME + " team",
-    },
-    new_message: {
-      subject: "New message in Job #[JobId] – " + APP_NAME,
-      body: "Hi {name},\n\nYou have a new message in your job chat.\n\n**From:** " + PH_SENDER + "\n**Message:** " + PH_MESSAGE + "\n\nReply in the app to keep everything in one place and stay on track.\n\n[Open job chat](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
-    },
-    job_created: {
-      subject: "Your job is accepted – pay & start job – " + APP_NAME,
-      body: "Hi {name},\n\nGreat news – a cleaner has accepted your job.\n\n**Job:** {listingTitle}\n**Job #:** [JobId]\n\n**Next step:** Pay & Start Job to hold funds in escrow and start the job. The cleaner will then see the checklist and address. Use the job chat to agree on timing and details.\n\n[Pay & Start Job](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
-    },
-    job_accepted: {
-      subject: "You're approved to start – Job #[JobId] – " + APP_NAME,
-      body: "Hi {name},\n\nThe lister has approved the job. You can start the bond clean.\n\n**Job:** {listingTitle}\n**Job #:** [JobId]\n\n**What to do:**\n- Check the job for the address and cleaning checklist.\n- Use the chat to confirm the time and any access details.\n- Complete the checklist and upload after-photos when you're done.\n\n[View job and checklist](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
-    },
-    job_approved_to_start: {
-      subject: "Go ahead — start Job #[JobId] – " + APP_NAME,
+      subject: "Welcome to " + APP_NAME + " — fair cleans, secure pay 🇦🇺",
       body:
         "Hi {name},\n\n" +
-        "The lister has **approved the job to start**. You’re cleared to begin the bond clean.\n\n" +
+        "**You’re in** — thanks for joining Australia’s bond-clean marketplace. We built this because end-of-lease stress is real, and your bond shouldn’t depend on luck (or a dodgy flyer).\n\n" +
+        "**What you can do:**\n" +
+        "- **Listing a clean?** Post your job, watch cleaners compete on price, and pick someone you trust — without the ring-around.\n" +
+        "- **On the tools?** Browse local jobs, bid with confidence, and get paid when the work’s done — escrow keeps everyone honest.\n" +
+        "- **Both?** One account; switch roles anytime.\n\n" +
+        "**Trust line:** Secure payments · Escrow protection · Disputes handled fairly — we’re not here to make moving harder.\n\n" +
+        "[Open your dashboard](" + APP_URL + "/dashboard)\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    tutorial_lister: {
+      subject: "Your lister playbook — four steps to handover – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "Welcome aboard — let’s get that bond clean sorted. Here’s the **lister playbook** (same vibe as the email we send new listers):\n\n" +
+        "**1. List your clean** — Add photos, move-out date, and anything quirky about access or parking. The clearer you are, the sharper the bids — no one likes guessing games at 7am on a Saturday.\n\n" +
+        "**2. Set a fair reserve** — Your reserve is the ceiling; cleaners bid down in a reverse auction. Think of it as setting the bar, then watching the competition do the limbo.\n\n" +
+        "**3. Compare bids & choose** — Job chat opens **once the job is in progress** (after pay & start), so access and timing stay on the platform — not lost in SMS threads.\n\n" +
+        "**4. Approve, then release** — When the clean’s done, check the photos and checklist. Happy? Release payment from escrow.\n\n" +
+        "**Fair dinkum tip:** Good photos and a short “what matters most” note save back-and-forth on the day.\n\n" +
+        "[My listings](" + APP_URL + "/my-listings) · [Dashboard](" + APP_URL + "/dashboard)\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    tutorial_cleaner: {
+      subject: "Your cleaner playbook — browse, clean, get paid – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "Stoked to have you on the tools. Here’s the **cleaner playbook**:\n\n" +
+        "**1. Hunt jobs that fit** — Filter by suburb so you’re not crossing town for a studio clean unless you really want to.\n\n" +
+        "**2. Bid smart or Buy Now** — Reverse auction = lowest bid wins. Spot a price you’re happy with? Buy Now can lock it in.\n\n" +
+        "**3. Chat when the job’s live** — After you’re hired and the job is **in progress**, use in-app messages for keys, parking, and timing — keeps everything above board.\n\n" +
+        "**4. Show your work** — Before/after photos help listers approve fast and protect you if anything’s questioned.\n\n" +
+        "**5. Get paid** — When the lister releases funds, track it under Earnings.\n\n" +
+        "**Ripper tip:** Solid photos and quick replies win more jobs.\n\n" +
+        "[Browse jobs](" + APP_URL + "/jobs) · [Earnings](" + APP_URL + "/earnings)\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    new_bid: {
+      subject: "Fresh bid on {listingTitle} — worth a look – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "Someone just threw their hat in the ring — **new bid** on your listing.\n\n" +
+        "**Listing:** {listingTitle}\n" +
+        "**Their note:** " +
+        PH_MESSAGE +
+        "\n\n" +
+        "Have a squiz at their profile and offer. The reverse auction means lower bids win — take your time, or jump in if the price already feels fair dinkum. Job chat opens after you **pay & start** and the job is **in progress**.\n\n" +
+        "[Review bids](" + APP_URL + "/listings/" + PH_LISTING + ")\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    new_message: {
+      subject: "Ping! New message on Job #[JobId] – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "**" +
+        PH_SENDER +
+        "** sent you a message on Job **[JobId]**:\n\n" +
+        "_" +
+        PH_MESSAGE +
+        "_\n\n" +
+        "Reply in Bond Back so dates, keys, and expectations stay in one thread — much easier than digging through SMS.\n\n" +
+        "[Open chat](" + APP_URL + "/jobs/" + PH_JOB + ")\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    job_created: {
+      subject: "Cleaner locked in — pay & start when you’re ready – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "You’ve got a cleaner — let’s get this bond clean moving.\n\n" +
         "**Job:** {listingTitle}\n**Job #:** [JobId]\n\n" +
-        "**Next steps:**\n" +
-        "- Open the job for the property address and checklist.\n" +
+        "**Next step:** **Pay & start** to hold funds in escrow. Then the cleaner gets the address and checklist, and job chat opens properly for timing and keys.\n\n" +
+        "[Pay & start job](" + APP_URL + "/jobs/" + PH_JOB + ")\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    job_accepted: {
+      subject: "Green light: start Job #[JobId] – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "The lister’s given you the nod — **you’re cleared to start** the bond clean.\n\n" +
+        "**Job:** {listingTitle}\n**Job #:** [JobId]\n\n" +
+        "- Open the job for address and checklist.\n" +
         "- Confirm timing in chat if needed.\n" +
-        "- Complete the work and upload after-photos when finished.\n\n" +
-        "[Start job & checklist](" +
-        APP_URL +
-        "/jobs/" +
-        PH_JOB +
-        ")\n\nThe " +
+        "- Tick the checklist and upload after photos when you’re done.\n\n" +
+        "Happy listers release payment faster — keep the chat warm.\n\n" +
+        "[Open job](" + APP_URL + "/jobs/" + PH_JOB + ")\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    job_approved_to_start: {
+      subject: "You’re cleared to begin Job #[JobId] – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "Green light from the lister — **approved to start**. Time to make that rental sparkle.\n\n" +
+        "**Job:** {listingTitle}\n**Job #:** [JobId]\n\n" +
+        "Grab the address, run the checklist, and upload after photos when finished.\n\n" +
+        "[Start job & checklist](" + APP_URL + "/jobs/" + PH_JOB + ")\n\n" +
+        "– The " +
         APP_NAME +
         " team",
     },
     job_completed: {
-      subject: "Job #[JobId] complete – review & approve & release funds – " + APP_NAME,
-      body: "Hi {name},\n\nThe cleaner has marked **Job #[JobId]** as complete and uploaded after-photos.\n\n**Next step:** Review the checklist and photos. If everything looks good, approve & release funds from escrow. You have 48 hours to review or open a dispute if needed.\n\n[View job & approve & release funds](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
+      subject: "Photos are in — have a squiz before you pay – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "The cleaner’s marked **Job #[JobId]** complete and uploaded after photos. Time for your final look.\n\n" +
+        "Happy with the checklist and pics? **Approve & release** from escrow. You’ve got **48 hours** to review or open a dispute if something’s off.\n\n" +
+        "[Review & release](" + APP_URL + "/jobs/" + PH_JOB + ")\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
     },
     job_cancelled_by_lister: {
-      subject: "Listing cancelled – Job #[JobId] – " + APP_NAME,
+      subject: "Listing cancelled — you’re free to move on – " + APP_NAME,
       body:
-        "Hi {name},\n\nThe property lister has **cancelled** the listing linked to Job #[JobId]. You have been unassigned from this job.\n\nIf you had questions about timing or scope, you can browse other bond cleans on the marketplace.\n\n[Browse jobs](" +
-        APP_URL +
-        "/jobs)\n\nThe " +
+        "Hi {name},\n\n" +
+        "The lister **cancelled** this listing (Job **[JobId]**). You’re unassigned — no stress.\n\n" +
+        "Plenty more bond cleans in the feed — your next win might be a tap away.\n\n" +
+        "[Browse jobs](" + APP_URL + "/jobs)\n\n" +
+        "– The " +
         APP_NAME +
         " team",
     },
     payment_released: {
-      subject: "Payment of [Amount] released – thank you – " + APP_NAME,
-      body: "Hi {name},\n\nPayment of **[Amount]** for Job #[JobId] has been released to you.\n\nThank you for completing this bond clean through " + APP_NAME + ". We hope the experience was smooth.\n\n**What's next?** You can leave a review for the lister from your dashboard.\n\n[View job](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
-    },
-    funds_ready: {
-      subject: "Funds ready to release – Job #[JobId] – " + APP_NAME,
-      body: "Hi {name},\n\nThe cleaner has completed the checklist and uploaded after-photos. Funds for Job #[JobId] are ready for you to release.\n\n**Next step:** Review the work and photos. When you're satisfied, release the payment. The cleaner will be notified once it's done.\n\n[Review and release funds](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
-    },
-    dispute_opened: {
-      subject: "Dispute opened for Job #[JobId] – action needed – " + APP_NAME,
-      body: "Hi {name},\n\nA dispute has been opened for Job #[JobId].\n\n**What to do:** Please go to the job page to view the details and submit your response. We'll use both sides to help resolve the issue fairly.\n\n[View dispute and respond](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
-    },
-    dispute_resolved: {
-      subject: "Dispute resolved – Job #[JobId] – " + APP_NAME,
-      body: "Hi {name},\n\nThe dispute for Job #[JobId] has been resolved.\n\n**Next steps:** Check the job page for the outcome and any next actions (e.g. payment release or refund).\n\n[View job](" + APP_URL + "/jobs/" + PH_JOB + ")\n\nThe " + APP_NAME + " team",
-    },
-    birthday: {
-      subject: "Happy Birthday, {name}! 🎂 – " + APP_NAME,
+      subject: "Ka-ching: [Amount] released — nice one – " + APP_NAME,
       body:
         "Hi {name},\n\n" +
-        "**Happy Birthday!** 🎉\n\n" +
-        "From everyone at " + APP_NAME + ", we hope your day is filled with joy and celebration. Thank you for being part of our community—whether you're listing bond cleans or getting them done, we're glad you're here.\n\n" +
-        "We wish you a fantastic year ahead and look forward to helping you with your next bond clean when the time comes.\n\n" +
-        "Enjoy your special day!\n\n" +
-        "[Visit " + APP_NAME + "](" + APP_URL + ")\n\n" +
-        "Warm wishes,\nThe " + APP_NAME + " team",
+        "**[Amount]** for Job **[JobId]** is on its way to you. Cracker of a job — thanks for using " +
+        APP_NAME +
+        ".\n\n" +
+        "Leave a review from your dashboard when you get a sec.\n\n" +
+        "[View job](" + APP_URL + "/jobs/" + PH_JOB + ")\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    funds_ready: {
+      subject: "Funds ready to release — Job #[JobId] – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "The hard yards look done — checklist ticked, after photos in. **Funds are ready** for you to release on Job **[JobId]**.\n\n" +
+        "Happy with everything? Tap through to release — your cleaner gets paid, and you get peace of mind.\n\n" +
+        "[Review & release](" + APP_URL + "/jobs/" + PH_JOB + ")\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    dispute_opened: {
+      subject: "Dispute opened — we’ll sort it fairly – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "A dispute’s been raised on **Job #[JobId]**. Deep breath — we’ll work through it properly.\n\n" +
+        "Open the job, add photos or notes, and reply promptly. We review both sides — **no kangaroo courts here**.\n\n" +
+        "[View job & respond](" + APP_URL + "/jobs/" + PH_JOB + ")\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    dispute_resolved: {
+      subject: "Dispute wrapped up — Job #[JobId] – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "Good news — the dispute on **Job #[JobId]** is **resolved**.\n\n" +
+        "Check the job page for the outcome and any next steps (payment release, refund, etc.).\n\n" +
+        "[View job](" + APP_URL + "/jobs/" + PH_JOB + ")\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
+    birthday: {
+      subject: "Happy Birthday, {name}! 🎂 (go on, treat yourself) – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "**Happy birthday!** 🎉\n\n" +
+        "From everyone at " +
+        APP_NAME +
+        ", we hope your day’s more **barbie than bond inspection** — you’ve earned it. Thanks for being part of the community, whether you’re listing cleans or smashing them out.\n\n" +
+        "Here’s to a ripper year — and stress-free handovers when the time comes.\n\n" +
+        "[Visit " +
+        APP_NAME +
+        "](" +
+        APP_URL +
+        ")\n\n" +
+        "Cheers,\nThe " +
+        APP_NAME +
+        " team",
     },
   };
 }

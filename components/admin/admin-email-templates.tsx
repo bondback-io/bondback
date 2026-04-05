@@ -310,9 +310,10 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
 
   const openEdit = (type: string) => {
     const t = templates[type];
+    const def = getDefaultTemplate(type);
     setEditType(type);
-    setEditSubject(t?.subject ?? "");
-    setEditBody(t?.body ?? "");
+    setEditSubject(t?.subject?.trim() ? t.subject : (def?.subject ?? ""));
+    setEditBody(t?.body?.trim() ? t.body : (def?.body ?? ""));
     setEditActive(isTemplateActive(t));
     setEditSendAfter(type === "birthday" ? "on_dob" : (t?.send_after ?? "instant"));
   };

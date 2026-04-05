@@ -1,7 +1,7 @@
 "use server";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getGlobalSettings, getEmailTemplateOverrides } from "@/lib/actions/global-settings";
 import { getEmailForUserId } from "@/lib/supabase/admin";
 import {
   buildTutorialEmail,
@@ -37,6 +37,9 @@ export async function sendScheduledTutorialEmails(): Promise<{
     });
     return { sent: 0, skipped: 0, errors: [] };
   }
+
+  const { email_templates: cronEmailTemplates, email_type_enabled: cronTypeEnabled } =
+    await getEmailTemplateOverrides();
 
   const now = new Date();
   const minCreated = new Date(now.getTime() - (HOURS_AFTER_SIGNUP + WINDOW_HOURS) * 60 * 60 * 1000).toISOString();
@@ -77,6 +80,11 @@ export async function sendScheduledTutorialEmails(): Promise<{
     }
 
     const role = row.active_role === "cleaner" ? "cleaner" : "lister";
+    const templateKeyCron = role === "lister" ? "tutorial_lister" : "tutorial_cleaner";
+    if (cronTypeEnabled?.[templateKeyCron] === false) {
+      skipped++;
+      continue;
+    }
     const roleSentKey =
       role === "lister" ? "email_tutorial_lister_sent" : "email_tutorial_cleaner_sent";
     const prefMap = prefs as Record<string, boolean | undefined>;
@@ -97,7 +105,8 @@ export async function sendScheduledTutorialEmails(): Promise<{
     const firstName = row.full_name?.trim()?.split(" ")[0];
 
     try {
-      const { subject, html } = await buildTutorialEmail(role, firstName);
+      const tutorialOverrideCron = cronEmailTemplates?.[templateKeyCron];
+      const { subject, html } = await buildTutorialEmail(role, firstName, tutorialOverrideCron);
       const result = await sendEmail(email, subject, html, {
         log: { userId: row.id, kind: `tutorial_${role}` },
       });

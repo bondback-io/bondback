@@ -182,7 +182,7 @@ export async function saveEmailTemplate(
 
 export type ApplyDefaultTemplatesResult = { ok: true; count: number } | { ok: false; error: string };
 
-/** Pre-fill all email templates with professional default content. Merges into existing; does not overwrite custom content. */
+/** Pre-fill empty email templates with default Bond Back copy (humour-forward; matches React defaults). Merges into existing; does not overwrite custom content. */
 export async function applyDefaultEmailTemplates(): Promise<ApplyDefaultTemplatesResult> {
   const { supabase, adminId } = await requireAdmin();
   const { data: rows } = await supabase.from("email_template_overrides").select("template_key, subject, body, active, type_enabled, send_after");

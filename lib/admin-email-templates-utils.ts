@@ -57,70 +57,78 @@ export type SampleData = {
 
 export const SAMPLE_DATA: Record<string, SampleData> = {
   welcome: {
-    messageText: "Welcome to Bond Back — jump into your dashboard to finish setup.",
+    messageText:
+      "You’re in — fair bids, secure pay, one less thing to worry about before handover.",
     jobId: null,
     senderName: "Bond Back",
   },
   tutorial_lister: {
     messageText:
-      "Quick start: create a listing, compare bids, then pay & start — job chat opens in progress.",
+      "Four steps from listing to handover — reserve, bids, pay & start, then release when the place sparkles.",
     jobId: null,
     senderName: "Bond Back",
   },
   tutorial_cleaner: {
-    messageText: "Quick start: browse jobs near you, bid or Buy Now, then upload proof and get paid.",
+    messageText:
+      "Five steps: hunt jobs, bid or Buy Now, chat when live, show before/afters, get paid — escrow keeps it fair.",
     jobId: null,
     senderName: "Bond Back",
   },
   new_bid: {
-    messageText: "I can do this bond clean for $280 — available Saturday or Sunday arvo.",
+    messageText:
+      "I can smash this bond clean for $280 — Sat or Sun arvo, own gear, happy to limbo under your reserve.",
     jobId: 10042,
     listingId: 10042,
   },
   new_message: {
-    messageText: "Hi — would Tuesday 2pm work for access? Happy to shuffle if needed.",
+    messageText: "G’day — Tuesday 2pm work for keys? Can shuffle if you’re on a tight runway.",
     jobId: 10042,
     senderName: "Alex Smith",
   },
   job_created: {
-    messageText: "Your cleaner accepted — pay & start when you’re ready so they get the checklist and address.",
+    messageText:
+      "Cleaner’s locked in — pay & start when you’re ready so they get the checklist and address (no more phone tag).",
     jobId: 10042,
   },
   job_accepted: {
-    messageText: "The lister approved you — you’re clear to start. Check the job for address and checklist.",
+    messageText: "Lister gave the green light — grab the address, run the checklist, keep the chat warm.",
     jobId: 10042,
   },
   job_approved_to_start: {
     messageText:
-      "Green light from the lister — you can start the bond clean. Open the job for address and checklist.",
+      "Approved to start — open the job for address and checklist, then make that rental sparkle.",
     jobId: 10042,
   },
   job_completed: {
-    messageText: "The clean’s done and after photos are in — please review and release payment when happy.",
+    messageText:
+      "Clean’s done, after photos uploaded — have a squiz, then release when you’re happy (48h window).",
     jobId: 10042,
   },
   job_cancelled_by_lister: {
-    messageText: "This listing was cancelled by the lister — you’ve been unassigned. Browse other jobs anytime.",
+    messageText:
+      "Lister pulled this listing — you’re unassigned. Plenty more fish (bond cleans) in the feed.",
     jobId: 10042,
   },
   payment_released: {
-    messageText: "Payment of $280.00 has been released to your account — thanks for a great clean.",
+    messageText: "$280.00 released — cracker of a clean. Ka-ching.",
     jobId: 10042,
   },
   funds_ready: {
-    messageText: "Funds for Job #10042 are ready to release — review photos and the checklist, then release when satisfied.",
+    messageText:
+      "Checklist ticked, photos in — funds ready to release on Job #10042 when you’re satisfied.",
     jobId: 10042,
   },
   dispute_opened: {
-    messageText: "A dispute was opened for Job #10042 — please open the job and add your side.",
+    messageText:
+      "Heads up — a dispute’s open on Job #10042. Jump in and add your side; we review both fairly.",
     jobId: 10042,
   },
   dispute_resolved: {
-    messageText: "The dispute for Job #10042 is resolved — check the job for the outcome and next steps.",
+    messageText: "Dispute on #10042 is wrapped — check the job for outcome and next steps.",
     jobId: 10042,
   },
   birthday: {
-    messageText: "Happy birthday from the Bond Back team — thanks for being part of the community.",
+    messageText: "Happy birthday from Bond Back — hope your day’s more barbie than bond inspection.",
     jobId: null,
     senderName: "Bond Back",
   },

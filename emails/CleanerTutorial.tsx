@@ -30,7 +30,7 @@ const STEPS = [
   {
     emoji: "💬",
     title: "Chat like a pro",
-    body: "Once you’re approved, use in-app messages for keys, parking, and timing — keeps everything above board if questions pop up later.",
+    body: "Once the job is in progress (after pay & start), use in-app messages for keys, parking, and timing — keeps everything above board if questions pop up later.",
     learnUrl: `${APP_URL}/dashboard`,
     learnLabel: "Dashboard",
   },

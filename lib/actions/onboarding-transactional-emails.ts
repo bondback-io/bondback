@@ -3,7 +3,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getGlobalSettings, getEmailTemplateOverrides } from "@/lib/actions/global-settings";
 import { getNotificationPrefs } from "@/lib/supabase/admin";
 import { buildTutorialEmail, buildWelcomeEmail, sendEmail } from "@/lib/notifications/email";
 import type { ProfileRole } from "@/lib/types";
@@ -172,13 +172,26 @@ export async function sendWelcomeEmailAfterEmailVerification(params: {
     return { ok: false, skipped: "email_force_disabled" };
   }
 
+  const { email_templates: emailTemplates, email_type_enabled: emailTypeEnabled } =
+    await getEmailTemplateOverrides();
+  if (emailTypeEnabled?.welcome === false) {
+    console.info("[email:welcome]", {
+      outcome: "skipped",
+      userId: params.userId,
+      trigger,
+      reason: "email_type_disabled",
+    });
+    return { ok: false, skipped: "email_type_disabled" };
+  }
+  const welcomeOverride = emailTemplates?.welcome;
+
   const admin = createSupabaseAdminClient();
   if (!admin) {
     console.warn("[email:welcome] no_service_role_admin — attempting send without prefs/idempotency", {
       userId: params.userId,
       trigger,
     });
-    const { subject, html } = await buildWelcomeEmail(undefined, "both");
+    const { subject, html } = await buildWelcomeEmail(undefined, "both", welcomeOverride);
     const welcomeResult = await sendEmail(email, subject, html, {
       log: { userId: params.userId, kind: "welcome" },
     });
@@ -230,7 +243,7 @@ export async function sendWelcomeEmailAfterEmailVerification(params: {
     signupRole,
   });
 
-  const { subject, html } = await buildWelcomeEmail(firstName, signupRole);
+  const { subject, html } = await buildWelcomeEmail(firstName, signupRole, welcomeOverride);
   const welcomeResult = await sendEmail(email, subject, html, {
     log: { userId: params.userId, kind: "welcome" },
   });
@@ -319,6 +332,9 @@ export async function sendTutorialEmailsForRoles(params: {
     return;
   }
 
+  const { email_templates: tutorialEmailTemplates, email_type_enabled: tutorialTypeEnabled } =
+    await getEmailTemplateOverrides();
+
   const admin = createSupabaseAdminClient();
   if (!admin) {
     console.error("[email:tutorial]", {
@@ -358,7 +374,19 @@ export async function sendTutorialEmailsForRoles(params: {
       phase: "role_saved_onboarding",
     });
 
-    const { subject, html } = await buildTutorialEmail(role, params.firstName);
+    const templateKey = role === "lister" ? "tutorial_lister" : "tutorial_cleaner";
+    if (tutorialTypeEnabled?.[templateKey] === false) {
+      console.info("[email:tutorial]", {
+        outcome: "skipped",
+        userId: params.userId,
+        role,
+        reason: "email_type_disabled",
+      });
+      continue;
+    }
+    const tutorialOverride = tutorialEmailTemplates?.[templateKey];
+
+    const { subject, html } = await buildTutorialEmail(role, params.firstName, tutorialOverride);
     const result = await sendEmail(email, subject, html, {
       log: { userId: params.userId, kind: `tutorial_${role}` },
     });
