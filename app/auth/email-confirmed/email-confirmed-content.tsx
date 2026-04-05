@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,34 +11,22 @@ import {
 } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";
 
-const COUNTDOWN_SECONDS = 5;
+function buttonLabelForNext(nextPath: string): string {
+  if (nextPath.startsWith("/onboarding")) {
+    return "Continue setup";
+  }
+  return "Go to dashboard";
+}
 
-export function EmailConfirmedContent() {
+export type EmailConfirmedContentProps = {
+  nextPath: string;
+  firstName: string;
+};
+
+export function EmailConfirmedContent({ nextPath, firstName }: EmailConfirmedContentProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const nextPath = useMemo(() => {
-    return sanitizeInternalNextPath(searchParams.get("next"), "/dashboard");
-  }, [searchParams]);
 
-  const destinationHint = useMemo(() => {
-    if (nextPath.startsWith("/onboarding")) {
-      return "We’re about to send you off to finish setting up your account.";
-    }
-    return "We’re about to send you to your dashboard.";
-  }, [nextPath]);
-
-  const [seconds, setSeconds] = useState(COUNTDOWN_SECONDS);
-
-  useEffect(() => {
-    if (seconds <= 0) {
-      router.replace(nextPath);
-      return;
-    }
-    const t = window.setTimeout(() => setSeconds((s) => s - 1), 1000);
-    return () => window.clearTimeout(t);
-  }, [seconds, nextPath, router]);
-
-  const goNow = () => {
+  const go = () => {
     router.replace(nextPath);
   };
 
@@ -54,7 +40,7 @@ export function EmailConfirmedContent() {
             </span>
           </div>
           <CardTitle className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-            You&apos;re in — email confirmed 🇦🇺
+            Welcome, {firstName}! Email confirmed and activated :)
           </CardTitle>
           <CardDescription className="text-left text-base leading-relaxed text-muted-foreground dark:text-gray-300">
             Thanks for proving you&apos;re not a robot (or a very clever dog). Your Bond Back account
@@ -64,21 +50,8 @@ export function EmailConfirmedContent() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 text-center">
-          <p className="text-sm text-muted-foreground dark:text-gray-400">{destinationHint}</p>
-          <div className="flex flex-col items-center gap-2">
-            <p
-              className="text-4xl font-bold tabular-nums text-primary dark:text-sky-400"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              {seconds > 0 ? seconds : 0}
-            </p>
-            <p className="text-xs text-muted-foreground dark:text-gray-500">
-              second{seconds === 1 ? "" : "s"} until we redirect you
-            </p>
-          </div>
-          <Button type="button" className="w-full sm:w-auto" onClick={goNow}>
-            Go there now
+          <Button type="button" className="min-h-11 w-full sm:w-auto" onClick={go}>
+            {buttonLabelForNext(nextPath)}
           </Button>
         </CardContent>
       </Card>
