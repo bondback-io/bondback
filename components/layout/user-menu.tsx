@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { scheduleRouterAction } from "@/lib/deferred-router";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,7 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useToast } from "@/components/ui/use-toast";
 import {
   ChevronDown,
   User,
@@ -181,7 +179,6 @@ export function UserMenu({ session }: UserMenuProps) {
   /** Only show Admin link for users with profiles.is_admin = true */
   const isAdmin = session.isAdmin === true;
 
-  const { toast } = useToast();
   const [logoutDialogOpen, setLogoutDialogOpen] = React.useState(false);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
@@ -192,11 +189,9 @@ export function UserMenu({ session }: UserMenuProps) {
     await supabase.auth.signOut();
     setIsLoggingOut(false);
     setLogoutDialogOpen(false);
-    scheduleRouterAction(() => router.push("/login"));
-    toast({
-      title: "You have been logged out",
-      description: "See you next time.",
-    });
+    // Full document navigation resets RSC/client cache and in-memory state so the next login
+    // does not show the previous user's avatar or account UI until a manual refresh.
+    window.location.assign("/login");
   };
 
   const triggerButton = (

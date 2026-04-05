@@ -68,13 +68,14 @@ export const Header = async ({
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <NotificationBell
+                key={session.user.id}
                 userId={session.user.id}
                 activeRole={session.activeRole}
                 inAppSoundEnabled={inAppSoundEnabled}
                 inAppVibrateEnabled={inAppVibrateEnabled}
               />
-              <RoleSwitcher session={session} variant="compact" />
-              <UserMenu session={session} />
+              <RoleSwitcher key={session.user.id} session={session} variant="compact" />
+              <UserMenu key={session.user.id} session={session} />
             </div>
           </div>
 
@@ -100,13 +101,14 @@ export const Header = async ({
             >
               <div className="flex min-w-0 flex-nowrap items-center justify-end gap-x-1 sm:gap-x-1.5 lg:gap-x-2">
                 <NotificationBell
+                  key={session.user.id}
                   userId={session.user.id}
                   activeRole={session.activeRole}
                   inAppSoundEnabled={inAppSoundEnabled}
                   inAppVibrateEnabled={inAppVibrateEnabled}
                 />
                 <PendingBidsBadge isCleaner={isCleaner} />
-                <RoleSwitcher session={session} />
+                <RoleSwitcher key={session.user.id} session={session} />
                 {stripeTestMode && (
                   <span
                     className="rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:bg-amber-400/90 dark:text-amber-950"
@@ -115,7 +117,7 @@ export const Header = async ({
                     Test mode
                   </span>
                 )}
-                <UserMenu session={session} />
+                <UserMenu key={session.user.id} session={session} />
               </div>
             </nav>
           </div>
