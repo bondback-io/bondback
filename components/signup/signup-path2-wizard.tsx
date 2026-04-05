@@ -222,6 +222,10 @@ export function SignupPath2Wizard() {
           return;
         }
 
+        if (data.user && !data.session) {
+          console.log("Confirmation email sent for user:", data.user.email ?? values.email.trim());
+        }
+
         const user = data.user;
         if (!user?.id) {
           setError("We could not create your account. Please try again.");

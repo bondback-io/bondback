@@ -175,6 +175,10 @@ function OnboardingSignupInner() {
         return;
       }
 
+      if (data.user && !data.session) {
+        console.log("Confirmation email sent for user:", data.user.email ?? email.trim());
+      }
+
       if (data.session) {
         setModalStepId("profile");
         setModalProgress(44);
