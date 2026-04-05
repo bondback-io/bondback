@@ -543,7 +543,14 @@ export async function buildWelcomeEmail(
       suburb: "—",
     };
     console.info("[email:template-props]", { kind: "admin_override", type: "welcome", templateProps: v });
-    return renderMarkdownEmailFromAdminOverride(adminOverride, v);
+    try {
+      return await renderMarkdownEmailFromAdminOverride(adminOverride, v);
+    } catch (e) {
+      console.error("[email:welcome-override-fallback]", {
+        error: e instanceof Error ? e.message : String(e),
+        note: "Falling back to React Welcome template",
+      });
+    }
   }
 
   const subject = "Welcome to Bond Back — fair cleans, secure pay 🇦🇺";
@@ -591,7 +598,15 @@ export async function buildTutorialEmail(
       suburb: "—",
     };
     console.info("[email:template-props]", { kind: "admin_override", type: `tutorial_${role}`, templateProps: v });
-    return renderMarkdownEmailFromAdminOverride(adminOverride, v);
+    try {
+      return await renderMarkdownEmailFromAdminOverride(adminOverride, v);
+    } catch (e) {
+      console.error("[email:tutorial-override-fallback]", {
+        role,
+        error: e instanceof Error ? e.message : String(e),
+        note: "Falling back to React ListerTutorial/CleanerTutorial",
+      });
+    }
   }
 
   const subject =

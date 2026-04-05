@@ -38,8 +38,14 @@ export async function sendScheduledTutorialEmails(): Promise<{
     return { sent: 0, skipped: 0, errors: [] };
   }
 
-  const { email_templates: cronEmailTemplates, email_type_enabled: cronTypeEnabled } =
-    await getEmailTemplateOverrides();
+  let cronEmailTemplates: Record<string, { subject: string; body: string; active: boolean }> = {};
+  try {
+    cronEmailTemplates = (await getEmailTemplateOverrides()).email_templates;
+  } catch (e) {
+    console.warn("[email:tutorial-cron] getEmailTemplateOverrides_failed", {
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
 
   const now = new Date();
   const minCreated = new Date(now.getTime() - (HOURS_AFTER_SIGNUP + WINDOW_HOURS) * 60 * 60 * 1000).toISOString();
@@ -81,10 +87,6 @@ export async function sendScheduledTutorialEmails(): Promise<{
 
     const role = row.active_role === "cleaner" ? "cleaner" : "lister";
     const templateKeyCron = role === "lister" ? "tutorial_lister" : "tutorial_cleaner";
-    if (cronTypeEnabled?.[templateKeyCron] === false) {
-      skipped++;
-      continue;
-    }
     const roleSentKey =
       role === "lister" ? "email_tutorial_lister_sent" : "email_tutorial_cleaner_sent";
     const prefMap = prefs as Record<string, boolean | undefined>;

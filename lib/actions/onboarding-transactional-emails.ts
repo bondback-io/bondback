@@ -172,18 +172,18 @@ export async function sendWelcomeEmailAfterEmailVerification(params: {
     return { ok: false, skipped: "email_force_disabled" };
   }
 
-  const { email_templates: emailTemplates, email_type_enabled: emailTypeEnabled } =
-    await getEmailTemplateOverrides();
-  if (emailTypeEnabled?.welcome === false) {
-    console.info("[email:welcome]", {
-      outcome: "skipped",
-      userId: params.userId,
-      trigger,
-      reason: "email_type_disabled",
+  /** Optional admin markdown override. Onboarding welcome always sends (React humour template) unless override is active + valid. */
+  let welcomeOverride = undefined as
+    | { subject: string; body: string; active: boolean }
+    | undefined;
+  try {
+    const { email_templates } = await getEmailTemplateOverrides();
+    welcomeOverride = email_templates?.welcome;
+  } catch (e) {
+    console.warn("[email:welcome] getEmailTemplateOverrides_failed", {
+      message: e instanceof Error ? e.message : String(e),
     });
-    return { ok: false, skipped: "email_type_disabled" };
   }
-  const welcomeOverride = emailTemplates?.welcome;
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
@@ -375,15 +375,6 @@ export async function sendTutorialEmailsForRoles(params: {
     });
 
     const templateKey = role === "lister" ? "tutorial_lister" : "tutorial_cleaner";
-    if (tutorialTypeEnabled?.[templateKey] === false) {
-      console.info("[email:tutorial]", {
-        outcome: "skipped",
-        userId: params.userId,
-        role,
-        reason: "email_type_disabled",
-      });
-      continue;
-    }
     const tutorialOverride = tutorialEmailTemplates?.[templateKey];
 
     const { subject, html } = await buildTutorialEmail(role, params.firstName, tutorialOverride);

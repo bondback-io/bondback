@@ -215,6 +215,50 @@ export async function applyDefaultEmailTemplates(): Promise<ApplyDefaultTemplate
   return { ok: true, count };
 }
 
+export type OverwriteAllEmailTemplatesResult =
+  | { ok: true; count: number }
+  | { ok: false; error: string };
+
+/**
+ * Overwrites every built-in template row with current copy from `lib/default-email-templates.ts`
+ * (humour format). Sets `active` to false and `type_enabled` to true so production uses React
+ * emails unless an admin explicitly activates an override again.
+ */
+export async function overwriteAllEmailTemplatesWithDefaults(): Promise<OverwriteAllEmailTemplatesResult> {
+  const { supabase, adminId } = await requireAdmin();
+  const defaults = getAllDefaultTemplates();
+  let count = 0;
+  for (const type of EMAIL_TEMPLATE_TYPES) {
+    const def = defaults[type];
+    if (!def) continue;
+    const sendAfter = type === "birthday" ? "on_dob" : "instant";
+    const { error } = await supabase.from("email_template_overrides").upsert(
+      {
+        template_key: type,
+        subject: def.subject,
+        body: def.body,
+        active: false,
+        type_enabled: true,
+        send_after: sendAfter,
+        updated_at: new Date().toISOString(),
+      } as never,
+      { onConflict: "template_key" }
+    );
+    if (error) return { ok: false, error: error.message };
+    count++;
+  }
+  await logAdminActivity({
+    adminId,
+    actionType: "email_templates_overwrite_all_defaults",
+    targetType: "other",
+    targetId: "templates",
+    details: { count },
+  });
+  revalidatePath("/admin/emails");
+  revalidatePath("/admin/global-settings");
+  return { ok: true, count };
+}
+
 export type ToggleEmailTypeResult =
   | { ok: true }
   | { ok: false; error: string };

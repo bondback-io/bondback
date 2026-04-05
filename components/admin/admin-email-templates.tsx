@@ -13,6 +13,7 @@ import {
   createEmailTemplate,
   sendTestEmailWithContent,
   applyDefaultEmailTemplates,
+  overwriteAllEmailTemplatesWithDefaults,
 } from "@/lib/actions/admin-email-templates";
 import type {
   EmailTemplatesData,
@@ -488,7 +489,7 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
               Global email toggles
             </CardTitle>
             <p className="text-xs leading-relaxed text-muted-foreground dark:text-gray-400">
-              Kill switch and per-type enable/disable. When off, no emails are sent for that type.
+              Master kill switch and per-type delivery for notification emails. Signup welcome and role tutorial emails are not blocked by these per-type switches (they follow the user’s email preferences and the master switch).
             </p>
           </div>
           <Badge variant="outline" className="w-fit shrink-0 text-[10px] uppercase tracking-wide">
@@ -533,7 +534,7 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
             Template management
           </CardTitle>
           <p className="text-xs leading-relaxed text-muted-foreground dark:text-gray-400">
-            Override subject and body per type; leave empty to use defaults. Preview, edit, or send a test from each row.
+            Override subject and body per type. Welcome, tutorials, and notifications use the humour React emails by default; turn an override active only when you want markdown from here instead. Per-type toggles above apply to notification emails; signup welcome and tutorial emails are controlled by user email preferences, not those toggles.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -555,7 +556,37 @@ export function AdminEmailTemplates({ initial }: AdminEmailTemplatesProps) {
                 });
               }}
             >
-              Pre-fill all
+              Pre-fill empty only
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="w-full sm:w-auto"
+              disabled={isPending}
+              title="Replaces every template’s subject and body with the current humour defaults from code"
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    "Replace ALL template subjects and bodies with the current humour defaults from the codebase? This overwrites existing admin copy, sets overrides to inactive, and re-enables every type. Continue?"
+                  )
+                ) {
+                  return;
+                }
+                startTransition(async () => {
+                  const result = await overwriteAllEmailTemplatesWithDefaults();
+                  if (result.ok) {
+                    toast({
+                      title: "Templates updated",
+                      description: `All ${result.count} template(s) now match the humour defaults. Refresh the page if the table looks stale.`,
+                    });
+                    router.refresh();
+                  } else {
+                    toast({ variant: "destructive", title: "Error", description: result.error });
+                  }
+                });
+              }}
+            >
+              Overwrite all with humour defaults
             </Button>
             <Button
               variant="default"
