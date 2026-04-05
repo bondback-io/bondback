@@ -265,9 +265,15 @@ export function LoginForm({
                 role="status"
               >
                 <p className="text-xs leading-relaxed">
-                  This confirmation link has expired or was already used. If you already verified
-                  your email, log in below. Otherwise open the latest email from Bond Back or sign
-                  up again to request a new link.
+                  That confirmation link has expired or was already used — it happens. If
+                  you&apos;ve already verified your email, log in below. Still need to confirm?{" "}
+                  <Link
+                    href="/resend-confirmation"
+                    className="font-semibold text-amber-900 underline underline-offset-2 dark:text-amber-50"
+                  >
+                    Click here to request a new link
+                  </Link>{" "}
+                  and we&apos;ll email you a fresh one.
                 </p>
               </Alert>
             )}
@@ -277,8 +283,15 @@ export function LoginForm({
                 role="status"
               >
                 <p className="text-xs leading-relaxed">
-                  This link is invalid or incomplete. Use the confirmation link from your most
-                  recent Bond Back email, or log in if you already have an account.
+                  That link doesn&apos;t look quite right — it may be broken, truncated, or from an
+                  old email. Try the newest message in your inbox,{" "}
+                  <Link
+                    href="/resend-confirmation"
+                    className="font-semibold text-amber-900 underline underline-offset-2 dark:text-amber-50"
+                  >
+                    click here to request a new confirmation link
+                  </Link>
+                  , or log in if you already have an account.
                 </p>
               </Alert>
             )}
