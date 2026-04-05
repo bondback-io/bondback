@@ -40,8 +40,9 @@ export function TutorialLister({ firstName }: TutorialListerProps) {
 
         <Text style={step}>2. Watch bids roll in</Text>
         <Text style={stepBody}>
-          Reverse auction: cleaners compete on price. Accept when you&apos;re happy, or keep the conversation
-          going in chat.
+          Reverse auction: cleaners compete on price. Compare bids and profiles, then accept when
+          you&apos;re happy — job chat unlocks after you pay &amp; start the job, so coordination stays
+          in-app and on-platform.
         </Text>
 
         <Text style={step}>3. Approve & coordinate</Text>

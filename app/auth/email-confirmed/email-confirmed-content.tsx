@@ -11,13 +11,6 @@ import {
 } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";
 
-function buttonLabelForNext(nextPath: string): string {
-  if (nextPath.startsWith("/onboarding")) {
-    return "Continue setup";
-  }
-  return "Go to dashboard";
-}
-
 export type EmailConfirmedContentProps = {
   nextPath: string;
   firstName: string;
@@ -26,8 +19,13 @@ export type EmailConfirmedContentProps = {
 export function EmailConfirmedContent({ nextPath, firstName }: EmailConfirmedContentProps) {
   const router = useRouter();
 
-  const go = () => {
+  const goDashboard = () => {
     router.replace(nextPath);
+  };
+
+  const goProfile = () => {
+    /** Opens “Personal info” (ProfileForm) via `TAB_TO_ACCORDION` on profile page + hash for scroll. */
+    router.replace("/profile?tab=personal#section-personal");
   };
 
   return (
@@ -49,10 +47,20 @@ export function EmailConfirmedContent({ nextPath, firstName }: EmailConfirmedCon
             bond-clean thing.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6 text-center">
-          <Button type="button" className="min-h-11 w-full sm:w-auto" onClick={go}>
-            {buttonLabelForNext(nextPath)}
-          </Button>
+        <CardContent className="space-y-6">
+          <div className="flex w-full flex-col gap-3 sm:mx-auto sm:max-w-sm">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 w-full"
+              onClick={goProfile}
+            >
+              Setup Profile
+            </Button>
+            <Button type="button" className="min-h-11 w-full" onClick={goDashboard}>
+              Dashboard
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

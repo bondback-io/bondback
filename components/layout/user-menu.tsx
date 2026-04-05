@@ -187,6 +187,7 @@ export function UserMenu({ session }: UserMenuProps) {
     setIsLoggingOut(true);
     const supabase = createBrowserSupabaseClient();
     await supabase.auth.signOut();
+    queryClient.clear();
     setIsLoggingOut(false);
     setLogoutDialogOpen(false);
     // Full document navigation resets RSC/client cache and in-memory state so the next login

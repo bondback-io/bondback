@@ -173,7 +173,7 @@ The **tutorial email** (“Your Quick Start Guide as a [Lister/Cleaner]”) is s
 
 ### 6.4 Job and messages
 
-1. As **lister**, accept a bid so a **job** is created.
+1. As **lister**, accept a bid so a **job** is created, then **pay & start** so the job is **in progress** (job chat is only available from this point).
 2. Both lister and cleaner should get **job_created** emails (if preferences allow).
 3. Send a **message** in the job as one user; the other should get **new_message** email (unless they were viewing the job in the last 5 minutes, or rate limit hit).
 4. Continue the flow: **approve job** → cleaner gets **job_accepted**; **mark complete** → lister gets **job_completed**; **release payment** → both get **payment_released**.

@@ -62,7 +62,8 @@ export const SAMPLE_DATA: Record<string, SampleData> = {
     senderName: "Bond Back",
   },
   tutorial_lister: {
-    messageText: "Quick start: create a listing, compare bids, and book your bond clean.",
+    messageText:
+      "Quick start: create a listing, compare bids, then pay & start — job chat opens in progress.",
     jobId: null,
     senderName: "Bond Back",
   },

@@ -167,13 +167,13 @@ When cleaners bid on your listing, you see all bids and choose who gets the job.
 
 - Open your **listing** from the dashboard (or the job page once a bid is accepted).
 - You’ll see each **bid amount**, the **cleaner’s name/profile**, and when they bid.
-- You can **message** bidders to ask questions before deciding.
+- **Messaging is not available while you’re still choosing a bid** — put must-knows in your listing description. After you accept a bid and **pay & start the job** (job **in progress**), **job chat** opens so you can coordinate access and timing on-platform.
 
 ## What to consider
 
 1. **Price** — The bid amount (and any add-ons) is what you’ll pay (subject to any agreed extras). Don’t choose on price alone.
 2. **Profile and reviews** — Check the cleaner’s profile: experience, suburb, ABN, and any reviews or completed jobs. This matters for bond cleaning quality.
-3. **Communication** — Cleaners who answer quickly and clearly are usually easier to work with for access and inspection day.
+3. **Profile & bid clarity** — Detailed profiles and clear bid notes usually mean smoother coordination once **job chat** opens (after pay & start).
 4. **Availability** — Confirm they can do the clean by your move-out date and that their travel radius includes your property.
 
 ## How to accept a bid
@@ -181,7 +181,7 @@ When cleaners bid on your listing, you see all bids and choose who gets the job.
 1. **Choose the bid** you want to accept.
 2. Click **Accept bid** (or equivalent) for that cleaner.
 3. A **job** is created; payment is held in escrow. The cleaner is notified and can confirm and schedule the clean.
-4. You can then coordinate access (keys, time) via messages.
+4. After **pay & start the job** (status **in progress**), **job chat** opens so you can coordinate access, keys, and timing — keeping the transaction on Bond Back.
 
 ## Tips
 
@@ -272,13 +272,13 @@ You can win bond cleaning jobs on Bond Back by **bidding** on an auction or by u
 1. **Open a listing** that has a reserve (and optionally a Buy Now price).
 2. **Review** the property details, photos, move-out date, and any special instructions.
 3. Click **Place bid** (or **Bid**).
-4. **Enter your bid amount** in dollars. Your bid must be at or above the current lowest bid (or the reserve if no bids yet). You may be able to add a short message to the lister.
+4. **Enter your bid amount** in dollars. Your bid must be at or above the current lowest bid (or the reserve if no bids yet). You may add a short **bid note** with your offer (not a live chat — listers compare bids first).
 5. **Submit** — The lister sees your bid along with others. They choose which cleaner to accept; it’s not automatic for the lowest bid.
 
 **Tips for bidding:**
 
 - Bid what the job is worth to you: size, location, condition, and your travel/time. Undercutting too much can hurt your margins; overbidding may mean you don’t win.
-- Mention your experience with bond cleans and availability in your message. Listers often prefer cleaners who communicate clearly.
+- Use your **bid note** to mention bond-clean experience and availability. **Job chat** opens for both sides after the lister pays & starts the job (in progress).
 
 ## Using Buy Now
 
@@ -288,7 +288,7 @@ You can win bond cleaning jobs on Bond Back by **bidding** on an auction or by u
 
 ## After you bid or Buy Now
 
-- If the lister **accepts your bid** (or you used Buy Now), you’ll get a notification and a **job** will appear in your dashboard. You can then message the lister to arrange access and the clean.
+- If the lister **accepts your bid** (or you used Buy Now), you’ll get a notification and a **job** will appear in your dashboard. **Job chat** opens after the lister **pays & starts the job** (in progress) so you can arrange access and the clean on-platform.
 - If someone else is chosen, you can keep browsing and bidding on other listings.`,
     is_published: true,
     sort_order: 20,

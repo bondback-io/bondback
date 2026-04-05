@@ -42,7 +42,7 @@ Use this before inviting external testers or going to production.
 | Area | What to verify |
 |------|----------------|
 | Onboarding | Signup with `?ref=` / `/ref/CODE` → `referred_by` set |
-| Listing → bid → accept | Job created; chat available |
+| Listing → bid → accept | Job created; pay & start → job chat when in progress |
 | Pay & start | Escrow hold; checklist + photos |
 | Complete → release | Lister release or auto-release; receipts |
 | Dispute | Open, negotiate, resolve paths |

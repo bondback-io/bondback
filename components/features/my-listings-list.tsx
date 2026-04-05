@@ -725,7 +725,7 @@ export function MyListingsList({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search title, suburb, postcode…"
-                className="h-12 rounded-xl border-border/80 pl-10 text-base shadow-sm dark:bg-gray-950"
+                className="h-12 rounded-xl border-border/80 pl-10 pr-4 text-base shadow-sm dark:bg-gray-950 md:pl-11 md:pr-3"
                 aria-label="Search listings"
               />
             </div>

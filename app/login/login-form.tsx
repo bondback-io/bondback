@@ -18,7 +18,10 @@ import { AuthPageBackLink } from "@/components/auth/auth-page-back-link";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { PostLoginBrandedScreen } from "@/components/auth/post-login-branded-screen";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
-import { markPostLoginFullPageNavigation } from "@/lib/auth/post-login-navigation-flag";
+import {
+  clearPostLoginNavigationFlag,
+  markPostLoginFullPageNavigation,
+} from "@/lib/auth/post-login-navigation-flag";
 import { shouldUseRoleBasedPostLogin } from "@/lib/auth/post-login-redirect";
 import {
   fetchPostLoginDestination,
@@ -121,16 +124,24 @@ export function LoginForm({
     let didRedirect = false;
 
     try {
+      /**
+       * Set **before** `signInWithPassword` resolves so `onAuthStateChange(SIGNED_IN)` sees the skip
+       * window and does not fire `router.refresh()` while cookies + RSC are still converging (reduces
+       * user flicker when switching accounts).
+       */
+      markPostLoginFullPageNavigation();
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (signInError) {
+        clearPostLoginNavigationFlag();
         setError(signInError.message);
       } else {
         const banCheck = await checkBanAfterLogin();
         if (banCheck.banned) {
+          clearPostLoginNavigationFlag();
           await supabase.auth.signOut();
           const reason = banCheck.reason ? encodeURIComponent(banCheck.reason) : "";
           scheduleRouterAction(() =>
@@ -145,12 +156,12 @@ export function LoginForm({
         didRedirect = true;
         setRedirectStatus("Signing you in…");
         setIsRedirecting(true);
-        markPostLoginFullPageNavigation();
 
         if (!signInData.session) {
           try {
             await waitForSupabaseSessionReady(supabase);
           } catch {
+            clearPostLoginNavigationFlag();
             setError("Could not establish a session. Please try again.");
             setIsRedirecting(false);
             didRedirect = false;
@@ -163,6 +174,7 @@ export function LoginForm({
         } = await supabase.auth.getSession();
         const userId = established?.user?.id;
         if (!userId) {
+          clearPostLoginNavigationFlag();
           setError("Could not establish a session. Please try again.");
           setIsRedirecting(false);
           didRedirect = false;

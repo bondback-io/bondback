@@ -25,7 +25,7 @@ function buildTemplates(): Record<EmailTemplateType, DefaultTemplate> {
     },
     tutorial_lister: {
       subject: "3 steps to list your bond clean – " + APP_NAME,
-      body: "Hi {name},\n\nHere’s how to get your bond clean done on " + APP_NAME + ":\n\n**1. Create your listing** – Add property details, move-out date, and any special requirements. Photos and clear instructions get better bids.\n\n**2. Review bids** – Cleaners send you offers. Compare prices and profiles; message them with questions.\n\n**3. Accept & approve** – Choose a cleaner, then approve the job to start. Use the checklist and chat to stay in sync; release payment when you’re happy.\n\n**Pro tip:** The more detail you add, the more accurate (and competitive) bids you’ll receive.\n\n[Get started](" + APP_URL + "/dashboard)\n\nThe " + APP_NAME + " team",
+      body: "Hi {name},\n\nHere’s how to get your bond clean done on " + APP_NAME + ":\n\n**1. Create your listing** – Add property details, move-out date, and any special requirements. Photos and clear instructions get better bids.\n\n**2. Review bids** – Cleaners send you offers. Compare prices and profiles; put must-knows in your listing description upfront.\n\n**3. Accept & pay & start** – Choose a cleaner, then pay & start the job. Job chat unlocks once the job is in progress so you can coordinate in-app; use the checklist and release payment when you’re happy.\n\n**Pro tip:** The more detail you add, the more accurate (and competitive) bids you’ll receive.\n\n[Get started](" + APP_URL + "/dashboard)\n\nThe " + APP_NAME + " team",
     },
     tutorial_cleaner: {
       subject: "3 steps to win bond clean jobs – " + APP_NAME,
@@ -33,7 +33,7 @@ function buildTemplates(): Record<EmailTemplateType, DefaultTemplate> {
     },
     new_bid: {
       subject: "New bid on {listingTitle} – " + APP_NAME,
-      body: "Hi {name},\n\nYou’ve received a **new bid** on your listing.\n\n**Listing:** {listingTitle}\n**Bid amount:** [Amount]\n**Message:** " + PH_MESSAGE + "\n\nReview the cleaner’s profile and respond – accept, decline, or message them with questions. Secure payments and 48-hour protection included.\n\n[View bid](" + APP_URL + "/listings/" + PH_LISTING + ")\n\nThe " + APP_NAME + " team",
+      body: "Hi {name},\n\nYou’ve received a **new bid** on your listing.\n\n**Listing:** {listingTitle}\n**Bid amount:** [Amount]\n**Message:** " + PH_MESSAGE + "\n\nReview the cleaner’s profile and bid note — accept or decline. Job chat opens after you pay & start the job (in progress) so you can coordinate on-platform. Secure payments and 48-hour protection included.\n\n[View bid](" + APP_URL + "/listings/" + PH_LISTING + ")\n\nThe " + APP_NAME + " team",
     },
     new_message: {
       subject: "New message in Job #[JobId] – " + APP_NAME,

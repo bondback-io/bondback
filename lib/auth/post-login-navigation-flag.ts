@@ -34,3 +34,13 @@ export function shouldSkipSignInSessionRefresh(): boolean {
     return false;
   }
 }
+
+/** Call on sign-out so the next login can set a fresh skip window (avoids stale TTL). */
+export function clearPostLoginNavigationFlag(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}

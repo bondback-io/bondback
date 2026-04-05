@@ -29,8 +29,8 @@ const STEPS = [
   },
   {
     emoji: "📊",
-    title: "Compare bids & chat",
-    body: "Review offers, read profiles, and message cleaners before you lock anyone in. You’re in the driver’s seat — we just hold the map.",
+    title: "Compare bids & choose",
+    body: "Review offers and cleaner profiles — price, experience, and reviews. Accept a bid when you’re ready. In-app job chat opens once the job is in progress (after pay & start), so access and timing stay on the platform — not lost in SMS threads.",
     learnUrl: `${APP_URL}/my-listings`,
     learnLabel: "My listings",
   },
@@ -58,7 +58,8 @@ export function ListerTutorial({ firstName }: ListerTutorialProps) {
         <Text style={guideTitle}>🏠 Your lister playbook</Text>
         <Text style={body}>{greeting}</Text>
         <Text style={intro}>
-          Four steps from “I need a clean” to “handover sorted” — with secure pay and chat in one place.
+          Four steps from “I need a clean” to “handover sorted” — secure pay in escrow, and in-app job
+          chat once your clean is under way.
         </Text>
 
         {STEPS.map((step, index) => (
@@ -78,8 +79,9 @@ export function ListerTutorial({ firstName }: ListerTutorialProps) {
         <Section style={proTipSection}>
           <Text style={proTipTitle}>💡 Fair dinkum tip</Text>
           <Text style={proTipBody}>
-            Good photos and a short “what matters most” note save a dozen messages. Future you — and your
-            cleaner — will thank you.
+            Good photos and a short “what matters most” note save back-and-forth on the day. Job chat
+            picks up once the job is in progress — future you (and your cleaner) will thank you for a
+            clear listing.
           </Text>
         </Section>
 

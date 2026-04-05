@@ -130,6 +130,7 @@ export function MyAccountSections({
       const hash = window.location.hash.replace("#", "");
       if (hash === "section-personal" || hash === "personal") {
         setOpenSections((prev) => ensureSection(prev, "personal"));
+        scrollToId("section-personal", 220);
       }
       if (hash === "portfolio-photos") {
         setOpenSections((prev) => ensureSection(prev, "personal"));
