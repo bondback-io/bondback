@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { redirectAfterAuthSessionEstablished } from "@/lib/auth/auth-callback-session";
 import { resolveEmailOtpTypeFromSearchParams } from "@/lib/auth/resolve-email-otp-type";
+import { establishSessionFromEmailRedirectParams } from "@/lib/auth/establish-email-session";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +14,12 @@ function readTokenHash(searchParams: URLSearchParams): string | null {
 }
 
 /**
- * Email confirmation — GET only. Use Supabase template with
- * `…/auth/confirm?token_hash={{ .TokenHash }}&type=signup` (OTP). PKCE-only `?code=` links are not handled here.
- * Success path uses {@link redirectAfterAuthSessionEstablished} (role-based dashboard, welcome/tutorial emails).
+ * Email confirmation — GET only.
+ *
+ * Uses the same session logic as `/auth/callback`: `createSupabaseRouteHandlerClient` wraps
+ * `createServerClient` from `@supabase/ssr` with cookies written onto the redirect response (required
+ * on Vercel). PKCE links use `token_hash=pkce_…` or `?code=…` — those must go through
+ * `exchangeCodeForSession`, not `verifyOtp` alone (see `getEmailRedirectAuthCode`).
  */
 export async function GET(request: NextRequest) {
   console.log("=== CONFIRM ROUTE HIT ===", {
@@ -24,57 +28,44 @@ export async function GET(request: NextRequest) {
   });
 
   const { searchParams, origin } = request.nextUrl;
+  const code = searchParams.get("code")?.trim() || null;
   const token_hash = readTokenHash(searchParams);
   const type = searchParams.get("type");
   const otpType = resolveEmailOtpTypeFromSearchParams(searchParams);
 
-  console.log("Extracted token_hash:", token_hash, "type:", type);
+  console.log("Extracted token_hash:", token_hash, "type:", type, "otpType:", otpType, "code:", code ? "[present]" : null);
 
-  /** App uses `/login` as the sign-in page (no `/signin` route). */
-  const redirectToSignIn = () => NextResponse.redirect(new URL("/login", origin));
+  const redirectToLogin = () => NextResponse.redirect(new URL("/login", origin));
 
-  if (!token_hash || token_hash.startsWith("pkce_")) {
-    console.log("Verification failed:", {
-      reason: !token_hash ? "missing_token_hash" : "pkce_token_not_supported_here",
-    });
-    return redirectToSignIn();
+  if (!code && !token_hash) {
+    console.log("Verification failed:", { reason: "missing_code_and_token_hash" });
+    return redirectToLogin();
   }
-
-  console.log("Calling verifyOtp with:", { type: otpType, token_hash });
 
   const authCookieResponse = NextResponse.redirect(new URL("/dashboard", origin));
   const supabase = createSupabaseRouteHandlerClient(request, authCookieResponse);
 
-  let data: Awaited<ReturnType<typeof supabase.auth.verifyOtp>>["data"];
-  let error: Awaited<ReturnType<typeof supabase.auth.verifyOtp>>["error"];
-  try {
-    const result = await supabase.auth.verifyOtp({
-      token_hash,
-      type: otpType,
-    });
-    data = result.data;
-    error = result.error;
-  } catch (e) {
-    console.log("Verification failed:", e);
-    return redirectToSignIn();
-  }
+  console.log("Calling establishSessionFromEmailRedirectParams (PKCE exchange or verifyOtp)…");
 
-  console.log("verifyOtp result:", {
-    data: data
-      ? {
-          hasSession: Boolean(data.session),
-          userId: data.user?.id ?? data.session?.user?.id ?? null,
-        }
-      : null,
-    error: error?.message ?? null,
+  const outcome = await establishSessionFromEmailRedirectParams(supabase, {
+    code,
+    tokenHash: token_hash,
+    otpType,
   });
 
-  if (error || !data.session?.user?.id) {
-    console.log("Verification failed:", error ?? { message: "no_session_after_verify" });
-    return redirectToSignIn();
+  console.log("verifyOtp / exchange result:", {
+    ok: outcome.ok,
+    method: outcome.method,
+    userId: outcome.ok ? outcome.user.id : null,
+    error: outcome.ok ? null : outcome.error.message,
+  });
+
+  if (!outcome.ok) {
+    console.log("Verification failed:", outcome.error);
+    return redirectToLogin();
   }
 
-  const userId = data.session.user.id;
+  const userId = outcome.user.id;
   const { data: profileRow } = await supabase
     .from("profiles")
     .select("active_role")
@@ -92,6 +83,6 @@ export async function GET(request: NextRequest) {
     signupFlow: null,
     refParam: null,
     authCookieResponse,
-    sessionFromAuth: data.session,
+    sessionFromAuth: outcome.session,
   });
 }
