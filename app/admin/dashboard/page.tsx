@@ -45,17 +45,17 @@ const PLATFORM_FEE_RATE = 0.12;
 async function requireAdmin() {
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     redirect("/");
   }
 
   const { data: profileData } = await supabase
     .from("profiles")
     .select("id, full_name, is_admin")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .maybeSingle();
 
   const profile = profileData as ProfileRow | null;

@@ -206,6 +206,8 @@ export function SignupPath2Wizard() {
               state: state ?? "",
               suburb: suburb ?? "",
               postcode: postcode ?? "",
+              /** Lets tutorial email send at `/auth/confirm` if profile.roles is not readable yet. */
+              pending_role: values.role,
             },
           },
         });

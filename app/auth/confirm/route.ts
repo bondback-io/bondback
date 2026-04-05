@@ -45,11 +45,15 @@ export async function GET(request: NextRequest) {
     code: code ? "[present]" : null,
   });
 
-  const redirectToLogin = () => NextResponse.redirect(new URL("/login", origin));
+  const redirectToLogin = (message: "confirm_link_invalid" | "confirm_link_expired") => {
+    const url = new URL("/login", origin);
+    url.searchParams.set("message", message);
+    return NextResponse.redirect(url);
+  };
 
   if (!code && !token_hash) {
     console.log("No token_hash or code in URL");
-    return redirectToLogin();
+    return redirectToLogin("confirm_link_invalid");
   }
 
   const authCookieResponse = NextResponse.redirect(new URL("/dashboard", origin));
@@ -92,7 +96,7 @@ export async function GET(request: NextRequest) {
       message: outcome.error.message,
       method: outcome.method,
     });
-    return redirectToLogin();
+    return redirectToLogin("confirm_link_expired");
   }
 
   console.log("Session established — user:", outcome.user.id, "method:", outcome.method);

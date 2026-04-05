@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import type { Session } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -352,17 +353,12 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
 
   if (error) return { ok: false, error: error.message };
 
-  if (isFirstRoleAssignment) {
-    void import("@/lib/actions/admin-notify-email").then((m) =>
-      m.notifyAdminNewUserRegistration(userId).catch(() => {})
-    );
-  }
-
   const {
     data: { session: sessionAfterUpsert },
   } = await supabase.auth.getSession();
   const sessionForEmail = sessionAfterUpsert ?? session;
-  if (isFirstRoleAssignment && sessionForEmail) {
+
+  if (isFirstRoleAssignment) {
     const tutorialRoles =
       choice === "both"
         ? (["lister", "cleaner"] as const)
@@ -373,33 +369,38 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
       userId,
       choice,
       tutorialRoles,
-      note: "deferred_background",
+      note: "after_response",
     });
-    void (async () => {
+    after(async () => {
       try {
-        const { data: nameRow } = await admin
-          .from("profiles")
-          .select("full_name")
-          .eq("id", userId)
-          .maybeSingle();
-        const fullName = (nameRow as { full_name?: string | null } | null)?.full_name ?? null;
-        const { sendTutorialEmailsForRoles } = await import("@/lib/actions/onboarding-transactional-emails");
-        await sendTutorialEmailsForRoles({
-          userId,
-          session: sessionForEmail,
-          firstName: fullName?.trim()?.split(" ")[0],
-          roles: [...tutorialRoles],
-          skipEmailConfirmedCheck: true,
-        });
+        const { notifyAdminNewUserRegistration } = await import("@/lib/actions/admin-notify-email");
+        await notifyAdminNewUserRegistration(userId).catch(() => {});
+        if (sessionForEmail) {
+          const { data: nameRow } = await admin
+            .from("profiles")
+            .select("full_name")
+            .eq("id", userId)
+            .maybeSingle();
+          const fullName = (nameRow as { full_name?: string | null } | null)?.full_name ?? null;
+          const { sendTutorialEmailsForRoles } = await import("@/lib/actions/onboarding-transactional-emails");
+          await sendTutorialEmailsForRoles({
+            userId,
+            session: sessionForEmail,
+            firstName: fullName?.trim()?.split(" ")[0],
+            roles: [...tutorialRoles],
+            skipEmailConfirmedCheck: true,
+          });
+        }
       } catch (e) {
-        console.error("[saveRoleChoice] tutorial emails failed", {
+        console.error("[saveRoleChoice] deferred emails failed", {
           userId,
           message: e instanceof Error ? e.message : String(e),
         });
       }
-    })();
-  } else if (isFirstRoleAssignment && !sessionForEmail) {
-    console.error("[onboarding:saveRoleChoice] tutorial_skipped_no_session", { userId, choice });
+    });
+    if (!sessionForEmail) {
+      console.error("[onboarding:saveRoleChoice] tutorial_skipped_no_session", { userId, choice });
+    }
   }
 
   revalidatePath("/onboarding");
@@ -526,9 +527,10 @@ export async function finalizePath2Signup(
     return { ok: false, error: error.message };
   }
 
-  void import("@/lib/actions/admin-notify-email").then((m) =>
-    m.notifyAdminNewUserRegistration(input.userId).catch(() => {})
-  );
+  after(async () => {
+    const { notifyAdminNewUserRegistration } = await import("@/lib/actions/admin-notify-email");
+    await notifyAdminNewUserRegistration(input.userId).catch(() => {});
+  });
 
   revalidatePath("/onboarding");
   revalidatePath("/dashboard");
@@ -605,17 +607,23 @@ export async function unlockRole(
   if (sessionForEmail) {
     const firstName =
       (profile as { full_name?: string | null }).full_name?.trim()?.split(" ")[0];
-    void import("@/lib/actions/onboarding-transactional-emails").then((m) =>
-      m
-        .sendTutorialEmailsForRoles({
+    after(async () => {
+      try {
+        const { sendTutorialEmailsForRoles } = await import("@/lib/actions/onboarding-transactional-emails");
+        await sendTutorialEmailsForRoles({
           userId: session.user.id,
           session: sessionForEmail,
           firstName,
           roles: [newRole],
           skipEmailConfirmedCheck: true,
-        })
-        .catch(() => {})
-    );
+        });
+      } catch (e) {
+        console.error("[unlockRole] tutorial email failed", {
+          userId: session.user.id,
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+    });
   }
 
   revalidatePath("/settings");
@@ -713,9 +721,10 @@ export async function completeOnboardingFromSignup(
   if (error) return { ok: false, error: error.message };
 
   if (!hadRolesAlready) {
-    void import("@/lib/actions/admin-notify-email").then((m) =>
-      m.notifyAdminNewUserRegistration(session.user.id).catch(() => {})
-    );
+    after(async () => {
+      const { notifyAdminNewUserRegistration } = await import("@/lib/actions/admin-notify-email");
+      await notifyAdminNewUserRegistration(session.user.id).catch(() => {});
+    });
     const { sendWelcomeEmailAfterEmailVerification, sendTutorialEmailsForRoles } = await import(
       "@/lib/actions/onboarding-transactional-emails"
     );

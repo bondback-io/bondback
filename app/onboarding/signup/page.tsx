@@ -157,6 +157,10 @@ function OnboardingSignupInner() {
         password,
         options: {
           emailRedirectTo: `${getResolvedAuthEmailRedirectOrigin()}/auth/callback?flow=onboarding`,
+          data: {
+            /** Role chosen in onboarding flow — tutorial email at email confirm before profile has roles. */
+            pending_role: role,
+          },
         },
       });
 

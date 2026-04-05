@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
@@ -212,56 +212,57 @@ export async function redirectAfterAuthSessionEstablished(
   if (session.user.id) {
     const userId = session.user.id;
     const sessionForEmails = session;
-    /** Defer so the redirect response is not blocked by Resend / global_settings / prefs reads. */
-    setTimeout(() => {
-      void (async () => {
-        if (skipDeferredTransactionalEmails) {
-          console.info("[auth-callback-session] skip_deferred_emails", {
-            userId,
-            reason: "google_signup_pending_profile_complete",
-            redirectTo,
-          });
-          return;
-        }
-        if (sendWelcomeEmail) {
-          console.info("[auth-callback-session] email_confirmed_attempting_welcome", {
-            userId,
-            trigger: "auth_redirect_after_verify",
-            note: "deferred",
-          });
-          try {
-            const result = await sendWelcomeEmailAfterEmailVerification({
-              userId,
-              session: sessionForEmails,
-              trigger: "auth_redirect_after_verify",
-            });
-            console.info("[auth-callback-session] welcome_email_result", {
-              userId,
-              ok: result.ok,
-              skipped: result.skipped,
-              error: result.error,
-            });
-          } catch (e) {
-            console.error("[auth-callback-session] welcome_email_failed", {
-              userId,
-              message: e instanceof Error ? e.message : String(e),
-            });
-          }
-        }
+    /**
+     * Use `after()` (not `setTimeout`) so transactional email work runs to completion on Vercel
+     * serverless — the invocation often ends before a macrotask fires, so welcome email never sent.
+     */
+    after(async () => {
+      if (skipDeferredTransactionalEmails) {
+        console.info("[auth-callback-session] skip_deferred_emails", {
+          userId,
+          reason: "google_signup_pending_profile_complete",
+          redirectTo,
+        });
+        return;
+      }
+      if (sendWelcomeEmail) {
+        console.info("[auth-callback-session] email_confirmed_attempting_welcome", {
+          userId,
+          trigger: "auth_redirect_after_verify",
+          note: "after_response",
+        });
         try {
-          await sendTutorialEmailsAfterEmailVerificationIfNeeded({
+          const result = await sendWelcomeEmailAfterEmailVerification({
             userId,
             session: sessionForEmails,
             trigger: "auth_redirect_after_verify",
           });
+          console.info("[auth-callback-session] welcome_email_result", {
+            userId,
+            ok: result.ok,
+            skipped: result.skipped,
+            error: result.error,
+          });
         } catch (e) {
-          console.error("[auth-callback-session] tutorial_after_verify_failed", {
+          console.error("[auth-callback-session] welcome_email_failed", {
             userId,
             message: e instanceof Error ? e.message : String(e),
           });
         }
-      })();
-    }, 0);
+      }
+      try {
+        await sendTutorialEmailsAfterEmailVerificationIfNeeded({
+          userId,
+          session: sessionForEmails,
+          trigger: "auth_redirect_after_verify",
+        });
+      } catch (e) {
+        console.error("[auth-callback-session] tutorial_after_verify_failed", {
+          userId,
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+    });
   }
 
   authPerfDevLog("auth-callback-session:total", { ms: Date.now() - callbackT0 });

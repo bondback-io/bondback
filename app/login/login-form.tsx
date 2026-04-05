@@ -259,11 +259,37 @@ export function LoginForm({
                 Password updated. Log in with your new password.
               </Alert>
             )}
-            {messageParam && messageParam !== "password-reset" && (
-              <Alert className="border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
-                <p className="text-xs leading-relaxed">{messageParam}</p>
+            {messageParam === "confirm_link_expired" && (
+              <Alert
+                className="border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+                role="status"
+              >
+                <p className="text-xs leading-relaxed">
+                  This confirmation link has expired or was already used. If you already verified
+                  your email, log in below. Otherwise open the latest email from Bond Back or sign
+                  up again to request a new link.
+                </p>
               </Alert>
             )}
+            {messageParam === "confirm_link_invalid" && (
+              <Alert
+                className="border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+                role="status"
+              >
+                <p className="text-xs leading-relaxed">
+                  This link is invalid or incomplete. Use the confirmation link from your most
+                  recent Bond Back email, or log in if you already have an account.
+                </p>
+              </Alert>
+            )}
+            {messageParam &&
+              messageParam !== "password-reset" &&
+              messageParam !== "confirm_link_expired" &&
+              messageParam !== "confirm_link_invalid" && (
+                <Alert className="border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+                  <p className="text-xs leading-relaxed">{messageParam}</p>
+                </Alert>
+              )}
             {error && <p className="text-xs text-destructive">{error}</p>}
 
             <Button type="submit" className="min-h-11 w-full" disabled={isSubmitting}>

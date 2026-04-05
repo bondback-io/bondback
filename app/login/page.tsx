@@ -54,14 +54,14 @@ export default async function LoginPage({
   const sp = await searchParams;
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (session?.user?.id) {
+  if (user?.id) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("roles, active_role, is_banned, banned_reason")
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .maybeSingle();
 
     const row = profile as {

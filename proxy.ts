@@ -55,6 +55,17 @@ export async function proxy(request: NextRequest) {
   const apexRedirect = redirectApexToWww(request);
   if (apexRedirect) return apexRedirect;
 
+  const pathname = request.nextUrl.pathname;
+
+  /**
+   * Do not run `getSession()` (token refresh) on email/OAuth link routes. If the browser still
+   * holds another account’s cookies, refreshing here can re-assert the old session on the
+   * middleware response before the route handler replaces cookies with the new user.
+   */
+  if (pathname.startsWith("/auth/confirm") || pathname.startsWith("/auth/callback")) {
+    return NextResponse.next({ request });
+  }
+
   const supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -73,8 +84,6 @@ export async function proxy(request: NextRequest) {
       },
     }
   );
-
-  const pathname = request.nextUrl.pathname;
 
   /**
    * Always refresh the session cookie (cheap local read + optional refresh).

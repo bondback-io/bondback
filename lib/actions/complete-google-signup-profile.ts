@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -98,10 +99,6 @@ export async function completeGoogleSignupProfile(input: {
     return { ok: false, error: upsertErr.message };
   }
 
-  void import("@/lib/actions/admin-notify-email").then((m) =>
-    m.notifyAdminNewUserRegistration(userId).catch(() => {})
-  );
-
   const {
     data: { session: sessionAfter },
   } = await supabase.auth.getSession();
@@ -115,8 +112,11 @@ export async function completeGoogleSignupProfile(input: {
 
   const firstName = (profileAfter as { full_name?: string | null } | null)?.full_name?.trim()?.split(" ")[0];
 
-  void (async () => {
+  /** `void` async IIFEs are dropped on Vercel serverless; `after()` keeps work alive after the response. */
+  after(async () => {
     try {
+      const { notifyAdminNewUserRegistration } = await import("@/lib/actions/admin-notify-email");
+      await notifyAdminNewUserRegistration(userId).catch(() => {});
       await sendWelcomeEmailAfterEmailVerification({
         userId,
         session: sessionForEmail,
@@ -135,7 +135,7 @@ export async function completeGoogleSignupProfile(input: {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  })();
+  });
 
   revalidatePath("/onboarding");
   revalidatePath("/dashboard");

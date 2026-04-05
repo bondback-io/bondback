@@ -29,12 +29,9 @@ export const GET = async (request: NextRequest) => {
   }
 
   if (!code && !token_hash) {
-    return NextResponse.redirect(
-      new URL(
-        `/login?message=${encodeURIComponent("Invalid or missing confirmation link. Open the latest email from Bond Back or log in.")}`,
-        origin
-      )
-    );
+    const url = new URL("/login", origin);
+    url.searchParams.set("message", "confirm_link_invalid");
+    return NextResponse.redirect(url);
   }
 
   const authCookieResponse = NextResponse.redirect(new URL("/dashboard", origin));
@@ -49,17 +46,13 @@ export const GET = async (request: NextRequest) => {
   });
 
   if (!outcome.ok) {
-    const msg =
-      outcome.method === "exchange"
-        ? "This sign-in link failed or expired. Request a new confirmation email or log in."
-        : "This confirmation link failed or expired. Request a new email from the sign-up page.";
     console.error("[auth/callback] establish_session_failed", {
       method: outcome.method,
       message: outcome.error.message,
     });
-    return NextResponse.redirect(
-      new URL(`/login?message=${encodeURIComponent(msg)}`, origin)
-    );
+    const url = new URL("/login", origin);
+    url.searchParams.set("message", "confirm_link_expired");
+    return NextResponse.redirect(url);
   }
 
   return redirectAfterAuthSessionEstablished({

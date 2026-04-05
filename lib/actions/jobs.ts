@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
 import type Stripe from "stripe";
@@ -1315,7 +1316,10 @@ export async function releaseJobFunds(
     return { ok: false, error: "Job has no cleaner (winner_id)." };
   }
 
-  const { data: profile } = await supabase
+  /** RLS usually allows users to read only their own profile; listers cannot read the cleaner's row. */
+  const adminForPayout = createSupabaseAdminClient();
+  const profileClient = adminForPayout ?? supabase;
+  const { data: profile } = await profileClient
     .from("profiles")
     .select("stripe_connect_id")
     .eq("id", j.winner_id)
@@ -1552,10 +1556,10 @@ export async function finalizeJobPayment(
   const supabase = await createServerSupabaseClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     return { ok: false, error: "You must be logged in." };
   }
 
@@ -1582,7 +1586,7 @@ export async function finalizeJobPayment(
     | "agreed_amount_cents"
   >;
 
-  if (row.lister_id !== session.user.id) {
+  if (row.lister_id !== user.id) {
     return { ok: false, error: "Only the lister can finalize payment." };
   }
 
@@ -1599,9 +1603,13 @@ export async function finalizeJobPayment(
   const numericJobId =
     typeof row.id === "number" ? row.id : Number(row.id);
 
+  /** Bypass RLS for job-scoped reads once lister is authorized (same as releaseJobFunds payout lookup). */
+  const admin = createSupabaseAdminClient();
+  const gatedClient = (admin ?? supabase) as SupabaseClient<Database>;
+
   // New flow: ready for release when checklist is complete and 3+ after-photos are uploaded
   // (no separate "mark complete" action; cleaner completing checklist + photos is enough)
-  const { data: items, error: checklistError } = await supabase
+  const { data: items, error: checklistError } = await gatedClient
     .from("job_checklist_items")
     .select("is_completed")
     .eq("job_id", numericJobId as never);
@@ -1623,7 +1631,7 @@ export async function finalizeJobPayment(
   }
 
   // Require at least 3 after-photos (new flow: no separate "mark complete" button)
-  const { data: afterFiles, error: afterError } = await supabase.storage
+  const { data: afterFiles, error: afterError } = await gatedClient.storage
     .from("condition-photos")
     .list(`jobs/${numericJobId}/after`, { limit: 100 });
   if (afterError) {
@@ -2088,9 +2096,10 @@ export async function openDispute(
     return { ok: false, error: updateError.message };
   }
 
-  void import("@/lib/actions/admin-notify-email").then((m) =>
-    m.notifyAdminDisputeOpened(jobId).catch(() => {})
-  );
+  after(async () => {
+    const { notifyAdminDisputeOpened } = await import("@/lib/actions/admin-notify-email");
+    await notifyAdminDisputeOpened(jobId).catch(() => {});
+  });
 
   const otherUserId = isLister ? j.winner_id : j.lister_id;
   const reasonSnippet = fullReason.length > 150 ? `${fullReason.slice(0, 147)}…` : fullReason;

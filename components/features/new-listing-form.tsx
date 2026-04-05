@@ -758,9 +758,12 @@ export function NewListingForm({
       void notifyListerListingLive(listingId).catch(() => {
         /* non-blocking */
       });
-      void import("@/lib/actions/admin-notify-email").then((m) =>
-        m.notifyAdminNewListing(listingId).catch(() => {})
-      );
+      try {
+        const { notifyAdminNewListing } = await import("@/lib/actions/admin-notify-email");
+        await notifyAdminNewListing(listingId).catch(() => {});
+      } catch {
+        /* non-blocking */
+      }
 
       setPublishProgress(100);
       setPublishModalPhase("success");

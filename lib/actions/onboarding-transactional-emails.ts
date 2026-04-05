@@ -13,6 +13,19 @@ type TutorialRole = "lister" | "cleaner";
 
 const WELCOME_SENT_KEY = "email_welcome_sent" as const;
 
+/**
+ * Set on `signUp({ options: { data: { pending_role } } })` so the role-specific tutorial can send
+ * at email confirmation when `profiles.roles` is still empty (Path 1). Path 2 also sets this as a
+ * fallback if profile reads lag.
+ */
+function tutorialRolesFromPendingMetadata(meta: Record<string, unknown> | undefined): TutorialRole[] {
+  if (!meta) return [];
+  const r = meta.pending_role;
+  if (r === "lister" || r === "cleaner") return [r];
+  if (r === "both") return ["lister", "cleaner"];
+  return [];
+}
+
 function prefsRecord(prefs: Record<string, boolean | undefined> | null | undefined) {
   return { ...(prefs ?? {}) } as Record<string, boolean | undefined>;
 }
@@ -384,9 +397,8 @@ export async function sendTutorialEmailsForRoles(params: {
 }
 
 /**
- * After email verification: send role tutorial emails when the profile already has roles
- * (e.g. combined Path 2 signup). Path 1 users typically have `roles: []` until `saveRoleChoice`,
- * which sends tutorials in-session instead.
+ * After email verification: send role tutorial emails when we can resolve a role from
+ * `profiles.roles` (Path 2) or from `user_metadata.pending_role` set at sign-up (Path 1).
  */
 export async function sendTutorialEmailsAfterEmailVerificationIfNeeded(params: {
   userId: string;
@@ -406,10 +418,28 @@ export async function sendTutorialEmailsAfterEmailVerificationIfNeeded(params: {
     .eq("id", params.userId)
     .maybeSingle();
 
-  const roles = normalizeProfileRolesFromDb(
+  let roles = normalizeProfileRolesFromDb(
     (profile as { roles?: unknown } | null)?.roles ?? null,
     !!profile
   );
+
+  if (roles.length === 0) {
+    const { data: authData, error: authErr } = await admin.auth.admin.getUserById(params.userId);
+    if (!authErr && authData?.user?.user_metadata) {
+      const fromMeta = tutorialRolesFromPendingMetadata(
+        authData.user.user_metadata as Record<string, unknown>
+      );
+      if (fromMeta.length > 0) {
+        roles = fromMeta;
+        console.info("[email:tutorial:after_verify] roles_from_pending_metadata", {
+          userId: params.userId,
+          trigger,
+          roles: fromMeta,
+        });
+      }
+    }
+  }
+
   if (roles.length === 0) {
     console.info("[email:tutorial:after_verify] skipped_no_roles", {
       userId: params.userId,

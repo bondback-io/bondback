@@ -67,20 +67,20 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   const supabaseAdmin = createSupabaseAdminClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) redirect("/");
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/");
 
   const { data: profile } = supabaseAdmin
     ? await supabaseAdmin
         .from("profiles")
         .select("id, is_admin")
-        .eq("id", session.user.id)
+        .eq("id", user.id)
         .maybeSingle()
     : await supabase
         .from("profiles")
         .select("id, is_admin")
-        .eq("id", session.user.id)
+        .eq("id", user.id)
         .maybeSingle();
 
   if (!profile || !(profile as { is_admin?: boolean }).is_admin) {
@@ -141,7 +141,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     const { data: fullAdminRow } = await supabaseAdmin
       .from("profiles")
       .select(PROFILE_ADMIN_TABLE_SELECT)
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .maybeSingle();
     if (fullAdminRow) {
       allProfiles = [fullAdminRow as ProfileWithExtras];

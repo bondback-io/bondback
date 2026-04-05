@@ -24,6 +24,24 @@ function isFlowStateNotFound(err: unknown): boolean {
   return msg.includes("flow state") && msg.includes("no valid");
 }
 
+/** Server/route handler has no PKCE verifier cookie (different browser/device or cleared storage). */
+function isPkceVerifierMissingOnServer(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as AuthLikeError & { code?: string };
+  if (e.code === "pkce_code_verifier_not_found") return true;
+  const name = String(e.name ?? "");
+  if (name.includes("AuthPKCECodeVerifierMissingError")) return true;
+  const msg = String(e.message ?? "").toLowerCase();
+  if (msg.includes("pkce code verifier") && msg.includes("not found")) return true;
+  if (msg.includes("code verifier") && msg.includes("not found")) return true;
+  if (msg.includes("verifier not found in storage")) return true;
+  return false;
+}
+
+function shouldTryVerifyOtpAfterExchangeFailure(err: unknown): boolean {
+  return isFlowStateNotFound(err) || isPkceVerifierMissingOnServer(err);
+}
+
 export type EstablishEmailSessionMethod = "exchange" | "verifyOtp";
 
 export type EstablishEmailSessionResult =
@@ -224,15 +242,30 @@ export async function establishSessionFromEmailRedirectParams(
       const otpToken = tokenHash;
       const tryVerifyFallback =
         Boolean(otpToken) &&
-        (!otpToken!.startsWith("pkce_") || isFlowStateNotFound(e));
+        (!otpToken!.startsWith("pkce_") || shouldTryVerifyOtpAfterExchangeFailure(e));
       if (tryVerifyFallback) {
         console.log("[auth/confirm] exchange_failed_trying_verifyOtp_fallback", {
           code: e.code ?? null,
           pkceToken: otpToken!.startsWith("pkce_"),
-          reason: isFlowStateNotFound(e) ? "flow_state_not_found" : "non_pkce_token",
+          reason: !otpToken!.startsWith("pkce_")
+            ? "non_pkce_token"
+            : isFlowStateNotFound(e)
+              ? "flow_state_not_found"
+              : isPkceVerifierMissingOnServer(e)
+                ? "pkce_verifier_missing"
+                : "unknown",
         });
-        const { data, error } = await verifyOtpWithEmailSignupFallback(supabase, otpToken!, params.otpType);
-        if (!error) {
+        /** Clear another account’s cookies before verifyOtp so the new session isn’t merged with stale JWTs. */
+        const { error: signOutErr } = await supabase.auth.signOut();
+        if (signOutErr) {
+          console.warn("[auth/confirm] signOut_before_verify_fallback", { message: signOutErr.message });
+        }
+        const { data, error: verifyErr } = await verifyOtpWithEmailSignupFallback(
+          supabase,
+          otpToken!,
+          params.otpType
+        );
+        if (!verifyErr) {
           const pair = sessionUserFromVerifyData(data);
           if (pair) {
             console.log("[auth/confirm] session_created", {
@@ -242,6 +275,11 @@ export async function establishSessionFromEmailRedirectParams(
             });
             return { ok: true, method: "verifyOtp", session: pair.session, user: pair.user };
           }
+        } else {
+          console.log("[auth/confirm] verifyOtp_fallback_failed", {
+            message: verifyErr.message,
+            code: verifyErr.code ?? null,
+          });
         }
       }
       return { ok: false, method: "exchange", error: e };
@@ -259,6 +297,12 @@ export async function establishSessionFromEmailRedirectParams(
       method: "verifyOtp",
       error: { message: "Invalid or missing confirmation link." },
     };
+  }
+
+  /** OTP-style link (non-PKCE hash): drop any existing session first so cookies match the new user only. */
+  const { error: signOutBeforeOtpErr } = await supabase.auth.signOut();
+  if (signOutBeforeOtpErr) {
+    console.warn("[auth/confirm] signOut_before_verifyOtp", { message: signOutBeforeOtpErr.message });
   }
 
   const { data, error } = await verifyOtpWithEmailSignupFallback(supabase, tokenHash, params.otpType);
