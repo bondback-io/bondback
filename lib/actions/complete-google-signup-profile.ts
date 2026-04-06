@@ -8,13 +8,14 @@ import type { Database } from "@/types/supabase";
 import type { ProfileRole } from "@/lib/types";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
+import { extractGoogleProfileFields } from "@/lib/auth/google-user-metadata";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 import {
   sendTutorialEmailsForRoles,
   sendWelcomeEmailAfterEmailVerification,
 } from "@/lib/actions/onboarding-transactional-emails";
 
-type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
+type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
 export type CompleteGoogleSignupProfileResult =
   | { ok: true; redirect: string }
@@ -45,7 +46,7 @@ export async function completeGoogleSignupProfile(input: {
 
   const { data: profile, error: fetchErr } = await admin
     .from("profiles")
-    .select("id, roles, active_role, full_name")
+    .select("id, roles, active_role, full_name, first_name, last_name")
     .eq("id", userId)
     .maybeSingle();
 
@@ -78,19 +79,37 @@ export async function completeGoogleSignupProfile(input: {
     abnStored = digits;
   }
 
-  const row: ProfileInsert = {
-    id: userId,
+  /** Use `.update()` only — partial `.upsert()` can null out omitted columns and wipe OAuth names. */
+  const googleFields = extractGoogleProfileFields(session.user);
+  const p = profile as {
+    full_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null;
+
+  const update: ProfileUpdate = {
     roles,
     active_role,
     suburb: "",
     postcode: null,
     max_travel_km: 30,
     abn: role === "cleaner" ? abnStored : null,
+    updated_at: new Date().toISOString(),
   };
 
-  const { error: upsertErr } = await admin.from("profiles").upsert(row as never, { onConflict: "id" });
-  if (upsertErr) {
-    return { ok: false, error: upsertErr.message };
+  if (!p?.full_name?.trim() && googleFields.fullName) {
+    update.full_name = googleFields.fullName;
+  }
+  if (!p?.first_name?.trim() && googleFields.givenName) {
+    update.first_name = googleFields.givenName;
+  }
+  if (!p?.last_name?.trim() && googleFields.familyName) {
+    update.last_name = googleFields.familyName;
+  }
+
+  const { error: updateErr } = await admin.from("profiles").update(update as never).eq("id", userId);
+  if (updateErr) {
+    return { ok: false, error: updateErr.message };
   }
 
   const {

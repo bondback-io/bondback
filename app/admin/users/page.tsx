@@ -335,7 +335,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
             <TableHeader>
               <TableRow className="dark:border-gray-800">
                 <TableHead className="w-[52px]">Avatar</TableHead>
-                <TableHead>Full name</TableHead>
+                <TableHead className="min-w-[11rem]">Full name</TableHead>
                 <TableHead className="hidden md:table-cell">Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead className="whitespace-nowrap">Joined</TableHead>
@@ -405,28 +405,33 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                         </div>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <div className="space-y-0.5">
-                        <Link
-                          href={`/admin/users/${user.id}`}
-                          className="font-medium text-foreground underline-offset-4 hover:underline dark:text-gray-100"
-                        >
-                          {user.full_name ?? "Unnamed"}
-                        </Link>
-                        {isDeleted && (
-                          <Badge variant="secondary" className="ml-1 text-[10px]">
-                            Deleted
-                          </Badge>
-                        )}
-                        <p
-                          className="pt-1 text-[11px] leading-snug text-muted-foreground md:hidden dark:text-gray-400"
+                    <TableCell className="min-w-[11rem] align-top">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                          <Link
+                            href={`/admin/users/${user.id}`}
+                            className="font-medium text-foreground underline-offset-4 hover:underline dark:text-gray-100"
+                          >
+                            {user.full_name ?? "Unnamed"}
+                          </Link>
+                          {isDeleted && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Deleted
+                            </Badge>
+                          )}
+                        </div>
+                        {/* md:hidden: last login lives here on small screens (dedicated column hidden) */}
+                        <div
+                          className="md:hidden"
                           title={lastLoginAbsolute ?? "No login recorded"}
                         >
-                          <span className="font-medium text-foreground/80 dark:text-gray-300">
-                            Last login:
-                          </span>{" "}
-                          {lastSignInAt ? lastLoginLabel : "Never"}
-                        </p>
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-500">
+                            Last login
+                          </p>
+                          <p className="text-[11px] leading-tight text-muted-foreground whitespace-nowrap dark:text-gray-400">
+                            {lastSignInAt ? lastLoginLabel : "Never"}
+                          </p>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-sm text-muted-foreground dark:text-gray-400">
