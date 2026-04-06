@@ -10,7 +10,7 @@ import { useForm, type DefaultValues } from "react-hook-form";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Check } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { finalizePath2Signup } from "@/lib/actions/onboarding";
+import { finalizePath2Signup, validateCleanerAbnBeforePath2Signup } from "@/lib/actions/onboarding";
 import { scheduleRouterAction } from "@/lib/deferred-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -269,6 +269,15 @@ export function SignupPath2Wizard() {
       const confirmUrl = buildPath2AuthConfirmUrl(getResolvedAuthEmailRedirectOrigin(), refParam);
 
       try {
+        if (values.role === "cleaner") {
+          const abnPre = await validateCleanerAbnBeforePath2Signup(values.abn);
+          if (!abnPre.ok) {
+            setError(null);
+            setAbnServerError(abnPre.error);
+            return;
+          }
+        }
+
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: values.email.trim(),
           password: values.password,

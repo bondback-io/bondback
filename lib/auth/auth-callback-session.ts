@@ -235,19 +235,32 @@ export async function redirectAfterAuthSessionEstablished(
   const needsRoleChoice = roles.length === 0 || !hasActiveRole;
   let redirectTo = next;
 
+  const oauthProvider =
+    typeof session.user.app_metadata?.provider === "string"
+      ? session.user.app_metadata.provider
+      : null;
+
   if (!needsRoleChoice) {
     if (next === "/dashboard" || next === "/onboarding/google-complete") {
       redirectTo = getPostLoginDashboardPath(p);
     }
   } else if (needsRoleChoice && (next === "/dashboard" || next === "/onboarding/role-choice")) {
-    redirectTo =
-      signupFlow === "onboarding"
-        ? "/onboarding/complete-profile"
-        : "/onboarding/role-choice";
+    if (signupFlow === "onboarding") {
+      redirectTo = "/onboarding/complete-profile";
+    } else if (oauthProvider === "google") {
+      /** Same Lister/Cleaner + optional ABN UI as sign-up with Google — not legacy role-choice only. */
+      redirectTo = "/onboarding/google-complete";
+    } else {
+      redirectTo = "/onboarding/role-choice";
+    }
   }
   /** `needsRoleChoice` + `next === /onboarding/google-complete` keeps `redirectTo` as that URL. */
 
-  const skipDeferredTransactionalEmails = redirectTo === "/onboarding/google-complete";
+  /**
+   * Welcome + “after verify” tutorial must run only after the user has a real role (or Path 2 metadata).
+   * Otherwise Google / email users who still owe a role would get the wrong welcome/tutorial early.
+   */
+  const skipDeferredTransactionalEmails = needsRoleChoice;
 
   if (session.user.id) {
     const userId = session.user.id;
@@ -260,7 +273,7 @@ export async function redirectAfterAuthSessionEstablished(
       if (skipDeferredTransactionalEmails) {
         console.info("[auth-callback-session] skip_deferred_emails", {
           userId,
-          reason: "google_signup_pending_profile_complete",
+          reason: "pending_role_choice",
           redirectTo,
         });
         return;

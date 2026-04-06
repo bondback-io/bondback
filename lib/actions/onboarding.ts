@@ -402,7 +402,15 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
             .eq("id", userId)
             .maybeSingle();
           const fullName = (nameRow as { full_name?: string | null } | null)?.full_name ?? null;
-          const { sendTutorialEmailsForRoles } = await import("@/lib/actions/onboarding-transactional-emails");
+          const {
+            sendWelcomeEmailAfterEmailVerification,
+            sendTutorialEmailsForRoles,
+          } = await import("@/lib/actions/onboarding-transactional-emails");
+          await sendWelcomeEmailAfterEmailVerification({
+            userId,
+            session: sessionForEmail,
+            trigger: "role_choice_first_assignment",
+          });
           await sendTutorialEmailsForRoles({
             userId,
             session: sessionForEmail,
@@ -435,6 +443,24 @@ export async function saveRoleChoice(choice: RoleChoice): Promise<SaveRoleChoice
   return { ok: true, redirect: "/onboarding/lister/quick-setup" };
 }
 
+/**
+ * Path 2 email sign-up (cleaner): run **before** `auth.signUp` so Supabase does not send a
+ * confirmation email when the ABN fails format or ABR validation.
+ */
+export async function validateCleanerAbnBeforePath2Signup(
+  abnRaw: string | null | undefined
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const digits = (abnRaw ?? "").replace(/\D/g, "");
+  if (digits.length !== 11) {
+    return { ok: false, error: "Enter your 11-digit ABN." };
+  }
+  const v = await validateAbnIfRequired(digits);
+  if (!v.ok) {
+    return { ok: false, error: v.error };
+  }
+  return { ok: true };
+}
+
 export type FinalizePath2SignupInput = {
   userId: string;
   email: string;
@@ -457,6 +483,9 @@ export type FinalizePath2SignupResult = { ok: true } | { ok: false; error: strin
  * Combined signup (Path 2): after `signUp` returns a user id, persist role + location via
  * service role. Verifies `email` matches Auth before writing. Does not send tutorial emails
  * (those run after email confirmation in `sendTutorialEmailsAfterEmailVerificationIfNeeded`).
+ *
+ * Cleaner ABN: Path 2 wizard calls {@link validateCleanerAbnBeforePath2Signup} before `signUp`
+ * so invalid ABNs never trigger a confirmation email; this function still validates again.
  */
 export async function finalizePath2Signup(
   input: FinalizePath2SignupInput
