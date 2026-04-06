@@ -307,10 +307,22 @@ export function LoginForm({
                 </p>
               </Alert>
             )}
+            {messageParam === "session_ended" && (
+              <Alert
+                className="border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
+                role="status"
+              >
+                <p className="text-xs leading-relaxed">
+                  Your session ended — this can happen if your account was removed or your sign-in
+                  expired. If you still have access, sign in again below.
+                </p>
+              </Alert>
+            )}
             {messageParam &&
               messageParam !== "password-reset" &&
               messageParam !== "confirm_link_expired" &&
-              messageParam !== "confirm_link_invalid" && (
+              messageParam !== "confirm_link_invalid" &&
+              messageParam !== "session_ended" && (
                 <Alert className="border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
                   <p className="text-xs leading-relaxed">{messageParam}</p>
                 </Alert>

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ACCOUNT_INACTIVE_MESSAGE } from "@/lib/auth/account-errors";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
   completeOnboardingFromSignup,
   upsertMinimalProfileAfterSignup,
@@ -55,6 +57,11 @@ export function CompleteProfileClient() {
               return;
             }
             if (!cancelled && !result.ok) {
+              if (result.error === ACCOUNT_INACTIVE_MESSAGE) {
+                await createBrowserSupabaseClient().auth.signOut();
+                router.replace("/login?message=session_ended");
+                return;
+              }
               setHint(result.error ?? null);
             }
           }

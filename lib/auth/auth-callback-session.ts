@@ -13,6 +13,8 @@ import {
   sendWelcomeEmailAfterEmailVerification,
 } from "@/lib/actions/onboarding-transactional-emails";
 import { authPerfDevLog, isAuthPerfDev } from "@/lib/auth/auth-perf-dev";
+import { ACCOUNT_INACTIVE_MESSAGE } from "@/lib/auth/account-errors";
+import { signOutIfAuthUserMissing } from "@/lib/auth/sign-out-if-auth-user-missing";
 
 type SessionFinalizeParams = {
   /** Matches `@supabase/ssr` server client (differs from bare `SupabaseClient<Database>` generics). */
@@ -121,11 +123,25 @@ export async function redirectAfterAuthSessionEstablished(
     });
   }
 
+  const stillAlive = await signOutIfAuthUserMissing(session.user.id);
+  if (!stillAlive) {
+    return redirectWithAuthCookies(
+      authCookieResponse,
+      new URL(`/login?message=session_ended`, origin)
+    );
+  }
+
+  const loginSessionEnded = () =>
+    redirectWithAuthCookies(
+      authCookieResponse,
+      new URL(`/login?message=session_ended`, origin)
+    );
+
   const provider = session.user.app_metadata?.provider;
   const upsertT0 = Date.now();
   if (provider === "google") {
     const fields = extractGoogleProfileFields(session.user);
-    await upsertMinimalProfileAfterSignup(
+    const minimal = await upsertMinimalProfileAfterSignup(
       {
         full_name: fields.fullName,
         postcode: null,
@@ -136,6 +152,15 @@ export async function redirectAfterAuthSessionEstablished(
       },
       { sessionOverride: session }
     );
+    if (!minimal.ok) {
+      if (minimal.error === ACCOUNT_INACTIVE_MESSAGE) {
+        await supabase.auth.signOut();
+        return loginSessionEnded();
+      }
+      console.warn("[auth-callback-session] minimal_profile_upsert_failed", {
+        error: minimal.error,
+      });
+    }
     await syncGoogleIdentityToProfile(session.user.id, fields);
   } else {
     const meta = session.user.user_metadata ?? {};
@@ -150,7 +175,7 @@ export async function redirectAfterAuthSessionEstablished(
       typeof meta.postcode === "string" && meta.postcode.trim() ? meta.postcode.trim() : null;
     const stateFromMeta =
       typeof meta.state === "string" && meta.state.trim() ? meta.state.trim().toUpperCase() : null;
-    await upsertMinimalProfileAfterSignup(
+    const minimal = await upsertMinimalProfileAfterSignup(
       {
         full_name: fullName,
         state: stateFromMeta,
@@ -160,6 +185,15 @@ export async function redirectAfterAuthSessionEstablished(
       },
       { sessionOverride: session }
     );
+    if (!minimal.ok) {
+      if (minimal.error === ACCOUNT_INACTIVE_MESSAGE) {
+        await supabase.auth.signOut();
+        return loginSessionEnded();
+      }
+      console.warn("[auth-callback-session] minimal_profile_upsert_failed", {
+        error: minimal.error,
+      });
+    }
   }
   authPerfDevLog("auth-callback-session:minimal_profile_upsert", {
     ms: Date.now() - upsertT0,

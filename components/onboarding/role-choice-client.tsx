@@ -17,6 +17,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { ACCOUNT_INACTIVE_MESSAGE } from "@/lib/auth/account-errors";
 import { markPostLoginFullPageNavigation } from "@/lib/auth/post-login-navigation-flag";
 import { isAuthPerfDev } from "@/lib/auth/auth-perf-dev";
 import { saveRoleChoice, upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
@@ -121,12 +122,20 @@ function RoleChoiceClientInner({ serverSessionReady }: RoleChoiceClientProps) {
           referralCode?: string | null;
         };
         if (payload?.full_name?.trim()) {
-          await upsertMinimalProfileAfterSignup({
+          const result = await upsertMinimalProfileAfterSignup({
             full_name: payload.full_name,
             suburb: payload.suburb ?? null,
             postcode: payload.postcode ?? null,
             referralCode: payload.referralCode ?? null,
           });
+          if (!result.ok) {
+            if (result.error === ACCOUNT_INACTIVE_MESSAGE) {
+              await supabase.auth.signOut();
+              router.replace("/login?message=session_ended");
+              return;
+            }
+            return;
+          }
           try {
             localStorage.removeItem(PENDING_MINIMAL_PROFILE_KEY);
           } catch {

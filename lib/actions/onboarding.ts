@@ -10,6 +10,8 @@ import type { ProfileRole } from "@/lib/types";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 import { clampMaxTravelKm } from "@/lib/max-travel-km";
+import { ACCOUNT_INACTIVE_MESSAGE } from "@/lib/auth/account-errors";
+import { signOutIfAuthUserMissing } from "@/lib/auth/sign-out-if-auth-user-missing";
 
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 
@@ -112,6 +114,15 @@ export async function upsertMinimalProfileAfterSignup(
   }
 
   const userId = session.user.id;
+
+  const authUserOk = await signOutIfAuthUserMissing(userId);
+  if (!authUserOk) {
+    return {
+      ok: false,
+      error: "This account is no longer active. Please sign in again.",
+    };
+  }
+
   const admin = createSupabaseAdminClient();
   if (!admin) {
     return {
@@ -122,9 +133,17 @@ export async function upsertMinimalProfileAfterSignup(
 
   const { data: existing } = await admin
     .from("profiles")
-    .select("roles, referred_by")
+    .select("roles, referred_by, is_deleted")
     .eq("id", userId)
     .maybeSingle();
+
+  if (existing && (existing as { is_deleted?: boolean | null }).is_deleted === true) {
+    await supabase.auth.signOut();
+    return {
+      ok: false,
+      error: ACCOUNT_INACTIVE_MESSAGE,
+    };
+  }
 
   const existingRoles = (existing?.roles as string[] | null) ?? [];
   if (existingRoles.length > 0) {

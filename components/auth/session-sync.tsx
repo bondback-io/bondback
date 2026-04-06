@@ -57,6 +57,24 @@ export function SessionSync() {
       markPostLoginFullPageNavigation();
     }
 
+    const supabase = createBrowserSupabaseClient();
+    let cancelled = false;
+    void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (cancelled || !session?.user?.id) return;
+      const { data, error } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (error || !data?.user) {
+        sessionDebug("session cleared — auth user missing or JWT invalid", {
+          message: error?.message ?? null,
+        });
+        await supabase.auth.signOut();
+        window.location.assign("/login?message=session_ended");
+      }
+    })();
+
     const runRefresh = (reason: string) => {
       const now = Date.now();
       if (now - lastRefreshAtRef.current < MIN_REFRESH_GAP_MS) {
@@ -85,7 +103,6 @@ export function SessionSync() {
       }, SIGN_IN_DEBOUNCE_MS);
     };
 
-    const supabase = createBrowserSupabaseClient();
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
@@ -143,6 +160,7 @@ export function SessionSync() {
       }
     });
     return () => {
+      cancelled = true;
       subscription.unsubscribe();
       if (debounceRef.current != null) clearTimeout(debounceRef.current);
     };
