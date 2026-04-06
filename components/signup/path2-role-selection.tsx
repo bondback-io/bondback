@@ -61,6 +61,8 @@ export type Path2RoleSelectionProps = {
   submitting: boolean;
   /** Optional; omitted on single-page sign-up. */
   backButton?: ReactNode | null;
+  /** > 0 disables role actions to avoid rapid repeated signUp / email sends */
+  signupBlockedSecondsLeft?: number;
 };
 
 /**
@@ -79,10 +81,12 @@ export function Path2RoleSelection({
   roleError,
   submitting,
   backButton,
+  signupBlockedSecondsLeft = 0,
 }: Path2RoleSelectionProps) {
   const reduceMotion = useReducedMotion();
   const listerActive = role === "lister";
   const cleanerActive = role === "cleaner";
+  const signupBlocked = signupBlockedSecondsLeft > 0;
 
   const t = reduceMotion ? 0 : 0.32;
   const tFast = reduceMotion ? 0 : 0.28;
@@ -203,7 +207,7 @@ export function Path2RoleSelection({
               <Button
                 type="button"
                 size="lg"
-                disabled={submitting}
+                disabled={submitting || signupBlocked}
                 onClick={() => {
                   onStartAsLister();
                 }}
@@ -217,6 +221,8 @@ export function Path2RoleSelection({
                     <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
                     Creating account…
                   </>
+                ) : signupBlocked ? (
+                  `Wait ${signupBlockedSecondsLeft}s`
                 ) : (
                   "Start as Lister"
                 )}
@@ -327,7 +333,7 @@ export function Path2RoleSelection({
                 type="button"
                 size="lg"
                 variant="secondary"
-                disabled={submitting}
+                disabled={submitting || signupBlocked}
                 onClick={() => {
                   onChooseCleaner();
                 }}
@@ -337,7 +343,7 @@ export function Path2RoleSelection({
                   "dark:border-emerald-500/45 dark:bg-emerald-700 dark:hover:bg-emerald-600"
                 )}
               >
-                Start as Cleaner
+                {signupBlocked ? `Wait ${signupBlockedSecondsLeft}s` : "Start as Cleaner"}
               </Button>
             </motion.div>
           </div>
@@ -411,7 +417,7 @@ export function Path2RoleSelection({
           <Button
             type="submit"
             size="lg"
-            disabled={submitting}
+            disabled={submitting || signupBlocked}
             className="inline-flex min-h-14 w-full touch-manipulation items-center justify-center gap-2 rounded-xl text-base font-semibold"
           >
             {submitting ? (
@@ -419,6 +425,8 @@ export function Path2RoleSelection({
                 <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
                 Creating account…
               </>
+            ) : signupBlocked ? (
+              `Wait ${signupBlockedSecondsLeft}s`
             ) : (
               "Create account"
             )}

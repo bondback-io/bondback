@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
@@ -28,6 +28,13 @@ import {
 import { SuburbPostcodeAutocomplete } from "@/components/features/suburb-postcode-autocomplete";
 import { Path2RoleSelection } from "@/components/signup/path2-role-selection";
 import { AU_STATES, type AuStateCode } from "@/lib/au-suburbs";
+import {
+  SIGNUP_RATE_LIMIT_MESSAGE,
+  SIGNUP_RETRY_COOLDOWN_MS,
+  isSignupEmailRateLimitError,
+  logSignupEmailRateLimitHit,
+  parseSignupEmailRetryAfterSeconds,
+} from "@/lib/auth/signup-email-rate-limit";
 
 const AU_STATE_CODES = new Set<string>(AU_STATES.map((s) => s.value));
 
@@ -133,12 +140,34 @@ export function SignupPath2Wizard() {
   const [submitting, setSubmitting] = useState(false);
   const [, startTransition] = useTransition();
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Forces countdown UI while `signupBlockedUntil` is in the future */
+  const [tick, setTick] = useState(0);
+  const [signupBlockedUntil, setSignupBlockedUntil] = useState<number | null>(null);
+  const [signupBlockKind, setSignupBlockKind] = useState<"rate_limit" | "cooldown" | null>(null);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     return () => {
       if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (signupBlockedUntil == null) return;
+    if (Date.now() >= signupBlockedUntil) {
+      setSignupBlockedUntil(null);
+      setSignupBlockKind(null);
+    }
+  }, [tick, signupBlockedUntil]);
+
+  const signupBlockedSecondsLeft = useMemo(() => {
+    if (signupBlockedUntil == null || Date.now() >= signupBlockedUntil) return 0;
+    return Math.max(0, Math.ceil((signupBlockedUntil - Date.now()) / 1000));
+  }, [tick, signupBlockedUntil]);
 
   /** When ABR / finalize puts an error on the ABN field, scroll it into view (mobile + desktop). */
   useEffect(() => {
@@ -219,6 +248,16 @@ export function SignupPath2Wizard() {
   const handlePath2Signup = useCallback(
     async (values: Path2Values) => {
       assertRole(values);
+      if (signupBlockedUntil != null && Date.now() < signupBlockedUntil) {
+        const secs = Math.ceil((signupBlockedUntil - Date.now()) / 1000);
+        if (signupBlockKind === "cooldown") {
+          setError(`Please wait ${secs}s before trying again.`);
+        } else {
+          setError(null);
+        }
+        return;
+      }
+
       setError(null);
       setAbnServerError(null);
       startTransition(() => setSubmitting(true));
@@ -248,14 +287,19 @@ export function SignupPath2Wizard() {
 
         if (signUpError) {
           setAbnServerError(null);
-          const isEmailRateLimit =
-            signUpError.message?.toLowerCase().includes("rate limit") ||
-            (signUpError as { code?: string }).code === "over_email_send_rate_limit";
-          setError(
-            isEmailRateLimit
-              ? "Too many signup emails were sent recently. Try again in about an hour or use a different email."
-              : signUpError.message
-          );
+          const isEmailRateLimit = isSignupEmailRateLimitError(signUpError);
+          if (isEmailRateLimit) {
+            logSignupEmailRateLimitHit("path2_signUp", signUpError);
+            const retrySec =
+              parseSignupEmailRetryAfterSeconds(signUpError) ?? 60;
+            setSignupBlockedUntil(Date.now() + Math.max(retrySec, 5) * 1000);
+            setSignupBlockKind("rate_limit");
+            setError(null);
+          } else {
+            setError(signUpError.message);
+            setSignupBlockedUntil(Date.now() + SIGNUP_RETRY_COOLDOWN_MS);
+            setSignupBlockKind("cooldown");
+          }
           return;
         }
 
@@ -297,6 +341,9 @@ export function SignupPath2Wizard() {
 
         saveCachedSignupLocation(values.postcode ?? "", values.suburb ?? "", values.state ?? "");
 
+        setSignupBlockedUntil(null);
+        setSignupBlockKind(null);
+
         setPhase("success");
 
         if (data.session) {
@@ -309,18 +356,27 @@ export function SignupPath2Wizard() {
         setSubmitting(false);
       }
     },
-    [refParam, router, startTransition]
+    [
+      refParam,
+      router,
+      startTransition,
+      signupBlockedUntil,
+      signupBlockKind,
+    ]
   );
 
   const onCreateAccount = form.handleSubmit(handlePath2Signup);
 
   const handleStartAsLister = useCallback(() => {
+    if (signupBlockedUntil != null && Date.now() < signupBlockedUntil) {
+      return;
+    }
     setAbnServerError(null);
     form.setValue("role", "lister", { shouldValidate: true });
     queueMicrotask(() => {
       void form.handleSubmit(handlePath2Signup)();
     });
-  }, [form, handlePath2Signup]);
+  }, [form, handlePath2Signup, signupBlockedUntil, signupBlockKind]);
 
   const handleChooseCleaner = useCallback(() => {
     setAbnServerError(null);
@@ -440,10 +496,26 @@ export function SignupPath2Wizard() {
                   </div>
 
                   <form className="space-y-8" onSubmit={onCreateAccount} noValidate>
+                    {signupBlockKind === "rate_limit" && signupBlockedSecondsLeft > 0 && (
+                      <Alert
+                        className="border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-50"
+                        role="status"
+                      >
+                        <p className="text-sm leading-relaxed">{SIGNUP_RATE_LIMIT_MESSAGE}</p>
+                        <p className="mt-2 text-sm font-semibold tabular-nums">
+                          Try again in {signupBlockedSecondsLeft}s
+                        </p>
+                      </Alert>
+                    )}
                     {error && (
                       <Alert variant="destructive" className="text-sm">
                         {error}
                       </Alert>
+                    )}
+                    {signupBlockKind === "cooldown" && signupBlockedSecondsLeft > 0 && error && (
+                      <p className="text-center text-sm text-muted-foreground tabular-nums">
+                        You can try again in {signupBlockedSecondsLeft}s
+                      </p>
                     )}
 
                     <div className="space-y-4">
@@ -551,6 +623,7 @@ export function SignupPath2Wizard() {
                       onChooseCleaner={handleChooseCleaner}
                       maxTravelKm={maxTravelKm}
                       onMaxTravelChange={(n) => form.setValue("maxTravelKm", n, { shouldValidate: true })}
+                      signupBlockedSecondsLeft={signupBlockedSecondsLeft}
                       abnInputProps={form.register("abn", {
                         onChange: (e) => {
                           setAbnServerError(null);

@@ -26,6 +26,12 @@ import {
   type AccountCreationStep,
 } from "@/components/auth/account-creation-progress-modal";
 import { getResolvedAuthEmailRedirectOrigin } from "@/lib/auth/email-redirect-origin";
+import {
+  SIGNUP_RATE_LIMIT_MESSAGE,
+  isSignupEmailRateLimitError,
+  logSignupEmailRateLimitHit,
+  parseSignupEmailRetryAfterSeconds,
+} from "@/lib/auth/signup-email-rate-limit";
 
 type ModalFlow = "bootstrap" | "signup" | null;
 
@@ -165,14 +171,14 @@ function OnboardingSignupInner() {
       });
 
       if (signUpError) {
-        const isEmailRateLimit =
-          signUpError.message?.toLowerCase().includes("rate limit") ||
-          (signUpError as { code?: string }).code === "over_email_send_rate_limit";
-        setError(
-          isEmailRateLimit
-            ? "Too many signup emails were sent recently. Please try again in about an hour, or use a different email address."
-            : signUpError.message
-        );
+        const isEmailRateLimit = isSignupEmailRateLimitError(signUpError);
+        if (isEmailRateLimit) {
+          logSignupEmailRateLimitHit("onboarding_signUp", signUpError);
+          const sec = parseSignupEmailRetryAfterSeconds(signUpError) ?? 60;
+          setError(`${SIGNUP_RATE_LIMIT_MESSAGE} (try again in about ${sec}s.)`);
+        } else {
+          setError(signUpError.message);
+        }
         setModalOpen(false);
         setModalFlow(null);
         setLoading(false);
