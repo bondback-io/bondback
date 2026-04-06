@@ -145,8 +145,20 @@ export async function upsertMinimalProfileAfterSignup(
     };
   }
 
-  const existingRoles = (existing?.roles as string[] | null) ?? [];
-  if (existingRoles.length > 0) {
+  let existingRolesNorm = normalizeProfileRolesFromDb(existing?.roles ?? null, !!existing);
+  /** Path 2 email sign-up: `finalizePath2Signup` writes roles before confirm; re-read once if metadata says a role was chosen. */
+  if (
+    existingRolesNorm.length === 0 &&
+    (session.user.user_metadata?.pending_role === "lister" ||
+      session.user.user_metadata?.pending_role === "cleaner")
+  ) {
+    const { data: again } = await admin.from("profiles").select("roles").eq("id", userId).maybeSingle();
+    existingRolesNorm = normalizeProfileRolesFromDb(
+      (again as { roles?: unknown } | null)?.roles ?? null,
+      !!again
+    );
+  }
+  if (existingRolesNorm.length > 0) {
     revalidatePath("/dashboard");
     return { ok: true };
   }

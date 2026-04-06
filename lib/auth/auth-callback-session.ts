@@ -7,7 +7,7 @@ import { extractGoogleProfileFields } from "@/lib/auth/google-user-metadata";
 import { syncGoogleIdentityToProfile } from "@/lib/auth/sync-google-profile";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
-import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
+import { resolveActiveRoleFromProfile } from "@/lib/profile-roles";
 import {
   sendTutorialEmailsAfterEmailVerificationIfNeeded,
   sendWelcomeEmailAfterEmailVerification,
@@ -227,12 +227,14 @@ export async function redirectAfterAuthSessionEstablished(
     return redirectWithAuthCookies(authCookieResponse, loginUrl);
   }
 
-  const roles = normalizeProfileRolesFromDb(p?.roles ?? null, !!p);
-  const activeRoleRaw = p?.active_role;
-  const hasActiveRole =
-    typeof activeRoleRaw === "string" && activeRoleRaw.trim().length > 0;
-  /** New signups and anyone who has not chosen a default role yet. */
-  const needsRoleChoice = roles.length === 0 || !hasActiveRole;
+  /**
+   * Must match `getSessionWithProfile` / `resolveActiveRoleFromProfile`. After
+   * `active_role` became nullable, a single entry in `roles` with `active_role` NULL still means
+   * the user chose Lister or Cleaner (e.g. Path 2 email sign-up). The old
+   * `roles.length === 0 || !hasActiveRole` check wrongly treated that as “pending role choice” and
+   * skipped welcome + tutorial emails after `/auth/confirm`.
+   */
+  const needsRoleChoice = resolveActiveRoleFromProfile(p) === null;
   let redirectTo = next;
 
   const oauthProvider =
