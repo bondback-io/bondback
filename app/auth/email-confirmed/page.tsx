@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import type { SessionWithProfile } from "@/lib/types";
+import { sendEmailPasswordSignupTransactionalEmailsAfterConfirmationPage } from "@/lib/actions/onboarding-transactional-emails";
 import { EmailConfirmedContent } from "./email-confirmed-content";
 
 export const metadata: Metadata = {
@@ -44,6 +45,10 @@ export default async function EmailConfirmedPage({
   const nextPath = sanitizeInternalNextPath(firstParam(sp, "next"), "/dashboard");
   const session = await getSessionWithProfile();
   const firstName = firstNameFromSession(session);
+
+  if (session?.user?.id) {
+    await sendEmailPasswordSignupTransactionalEmailsAfterConfirmationPage();
+  }
 
   return <EmailConfirmedContent nextPath={nextPath} firstName={firstName} />;
 }

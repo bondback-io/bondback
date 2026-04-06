@@ -15,6 +15,7 @@ import {
 import { authPerfDevLog, isAuthPerfDev } from "@/lib/auth/auth-perf-dev";
 import { ACCOUNT_INACTIVE_MESSAGE } from "@/lib/auth/account-errors";
 import { signOutIfAuthUserMissing } from "@/lib/auth/sign-out-if-auth-user-missing";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type SessionFinalizeParams = {
   /** Matches `@supabase/ssr` server client (differs from bare `SupabaseClient<Database>` generics). */
@@ -201,22 +202,36 @@ export async function redirectAfterAuthSessionEstablished(
   });
 
   const profileT0 = Date.now();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("is_banned, banned_reason, roles, active_role")
-    .eq("id", session.user.id)
-    .maybeSingle();
+  type ProfileRow = {
+    is_banned?: boolean;
+    banned_reason?: string | null;
+    roles?: unknown;
+    active_role?: string | null;
+  };
+  /** Prefer service role so Path 2 rows written at sign-up are visible; anon RLS can miss the row in this request. */
+  const admin = createSupabaseAdminClient();
+  let p: ProfileRow | null = null;
+  if (admin) {
+    const { data } = await admin
+      .from("profiles")
+      .select("is_banned, banned_reason, roles, active_role")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    p = (data as ProfileRow | null) ?? null;
+  }
+  if (!p) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_banned, banned_reason, roles, active_role")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    p = (profile as ProfileRow | null) ?? null;
+  }
   const profileMs = Date.now() - profileT0;
   authPerfDevLog("auth-callback-session:profiles_select", { ms: profileMs });
   if (isAuthPerfDev && profileMs > 800) {
     console.warn("[auth:perf] auth-callback-session:profiles_select_SLOW", { ms: profileMs });
   }
-  const p = profile as {
-    is_banned?: boolean;
-    banned_reason?: string | null;
-    roles?: string[] | null;
-    active_role?: string | null;
-  } | null;
 
   if (p?.is_banned) {
     await supabase.auth.signOut();

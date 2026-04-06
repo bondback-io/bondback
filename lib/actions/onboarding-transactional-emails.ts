@@ -485,3 +485,63 @@ export async function sendTutorialEmailsAfterEmailVerificationIfNeeded(params: {
     roles: tutorialRoles,
   });
 }
+
+/**
+ * Email/password sign-up (Path 2 lister/cleaner): send welcome + role tutorials after the user lands on
+ * `/auth/email-confirmed` with a valid session. Google OAuth completes via `/onboarding/google-complete`
+ * instead — skip when `app_metadata.provider === "google"`.
+ *
+ * Idempotent: {@link sendWelcomeEmailAfterEmailVerification} and
+ * {@link sendTutorialEmailsAfterEmailVerificationIfNeeded} respect prefs / already-sent flags.
+ */
+export async function sendEmailPasswordSignupTransactionalEmailsAfterConfirmationPage(): Promise<void> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.id) return;
+
+  if (user.app_metadata?.provider === "google") {
+    console.info("[email:email-confirmed-page] skip_google_provider", { userId: user.id });
+    return;
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) return;
+
+  const trigger = "email_confirmed_page_load";
+  const userId = user.id;
+
+  try {
+    const welcome = await sendWelcomeEmailAfterEmailVerification({
+      userId,
+      session,
+      trigger,
+    });
+    console.info("[email:email-confirmed-page] welcome", {
+      userId,
+      ok: welcome.ok,
+      skipped: welcome.skipped,
+    });
+  } catch (e) {
+    console.error("[email:email-confirmed-page] welcome_failed", {
+      userId,
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  try {
+    await sendTutorialEmailsAfterEmailVerificationIfNeeded({
+      userId,
+      session,
+      trigger,
+    });
+  } catch (e) {
+    console.error("[email:email-confirmed-page] tutorial_failed", {
+      userId,
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
