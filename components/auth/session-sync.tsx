@@ -16,6 +16,13 @@ const SIGN_IN_DEBOUNCE_MS = 600;
 /** Avoid stacking `router.refresh()` calls (can race with navigation and surface “page couldn’t load” on Vercel). */
 const MIN_REFRESH_GAP_MS = 2800;
 
+/**
+ * Re-check Supabase Auth with the server (`getUser`) while the tab stays on one route.
+ * If an admin deletes the auth user (or the account is removed in the dashboard), cookies can
+ * still hold a JWT until the next navigation — `visibilitychange` / polling catches that.
+ */
+const SESSION_REVALIDATE_POLL_MS = 180_000;
+
 const SESSION_DEBUG =
   typeof process !== "undefined" && process.env.NODE_ENV !== "production";
 
@@ -44,6 +51,8 @@ function sessionDebug(message: string, extra?: Record<string, unknown>) {
  *   where possible (see `LogoutButton`).
  * - **SIGNED_IN** / **USER_UPDATED**: debounced refresh; both honour `bb_skip_sign_in_refresh_until`.
  * Skips **INITIAL_SESSION**. Does **not** refresh on `TOKEN_REFRESHED`.
+ * - **Tab visible / interval**: `getUser()` so deleted accounts don’t stay “signed in” on long-lived
+ *   onboarding tabs without navigation.
  */
 export function SessionSync() {
   const router = useRouter();
@@ -59,7 +68,8 @@ export function SessionSync() {
 
     const supabase = createBrowserSupabaseClient();
     let cancelled = false;
-    void (async () => {
+
+    async function validateBrowserSession() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -73,7 +83,19 @@ export function SessionSync() {
         await supabase.auth.signOut();
         window.location.assign("/login?message=session_ended");
       }
-    })();
+    }
+
+    void validateBrowserSession();
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void validateBrowserSession();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void validateBrowserSession();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    const pollId = window.setInterval(() => void validateBrowserSession(), SESSION_REVALIDATE_POLL_MS);
 
     const runRefresh = (reason: string) => {
       const now = Date.now();
@@ -161,6 +183,9 @@ export function SessionSync() {
     });
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+      window.clearInterval(pollId);
       subscription.unsubscribe();
       if (debounceRef.current != null) clearTimeout(debounceRef.current);
     };

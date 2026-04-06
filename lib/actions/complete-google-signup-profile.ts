@@ -32,13 +32,14 @@ export async function completeGoogleSignupProfile(input: {
 }): Promise<CompleteGoogleSignupProfileResult> {
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user?.id) {
+    data: { user },
+    error: authErr,
+  } = await supabase.auth.getUser();
+  if (authErr || !user?.id) {
     return { ok: false, error: "You must be signed in." };
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
   const admin = createSupabaseAdminClient();
   if (!admin) {
     return { ok: false, error: "Server configuration error." };
@@ -80,7 +81,7 @@ export async function completeGoogleSignupProfile(input: {
   }
 
   /** Use `.update()` only — partial `.upsert()` can null out omitted columns and wipe OAuth names. */
-  const googleFields = extractGoogleProfileFields(session.user);
+  const googleFields = extractGoogleProfileFields(user);
   const p = profile as {
     full_name?: string | null;
     first_name?: string | null;
@@ -115,7 +116,6 @@ export async function completeGoogleSignupProfile(input: {
   const {
     data: { session: sessionAfter },
   } = await supabase.auth.getSession();
-  const sessionForEmail = sessionAfter ?? session;
 
   const { data: profileAfter } = await admin
     .from("profiles")
@@ -130,14 +130,18 @@ export async function completeGoogleSignupProfile(input: {
     try {
       const { notifyAdminNewUserRegistration } = await import("@/lib/actions/admin-notify-email");
       await notifyAdminNewUserRegistration(userId).catch(() => {});
+      if (!sessionAfter) {
+        console.warn("[completeGoogleSignupProfile] skip welcome/tutorial emails: no cookie session");
+        return;
+      }
       await sendWelcomeEmailAfterEmailVerification({
         userId,
-        session: sessionForEmail,
+        session: sessionAfter,
         trigger: "google_signup_profile_complete",
       });
       await sendTutorialEmailsForRoles({
         userId,
-        session: sessionForEmail,
+        session: sessionAfter,
         firstName,
         roles: [role],
         skipEmailConfirmedCheck: true,
