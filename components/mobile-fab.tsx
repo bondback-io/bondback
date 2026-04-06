@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { memo } from "react";
 import Image from "next/image";
 import { Plus, Search, Star, Briefcase, MapPin, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,6 +17,7 @@ export function MobileDashboardFab({
 }: {
   variant: "lister" | "cleaner";
 }) {
+  const router = useRouter();
   const isLister = variant === "lister";
   const href = isLister ? "/listings/new" : "/jobs";
   const label = isLister ? "Create New Listing" : "Find Jobs";
@@ -22,6 +25,8 @@ export function MobileDashboardFab({
   return (
     <Link
       href={href}
+      prefetch
+      onMouseEnter={() => router.prefetch(href)}
       className={cn(
         "fixed left-4 right-[4.75rem] z-[55] flex items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-semibold !text-white shadow-2xl transition active:scale-[0.98] no-underline hover:!text-white sm:text-base md:hidden",
         "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))]",
@@ -42,7 +47,7 @@ export function MobileDashboardFab({
 }
 
 /** Cleaner: stacked cards on small screens with tap actions on each card; grid from md up. */
-export function ResponsiveCleanerJobCards({
+function ResponsiveCleanerJobCardsInner({
   items,
   ratingStars,
 }: {
@@ -88,6 +93,9 @@ export function ResponsiveCleanerJobCards({
     </>
   );
 }
+
+export const ResponsiveCleanerJobCards = memo(ResponsiveCleanerJobCardsInner);
+ResponsiveCleanerJobCards.displayName = "ResponsiveCleanerJobCards";
 
 export type ListerActiveJobItem = {
   jobId: number;

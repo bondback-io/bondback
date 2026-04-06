@@ -26,6 +26,7 @@ import { NotificationsRealtimeSync } from "@/components/notifications/notificati
 import { NotificationAudioUnlock } from "@/components/notifications/notification-audio-unlock";
 import { NavigationRouteProgress } from "@/components/navigation/navigation-route-progress";
 import { SessionSync } from "@/components/auth/session-sync";
+import { LoggedInRoutePrefetch } from "@/components/performance/logged-in-route-prefetch";
 
 const site = getSiteUrl();
 
@@ -159,7 +160,12 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         {session?.profile ? (
           <UserPreferencesHydration distanceUnit={session.profile.distance_unit} />
         ) : null}
-        {session?.user?.id ? <NotificationsRealtimeSync userId={session.user.id} /> : null}
+        {session?.user?.id ? (
+          <>
+            <LoggedInRoutePrefetch />
+            <NotificationsRealtimeSync userId={session.user.id} />
+          </>
+        ) : null}
         <RegisterExpoPushToken userId={session?.user.id ?? null} />
         <ExpoPushDeepLinkHandler />
         <Toaster>

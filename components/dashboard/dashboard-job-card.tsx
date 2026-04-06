@@ -100,7 +100,7 @@ function MarkCompleteActionButton({
   );
 }
 
-export function DashboardJobCard({
+function DashboardJobCardInner({
   job,
   listing,
   daysLeft,
@@ -354,3 +354,6 @@ export function DashboardJobCard({
     </Card>
   );
 }
+
+export const DashboardJobCard = React.memo(DashboardJobCardInner);
+DashboardJobCard.displayName = "DashboardJobCard";

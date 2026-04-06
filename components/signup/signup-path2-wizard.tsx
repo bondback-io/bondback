@@ -108,6 +108,18 @@ function assertRole(
 
 const EASE_FLOW = [0.25, 0.1, 0.25, 1] as const;
 
+/** Server errors that belong under the ABN field (Path 2 cleaner finalize + ABR validation). */
+function isAbnRelatedFinalizeError(message: string): boolean {
+  const m = message.toLowerCase();
+  if (m.includes("could not verify your account")) return false;
+  if (m.includes("server configuration error")) return false;
+  return (
+    m.includes("abn") ||
+    m.includes("australian business register") ||
+    m.includes("business register")
+  );
+}
+
 export function SignupPath2Wizard() {
   const reduceMotion = useReducedMotion();
   const router = useRouter();
@@ -127,6 +139,18 @@ export function SignupPath2Wizard() {
       if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     };
   }, []);
+
+  /** When ABR / finalize puts an error on the ABN field, scroll it into view (mobile + desktop). */
+  useEffect(() => {
+    if (!abnServerError) return;
+    const id = window.requestAnimationFrame(() => {
+      document.getElementById("p2-abn")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [abnServerError]);
 
   const form = useForm<Path2Values>({
     resolver: zodResolver(path2Schema),
@@ -261,7 +285,13 @@ export function SignupPath2Wizard() {
         });
 
         if (!fin.ok) {
-          setError(fin.error);
+          if (values.role === "cleaner" && isAbnRelatedFinalizeError(fin.error)) {
+            setError(null);
+            setAbnServerError(fin.error);
+          } else {
+            setAbnServerError(null);
+            setError(fin.error);
+          }
           return;
         }
 

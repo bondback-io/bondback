@@ -195,6 +195,28 @@ export function UserMenu({ session }: UserMenuProps) {
     window.location.assign("/login");
   };
 
+  /** Prefetch likely next navigations when the account menu opens (desktop + mobile). */
+  const prefetchAccountRoutes = React.useCallback(() => {
+    const activity = jobsActivityHref(session.roles, session.activeRole);
+    const routes = [
+      "/profile",
+      "/messages",
+      "/help",
+      "/support",
+      "/my-listings",
+      "/jobs",
+      "/earnings",
+      "/listings/new",
+      LISTER_DASHBOARD_HREF,
+      CLEANER_JOBS_DASHBOARD_HREF,
+      BROWSE_CLEANERS_HREF,
+      activity,
+    ];
+    for (const href of routes) {
+      router.prefetch(href);
+    }
+  }, [router, session.roles, session.activeRole]);
+
   const triggerButton = (
     <Button
       variant="ghost"
@@ -281,7 +303,13 @@ export function UserMenu({ session }: UserMenuProps) {
   if (isMobile) {
     return (
       <>
-        <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+        <Sheet
+          open={mobileSheetOpen}
+          onOpenChange={(open) => {
+            setMobileSheetOpen(open);
+            if (open) prefetchAccountRoutes();
+          }}
+        >
           <SheetTrigger asChild>{triggerButton}</SheetTrigger>
           <SheetContent
             side="bottom"
@@ -515,7 +543,7 @@ export function UserMenu({ session }: UserMenuProps) {
   // Desktop: floating dropdown
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => open && prefetchAccountRoutes()}>
         <DropdownMenuTrigger asChild>
           {triggerButton}
         </DropdownMenuTrigger>

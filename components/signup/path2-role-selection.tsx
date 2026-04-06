@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const listerBullets = [
   "Post bond cleans and compare bids in one place",
@@ -380,9 +381,9 @@ export function Path2RoleSelection({
               aria-invalid={Boolean(abnError || abnServerError)}
             />
             {(abnServerError || abnError) && (
-              <p className="text-sm text-destructive" role="alert">
-                {abnServerError ?? abnError}
-              </p>
+              <Alert variant="destructive" className="py-3 text-sm">
+                <AlertDescription>{abnServerError ?? abnError}</AlertDescription>
+              </Alert>
             )}
           </div>
           <div className="space-y-3">

@@ -115,9 +115,27 @@ export function MyAccountSections({
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const focusFieldAfterScroll = (el: HTMLElement) => {
+      if (
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement ||
+        el instanceof HTMLButtonElement
+      ) {
+        el.focus({ preventScroll: true });
+        return;
+      }
+      const focusable = el.querySelector<HTMLElement>(
+        "input:not([type=hidden]), textarea, select, button, [tabindex]:not([tabindex='-1'])"
+      );
+      focusable?.focus({ preventScroll: true });
+    };
+
     const scrollToId = (id: string, delayMs: number) => {
       window.setTimeout(() => {
-        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        const el = document.getElementById(id);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (el) focusFieldAfterScroll(el);
       }, delayMs);
     };
 
@@ -148,10 +166,10 @@ export function MyAccountSections({
       ]);
       if (hash === "section-personal" || hash === "personal") {
         setOpenSections((prev) => ensureSection(prev, "personal"));
-        scrollToId("section-personal", 220);
+        scrollToId("section-personal", 420);
       } else if (personalFieldHashes.has(hash)) {
         setOpenSections((prev) => ensureSection(prev, "personal"));
-        scrollToId(hash, 380);
+        scrollToId(hash, 560);
       }
       if (hash === "my-roles") {
         setOpenSections((prev) => ensureSection(prev, "roles"));

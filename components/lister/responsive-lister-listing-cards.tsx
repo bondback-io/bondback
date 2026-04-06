@@ -1,10 +1,11 @@
 "use client";
 
+import { memo } from "react";
 import type { DashboardListingCardProps } from "@/components/dashboard/dashboard-listing-card";
 import { DashboardListingCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 
 /** Lister: stacked live listing cards on small screens; grid from md up. */
-export function ResponsiveListerListingCards({
+function ResponsiveListerListingCardsInner({
   items,
 }: {
   items: DashboardListingCardProps[];
@@ -37,3 +38,6 @@ export function ResponsiveListerListingCards({
     </>
   );
 }
+
+export const ResponsiveListerListingCards = memo(ResponsiveListerListingCardsInner);
+ResponsiveListerListingCards.displayName = "ResponsiveListerListingCards";

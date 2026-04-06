@@ -13,8 +13,8 @@ export type CriticalTask = {
   key: CriticalTaskKey;
   /** Short label for UI */
   label: string;
-  /** Hash on /profile (opens Personal info) */
-  href: string;
+  /** DOM id / hash fragment without # — scroll target in Personal info */
+  fieldId: string;
 };
 
 function resolveRoleForTasks(
@@ -59,17 +59,17 @@ export function getCriticalProfileTasks(
       tasks.push({
         key: "profile_photo",
         label: "Profile photo",
-        href: "#profile-photo",
+        fieldId: "profile-photo",
       });
     }
     if (!phoneOk) {
-      tasks.push({ key: "phone", label: "Mobile number", href: "#phone" });
+      tasks.push({ key: "phone", label: "Mobile number", fieldId: "phone" });
     }
     if (!dobOk) {
       tasks.push({
         key: "date_of_birth",
         label: "Date of birth",
-        href: "#date_of_birth",
+        fieldId: "date_of_birth",
       });
     }
     const total = 3;
@@ -94,28 +94,28 @@ export function getCriticalProfileTasks(
     tasks.push({
       key: "profile_photo",
       label: "Profile photo",
-      href: "#profile-photo",
+      fieldId: "profile-photo",
     });
   }
   if (!phoneOk) {
-    tasks.push({ key: "phone", label: "Mobile number", href: "#phone" });
+    tasks.push({ key: "phone", label: "Mobile number", fieldId: "phone" });
   }
   if (!dobOk) {
     tasks.push({
       key: "date_of_birth",
       label: "Date of birth",
-      href: "#date_of_birth",
+      fieldId: "date_of_birth",
     });
   }
   if (!insuranceOk) {
     tasks.push({
       key: "insurance",
       label: "Insurance policy #",
-      href: "#insurance_policy_number",
+      fieldId: "insurance_policy_number",
     });
   }
   if (!abnOk) {
-    tasks.push({ key: "abn", label: "ABN", href: "#abn" });
+    tasks.push({ key: "abn", label: "ABN", fieldId: "abn" });
   }
 
   const total = 5;

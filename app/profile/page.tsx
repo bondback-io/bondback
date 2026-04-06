@@ -20,10 +20,11 @@ import { VerificationBadges } from "@/components/shared/verification-badges";
 import { recomputeVerificationBadgesForUser, syncCurrentUserEmailVerification } from "@/lib/actions/verification";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { ensureReferralCodeForUser } from "@/lib/actions/referral-code";
-import { ProfileReferralSection } from "@/components/features/profile-referral-section";
+import { ProfileReferralSectionLazy } from "@/components/profile/profile-referral-section-lazy";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MyAccountSections } from "@/components/account/my-account-sections";
+import { ProfileEssentialTaskLink } from "@/components/profile/profile-essential-task-link";
 import { SettingsPaymentReturnHandler } from "@/components/settings/settings-payment-return-handler";
 import type { DistanceUnitPref, ThemePreference } from "@/lib/types";
 import { getAppBaseUrl } from "@/lib/site";
@@ -340,8 +341,8 @@ const ProfilePage = async ({
                       );
                     return (
                       <li key={task.key} className="min-w-0">
-                        <Link
-                          href={task.href}
+                        <ProfileEssentialTaskLink
+                          fieldId={task.fieldId}
                           className="flex min-h-[44px] flex-col justify-center gap-0.5 rounded-lg border border-amber-200/80 bg-background/90 px-2.5 py-2 text-left shadow-sm transition-colors hover:border-amber-400/80 hover:bg-amber-50/50 active:bg-amber-100/40 dark:border-amber-800/60 dark:bg-gray-950/60 dark:hover:bg-amber-950/40"
                         >
                           <span className="flex items-center gap-1.5">
@@ -353,19 +354,19 @@ const ProfilePage = async ({
                           <span className="truncate text-xs font-medium leading-tight text-foreground dark:text-gray-100">
                             {task.label}
                           </span>
-                        </Link>
+                        </ProfileEssentialTaskLink>
                       </li>
                     );
                   })}
                 </ul>
                 <p className="text-[11px] leading-snug text-muted-foreground dark:text-gray-500">
                   Open{" "}
-                  <Link
-                    href="#section-personal"
+                  <ProfileEssentialTaskLink
+                    fieldId="section-personal"
                     className="font-medium text-primary underline-offset-2 hover:underline dark:text-blue-300"
                   >
                     Personal info
-                  </Link>{" "}
+                  </ProfileEssentialTaskLink>{" "}
                   below to update these fields.
                 </p>
               </CardContent>
@@ -375,7 +376,7 @@ const ProfilePage = async ({
       </div>
 
       {referralEnabled && referralCode && (
-        <ProfileReferralSection
+        <ProfileReferralSectionLazy
           referralCode={referralCode}
           accountCreditCents={accountCreditCents}
           appOrigin={appOrigin}
