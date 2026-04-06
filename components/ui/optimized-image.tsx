@@ -5,6 +5,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { isSupabasePublicImageUrl } from "@/lib/supabase-image-url";
+import { isGooglePublicAvatarUrl } from "@/lib/google-avatar-url";
 
 /** Default `sizes` — override per layout (grids, avatars) via `lib/next-image-sizes.ts`. */
 const DEFAULT_SIZES = "(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw";
@@ -85,6 +86,7 @@ export function OptimizedImage({
       alt={alt}
       loading={priority ? "eager" : "lazy"}
       decoding="async"
+      referrerPolicy={isGooglePublicAvatarUrl(src) ? "no-referrer" : undefined}
       className={cn("h-full w-full object-cover", className)}
       width={width}
       height={height}

@@ -29,6 +29,7 @@ import { SettingsPaymentReturnHandler } from "@/components/settings/settings-pay
 import type { DistanceUnitPref, ThemePreference } from "@/lib/types";
 import { getAppBaseUrl } from "@/lib/site";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
+import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -211,7 +212,7 @@ const ProfilePage = async ({
       .join("")
       .slice(0, 2)
       .toUpperCase() || "BB";
-  const avatarUrl = profile.profile_photo_url?.trim() || null;
+  const avatarUrl = effectiveProfilePhotoUrl(profile);
 
   return (
     <section className="page-inner !px-3 sm:!px-6 space-y-8 text-foreground md:space-y-6 dark:text-gray-100">
@@ -233,6 +234,7 @@ const ProfilePage = async ({
                     quality={75}
                     placeholder="blur"
                     blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                    referrerPolicy="no-referrer"
                   />
                 ) : (
                   <AvatarFallback className="text-lg font-semibold tracking-tight">{initials}</AvatarFallback>

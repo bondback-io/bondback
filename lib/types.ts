@@ -13,7 +13,10 @@ export type SessionWithProfile = {
         full_name: string | null;
         roles: ProfileRole[];
         activeRole: ProfileRole | null;
+        /** User-uploaded public storage URL. */
         profile_photo_url: string | null;
+        /** OAuth provider image (e.g. Google); used when `profile_photo_url` is empty. */
+        avatar_url?: string | null;
         theme_preference: ThemePreference;
         distance_unit: DistanceUnitPref;
         /** For push banner / prefs; optional when profile row missing fields. */

@@ -1,4 +1,5 @@
 import type { Database } from "@/types/supabase";
+import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -51,7 +52,7 @@ export function getCriticalProfileTasks(
 
   const phoneOk = !!profile.phone?.trim();
   const dobOk = !!String(profile.date_of_birth ?? "").trim();
-  const photoOk = !!profile.profile_photo_url?.trim();
+  const photoOk = !!effectiveProfilePhotoUrl(profile);
 
   if (role === "lister") {
     const tasks: CriticalTask[] = [];

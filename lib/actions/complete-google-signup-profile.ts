@@ -8,7 +8,7 @@ import type { Database } from "@/types/supabase";
 import type { ProfileRole } from "@/lib/types";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
-import { extractGoogleProfileFields } from "@/lib/auth/google-user-metadata";
+import { getGoogleProfileFieldsForSync } from "@/lib/auth/google-user-metadata";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 import {
   sendTutorialEmailsForRoles,
@@ -47,7 +47,7 @@ export async function completeGoogleSignupProfile(input: {
 
   const { data: profile, error: fetchErr } = await admin
     .from("profiles")
-    .select("id, roles, active_role, full_name, first_name, last_name")
+    .select("id, roles, active_role, full_name, first_name, last_name, profile_photo_url, avatar_url")
     .eq("id", userId)
     .maybeSingle();
 
@@ -81,11 +81,13 @@ export async function completeGoogleSignupProfile(input: {
   }
 
   /** Use `.update()` only — partial `.upsert()` can null out omitted columns and wipe OAuth names. */
-  const googleFields = extractGoogleProfileFields(user);
+  const googleFields = await getGoogleProfileFieldsForSync(user);
   const p = profile as {
     full_name?: string | null;
     first_name?: string | null;
     last_name?: string | null;
+    profile_photo_url?: string | null;
+    avatar_url?: string | null;
   } | null;
 
   const update: ProfileUpdate = {
@@ -106,6 +108,12 @@ export async function completeGoogleSignupProfile(input: {
   }
   if (!p?.last_name?.trim() && googleFields.familyName) {
     update.last_name = googleFields.familyName;
+  }
+  if (googleFields.pictureUrl) {
+    update.avatar_url = googleFields.pictureUrl;
+    if (!p?.profile_photo_url?.trim()) {
+      update.profile_photo_url = googleFields.pictureUrl;
+    }
   }
 
   const { error: updateErr } = await admin.from("profiles").update(update as never).eq("id", userId);

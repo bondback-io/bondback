@@ -68,6 +68,7 @@ import {
   JOBS_RADIUS_SYNC_SESSION_KEY,
 } from "@/lib/jobs-radius-local";
 import { MAX_TRAVEL_KM, clampMaxTravelKm } from "@/lib/max-travel-km";
+import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
 import {
   AbnValidationInputRow,
@@ -129,7 +130,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(
-    profile.profile_photo_url
+    effectiveProfilePhotoUrl(profile)
   );
   const [portfolioUrls, setPortfolioUrls] = useState<string[]>(
     Array.isArray(profile.portfolio_photo_urls)

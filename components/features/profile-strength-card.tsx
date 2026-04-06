@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { calculateProfileStrengthPercent } from "@/lib/profile-strength";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -16,41 +17,12 @@ interface ProfileStrengthCardProps {
   initialProfile: ProfileRow;
 }
 
-function calculateProfileStrength(profile: ProfileRow): {
+function profileStrengthUi(profile: ProfileRow): {
   percent: number;
   message: string;
   variant: "low" | "medium" | "high";
 } {
-  let score = 0;
-
-  // Profile photo (20%)
-  if (profile.profile_photo_url) score += 20;
-
-  // Bio (10%)
-  if (profile.bio && profile.bio.trim().length > 0) score += 10;
-
-  // Specialties (15%)
-  if (profile.specialties && profile.specialties.length > 0) score += 15;
-
-  // Portfolio photos (20%)
-  if (profile.portfolio_photo_urls && profile.portfolio_photo_urls.length > 0) {
-    score += 20;
-  }
-
-  // ABN verified (10%) – treat presence of ABN as verified for now
-  if (profile.abn && profile.abn.trim().length > 0) score += 10;
-
-  // Phone & suburb (10%)
-  if (profile.phone && profile.phone.trim().length > 0 && profile.suburb) {
-    score += 10;
-  }
-
-  // Availability (15%)
-  if (profile.availability && Object.keys(profile.availability).length > 0) {
-    score += 15;
-  }
-
-  const percent = Math.max(0, Math.min(100, score));
+  const percent = calculateProfileStrengthPercent(profile);
 
   let message = "";
   let variant: "low" | "medium" | "high" = "low";
@@ -73,7 +45,7 @@ export function ProfileStrengthCard({ initialProfile }: ProfileStrengthCardProps
   const [profile, setProfile] = useState<ProfileRow>(initialProfile);
 
   const { percent, message, variant } = useMemo(
-    () => calculateProfileStrength(profile),
+    () => profileStrengthUi(profile),
     [profile]
   );
 

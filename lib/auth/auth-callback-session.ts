@@ -3,7 +3,7 @@ import { NextResponse, after } from "next/server";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { upsertMinimalProfileAfterSignup } from "@/lib/actions/onboarding";
-import { extractGoogleProfileFields } from "@/lib/auth/google-user-metadata";
+import { getGoogleProfileFieldsForSync } from "@/lib/auth/google-user-metadata";
 import { syncGoogleIdentityToProfile } from "@/lib/auth/sync-google-profile";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { getPostLoginDashboardPath } from "@/lib/auth/post-login-redirect";
@@ -141,7 +141,7 @@ export async function redirectAfterAuthSessionEstablished(
   const provider = session.user.app_metadata?.provider;
   const upsertT0 = Date.now();
   if (provider === "google") {
-    const fields = extractGoogleProfileFields(session.user);
+    const fields = await getGoogleProfileFieldsForSync(session.user);
     const minimal = await upsertMinimalProfileAfterSignup(
       {
         full_name: fields.fullName,

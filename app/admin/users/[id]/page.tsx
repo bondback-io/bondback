@@ -25,6 +25,7 @@ import { AdminResendWelcomeEmail } from "@/components/admin/admin-resend-welcome
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getEffectivePayoutSchedule, formatPayoutScheduleLabel } from "@/lib/payout-schedule";
 import { formatDistanceToNow, format } from "date-fns";
+import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type EmailLogRow = Database["public"]["Tables"]["email_logs"]["Row"];
@@ -100,6 +101,7 @@ export default async function AdminUserDetailPage({
   ]);
 
   const emailLogs = (emailLogsData.data ?? []) as EmailLogRow[];
+  const detailAvatarUrl = effectiveProfilePhotoUrl(p);
   const roles = (p.roles as string[] | null) ?? [];
   const primaryRole = p.active_role ?? roles[0] ?? "—";
   const isAdmin = !!(p as { is_admin?: boolean }).is_admin;
@@ -142,14 +144,15 @@ export default async function AdminUserDetailPage({
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-center gap-4">
-                {p.profile_photo_url ? (
+                {detailAvatarUrl ? (
                   <div className="relative h-16 w-16 overflow-hidden rounded-full border border-border bg-muted dark:border-gray-700">
                     <Image
-                      src={p.profile_photo_url}
+                      src={detailAvatarUrl}
                       alt=""
                       fill
                       className="object-cover"
                       sizes="64px"
+                      referrerPolicy="no-referrer"
                     />
                   </div>
                 ) : (

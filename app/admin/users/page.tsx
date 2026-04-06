@@ -30,22 +30,12 @@ import { AdminUsersFilters } from "@/components/admin/admin-users-filters";
 import { AdminUserVerificationActions } from "@/components/admin/admin-user-verification-actions";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { PROFILE_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
+import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
+import { calculateProfileStrengthPercent } from "@/lib/profile-strength";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = { id: number; lister_id: string; winner_id: string | null; listing_id: string; status: string };
 type ListingRow = { id: string; current_lowest_bid_cents: number | null };
-
-function calculateProfileStrength(profile: ProfileRow): number {
-  let score = 0;
-  if (profile.profile_photo_url) score += 20;
-  if (profile.bio && profile.bio.trim().length > 0) score += 10;
-  if (profile.specialties && profile.specialties.length > 0) score += 15;
-  if (profile.portfolio_photo_urls && profile.portfolio_photo_urls.length > 0) score += 20;
-  if (profile.abn && profile.abn.trim().length > 0) score += 10;
-  if (profile.phone && profile.phone.trim().length > 0 && profile.suburb) score += 10;
-  if (profile.availability && Object.keys(profile.availability || {}).length > 0) score += 15;
-  return Math.max(0, Math.min(100, score));
-}
 
 interface AdminUsersPageProps {
   searchParams?: Promise<{
@@ -373,10 +363,11 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                   : null;
                 const totalJobs = totalJobsByUser.get(user.id) ?? 0;
                 const totalEarnings = totalEarningsByUser.get(user.id) ?? 0;
-                const strength = calculateProfileStrength(user);
+                const strength = calculateProfileStrengthPercent(user);
                 const userBadges =
                   (user as { verification_badges?: string[] | null })
                     .verification_badges ?? [];
+                const avatarDisplayUrl = effectiveProfilePhotoUrl(user);
 
                 const roleBadge =
                   primaryRole === "Admin"
@@ -388,13 +379,14 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                 return (
                   <TableRow key={user.id} className="dark:border-gray-800">
                     <TableCell className="w-[52px]">
-                      {user.profile_photo_url ? (
+                      {avatarDisplayUrl ? (
                         <Image
-                          src={user.profile_photo_url}
+                          src={avatarDisplayUrl}
                           alt=""
                           width={36}
                           height={36}
                           className="rounded-full object-cover"
+                          referrerPolicy="no-referrer"
                         />
                       ) : (
                         <div

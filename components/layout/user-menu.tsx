@@ -17,6 +17,8 @@ import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/s
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
+import { isGooglePublicAvatarUrl } from "@/lib/google-avatar-url";
 import {
   Dialog,
   DialogContent,
@@ -157,7 +159,12 @@ export function UserMenu({ session }: UserMenuProps) {
     session.user.email ||
     "User";
 
-  const avatarUrl = session.profile?.profile_photo_url ?? null;
+  const avatarUrl = session.profile
+    ? effectiveProfilePhotoUrl({
+        profile_photo_url: session.profile.profile_photo_url,
+        avatar_url: session.profile.avatar_url,
+      })
+    : null;
   const initials =
     displayName && displayName.length > 0
       ? displayName
@@ -236,6 +243,7 @@ export function UserMenu({ session }: UserMenuProps) {
             alt=""
             loading="lazy"
             decoding="async"
+            referrerPolicy={isGooglePublicAvatarUrl(avatarUrl) ? "no-referrer" : undefined}
             className="h-8 w-8 rounded-full object-cover"
           />
         ) : (
@@ -337,6 +345,7 @@ export function UserMenu({ session }: UserMenuProps) {
                       alt=""
                       loading="lazy"
                       decoding="async"
+                      referrerPolicy={isGooglePublicAvatarUrl(avatarUrl) ? "no-referrer" : undefined}
                       className="h-full w-full rounded-full object-cover"
                     />
                   ) : (

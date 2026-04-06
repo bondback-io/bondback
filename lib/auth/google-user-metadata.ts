@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 /** Fields derived from Google (and compatible) OAuth `user_metadata`. */
 export type GoogleProfileFields = {
@@ -75,4 +76,19 @@ export function extractGoogleProfileFields(user: User): GoogleProfileFields {
     fullName,
     pictureUrl,
   };
+}
+
+/**
+ * Session/JWT `User` often omits `identities[].identity_data` where Google puts `picture`.
+ * Admin `getUserById` returns the full Auth user so avatars sync reliably on OAuth callback.
+ */
+export async function getGoogleProfileFieldsForSync(sessionUser: User): Promise<GoogleProfileFields> {
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    const { data, error } = await admin.auth.admin.getUserById(sessionUser.id);
+    if (!error && data?.user) {
+      return extractGoogleProfileFields(data.user);
+    }
+  }
+  return extractGoogleProfileFields(sessionUser);
 }

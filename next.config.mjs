@@ -74,7 +74,18 @@ const nextConfig = {
     minimumCacheTTL: 60 * 60 * 24 * 30,
     remotePatterns: (() => {
       const storagePattern = supabaseStorageRemotePattern();
-      return storagePattern ? [storagePattern] : [];
+      /** Google OAuth profile images (`lh3.googleusercontent.com`, etc.) — required for `next/image` on admin + avatars. */
+      const googleAvatarPatterns = [
+        "lh3.googleusercontent.com",
+        "lh4.googleusercontent.com",
+        "lh5.googleusercontent.com",
+        "lh6.googleusercontent.com",
+      ].map((hostname) => ({
+        protocol: "https",
+        hostname,
+        pathname: "/**",
+      }));
+      return [...(storagePattern ? [storagePattern] : []), ...googleAvatarPatterns];
     })(),
   },
 };

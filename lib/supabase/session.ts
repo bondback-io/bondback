@@ -84,6 +84,7 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
           roles,
           activeRole,
           profile_photo_url: row.profile_photo_url ?? null,
+          avatar_url: row.avatar_url ?? null,
           theme_preference: parseThemePref(
             (row as { theme_preference?: string | null }).theme_preference
           ),
