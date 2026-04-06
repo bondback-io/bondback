@@ -1,11 +1,10 @@
 "use client";
 
-import type { ComponentProps, ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { Brush, House, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -16,7 +15,7 @@ import {
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AbnCleanerOnboardingField } from "@/components/onboarding/abn-cleaner-onboarding-field";
 
 const listerBullets = [
   "Post bond cleans and compare bids in one place",
@@ -53,8 +52,10 @@ export type Path2RoleSelectionProps = {
   onChooseCleaner: () => void;
   maxTravelKm: number;
   onMaxTravelChange: (n: number) => void;
-  abnInputProps: ComponentProps<typeof Input>;
-  abnError?: string;
+  /** Digits-only ABN (max 11) — same contract as Google cleaner onboarding. */
+  abnValue: string;
+  onAbnChange: (digitsOnly: string) => void;
+  abnFieldError?: string;
   /** Server-side ABN / profile error (e.g. ABR lookup failed) — shown under the ABN field */
   abnServerError?: string | null;
   roleError?: string;
@@ -75,8 +76,9 @@ export function Path2RoleSelection({
   onChooseCleaner,
   maxTravelKm,
   onMaxTravelChange,
-  abnInputProps,
-  abnError,
+  abnValue,
+  onAbnChange,
+  abnFieldError,
   abnServerError,
   roleError,
   submitting,
@@ -87,6 +89,11 @@ export function Path2RoleSelection({
   const listerActive = role === "lister";
   const cleanerActive = role === "cleaner";
   const signupBlocked = signupBlockedSecondsLeft > 0;
+  const [abnReady, setAbnReady] = useState(false);
+
+  useEffect(() => {
+    if (!cleanerActive) setAbnReady(false);
+  }, [cleanerActive]);
 
   const t = reduceMotion ? 0 : 0.32;
   const tFast = reduceMotion ? 0 : 0.28;
@@ -369,29 +376,21 @@ export function Path2RoleSelection({
           transition={{ duration: tFast, ease: EASE }}
           className="space-y-4 overflow-hidden rounded-2xl border border-border/70 bg-muted/25 p-5 dark:border-gray-700/80 dark:bg-gray-950/50"
         >
-          <p className="text-sm font-medium text-foreground">Cleaner details</p>
-          <div className="space-y-2">
-            <Label htmlFor="p2-abn" className="text-base">
-              ABN <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="p2-abn"
-              className="min-h-12 text-base"
-              placeholder="11 digits"
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={11}
-              required
-              aria-required
-              {...abnInputProps}
-              aria-invalid={Boolean(abnError || abnServerError)}
-            />
-            {(abnServerError || abnError) && (
-              <Alert variant="destructive" className="py-3 text-sm">
-                <AlertDescription>{abnServerError ?? abnError}</AlertDescription>
-              </Alert>
-            )}
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">Cleaner details</p>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              ABN is required for Cleaner accounts. Enter your 11-digit number — we validate it live
+              against the Australian Business Register when ABR checks are enabled.
+            </p>
           </div>
+          <AbnCleanerOnboardingField
+            id="p2-abn"
+            value={abnValue}
+            onChange={onAbnChange}
+            disabled={submitting}
+            primaryError={abnServerError ?? abnFieldError ?? null}
+            onReadyChange={setAbnReady}
+          />
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="font-medium">Travel radius</span>
@@ -417,7 +416,7 @@ export function Path2RoleSelection({
           <Button
             type="submit"
             size="lg"
-            disabled={submitting || signupBlocked}
+            disabled={submitting || signupBlocked || !abnReady}
             className="inline-flex min-h-14 w-full touch-manipulation items-center justify-center gap-2 rounded-xl text-base font-semibold"
           >
             {submitting ? (

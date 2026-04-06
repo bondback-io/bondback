@@ -633,14 +633,12 @@ export function SignupPath2Wizard() {
                       maxTravelKm={maxTravelKm}
                       onMaxTravelChange={(n) => form.setValue("maxTravelKm", n, { shouldValidate: true })}
                       signupBlockedSecondsLeft={signupBlockedSecondsLeft}
-                      abnInputProps={form.register("abn", {
-                        onChange: (e) => {
-                          setAbnServerError(null);
-                          const el = e.target as HTMLInputElement;
-                          el.value = el.value.replace(/\D/g, "").slice(0, 11);
-                        },
-                      })}
-                      abnError={form.formState.errors.abn?.message}
+                      abnValue={form.watch("abn") ?? ""}
+                      onAbnChange={(digits) => {
+                        setAbnServerError(null);
+                        form.setValue("abn", digits, { shouldValidate: true, shouldDirty: true });
+                      }}
+                      abnFieldError={form.formState.errors.abn?.message}
                       abnServerError={abnServerError}
                       roleError={form.formState.errors.role?.message}
                       submitting={submitting}

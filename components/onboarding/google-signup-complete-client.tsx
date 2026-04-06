@@ -4,15 +4,12 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Brush, Home, Loader2, CheckCircle2 } from "lucide-react";
+import { Brush, Home, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { markPostLoginFullPageNavigation } from "@/lib/auth/post-login-navigation-flag";
 import { completeGoogleSignupProfile } from "@/lib/actions/complete-google-signup-profile";
-import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
+import { AbnCleanerOnboardingField } from "@/components/onboarding/abn-cleaner-onboarding-field";
 import { cn } from "@/lib/utils";
 
 const EASE = [0.25, 0.1, 0.25, 1] as const;
@@ -31,8 +28,7 @@ export function GoogleSignupCompleteClient() {
   const [submitting, setSubmitting] = useState(false);
   const [, startTransition] = useTransition();
   const [abnInput, setAbnInput] = useState("");
-  const abnDigits = abnInput.replace(/\D/g, "").slice(0, 11);
-  const abnLive = useAbnLiveValidation(abnDigits);
+  const [abnCanSubmit, setAbnCanSubmit] = useState(false);
 
   useEffect(() => {
     markPostLoginFullPageNavigation();
@@ -80,33 +76,24 @@ export function GoogleSignupCompleteClient() {
     setError(null);
     setAbnError(null);
     setAbnInput("");
+    setAbnCanSubmit(false);
     setPhase("cleaner-abn");
   }, []);
 
   const onCleanerSubmit = useCallback(() => {
     setAbnError(null);
     setError(null);
-    if (abnDigits.length !== 11) {
-      setAbnError("Enter all 11 digits of your ABN.");
-      return;
-    }
-    if (abnLive.validating) {
-      setAbnError("Still checking your ABN — wait for verification to finish.");
-      return;
-    }
-    if (abnLive.status !== "valid") {
+    const digits = abnInput.replace(/\D/g, "").slice(0, 11);
+    if (!abnCanSubmit) {
       setAbnError(
-        abnLive.status === "invalid" && abnLive.error
-          ? abnLive.error
+        digits.length !== 11
+          ? "Enter all 11 digits of your ABN."
           : "ABN could not be verified. Check the number and try again."
       );
       return;
     }
-    void runComplete({ role: "cleaner", abn: abnDigits });
-  }, [abnDigits, abnLive.error, abnLive.status, abnLive.validating, runComplete]);
-
-  const canSubmitCleaner =
-    abnDigits.length === 11 && !abnLive.validating && abnLive.status === "valid";
+    void runComplete({ role: "cleaner", abn: digits });
+  }, [abnCanSubmit, abnInput, runComplete]);
 
   return (
     <div className="relative flex min-h-[calc(100dvh-4rem)] w-full flex-col items-center justify-center px-3 py-8">
@@ -278,63 +265,17 @@ export function GoogleSignupCompleteClient() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <Label htmlFor="g-abn" className="text-base">
-                        Australian Business Number (ABN) <span className="text-destructive">*</span>
-                      </Label>
-                      <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">
-                        {abnDigits.length}/11 digits
-                      </span>
-                    </div>
-                    <Input
-                      id="g-abn"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      className="min-h-12 text-base"
-                      placeholder="Enter 11 digits"
-                      maxLength={11}
-                      value={abnDigits}
-                      onChange={(e) => {
-                        setAbnError(null);
-                        setAbnInput(e.target.value.replace(/\D/g, "").slice(0, 11));
-                      }}
-                      disabled={submitting}
-                      aria-invalid={
-                        Boolean(abnError) ||
-                        (abnDigits.length === 11 && abnLive.status === "invalid")
-                      }
-                      aria-describedby="g-abn-hint g-abn-feedback"
-                    />
-                    <p id="g-abn-hint" className="text-xs text-muted-foreground">
-                      Numbers only — spaces are ignored.
-                    </p>
-                    <div id="g-abn-feedback" className="space-y-2">
-                      {abnError && (
-                        <Alert variant="destructive" className="py-2 text-sm">
-                          <AlertDescription>{abnError}</AlertDescription>
-                        </Alert>
-                      )}
-                      {!abnError && abnLive.validating && abnDigits.length === 11 && (
-                        <p className="text-xs text-muted-foreground">Checking ABN…</p>
-                      )}
-                      {!abnError && abnLive.status === "valid" && abnDigits.length === 11 && (
-                        <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                          {abnLive.entityName ? `Verified — ${abnLive.entityName}` : "ABN verified."}
-                        </p>
-                      )}
-                      {!abnError &&
-                        abnLive.status === "invalid" &&
-                        abnDigits.length === 11 &&
-                        !abnLive.validating &&
-                        abnLive.error && (
-                          <Alert variant="destructive" className="py-2 text-sm">
-                            <AlertDescription>{abnLive.error}</AlertDescription>
-                          </Alert>
-                        )}
-                    </div>
-                  </div>
+                  <AbnCleanerOnboardingField
+                    id="g-abn"
+                    value={abnInput}
+                    onChange={(d) => {
+                      setAbnError(null);
+                      setAbnInput(d);
+                    }}
+                    disabled={submitting}
+                    primaryError={abnError}
+                    onReadyChange={setAbnCanSubmit}
+                  />
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <Button
                       type="button"
@@ -344,6 +285,7 @@ export function GoogleSignupCompleteClient() {
                       onClick={() => {
                         setPhase("role");
                         setAbnInput("");
+                        setAbnCanSubmit(false);
                         setAbnError(null);
                         setError(null);
                       }}
@@ -353,7 +295,7 @@ export function GoogleSignupCompleteClient() {
                     <Button
                       type="button"
                       className="order-1 min-h-11 w-full sm:order-2 sm:min-w-[10rem]"
-                      disabled={submitting || !canSubmitCleaner}
+                      disabled={submitting || !abnCanSubmit}
                       onClick={onCleanerSubmit}
                     >
                       {submitting ? (
