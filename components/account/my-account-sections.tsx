@@ -128,13 +128,30 @@ export function MyAccountSections({
         setOpenSections((prev) => ensureSection(prev, "payments"));
       }
       const hash = window.location.hash.replace("#", "");
+      const personalFieldHashes = new Set([
+        "portfolio-photos",
+        "profile-photo",
+        "phone",
+        "date_of_birth",
+        "full_name",
+        "email",
+        "abn",
+        "insurance_policy_number",
+        "max_travel_km",
+        "years_experience",
+        "vehicle_type",
+        "bio",
+        "business_name",
+        "equipment_notes",
+        "profile-cleaner-location",
+        "profile-lister-location",
+      ]);
       if (hash === "section-personal" || hash === "personal") {
         setOpenSections((prev) => ensureSection(prev, "personal"));
         scrollToId("section-personal", 220);
-      }
-      if (hash === "portfolio-photos") {
+      } else if (personalFieldHashes.has(hash)) {
         setOpenSections((prev) => ensureSection(prev, "personal"));
-        scrollToId("portfolio-photos", 380);
+        scrollToId(hash, 380);
       }
       if (hash === "my-roles") {
         setOpenSections((prev) => ensureSection(prev, "roles"));

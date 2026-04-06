@@ -19,6 +19,7 @@ import {
   type AuStateCode,
   type SuburbEntry,
 } from "@/lib/au-suburbs";
+import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
 import {
   Card,
   CardContent,
@@ -55,8 +56,8 @@ const onboardingSchema = z.object({
   postcode: z.string().optional(),
   max_travel_km: z.coerce
     .number()
-    .min(1, "Minimum 1km")
-    .max(200, "Maximum 200km")
+    .min(5, "Minimum 5 km")
+    .max(MAX_TRAVEL_KM, `Maximum ${MAX_TRAVEL_KM} km`)
     .optional()
 });
 

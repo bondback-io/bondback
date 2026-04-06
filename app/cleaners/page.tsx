@@ -21,6 +21,7 @@ import { ArrowLeft, Info, SearchX } from "lucide-react";
 import { JobsPageMobileShell } from "@/components/features/jobs-page-mobile-shell";
 import { CleanersPageMobileChrome } from "@/components/mobile-job-search";
 import { cn } from "@/lib/utils";
+import { clampMaxTravelKm, nextSearchRadiusKm } from "@/lib/max-travel-km";
 
 export const dynamic = "force-dynamic";
 
@@ -83,10 +84,11 @@ export default async function BrowseCleanersPage({
             ? "/cleaner/dashboard"
             : "/dashboard";
 
-  const defaultRadiusKm =
+  const defaultRadiusKm = clampMaxTravelKm(
     typeof profile?.max_travel_km === "number" && profile.max_travel_km > 0
       ? profile.max_travel_km
-      : 30;
+      : 30
+  );
 
   const suburbFilter = (resolved.suburb ?? "").trim();
   const postcodeFilter = (resolved.postcode ?? "").trim();
@@ -94,8 +96,8 @@ export default async function BrowseCleanersPage({
 
   const radiusParsed = radiusFilter ? Number(radiusFilter) : NaN;
   const radiusKm = Number.isFinite(radiusParsed) && radiusParsed > 0
-    ? Math.min(100, Math.max(5, Math.round(radiusParsed)))
-    : Math.min(100, Math.max(5, Math.round(defaultRadiusKm)));
+    ? clampMaxTravelKm(radiusParsed)
+    : clampMaxTravelKm(defaultRadiusKm);
 
   const centerLatRaw = resolved.center_lat ? Number(resolved.center_lat) : null;
   const centerLonRaw = resolved.center_lon ? Number(resolved.center_lon) : null;
@@ -140,8 +142,7 @@ export default async function BrowseCleanersPage({
 
   const clearHref = "/cleaners";
   const currentRadiusForIncrease = Number(radiusFilter || defaultRadiusKm);
-  const nextRadiusForIncrease =
-    currentRadiusForIncrease < 20 ? 20 : currentRadiusForIncrease < 50 ? 50 : 100;
+  const nextRadiusForIncrease = nextSearchRadiusKm(currentRadiusForIncrease);
   const radiusParams = new URLSearchParams(baseParams);
   radiusParams.set("radius_km", String(nextRadiusForIncrease));
   const increaseRadiusHref = `/cleaners?${radiusParams.toString()}`;

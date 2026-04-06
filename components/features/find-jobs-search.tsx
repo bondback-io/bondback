@@ -30,8 +30,9 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
 import { useDistanceUnit } from "@/hooks/use-distance-unit";
 import { formatRadiusPresetLabel } from "@/lib/distance-format";
+import { MAX_TRAVEL_KM, clampMaxTravelKm } from "@/lib/max-travel-km";
 
-const RADIUS_PRESETS = [5, 10, 20, 50, 100] as const;
+const RADIUS_PRESETS = [5, 10, 20, 50, 100, MAX_TRAVEL_KM] as const;
 
 type SuburbRow = {
   suburb: string;
@@ -107,7 +108,7 @@ export function FindJobsSearch({
   const [radiusKm, setRadiusKm] = useState(() => {
     const r = initial?.radius_km?.trim();
     const n = r ? Number(r) : NaN;
-    if (Number.isFinite(n) && n > 0) return String(Math.min(100, Math.max(5, Math.round(n))));
+    if (Number.isFinite(n) && n > 0) return String(clampMaxTravelKm(n));
     return String(defaultRadiusKm);
   });
   const [centerLat, setCenterLat] = useState<number | null>(() =>

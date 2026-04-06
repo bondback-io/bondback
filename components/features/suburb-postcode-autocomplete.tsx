@@ -21,7 +21,8 @@ import { cn } from "@/lib/utils";
 
 export type SuburbPostcodeAutocompleteProps = {
   stateValue: string;
-  onStateChange: (state: AuStateCode) => void;
+  /** AU state code (e.g. NSW) or empty when cleared */
+  onStateChange: (state: string) => void;
   suburbValue: string;
   postcodeValue: string;
   onSuburbPostcodeChange: (suburb: string, postcode: string) => void;
@@ -44,9 +45,15 @@ export type SuburbPostcodeAutocompleteProps = {
 
 const BLUR_CLOSE_MS = 350;
 
-function formatDisplayFromValues(suburb: string, postcode: string): string {
+function formatDisplayFromValues(
+  suburb: string,
+  postcode: string,
+  state?: string
+): string {
   const s = suburb?.trim() ?? "";
   const p = postcode?.trim() ?? "";
+  const st = state?.trim() ?? "";
+  if (s && p && st) return `${s}, ${p} (${st})`;
   if (s && p) return `${s} ${p}`;
   if (p && !s) return p;
   return s;
@@ -59,7 +66,7 @@ export function SuburbPostcodeAutocomplete({
   postcodeValue,
   onSuburbPostcodeChange,
   id = "suburb",
-  suburbPlaceholder = "Select state then type suburb or postcode",
+  suburbPlaceholder,
   disabled,
   error,
   hideStateSelect = false,
@@ -68,9 +75,14 @@ export function SuburbPostcodeAutocomplete({
   className,
   inputClassName,
 }: SuburbPostcodeAutocompleteProps) {
+  const resolvedSuburbPlaceholder =
+    suburbPlaceholder ??
+    (hideStateSelect
+      ? "Type suburb or postcode, then pick a match"
+      : "Select state then type suburb or postcode");
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(() =>
-    formatDisplayFromValues(suburbValue, postcodeValue)
+    formatDisplayFromValues(suburbValue, postcodeValue, stateValue)
   );
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [dbSuggestions, setDbSuggestions] = useState<
@@ -82,38 +94,45 @@ export function SuburbPostcodeAutocomplete({
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   useEffect(() => {
-    setInputValue(formatDisplayFromValues(suburbValue, postcodeValue));
-  }, [suburbValue, postcodeValue]);
+    setInputValue(formatDisplayFromValues(suburbValue, postcodeValue, stateValue));
+  }, [suburbValue, postcodeValue, stateValue]);
 
   const stateCode = stateValue as AuStateCode | undefined;
-  const staticSuggestions = filterSuburbs(inputValue, stateCode ?? null);
+  /** Search query: strip formatted display like "Sydney, 2000 (NSW)" to "Sydney" for lookups */
+  const searchQuery = (() => {
+    const raw = inputValue.trim();
+    if (!raw) return "";
+    return raw.includes(",") ? (raw.split(",")[0]?.trim() ?? "") : raw;
+  })();
+  const staticSuggestions = filterSuburbs(searchQuery, stateCode ?? null);
 
   useEffect(() => {
     if (!useDatabaseSuburbs) {
       setDbSuggestions([]);
       return;
     }
-    const q = inputValue.trim();
+    const q = searchQuery;
     if (q.length < 2) {
       setDbSuggestions([]);
       return;
     }
     startSuburbTransition(async () => {
+      const safe = q.replace(/%/g, "\\%").replace(/,/g, "");
       const { data, error } = await supabase
         .from("suburbs")
         .select("suburb, postcode, state")
-        .ilike("suburb", `%${q}%`)
+        .or(`suburb.ilike.%${safe}%,postcode.ilike.%${safe}%`)
         .order("suburb", { ascending: true })
-        .limit(10);
+        .limit(12);
       if (!error) setDbSuggestions((data ?? []) as typeof dbSuggestions);
       else setDbSuggestions([]);
     });
-  }, [inputValue, supabase, useDatabaseSuburbs]);
+  }, [searchQuery, supabase, useDatabaseSuburbs]);
 
   const suggestions = useDatabaseSuburbs ? dbSuggestions : staticSuggestions;
 
   const handleStateChange = useCallback(
-    (v: string) => onStateChange(v as AuStateCode),
+    (v: string) => onStateChange(v),
     [onStateChange]
   );
 
@@ -129,10 +148,14 @@ export function SuburbPostcodeAutocomplete({
         "state" in entry && entry.state != null && String(entry.state).trim()
           ? String(entry.state).trim().toUpperCase()
           : null;
-      if (rawState && AU_STATES.some((s) => s.value === rawState)) {
-        onStateChange(rawState as AuStateCode);
+      const validState =
+        rawState && AU_STATES.some((s) => s.value === rawState) ? rawState : null;
+      if (validState) {
+        onStateChange(validState);
       }
-      setInputValue(`${entry.suburb} ${pc}`);
+      setInputValue(
+        validState ? `${entry.suburb}, ${pc} (${validState})` : `${entry.suburb} ${pc}`
+      );
       setOpen(false);
     },
     [onSuburbPostcodeChange, onStateChange]
@@ -145,6 +168,7 @@ export function SuburbPostcodeAutocomplete({
     setHighlightIndex(0);
     if (!v.trim()) {
       onSuburbPostcodeChange("", "");
+      onStateChange("");
     } else {
       onSuburbPostcodeChange(v.trim(), "");
     }
@@ -220,14 +244,16 @@ export function SuburbPostcodeAutocomplete({
           </div>
         )}
         <div className={cn("space-y-1.5", hideStateSelect && "sm:col-span-1")}>
-          <Label htmlFor={id} className={hideStateSelect ? "text-base" : undefined}>
-            {label}
-          </Label>
+          {label ? (
+            <Label htmlFor={id} className={hideStateSelect ? "text-base" : undefined}>
+              {label}
+            </Label>
+          ) : null}
           <div className="relative z-20 overflow-visible">
             <Input
               id={id}
               type="text"
-              placeholder={suburbPlaceholder}
+              placeholder={resolvedSuburbPlaceholder}
               value={inputValue}
               onChange={handleInputChange}
               onFocus={() => {

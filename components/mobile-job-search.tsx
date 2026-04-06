@@ -27,6 +27,7 @@ import {
 } from "@/lib/mobile-job-search-storage";
 import { useDistanceUnit } from "@/hooks/use-distance-unit";
 import { formatRadiusBannerLabel } from "@/lib/distance-format";
+import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
 import { Loader2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -837,7 +838,7 @@ export function MobileJobSearchBar({
               <div className="space-y-3">
                 <Slider
                   min={5}
-                  max={100}
+                  max={MAX_TRAVEL_KM}
                   step={5}
                   value={[radiusKm]}
                   onValueChange={(v) => {

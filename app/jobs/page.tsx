@@ -22,6 +22,7 @@ import { SearchX } from "lucide-react";
 import { JobsPageMobileShell } from "@/components/features/jobs-page-mobile-shell";
 import { OfflineJobsPrimer } from "@/components/offline/offline-jobs-primer";
 import { JobsPageMobileChrome } from "@/components/mobile-job-search";
+import { clampMaxTravelKm, nextSearchRadiusKm } from "@/lib/max-travel-km";
 
 export const metadata: Metadata = {
   title: "Browse bond cleaning jobs",
@@ -99,10 +100,11 @@ export default async function JobsPage({
     redirect("/dashboard");
   }
 
-  const defaultRadiusKm =
+  const defaultRadiusKm = clampMaxTravelKm(
     typeof profile.max_travel_km === "number" && profile.max_travel_km > 0
       ? profile.max_travel_km
-      : 30;
+      : 30
+  );
 
   const suburbFilter = (sp.suburb ?? "").trim();
   const postcodeFilter = (sp.postcode ?? "").trim();
@@ -157,7 +159,11 @@ export default async function JobsPage({
     bidCountByListingId = counts;
   }
 
-  const activeRadiusKm = Number(radiusFilter || defaultRadiusKm) || defaultRadiusKm;
+  const radiusParsed = radiusFilter ? Number(radiusFilter) : NaN;
+  const activeRadiusKm =
+    Number.isFinite(radiusParsed) && radiusParsed > 0
+      ? clampMaxTravelKm(radiusParsed)
+      : defaultRadiusKm;
 
   // Optional client-side radius filter if listings have lat/lon and center is provided.
   const centerLat = sp.center_lat ? Number(sp.center_lat) : null;
@@ -218,8 +224,7 @@ export default async function JobsPage({
   const clearHref = "/jobs";
 
   const currentRadiusForIncrease = Number(radiusFilter || defaultRadiusKm);
-  const nextRadiusForIncrease =
-    currentRadiusForIncrease < 20 ? 20 : currentRadiusForIncrease < 50 ? 50 : 100;
+  const nextRadiusForIncrease = nextSearchRadiusKm(currentRadiusForIncrease);
   const radiusParams = new URLSearchParams(baseParams);
   radiusParams.set("radius_km", String(nextRadiusForIncrease));
   const increaseRadiusHref = `/jobs?${radiusParams.toString()}`;

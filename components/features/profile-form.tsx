@@ -16,11 +16,6 @@ import {
   type VehicleType,
   type CleanerSpecialty,
 } from "@/lib/types";
-import {
-  AU_STATES,
-  type AuStateCode,
-  type SuburbEntry,
-} from "@/lib/au-suburbs";
 import type { Database } from "@/types/supabase";
 import { cn } from "@/lib/utils";
 import {
@@ -72,11 +67,13 @@ import {
   setStoredRadiusKm,
   JOBS_RADIUS_SYNC_SESSION_KEY,
 } from "@/lib/jobs-radius-local";
+import { MAX_TRAVEL_KM, clampMaxTravelKm } from "@/lib/max-travel-km";
 import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
 import {
   AbnValidationInputRow,
   AbnLiveValidationMessages,
 } from "@/components/features/abn-validation-ui";
+import { SuburbPostcodeAutocomplete } from "@/components/features/suburb-postcode-autocomplete";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -104,7 +101,7 @@ const cleanerSchema = listerSchema.extend({
       "ABN must be 11 digits"
     )
     .optional(),
-  max_travel_km: z.coerce.number().min(5).max(100),
+  max_travel_km: z.coerce.number().min(5).max(MAX_TRAVEL_KM),
   years_experience: z.coerce.number().min(0).max(50),
   vehicle_type: z.enum(VEHICLE_TYPES as unknown as [string, ...string[]]),
   bio: z.string().max(2000).optional(),
@@ -154,12 +151,6 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
   const [specialties, setSpecialties] = useState<string[]>(
     profile.specialties ?? []
   );
-  const [cleanerSuburbSuggestions, setCleanerSuburbSuggestions] = useState<
-    SuburbEntry[]
-  >([]);
-  const [listerSuburbSuggestions, setListerSuburbSuggestions] = useState<
-    SuburbEntry[]
-  >([]);
   const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">("km");
   const [savingTravelRadius, setSavingTravelRadius] = useState(false);
 
@@ -192,7 +183,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       suburb: profile.suburb ?? "",
       postcode: profile.postcode ?? "",
       abn: (profile.abn ?? "").replace(/\D/g, "").slice(0, 11),
-      max_travel_km: Math.min(100, Math.max(5, profile.max_travel_km ?? 30)),
+      max_travel_km: clampMaxTravelKm(profile.max_travel_km ?? 30),
       years_experience: profile.years_experience ?? 0,
       vehicle_type: (profile.vehicle_type as VehicleType) ?? "Car",
       bio: profile.bio ?? "",
@@ -463,9 +454,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       setSubmitError(result.error);
       return;
     }
-    const prevKm = clampRadiusKm(
-      Math.min(100, Math.max(5, profile.max_travel_km ?? 30))
-    );
+    const prevKm = clampRadiusKm(clampMaxTravelKm(profile.max_travel_km ?? 30));
     const nextKm = clampRadiusKm(values.max_travel_km);
     if (prevKm !== nextKm) {
       setStoredRadiusKm(nextKm);
@@ -491,7 +480,10 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
             onSubmit={cleanerForm.handleSubmit(onCleanerSubmit)}
             noValidate
           >
-            <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 dark:border-emerald-800 dark:bg-emerald-950/40">
+            <div
+              id="profile-photo"
+              className="scroll-mt-28 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 dark:border-emerald-800 dark:bg-emerald-950/40"
+            >
               <div className="flex items-baseline justify-between gap-2">
                 <div>
                   <Label className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
@@ -617,106 +609,30 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label>My location</Label>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-1">
-                  <Label htmlFor="state">State</Label>
-                  <Controller
-                    control={cleanerForm.control}
-                    name="state"
-                    render={({ field }) => (
-                      <Select
-                        value={field.value ?? ""}
-                        onValueChange={field.onChange}
-                      >
-                        <SelectTrigger id="state">
-                          <SelectValue placeholder="Select state" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AU_STATES.map((s) => (
-                            <SelectItem key={s.value} value={s.value}>
-                              {s.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-                <div className="space-y-1 relative">
-                  <Label htmlFor="suburb">Suburb</Label>
-                  <Input
-                    id="suburb"
-                    {...cleanerForm.register("suburb")}
-                    onChange={(e) => {
-                      const field = cleanerForm.register("suburb");
-                      field.onChange(e);
-                      const value = e.target.value.trim();
-                      if (value.length < 2) {
-                        setCleanerSuburbSuggestions([]);
-                        return;
-                      }
-                      const stateCode = (cleanerForm.watch("state") ||
-                        null) as AuStateCode | null;
-                      supabase
-                        .from("suburbs")
-                        .select("suburb, postcode, state")
-                        .ilike("suburb", `${value}%`)
-                        .order("suburb")
-                        .limit(8)
-                        .then(({ data, error }) => {
-                          if (error || !data) {
-                            setCleanerSuburbSuggestions([]);
-                            return;
-                          }
-                          const rows = data as SuburbEntry[];
-                          const filtered = stateCode
-                            ? rows.filter((s) => s.state === stateCode)
-                            : rows;
-                          setCleanerSuburbSuggestions(filtered);
-                        });
-                    }}
-                  />
-                  {cleanerForm.formState.errors.suburb && (
-                    <p className="text-base text-destructive md:text-xs">
-                      {cleanerForm.formState.errors.suburb.message}
-                    </p>
-                  )}
-                  {cleanerSuburbSuggestions.length > 0 && (
-                    <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover text-sm shadow-md dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
-                      {cleanerSuburbSuggestions.map((s) => (
-                        <li
-                          key={`${s.suburb}-${s.postcode}-${s.state}`}
-                          className="cursor-pointer px-2 py-1 hover:bg-muted dark:hover:bg-gray-800"
-                          onClick={() => {
-                            cleanerForm.setValue("suburb", s.suburb, {
-                              shouldValidate: true,
-                            });
-                            cleanerForm.setValue("postcode", s.postcode, {
-                              shouldValidate: true,
-                            });
-                            setCleanerSuburbSuggestions([]);
-                          }}
-                        >
-                          {s.suburb} {s.postcode} ({s.state})
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="postcode">Postcode</Label>
-                  <Input
-                    id="postcode"
-                    {...cleanerForm.register("postcode")}
-                  />
-                  {cleanerForm.formState.errors.postcode && (
-                    <p className="text-base text-destructive md:text-xs">
-                      {cleanerForm.formState.errors.postcode.message}
-                    </p>
-                  )}
-                </div>
-              </div>
+              <Label htmlFor="profile-cleaner-location">My location</Label>
+              <SuburbPostcodeAutocomplete
+                hideStateSelect
+                useDatabaseSuburbs
+                className="relative z-10"
+                stateValue={cleanerForm.watch("state") ?? ""}
+                onStateChange={(code) =>
+                  cleanerForm.setValue("state", code, { shouldValidate: true, shouldDirty: true })
+                }
+                suburbValue={cleanerForm.watch("suburb") ?? ""}
+                postcodeValue={cleanerForm.watch("postcode") ?? ""}
+                onSuburbPostcodeChange={(s, p) => {
+                  cleanerForm.setValue("suburb", s, { shouldValidate: true, shouldDirty: true });
+                  cleanerForm.setValue("postcode", p, { shouldValidate: true, shouldDirty: true });
+                }}
+                id="profile-cleaner-location"
+                label="Suburb, postcode & state"
+                error={
+                  cleanerForm.formState.errors.suburb?.message ||
+                  cleanerForm.formState.errors.postcode?.message ||
+                  cleanerForm.formState.errors.state?.message ||
+                  undefined
+                }
+              />
             </div>
 
             {/* Travel radius: only for cleaners */}
@@ -775,7 +691,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                   <Slider
                     id="max_travel_km"
                     min={5}
-                    max={100}
+                    max={MAX_TRAVEL_KM}
                     step={5}
                     value={[cleanerForm.watch("max_travel_km") ?? 30]}
                     onValueChange={([v]) => {
@@ -789,9 +705,9 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
                   />
                   <div className="mt-1 flex justify-between text-[11px] text-muted-foreground dark:text-gray-400">
                     <span>5 km</span>
-                    <span>30 km</span>
                     <span>50 km</span>
                     <span>100 km</span>
+                    <span>{MAX_TRAVEL_KM} km</span>
                   </div>
                 </div>
                 <p className="text-sm font-medium text-foreground dark:text-gray-100">
@@ -1055,7 +971,10 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
           onSubmit={listerForm.handleSubmit(onListerSubmit)}
           noValidate
         >
-          <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 dark:border-emerald-800 dark:bg-emerald-950/40">
+          <div
+            id="profile-photo"
+            className="scroll-mt-28 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 dark:border-emerald-800 dark:bg-emerald-950/40"
+          >
             <div className="flex items-baseline justify-between gap-2">
               <div>
                 <Label className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
@@ -1137,103 +1056,30 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
             </p>
           </div>
           <div className="space-y-2">
-            <Label>My location</Label>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1">
-                <Label htmlFor="state">State</Label>
-                <Controller
-                  control={listerForm.control}
-                  name="state"
-                  render={({ field }) => (
-                    <Select
-                      value={field.value ?? ""}
-                      onValueChange={field.onChange}
-                    >
-                      <SelectTrigger id="state">
-                        <SelectValue placeholder="Select state" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {AU_STATES.map((s) => (
-                          <SelectItem key={s.value} value={s.value}>
-                            {s.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-              <div className="space-y-1 relative">
-                <Label htmlFor="suburb">Suburb</Label>
-                <Input
-                  id="suburb"
-                  {...listerForm.register("suburb")}
-                  onChange={(e) => {
-                    const field = listerForm.register("suburb");
-                    field.onChange(e);
-                    const value = e.target.value.trim();
-                    if (value.length < 2) {
-                      setListerSuburbSuggestions([]);
-                      return;
-                    }
-                    const stateCode = (listerForm.watch("state") ||
-                      null) as AuStateCode | null;
-                    supabase
-                      .from("suburbs")
-                      .select("suburb, postcode, state")
-                      .ilike("suburb", `${value}%`)
-                      .order("suburb")
-                      .limit(8)
-                      .then(({ data, error }) => {
-                        if (error || !data) {
-                          setListerSuburbSuggestions([]);
-                          return;
-                        }
-                        const rows = data as SuburbEntry[];
-                        const filtered = stateCode
-                          ? rows.filter((s) => s.state === stateCode)
-                          : rows;
-                        setListerSuburbSuggestions(filtered);
-                      });
-                  }}
-                />
-                {listerForm.formState.errors.suburb && (
-                  <p className="text-base text-destructive md:text-xs">
-                    {listerForm.formState.errors.suburb.message}
-                  </p>
-                )}
-                {listerSuburbSuggestions.length > 0 && (
-                  <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover text-sm shadow-md">
-                    {listerSuburbSuggestions.map((s) => (
-                      <li
-                        key={`${s.suburb}-${s.postcode}-${s.state}`}
-                        className="cursor-pointer px-2 py-1 hover:bg-muted"
-                        onClick={() => {
-                          listerForm.setValue("suburb", s.suburb, {
-                            shouldValidate: true,
-                          });
-                          listerForm.setValue("postcode", s.postcode, {
-                            shouldValidate: true,
-                          });
-                          setListerSuburbSuggestions([]);
-                        }}
-                      >
-                        {s.suburb} {s.postcode} ({s.state})
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="postcode">Postcode</Label>
-                <Input id="postcode" {...listerForm.register("postcode")} />
-                {listerForm.formState.errors.postcode && (
-                  <p className="text-base text-destructive md:text-xs">
-                    {listerForm.formState.errors.postcode.message}
-                  </p>
-                )}
-              </div>
-            </div>
+            <Label htmlFor="profile-lister-location">My location</Label>
+            <SuburbPostcodeAutocomplete
+              hideStateSelect
+              useDatabaseSuburbs
+              className="relative z-10"
+              stateValue={listerForm.watch("state") ?? ""}
+              onStateChange={(code) =>
+                listerForm.setValue("state", code, { shouldValidate: true, shouldDirty: true })
+              }
+              suburbValue={listerForm.watch("suburb") ?? ""}
+              postcodeValue={listerForm.watch("postcode") ?? ""}
+              onSuburbPostcodeChange={(s, p) => {
+                listerForm.setValue("suburb", s, { shouldValidate: true, shouldDirty: true });
+                listerForm.setValue("postcode", p, { shouldValidate: true, shouldDirty: true });
+              }}
+              id="profile-lister-location"
+              label="Suburb, postcode & state"
+              error={
+                listerForm.formState.errors.suburb?.message ||
+                listerForm.formState.errors.postcode?.message ||
+                listerForm.formState.errors.state?.message ||
+                undefined
+              }
+            />
           </div>
           {submitError && (
             <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-base font-medium text-destructive md:border-0 md:bg-transparent md:p-0 md:text-sm md:font-normal">

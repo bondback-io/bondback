@@ -15,6 +15,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
+import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
 
 const listerBullets = [
   "Post bond cleans and compare bids in one place",
@@ -53,6 +54,8 @@ export type Path2RoleSelectionProps = {
   onMaxTravelChange: (n: number) => void;
   abnInputProps: ComponentProps<typeof Input>;
   abnError?: string;
+  /** Server-side ABN / profile error (e.g. ABR lookup failed) — shown under the ABN field */
+  abnServerError?: string | null;
   roleError?: string;
   submitting: boolean;
   /** Optional; omitted on single-page sign-up. */
@@ -71,6 +74,7 @@ export function Path2RoleSelection({
   onMaxTravelChange,
   abnInputProps,
   abnError,
+  abnServerError,
   roleError,
   submitting,
   backButton,
@@ -373,9 +377,13 @@ export function Path2RoleSelection({
               required
               aria-required
               {...abnInputProps}
-              aria-invalid={Boolean(abnError)}
+              aria-invalid={Boolean(abnError || abnServerError)}
             />
-            {abnError && <p className="text-sm text-destructive">{abnError}</p>}
+            {(abnServerError || abnError) && (
+              <p className="text-sm text-destructive" role="alert">
+                {abnServerError ?? abnError}
+              </p>
+            )}
           </div>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
@@ -384,7 +392,7 @@ export function Path2RoleSelection({
             </div>
             <Slider
               min={5}
-              max={200}
+              max={MAX_TRAVEL_KM}
               step={1}
               value={[maxTravelKm]}
               onValueChange={(v) => {

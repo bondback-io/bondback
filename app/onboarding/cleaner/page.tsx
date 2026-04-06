@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { OnboardingCleanerForm } from "@/components/features/onboarding-cleaner-form";
 import type { Database } from "@/types/supabase";
+import { clampMaxTravelKm } from "@/lib/max-travel-km";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -50,7 +51,9 @@ const OnboardingCleanerPage = async ({
       initialSuburb={params.suburb ?? ""}
       initialPostcode={params.postcode ?? ""}
       initialMaxTravelKm={
-        params.max_travel_km ? Number(params.max_travel_km) : 30
+        params.max_travel_km
+          ? clampMaxTravelKm(Number(params.max_travel_km))
+          : 30
       }
       initialAbn={params.abn ?? ""}
     />

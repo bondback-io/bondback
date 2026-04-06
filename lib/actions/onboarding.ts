@@ -9,6 +9,7 @@ import type { Database } from "@/types/supabase";
 import type { ProfileRole } from "@/lib/types";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
+import { clampMaxTravelKm } from "@/lib/max-travel-km";
 
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 
@@ -49,7 +50,7 @@ export async function saveOnboardingProfile(profile: {
     date_of_birth: profile.date_of_birth?.trim() || null,
     suburb: profile.suburb.trim(),
     postcode: profile.postcode?.trim() || null,
-    max_travel_km: profile.max_travel_km,
+    max_travel_km: clampMaxTravelKm(profile.max_travel_km),
   };
 
   const admin = createSupabaseAdminClient();
@@ -225,7 +226,7 @@ export async function saveCleanerQuickSetup(input: {
     .from("profiles")
     .update({
       abn,
-      max_travel_km: Math.min(200, Math.max(5, Math.round(input.max_travel_km))),
+      max_travel_km: clampMaxTravelKm(input.max_travel_km),
     } as never)
     .eq("id", userId);
 
@@ -272,7 +273,7 @@ export async function saveOnboardingCleanerProfile(profile: {
     abn: profile.abn?.trim() || null,
     suburb: profile.suburb.trim(),
     postcode: profile.postcode?.trim() || null,
-    max_travel_km: profile.max_travel_km,
+    max_travel_km: clampMaxTravelKm(profile.max_travel_km),
     full_name: profile.full_name.trim(),
     phone: profile.phone.trim(),
     date_of_birth: profile.date_of_birth?.trim() || null,
@@ -505,7 +506,7 @@ export async function finalizePath2Signup(
   }
   const maxTravel =
     input.role === "cleaner"
-      ? Math.min(200, Math.max(5, Math.round(input.max_travel_km ?? 30)))
+      ? clampMaxTravelKm(input.max_travel_km ?? 30)
       : 30;
 
   const row: ProfileInsert = {

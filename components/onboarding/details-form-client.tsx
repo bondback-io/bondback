@@ -7,14 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { AU_STATES } from "@/lib/au-suburbs";
+import { SuburbPostcodeAutocomplete } from "@/components/features/suburb-postcode-autocomplete";
 import { setOnboardingDetails, type OnboardingRole } from "./onboarding-storage";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
@@ -60,6 +53,10 @@ export function DetailsFormClient({ role }: Props) {
     }
     if (!form.suburb.trim()) {
       setError("Suburb is required.");
+      return false;
+    }
+    if (!form.state?.trim()) {
+      setError("Pick your suburb from the suggestions so we can set your state.");
       return false;
     }
     if (needsAbn && form.abn.replace(/\D/g, "").length !== 11) {
@@ -130,46 +127,25 @@ export function DetailsFormClient({ role }: Props) {
               className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="state" className="dark:text-gray-200">State</Label>
-              <Select
-                value={form.state}
-                onValueChange={(v) => setForm((p) => ({ ...p, state: v }))}
-              >
-                <SelectTrigger id="state" className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AU_STATES.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="suburb" className="dark:text-gray-200">Suburb</Label>
-              <Input
-                id="suburb"
-                value={form.suburb}
-                onChange={(e) => setForm((p) => ({ ...p, suburb: e.target.value }))}
-                placeholder="Suburb"
-                className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="postcode" className="dark:text-gray-200">Postcode</Label>
-              <Input
-                id="postcode"
-                value={form.postcode}
-                onChange={(e) => setForm((p) => ({ ...p, postcode: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
-                placeholder="e.g. 4000"
-                maxLength={4}
-                className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-              />
-            </div>
+          <div className="space-y-2">
+            <SuburbPostcodeAutocomplete
+              hideStateSelect
+              useDatabaseSuburbs
+              className="relative z-10"
+              stateValue={form.state}
+              onStateChange={(v) => setForm((p) => ({ ...p, state: v }))}
+              suburbValue={form.suburb}
+              postcodeValue={form.postcode}
+              onSuburbPostcodeChange={(s, p) =>
+                setForm((prev) => ({ ...prev, suburb: s, postcode: p }))
+              }
+              id="details-location"
+              label="Location (suburb, postcode & state)"
+              inputClassName="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+            />
+            <p className="text-base text-muted-foreground dark:text-gray-400 md:text-xs">
+              Type a suburb or postcode and pick a match — your state is set automatically.
+            </p>
           </div>
           {needsAbn && (
             <div className="space-y-2">

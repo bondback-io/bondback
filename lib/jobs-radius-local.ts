@@ -1,3 +1,5 @@
+import { MAX_TRAVEL_KM, MIN_TRAVEL_KM } from "@/lib/max-travel-km";
+
 /** Client-only jobs search radius (km). Synced with Jobs list slider on mobile. */
 const STORAGE_KEY = "bondback_jobs_radius_km";
 
@@ -6,8 +8,8 @@ const STORAGE_KEY = "bondback_jobs_radius_km";
  */
 export const JOBS_RADIUS_SYNC_SESSION_KEY = "bondback_sync_jobs_radius";
 
-const MIN = 5;
-const MAX = 100;
+const MIN = MIN_TRAVEL_KM;
+const MAX = MAX_TRAVEL_KM;
 const STEP = 5;
 
 export function clampRadiusKm(n: number): number {

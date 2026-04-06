@@ -11,6 +11,7 @@ import { ProgressRing } from "@/components/ui/progress-ring";
 import { saveCleanerQuickSetup } from "@/lib/actions/onboarding";
 import { Brush } from "lucide-react";
 import { FormSavingOverlay } from "@/components/ui/form-saving-overlay";
+import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
 
 const DEFAULT_KM = 30;
 
@@ -111,7 +112,7 @@ export function QuickSetupCleanerClient() {
             </div>
             <Slider
               min={5}
-              max={80}
+              max={MAX_TRAVEL_KM}
               step={5}
               value={km}
               onValueChange={setKm}

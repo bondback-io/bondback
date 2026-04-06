@@ -8,6 +8,7 @@ import {
   tierSortRank,
   type CleanerBrowseTier,
 } from "@/lib/cleaner-browse-tier";
+import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
 
 export type BrowseCleanerRow = {
   id: string;
@@ -162,7 +163,7 @@ export async function loadBrowseCleaners(params: {
 
   const centerResolved = hasCenter;
 
-  const radius = Math.min(200, Math.max(5, Math.round(params.radiusKm)));
+  const radius = Math.min(MAX_TRAVEL_KM, Math.max(5, Math.round(params.radiusKm)));
 
   const mapped: BrowseCleanerRow[] = [];
 

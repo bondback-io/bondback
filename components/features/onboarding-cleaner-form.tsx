@@ -9,6 +9,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { saveOnboardingCleanerProfile } from "@/lib/actions/onboarding";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 import { VEHICLE_TYPES, type VehicleType } from "@/lib/types";
+import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
 import {
   AU_STATES,
   type AuStateCode,
@@ -48,8 +49,8 @@ const cleanerOnboardingSchema = z.object({
   postcode: z.string().optional(),
   max_travel_km: z.coerce
     .number()
-    .min(1, "At least 1 km")
-    .max(200, "At most 200 km"),
+    .min(5, "At least 5 km")
+    .max(MAX_TRAVEL_KM, `At most ${MAX_TRAVEL_KM} km`),
   years_experience: z.coerce.number().min(0, "Minimum 0").max(50, "Maximum 50"),
   vehicle_type: z.enum(VEHICLE_TYPES as unknown as [string, ...string[]]),
   abn: z
@@ -298,8 +299,8 @@ export function OnboardingCleanerForm({
               <Input
                 id="max_travel_km"
                 type="number"
-                min={1}
-                max={200}
+                min={5}
+                max={MAX_TRAVEL_KM}
                 {...form.register("max_travel_km", { valueAsNumber: true })}
               />
               {form.formState.errors.max_travel_km && (

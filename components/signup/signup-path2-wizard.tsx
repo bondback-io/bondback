@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
+import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type DefaultValues } from "react-hook-form";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
@@ -53,7 +54,7 @@ const path2Schema = z
       })
       .optional(),
     abn: z.string().optional().or(z.literal("")),
-    maxTravelKm: z.number().min(5).max(200),
+    maxTravelKm: z.number().min(5).max(MAX_TRAVEL_KM),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -115,6 +116,8 @@ export function SignupPath2Wizard() {
 
   const [phase, setPhase] = useState<"form" | "success">("form");
   const [error, setError] = useState<string | null>(null);
+  /** ABR / finalize errors for cleaner — shown under ABN, not in the top alert */
+  const [abnServerError, setAbnServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [, startTransition] = useTransition();
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -158,6 +161,9 @@ export function SignupPath2Wizard() {
       if (cached?.suburb?.trim()) {
         setValue("suburb", cached.suburb.trim(), opts);
       }
+      if (cached?.state?.trim()) {
+        setValue("state", cached.state.trim().toUpperCase(), opts);
+      }
 
       const needPostcode = !getValues("postcode")?.trim();
       const needSuburb = !getValues("suburb")?.trim();
@@ -171,6 +177,9 @@ export function SignupPath2Wizard() {
       }
       if (geo.suburb && !getValues("suburb")?.trim()) {
         setValue("suburb", geo.suburb, opts);
+      }
+      if (geo.state?.trim() && !getValues("state")?.trim()) {
+        setValue("state", geo.state.trim().toUpperCase(), opts);
       }
     };
 
@@ -187,6 +196,7 @@ export function SignupPath2Wizard() {
     async (values: Path2Values) => {
       assertRole(values);
       setError(null);
+      setAbnServerError(null);
       startTransition(() => setSubmitting(true));
 
       const supabase = createBrowserSupabaseClient({ authFlow: "implicit" });
@@ -213,6 +223,7 @@ export function SignupPath2Wizard() {
         });
 
         if (signUpError) {
+          setAbnServerError(null);
           const isEmailRateLimit =
             signUpError.message?.toLowerCase().includes("rate limit") ||
             (signUpError as { code?: string }).code === "over_email_send_rate_limit";
@@ -274,6 +285,7 @@ export function SignupPath2Wizard() {
   const onCreateAccount = form.handleSubmit(handlePath2Signup);
 
   const handleStartAsLister = useCallback(() => {
+    setAbnServerError(null);
     form.setValue("role", "lister", { shouldValidate: true });
     queueMicrotask(() => {
       void form.handleSubmit(handlePath2Signup)();
@@ -281,6 +293,7 @@ export function SignupPath2Wizard() {
   }, [form, handlePath2Signup]);
 
   const handleChooseCleaner = useCallback(() => {
+    setAbnServerError(null);
     form.setValue("role", "cleaner", { shouldValidate: true });
   }, [form]);
 
@@ -472,6 +485,7 @@ export function SignupPath2Wizard() {
 
                       <div className="relative z-10 overflow-visible">
                         <SuburbPostcodeAutocomplete
+                          hideStateSelect
                           useDatabaseSuburbs
                           stateValue={form.watch("state") ?? ""}
                           onStateChange={(code) =>
@@ -484,8 +498,7 @@ export function SignupPath2Wizard() {
                             form.setValue("postcode", p, { shouldValidate: true, shouldDirty: true });
                           }}
                           id="p2-suburb"
-                          label="Suburb & postcode"
-                          suburbPlaceholder="Select state, then type suburb or postcode"
+                          label="Location (suburb, postcode & state)"
                           error={
                             form.formState.errors.suburb?.message ||
                             form.formState.errors.postcode?.message ||
@@ -494,8 +507,8 @@ export function SignupPath2Wizard() {
                           }
                         />
                         <p className="mt-2 text-xs text-muted-foreground">
-                          Choose state first, then pick a suggestion or type manually. We may prefill from your
-                          location; last values are remembered on this device.
+                          Type a suburb or postcode and pick a match — your state is set automatically. We may
+                          prefill from your location; last values are remembered on this device.
                         </p>
                       </div>
                     </div>
@@ -510,11 +523,13 @@ export function SignupPath2Wizard() {
                       onMaxTravelChange={(n) => form.setValue("maxTravelKm", n, { shouldValidate: true })}
                       abnInputProps={form.register("abn", {
                         onChange: (e) => {
+                          setAbnServerError(null);
                           const el = e.target as HTMLInputElement;
                           el.value = el.value.replace(/\D/g, "").slice(0, 11);
                         },
                       })}
                       abnError={form.formState.errors.abn?.message}
+                      abnServerError={abnServerError}
                       roleError={form.formState.errors.role?.message}
                       submitting={submitting}
                     />

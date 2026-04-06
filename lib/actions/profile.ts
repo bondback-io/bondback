@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PHOTO_LIMITS } from "@/lib/photo-validation";
 import type { Database } from "@/types/supabase";
 import type { ProfileRole } from "@/lib/types";
+import { clampMaxTravelKm } from "@/lib/max-travel-km";
 
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
@@ -28,6 +29,9 @@ export async function updateProfile(
   }
 
   const safeUpdates = { ...updates } as Record<string, unknown>;
+  if (typeof safeUpdates.max_travel_km === "number") {
+    safeUpdates.max_travel_km = clampMaxTravelKm(safeUpdates.max_travel_km);
+  }
   if (Array.isArray(safeUpdates.portfolio_photo_urls)) {
     const arr = safeUpdates.portfolio_photo_urls as string[];
     if (arr.length > PHOTO_LIMITS.PORTFOLIO) {
@@ -109,9 +113,6 @@ export async function setActiveRole(role: ProfileRole): Promise<{ ok: boolean; e
   return { ok: true };
 }
 
-const MAX_TRAVEL_KM_MIN = 5;
-const MAX_TRAVEL_KM_MAX = 100;
-
 export type UpdateMaxTravelKmResult = { ok: true } | { ok: false; error: string };
 
 /**
@@ -128,7 +129,7 @@ export async function updateMaxTravelKm(
   if (!session || session.user.id !== userId) {
     return { ok: false, error: "You must be logged in." };
   }
-  const clamped = Math.round(Math.max(MAX_TRAVEL_KM_MIN, Math.min(MAX_TRAVEL_KM_MAX, km)));
+  const clamped = clampMaxTravelKm(km);
   const admin = createSupabaseAdminClient();
   if (!admin) return { ok: false, error: "Server error." };
   const { error } = await admin

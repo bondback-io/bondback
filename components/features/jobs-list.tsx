@@ -28,6 +28,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { HelpCircle, Loader2, MapPin } from "lucide-react";
 import { useDistanceUnit } from "@/hooks/use-distance-unit";
 import { formatRadiusBannerLabel } from "@/lib/distance-format";
+import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
 import {
   JOBS_RADIUS_CHANGED_EVENT,
   useJobsSearchCountSetter,
@@ -104,7 +105,7 @@ export function JobsList({
   const [page, setPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(initialListings.length >= INITIAL_PAGE_SIZE);
-  /** Mobile-only radius (5–100 km); client filter when center lat/lon exist; persisted locally */
+  /** Mobile-only radius (5–150 km); client filter when center lat/lon exist; persisted locally */
   const [mobileRadiusKm, setMobileRadiusKm] = useState(() =>
     clampRadiusKm(_radiusKm)
   );
@@ -460,7 +461,7 @@ export function JobsList({
             </div>
             <Slider
               min={5}
-              max={100}
+              max={MAX_TRAVEL_KM}
               step={5}
               value={[mobileRadiusKm]}
               onValueChange={(v) => {

@@ -3,11 +3,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getProfileCompletion } from "@/lib/profile-completion";
+import { getCriticalProfileTasks } from "@/lib/profile-critical-tasks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Camera, MapPin, Star, BadgeCheck, Phone } from "lucide-react";
+import {
+  Star,
+  BadgeCheck,
+  Smartphone,
+  Calendar,
+  Camera,
+  Shield,
+} from "lucide-react";
 import type { Database } from "@/types/supabase";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { recomputeVerificationBadgesForUser, syncCurrentUserEmailVerification } from "@/lib/actions/verification";
@@ -88,18 +95,18 @@ const ProfilePage = async ({
     .eq("id", session.user.id)
     .maybeSingle();
 
-  const { percent, message } = getProfileCompletion(profile);
   const isCleaner = roles.includes("cleaner");
   const isLister = roles.includes("lister");
   const showPaymentsTab = isLister || isCleaner;
   const isListerActive = activeRole === "lister";
   const isCleanerActive = activeRole === "cleaner";
 
-  const abnDigits = (profile.abn ?? "").replace(/\D/g, "");
-  const needsAbn = isCleaner && abnDigits.length !== 11;
-  const portfolioCount = Array.isArray(profile.portfolio_photo_urls) ? profile.portfolio_photo_urls.length : 0;
-  const needsPortfolioPhotos = isCleaner && portfolioCount === 0;
-  const showCompleteProfileCard = percent < 100;
+  const criticalProfile = getCriticalProfileTasks(profile, {
+    activeRole,
+    isCleaner,
+    isLister,
+  });
+  const showCompleteProfileCard = criticalProfile.tasks.length > 0;
 
   const globalSettings = await getGlobalSettings();
   const referralEnabled = globalSettings?.referral_enabled === true;
@@ -271,91 +278,96 @@ const ProfilePage = async ({
           </Card>
 
           {showCompleteProfileCard && (
-            <Card className="max-w-2xl border-2 border-primary/25 bg-primary/5 shadow-sm dark:border-primary/30 dark:bg-primary/10">
-              <CardHeader className="space-y-2 !p-0 px-3 pb-2 pt-6 sm:px-6">
-                <CardTitle className="text-2xl font-bold tracking-tight md:text-xl">
-                  Complete your profile
-                </CardTitle>
-                <CardDescription className="text-base md:text-sm">
-                  One-tap shortcuts — finish these to rank higher and win more work.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 px-3 pb-6 sm:px-6">
-                <Progress
-                  value={percent}
-                  className="h-3"
-                  indicatorClassName={
-                    percent < 40 ? "bg-amber-500" : percent < 80 ? "bg-sky-500" : "bg-emerald-500"
-                  }
-                />
-                <p className="text-sm font-medium text-foreground dark:text-gray-100">
-                  {percent}% complete
-                  {message ? (
-                    <span className="font-normal text-muted-foreground dark:text-gray-400"> — {message}</span>
-                  ) : null}
-                </p>
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  {isCleaner && needsAbn && (
-                    <Button
-                      asChild
-                      size="lg"
-                      className="h-14 min-h-[56px] w-full justify-center text-base font-semibold sm:flex-1"
-                    >
-                      <Link href="#abn">
-                        <BadgeCheck className="mr-2 h-5 w-5 shrink-0" aria-hidden />
-                        Add ABN
-                      </Link>
-                    </Button>
-                  )}
-                  {isCleaner && (needsPortfolioPhotos || !profile.profile_photo_url?.trim()) && (
-                    <Button
-                      asChild
-                      size="lg"
-                      variant="secondary"
-                      className="h-14 min-h-[56px] w-full justify-center text-base font-semibold sm:flex-1"
-                    >
-                      <Link href="#portfolio-photos">
-                        <Camera className="mr-2 h-5 w-5 shrink-0" aria-hidden />
-                        Add photos
-                      </Link>
-                    </Button>
-                  )}
-                  {isCleaner && (
-                    <Button
-                      asChild
-                      size="lg"
-                      variant="outline"
-                      className="h-14 min-h-[56px] w-full justify-center border-2 text-base font-semibold sm:flex-1"
-                    >
-                      <Link href="#max_travel_km">
-                        <MapPin className="mr-2 h-5 w-5 shrink-0" aria-hidden />
-                        Set max travel km
-                      </Link>
-                    </Button>
-                  )}
-                  {!isCleaner && !profile.phone?.trim() && (
-                    <Button
-                      asChild
-                      size="lg"
-                      className="h-14 min-h-[56px] w-full justify-center text-base font-semibold sm:flex-1"
-                    >
-                      <Link href="#phone">
-                        <Phone className="mr-2 h-5 w-5 shrink-0" aria-hidden />
-                        Add phone
-                      </Link>
-                    </Button>
-                  )}
-                  {!isCleaner && !profile.suburb?.trim() && (
-                    <Button
-                      asChild
-                      size="lg"
-                      variant="secondary"
-                      className="h-14 min-h-[56px] w-full justify-center text-base font-semibold sm:flex-1"
-                    >
-                      <Link href="#suburb">Add suburb</Link>
-                    </Button>
-                  )}
+            <Card className="max-w-2xl border border-amber-200/70 bg-gradient-to-b from-amber-50/90 to-card shadow-sm dark:border-amber-900/40 dark:from-amber-950/30 dark:to-card">
+              <CardHeader className="space-y-1 !p-0 px-3 pb-1 pt-4 sm:px-5 sm:pt-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg font-bold leading-tight tracking-tight sm:text-xl">
+                      Finish the essentials
+                    </CardTitle>
+                    <CardDescription className="text-sm leading-snug text-muted-foreground dark:text-gray-400">
+                      {criticalProfile.role === "cleaner"
+                        ? "Cleaner — add the details listers expect before you bid."
+                        : "Lister — a complete profile helps cleaners trust you."}
+                    </CardDescription>
+                  </div>
+                  <span
+                    className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900 dark:bg-amber-900/50 dark:text-amber-100"
+                    aria-hidden
+                  >
+                    To do
+                  </span>
                 </div>
+              </CardHeader>
+              <CardContent className="space-y-3 px-3 pb-4 sm:px-5 sm:pb-5">
+                <div className="space-y-1.5">
+                  <Progress
+                    value={criticalProfile.percent}
+                    className="h-2"
+                    indicatorClassName={
+                      criticalProfile.percent < 40
+                        ? "bg-amber-500"
+                        : criticalProfile.percent < 80
+                          ? "bg-sky-500"
+                          : "bg-emerald-500"
+                    }
+                  />
+                  <p className="text-xs font-medium text-foreground dark:text-gray-100">
+                    {criticalProfile.percent}% essentials done
+                    {criticalProfile.subtitle ? (
+                      <span className="font-normal text-muted-foreground dark:text-gray-400">
+                        {" "}
+                        · {criticalProfile.subtitle}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {criticalProfile.tasks.map((task) => {
+                    const iconCls =
+                      "h-3.5 w-3.5 shrink-0 text-amber-800 dark:text-amber-200/90";
+                    const icon =
+                      task.key === "phone" ? (
+                        <Smartphone className={iconCls} aria-hidden />
+                      ) : task.key === "date_of_birth" ? (
+                        <Calendar className={iconCls} aria-hidden />
+                      ) : task.key === "profile_photo" ? (
+                        <Camera className={iconCls} aria-hidden />
+                      ) : task.key === "insurance" ? (
+                        <Shield className={iconCls} aria-hidden />
+                      ) : (
+                        <BadgeCheck className={iconCls} aria-hidden />
+                      );
+                    return (
+                      <li key={task.key} className="min-w-0">
+                        <Link
+                          href={task.href}
+                          className="flex min-h-[44px] flex-col justify-center gap-0.5 rounded-lg border border-amber-200/80 bg-background/90 px-2.5 py-2 text-left shadow-sm transition-colors hover:border-amber-400/80 hover:bg-amber-50/50 active:bg-amber-100/40 dark:border-amber-800/60 dark:bg-gray-950/60 dark:hover:bg-amber-950/40"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {icon}
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100/90">
+                              Add
+                            </span>
+                          </span>
+                          <span className="truncate text-xs font-medium leading-tight text-foreground dark:text-gray-100">
+                            {task.label}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="text-[11px] leading-snug text-muted-foreground dark:text-gray-500">
+                  Open{" "}
+                  <Link
+                    href="#section-personal"
+                    className="font-medium text-primary underline-offset-2 hover:underline dark:text-blue-300"
+                  >
+                    Personal info
+                  </Link>{" "}
+                  below to update these fields.
+                </p>
               </CardContent>
             </Card>
           )}
