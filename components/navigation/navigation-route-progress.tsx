@@ -112,6 +112,8 @@ function NavigationRouteProgressInner() {
       if (!a) return;
       if (a.getAttribute("target") === "_blank") return;
       if (a.hasAttribute("download")) return;
+      // Same-page hash / client-handled links (e.g. profile TO DO) — never show route progress.
+      if (a.hasAttribute("data-skip-route-progress")) return;
 
       const href = a.getAttribute("href");
       if (!href || href.startsWith("#")) return;

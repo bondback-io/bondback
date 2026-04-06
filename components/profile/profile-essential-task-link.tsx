@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export type ProfileEssentialTaskLinkProps = {
@@ -11,29 +12,35 @@ export type ProfileEssentialTaskLinkProps = {
 };
 
 /**
- * Deep-link to /profile#fieldId and ensure hashchange runs so MyAccountSections
- * opens the Personal info accordion and scrolls to the field.
+ * Deep-link to `/profile#fieldId` so `MyAccountSections` opens Personal info and scrolls.
+ * `href` includes the current query on `/profile` so `NavigationRouteProgress` does not treat
+ * the click as a full navigation (hash-only; avoids a stuck ~90% loading bar).
  */
 export function ProfileEssentialTaskLink({
   fieldId,
   className,
   children,
 }: ProfileEssentialTaskLinkProps) {
-  const href = `/profile#${fieldId}`;
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const href =
+    pathname === "/profile"
+      ? `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}#${fieldId}`
+      : `/profile#${fieldId}`;
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     if (typeof window === "undefined") return;
 
     const targetHash = `#${fieldId}`;
-    const base = window.location.pathname + window.location.search;
 
     if (window.location.pathname !== "/profile") {
-      window.location.assign(href);
+      window.location.assign(`/profile#${fieldId}`);
       return;
     }
 
     if (window.location.hash === targetHash) {
+      const base = window.location.pathname + window.location.search;
       window.history.replaceState(null, "", base);
       window.requestAnimationFrame(() => {
         window.location.hash = fieldId;
@@ -44,7 +51,12 @@ export function ProfileEssentialTaskLink({
   };
 
   return (
-    <a href={href} className={cn(className)} onClick={handleClick}>
+    <a
+      href={href}
+      className={cn(className)}
+      onClick={handleClick}
+      data-skip-route-progress=""
+    >
       {children}
     </a>
   );
