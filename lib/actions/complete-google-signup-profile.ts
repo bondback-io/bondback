@@ -21,15 +21,13 @@ export type CompleteGoogleSignupProfileResult =
   | { ok: false; error: string };
 
 /**
- * After Google OAuth on combined sign-up: save first role + optional cleaner ABN, send welcome/tutorial
- * emails, then return dashboard path. Email/password Path 2 is unchanged.
+ * After Google OAuth on combined sign-up: save first role + cleaner ABN (required for cleaner),
+ * send welcome/tutorial emails, then return dashboard path. Email/password Path 2 is unchanged.
  */
 export async function completeGoogleSignupProfile(input: {
   role: "lister" | "cleaner";
-  /** 11-digit ABN when provided (cleaner). */
+  /** 11-digit ABN — required when role is `cleaner`. */
   abn: string | null;
-  /** Cleaner only: skip ABN and add later in Settings. */
-  skipAbn?: boolean;
 }): Promise<CompleteGoogleSignupProfileResult> {
   const supabase = await createServerSupabaseClient();
   const {
@@ -69,19 +67,15 @@ export async function completeGoogleSignupProfile(input: {
 
   let abnStored: string | null = null;
   if (role === "cleaner") {
-    if (input.skipAbn) {
-      abnStored = null;
-    } else {
-      const digits = (input.abn ?? "").replace(/\D/g, "");
-      if (digits.length !== 11) {
-        return { ok: false, error: "Enter an 11-digit ABN or choose Skip for now." };
-      }
-      const v = await validateAbnIfRequired(digits);
-      if (!v.ok) {
-        return { ok: false, error: v.error };
-      }
-      abnStored = digits;
+    const digits = (input.abn ?? "").replace(/\D/g, "");
+    if (digits.length !== 11) {
+      return { ok: false, error: "Enter your 11-digit ABN." };
     }
+    const v = await validateAbnIfRequired(digits);
+    if (!v.ok) {
+      return { ok: false, error: v.error };
+    }
+    abnStored = digits;
   }
 
   const row: ProfileInsert = {

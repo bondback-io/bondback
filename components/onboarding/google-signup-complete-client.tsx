@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { markPostLoginFullPageNavigation } from "@/lib/auth/post-login-navigation-flag";
 import { completeGoogleSignupProfile } from "@/lib/actions/complete-google-signup-profile";
 import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
@@ -18,17 +19,20 @@ const EASE = [0.25, 0.1, 0.25, 1] as const;
 const btnTouch =
   "touch-manipulation min-h-[3.25rem] w-full shrink-0 text-base font-semibold transition-transform duration-150 active:scale-[0.98] sm:min-h-12";
 
-type Phase = "role" | "cleaner-abn";
+type Phase = "role" | "lister-confirm" | "cleaner-abn";
 
 export function GoogleSignupCompleteClient() {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const [phase, setPhase] = useState<Phase>("role");
   const [error, setError] = useState<string | null>(null);
+  /** Cleaner ABN step: validation + server errors shown under the field */
+  const [abnError, setAbnError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [, startTransition] = useTransition();
   const [abnInput, setAbnInput] = useState("");
-  const abnLive = useAbnLiveValidation(abnInput);
+  const abnDigits = abnInput.replace(/\D/g, "").slice(0, 11);
+  const abnLive = useAbnLiveValidation(abnDigits);
 
   useEffect(() => {
     markPostLoginFullPageNavigation();
@@ -37,8 +41,9 @@ export function GoogleSignupCompleteClient() {
   const flowDur = reduceMotion ? 0 : 0.28;
 
   const runComplete = useCallback(
-    async (payload: { role: "lister" | "cleaner"; abn: string | null; skipAbn?: boolean }) => {
+    async (payload: { role: "lister" | "cleaner"; abn: string | null }) => {
       setError(null);
+      setAbnError(null);
       startTransition(() => setSubmitting(true));
       try {
         const result = await completeGoogleSignupProfile(payload);
@@ -47,7 +52,11 @@ export function GoogleSignupCompleteClient() {
             router.replace("/dashboard");
             return;
           }
-          setError(result.error);
+          if (payload.role === "cleaner") {
+            setAbnError(result.error);
+          } else {
+            setError(result.error);
+          }
           return;
         }
         router.replace(result.redirect);
@@ -58,35 +67,46 @@ export function GoogleSignupCompleteClient() {
     [router, startTransition]
   );
 
-  const onLister = useCallback(() => {
+  const onListerChosen = useCallback(() => {
+    setError(null);
+    setPhase("lister-confirm");
+  }, []);
+
+  const onListerConfirmSubmit = useCallback(() => {
     void runComplete({ role: "lister", abn: null });
   }, [runComplete]);
 
   const onCleanerChosen = useCallback(() => {
     setError(null);
+    setAbnError(null);
+    setAbnInput("");
     setPhase("cleaner-abn");
   }, []);
 
   const onCleanerSubmit = useCallback(() => {
-    const digits = abnInput.replace(/\D/g, "");
-    if (digits.length !== 11) {
-      setError("Enter an 11-digit ABN or skip for now.");
-      return;
-    }
-    if (abnLive.status === "invalid") {
-      setError(abnLive.error ?? "ABN could not be verified.");
+    setAbnError(null);
+    setError(null);
+    if (abnDigits.length !== 11) {
+      setAbnError("Enter all 11 digits of your ABN.");
       return;
     }
     if (abnLive.validating) {
-      setError("Still checking your ABN — try again in a moment.");
+      setAbnError("Still checking your ABN — wait for verification to finish.");
       return;
     }
-    void runComplete({ role: "cleaner", abn: digits });
-  }, [abnInput, abnLive.error, abnLive.status, abnLive.validating, runComplete]);
+    if (abnLive.status !== "valid") {
+      setAbnError(
+        abnLive.status === "invalid" && abnLive.error
+          ? abnLive.error
+          : "ABN could not be verified. Check the number and try again."
+      );
+      return;
+    }
+    void runComplete({ role: "cleaner", abn: abnDigits });
+  }, [abnDigits, abnLive.error, abnLive.status, abnLive.validating, runComplete]);
 
-  const onSkipAbn = useCallback(() => {
-    void runComplete({ role: "cleaner", abn: null, skipAbn: true });
-  }, [runComplete]);
+  const canSubmitCleaner =
+    abnDigits.length === 11 && !abnLive.validating && abnLive.status === "valid";
 
   return (
     <div className="relative flex min-h-[calc(100dvh-4rem)] w-full flex-col items-center justify-center px-3 py-8">
@@ -107,7 +127,7 @@ export function GoogleSignupCompleteClient() {
           </p>
         </div>
 
-        {error && (
+        {(phase === "role" || phase === "lister-confirm") && error && (
           <div
             className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-center text-sm text-destructive"
             role="alert"
@@ -147,16 +167,9 @@ export function GoogleSignupCompleteClient() {
                     size="lg"
                     className={cn(btnTouch, "bg-sky-600 hover:bg-sky-600/90")}
                     disabled={submitting}
-                    onClick={onLister}
+                    onClick={onListerChosen}
                   >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving…
-                      </>
-                    ) : (
-                      "Start as Lister"
-                    )}
+                    Start as Lister
                   </Button>
                 </CardContent>
               </Card>
@@ -193,6 +206,61 @@ export function GoogleSignupCompleteClient() {
                 </CardContent>
               </Card>
             </motion.div>
+          ) : phase === "lister-confirm" ? (
+            <motion.div
+              key="lister-confirm"
+              initial={reduceMotion ? false : { opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -12 }}
+              transition={{ duration: flowDur, ease: EASE }}
+            >
+              <Card className="border-2 border-sky-500/25 shadow-lg dark:border-gray-800 dark:bg-gray-900">
+                <CardHeader>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 dark:bg-sky-900/50">
+                    <Home className="h-7 w-7 text-sky-600 dark:text-sky-300" aria-hidden />
+                  </div>
+                  <CardTitle className="text-xl pt-2">Lister</CardTitle>
+                  <CardDescription className="text-base leading-relaxed">
+                    You&apos;ll post bond cleans, compare bids from cleaners, and hire the right person for the
+                    job. Confirm to finish setup and open your dashboard.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="order-2 w-full sm:order-1 sm:w-auto"
+                      disabled={submitting}
+                      onClick={() => {
+                        setPhase("role");
+                        setError(null);
+                      }}
+                    >
+                      Back to role choice
+                    </Button>
+                    <Button
+                      type="button"
+                      className={cn(
+                        "order-1 min-h-11 w-full sm:order-2 sm:min-w-[10rem]",
+                        "bg-sky-600 hover:bg-sky-600/90"
+                      )}
+                      disabled={submitting}
+                      onClick={onListerConfirmSubmit}
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving…
+                        </>
+                      ) : (
+                        "Continue as Lister"
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           ) : (
             <motion.div
               key="abn"
@@ -205,85 +273,105 @@ export function GoogleSignupCompleteClient() {
                 <CardHeader>
                   <CardTitle className="text-xl">Cleaner — ABN</CardTitle>
                   <CardDescription className="text-base leading-relaxed">
-                    ABN is required for Cleaner accounts to verify you&apos;re a professional cleaner. We check it
-                    against the Australian Business Register when validation is enabled.
+                    ABN is required for Cleaner accounts. Enter your 11-digit number — we validate it live
+                    against the Australian Business Register when ABR checks are enabled.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="g-abn" className="text-base">
-                      Australian Business Number (ABN)
-                    </Label>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <Label htmlFor="g-abn" className="text-base">
+                        Australian Business Number (ABN) <span className="text-destructive">*</span>
+                      </Label>
+                      <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">
+                        {abnDigits.length}/11 digits
+                      </span>
+                    </div>
                     <Input
                       id="g-abn"
                       inputMode="numeric"
                       autoComplete="off"
                       className="min-h-12 text-base"
-                      placeholder="11 digits"
-                      value={abnInput}
-                      onChange={(e) => setAbnInput(e.target.value)}
+                      placeholder="Enter 11 digits"
+                      maxLength={11}
+                      value={abnDigits}
+                      onChange={(e) => {
+                        setAbnError(null);
+                        setAbnInput(e.target.value.replace(/\D/g, "").slice(0, 11));
+                      }}
                       disabled={submitting}
+                      aria-invalid={
+                        Boolean(abnError) ||
+                        (abnDigits.length === 11 && abnLive.status === "invalid")
+                      }
+                      aria-describedby="g-abn-hint g-abn-feedback"
                     />
-                    {abnLive.validating && (
-                      <p className="text-xs text-muted-foreground">Checking ABN…</p>
-                    )}
-                    {abnLive.status === "valid" && (
-                      <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                        {abnLive.entityName ? `Verified — ${abnLive.entityName}` : "ABN looks good."}
-                      </p>
-                    )}
-                    {abnLive.status === "invalid" && abnInput.replace(/\D/g, "").length === 11 && (
-                      <p className="text-xs text-destructive">{abnLive.error}</p>
-                    )}
+                    <p id="g-abn-hint" className="text-xs text-muted-foreground">
+                      Numbers only — spaces are ignored.
+                    </p>
+                    <div id="g-abn-feedback" className="space-y-2">
+                      {abnError && (
+                        <Alert variant="destructive" className="py-2 text-sm">
+                          <AlertDescription>{abnError}</AlertDescription>
+                        </Alert>
+                      )}
+                      {!abnError && abnLive.validating && abnDigits.length === 11 && (
+                        <p className="text-xs text-muted-foreground">Checking ABN…</p>
+                      )}
+                      {!abnError && abnLive.status === "valid" && abnDigits.length === 11 && (
+                        <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          {abnLive.entityName ? `Verified — ${abnLive.entityName}` : "ABN verified."}
+                        </p>
+                      )}
+                      {!abnError &&
+                        abnLive.status === "invalid" &&
+                        abnDigits.length === 11 &&
+                        !abnLive.validating &&
+                        abnLive.error && (
+                          <Alert variant="destructive" className="py-2 text-sm">
+                            <AlertDescription>{abnLive.error}</AlertDescription>
+                          </Alert>
+                        )}
+                    </div>
                   </div>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <Button
                       type="button"
-                      variant="ghost"
-                      className="order-2 text-muted-foreground sm:order-1"
+                      variant="outline"
+                      className="order-2 w-full sm:order-1 sm:w-auto"
                       disabled={submitting}
                       onClick={() => {
                         setPhase("role");
                         setAbnInput("");
+                        setAbnError(null);
                         setError(null);
                       }}
                     >
-                      Back
+                      Back to role choice
                     </Button>
-                    <div className="order-1 flex w-full flex-col gap-2 sm:order-2 sm:w-auto sm:flex-row">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="min-h-11 w-full sm:w-auto"
-                        disabled={submitting}
-                        onClick={onSkipAbn}
-                      >
-                        Skip for now
-                      </Button>
-                      <Button
-                        type="button"
-                        className="min-h-11 w-full sm:min-w-[10rem]"
-                        disabled={submitting || abnLive.validating}
-                        onClick={onCleanerSubmit}
-                      >
-                        {submitting ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving…
-                          </>
-                        ) : (
-                          "Continue"
-                        )}
-                      </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      className="order-1 min-h-11 w-full sm:order-2 sm:min-w-[10rem]"
+                      disabled={submitting || !canSubmitCleaner}
+                      onClick={onCleanerSubmit}
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving…
+                        </>
+                      ) : (
+                        "Continue as Cleaner"
+                      )}
+                    </Button>
                   </div>
                   <p className="text-center text-xs text-muted-foreground">
-                    You can add or update your ABN anytime in{" "}
+                    You can update your ABN later in{" "}
                     <Link href="/settings" className="font-medium text-primary underline underline-offset-2">
                       Settings
-                    </Link>
-                    .
+                    </Link>{" "}
+                    if your business details change.
                   </p>
                 </CardContent>
               </Card>
