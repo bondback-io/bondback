@@ -82,10 +82,13 @@ const listerSchema = z.object({
   full_name: z.string().min(1, "Name is required"),
   phone: z
     .string()
-    .min(1, "Phone is required")
     .refine(
-      (v) => v.replace(/\D/g, "").length >= 9 && v.replace(/\D/g, "").length <= 11,
-      "Valid Australian phone (9–11 digits)"
+      (v) => {
+        const d = v.replace(/\D/g, "");
+        if (d.length === 0) return true;
+        return d.length >= 9 && d.length <= 11;
+      },
+      { message: "Valid Australian phone (9–11 digits)" }
     ),
   date_of_birth: z.string().optional(),
   state: z.string().optional(),
@@ -432,7 +435,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
     }
     const result = await updateProfile({
       full_name: values.full_name.trim(),
-      phone: values.phone.trim(),
+      phone: values.phone.trim() || null,
       date_of_birth: values.date_of_birth?.trim() || null,
       state: values.state || null,
       suburb: values.suburb.trim(),
@@ -550,7 +553,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone (Australian)</Label>
+              <Label htmlFor="phone">Phone (Australian, optional)</Label>
               <Input id="phone" type="tel" {...cleanerForm.register("phone")} />
               {cleanerForm.formState.errors.phone && (
                 <p className="text-base text-destructive md:text-xs">
@@ -1037,7 +1040,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
             <Input id="email" value={email ?? ""} disabled />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="phone">Phone (Australian)</Label>
+            <Label htmlFor="phone">Phone (Australian, optional)</Label>
             <Input id="phone" type="tel" {...listerForm.register("phone")} />
             {listerForm.formState.errors.phone && (
               <p className="text-base text-destructive md:text-xs">
