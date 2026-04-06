@@ -30,8 +30,9 @@ export function resolveActiveRoleFromProfile(row: {
  * Single source of truth for interpreting `profiles.roles` from the DB.
  * Must stay in sync with `getSessionWithProfile` in `lib/supabase/session.ts`.
  *
- * - `null` on an existing profile row = legacy lister-only (before `roles[]` existed).
- * - `[]` = signed up but not yet chosen lister/cleaner (keep empty).
+ * - `[]` = signed up but not yet chosen lister/cleaner (OAuth / Path 1).
+ * - `null` should not occur after migration (`20260329130000_profiles_pending_active_role.sql`);
+ *   if it does, treat as **no roles** (pending), not lister — avoids showing lister before onboarding.
  */
 export function normalizeProfileRolesFromDb(
   roles: unknown,
@@ -64,7 +65,7 @@ export function normalizeProfileRolesFromDb(
       }
     }
   } else if (hasProfileRow) {
-    out = ["lister"];
+    out = [];
   }
   return out;
 }

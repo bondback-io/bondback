@@ -56,6 +56,33 @@ export async function proxy(request: NextRequest) {
   if (apexRedirect) return apexRedirect;
 
   const pathname = request.nextUrl.pathname;
+  const sp = request.nextUrl.searchParams;
+
+  /**
+   * Supabase OAuth can land on the **Site URL** root (`/?code=…`) when `redirectTo` is not
+   * allow-listed or Dashboard “Site URL” is used as a fallback — the PKCE `code` never reaches
+   * `/auth/callback`, so no session is established. Forward the same query string to the callback
+   * route so `exchangeCodeForSession` runs and post-login redirect (e.g. Google → role selection)
+   * still applies via `redirectAfterAuthSessionEstablished`.
+   */
+  const code = sp.get("code")?.trim();
+  const tokenHash = sp.get("token_hash")?.trim() ?? sp.get("token")?.trim();
+  const isOAuthOrPkcePayload =
+    Boolean(code) ||
+    Boolean(tokenHash) ||
+    (sp.has("error") && (sp.has("error_code") || sp.has("error_description")));
+
+  if (
+    isOAuthOrPkcePayload &&
+    !pathname.startsWith("/auth/callback") &&
+    !pathname.startsWith("/auth/confirm")
+  ) {
+    const destination = new URL("/auth/callback", request.url);
+    sp.forEach((value, key) => {
+      destination.searchParams.set(key, value);
+    });
+    return NextResponse.redirect(destination);
+  }
 
   /**
    * Do not run `getSession()` (token refresh) on email/OAuth link routes. If the browser still

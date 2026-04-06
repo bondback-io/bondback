@@ -182,6 +182,8 @@ export async function upsertMinimalProfileAfterSignup(
     suburb: input.suburb?.trim() ?? "",
     max_travel_km: 30,
     roles: [],
+    /** Until roles are chosen (Lister/Cleaner), do not default to lister — requires nullable `active_role` in DB. */
+    active_role: null,
     ...(avatar ? { profile_photo_url: avatar } : {}),
     ...(!alreadyReferred && referredBy ? { referred_by: referredBy } : {}),
   };

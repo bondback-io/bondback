@@ -2,7 +2,8 @@
  * Origins for Supabase **emailRedirectTo**, **signInWithOAuth redirectTo**, and **resetPassword redirectTo**.
  *
  * ## Only list these in Supabase Dashboard → Authentication → URL Configuration → Redirect URLs
- * - `https://www.bondback.io/**` (production; canonical host — see `proxy.ts` apex→www)
+ * - `https://www.bondback.io/auth/callback` (and `https://www.bondback.io/**` wildcard) — **avoid** relying
+ *   on Site URL alone; otherwise OAuth can fall back to `/?code=…` (see `proxy.ts` forwarding).
  * - `http://localhost:3000/**` (local dev)
  *
  * **Do not** add `https://*.vercel.app/**` — Vercel preview hostnames change per deployment and will

@@ -13,7 +13,8 @@ export interface Database {
         Row: {
           id: string;
           roles: string[] | null;
-          active_role: "lister" | "cleaner";
+          /** NULL when roles is empty (pending first role choice). */
+          active_role: "lister" | "cleaner" | null;
           abn: string | null;
           state: string | null;
           suburb: string;
@@ -65,7 +66,7 @@ export interface Database {
         Insert: {
           id: string;
           roles?: string[] | null;
-          active_role?: "lister" | "cleaner";
+          active_role?: "lister" | "cleaner" | null;
           abn?: string | null;
           state?: string | null;
           suburb?: string;
@@ -111,7 +112,7 @@ export interface Database {
         };
         Update: {
           roles?: string[] | null;
-          active_role?: "lister" | "cleaner";
+          active_role?: "lister" | "cleaner" | null;
           abn?: string | null;
           state?: string | null;
           suburb?: string;
