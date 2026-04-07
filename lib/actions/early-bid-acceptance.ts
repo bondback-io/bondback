@@ -31,6 +31,11 @@ function formatAud(cents: number): string {
   return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
 }
 
+/** Listing UUIDs from the URL and from Postgres can differ in letter case; JS `===` is strict. */
+function sameListingId(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
 export type EarlyBidRequestResult =
   | { ok: true }
   | { ok: false; error: string };
@@ -87,7 +92,7 @@ export async function requestEarlyBidAcceptance(
   const { data: jobExists } = await admin
     .from("jobs")
     .select("id")
-    .eq("id", listingId as never)
+    .eq("listing_id", listingId)
     .maybeSingle();
   if (jobExists) {
     return { ok: false, error: "A job already exists for this listing." };
@@ -108,7 +113,7 @@ export async function requestEarlyBidAcceptance(
     amount_cents: number;
     status: string;
   };
-  if (b.listing_id !== listingId) {
+  if (!sameListingId(b.listing_id, listingId)) {
     return { ok: false, error: "This bid does not belong to this listing." };
   }
   if (b.status !== "active") {
