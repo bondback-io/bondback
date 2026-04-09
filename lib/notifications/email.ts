@@ -373,7 +373,7 @@ export async function buildNotificationEmail(
     new_message: `${senderName ?? "Someone"} messaged you — Job #${id} – Bond Back`,
     new_bid: `Fresh bid on your listing — worth a look – Bond Back`,
     job_created: `Cleaner locked in — pay & start when you’re ready – Bond Back`,
-    job_accepted: `Green light: start Job #${id} – Bond Back`,
+    job_accepted: `You won the job — Job #${id} – Bond Back`,
     job_approved_to_start: `You’re cleared to begin Job #${id} – Bond Back`,
     job_completed: `Clean’s done — review & release when happy – Bond Back`,
     payment_released: (() => {

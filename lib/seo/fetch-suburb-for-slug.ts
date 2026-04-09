@@ -6,14 +6,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { parseLocationSlug } from "@/lib/seo/location-slug";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import type { Database } from "@/types/supabase";
+import { QLD_REGION_STATIC_SUBURBS } from "@/lib/seo/qld-regional-static-seo";
+import type { SuburbSeoRow } from "@/lib/seo/suburb-seo-types";
 
-export type SuburbSeoRow = {
-  suburb: string;
-  postcode: string;
-  state: string;
-  lat: number | null;
-  lon: number | null;
-};
+export type { SuburbSeoRow } from "@/lib/seo/suburb-seo-types";
 
 type ParsedSlug = NonNullable<ReturnType<typeof parseLocationSlug>>;
 
@@ -45,17 +41,23 @@ export async function fetchSuburbForSlug(
   const parsed = parseLocationSlug(norm);
   if (!parsed) return null;
 
+  const fallback = QLD_REGION_STATIC_SUBURBS[norm] ?? null;
+
   const admin = createSupabaseAdminClient();
   if (!admin) {
     const supabase = await createServerSupabaseClient();
-    return querySuburbRow(supabase, parsed);
+    const fromDb = await querySuburbRow(supabase, parsed);
+    if (fromDb) return fromDb;
+    return fallback;
   }
 
   return unstable_cache(
     async () => {
       const a = createSupabaseAdminClient();
-      if (!a) return null;
-      return querySuburbRow(a, parsed);
+      if (!a) return fallback;
+      const fromDb = await querySuburbRow(a, parsed);
+      if (fromDb) return fromDb;
+      return fallback;
     },
     ["suburb-seo-by-slug", norm],
     { revalidate: 3600, tags: [CACHE_TAGS.suburbs] }

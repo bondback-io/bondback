@@ -131,8 +131,8 @@ export type AcceptBidResult =
 
 /**
  * Lister accepts a bid: create job with winner_id = cleanerId and agreed_amount_cents.
- * Used after the cleaner confirms an early acceptance (see `lib/actions/early-bid-acceptance.ts`).
- * Listing is closed, other bids cancelled. Requires service role for token-based confirm flows.
+ * Called from `requestEarlyBidAcceptance` (immediate accept) and legacy email token `confirmEarlyBidByToken`.
+ * Listing is closed, other bids cancelled.
  */
 export async function finalizeBidAcceptanceCore(params: {
   listingId: string;
@@ -243,7 +243,7 @@ export async function finalizeBidAcceptanceCore(params: {
     params.cleanerId,
     "job_accepted",
     numericJobId,
-    "The lister accepted your bid. They'll pay and start the job to hold funds in escrow; then you can begin.",
+    "You won this job — the lister accepted your bid. They'll pay and start the job to hold funds in escrow; then you can begin.",
     { listingTitle }
   );
 

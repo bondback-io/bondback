@@ -2,8 +2,12 @@
  * Precomputed slugs matching `buildLocationSlug(suburb, state, postcode)` for the
  * Australian postcodes dataset (locality names as in `public.suburbs`).
  * Used for `generateStaticParams`, sitemap, and `/cleaning/[city]` redirects.
+ *
+ * Sunshine Coast QLD, Gympie, and North Brisbane slugs are listed first for local SEO priority.
  */
-export const TOP_BOND_CLEANING_SLUGS: readonly string[] = [
+import { SUNSHINE_COAST_REGION_BOND_CLEANING_SLUGS } from "@/lib/seo/qld-regional-static-seo";
+
+const LEGACY_BOND_CLEANING_SLUGS: readonly string[] = [
   "sydney-nsw-2000",
   "melbourne-vic-3000",
   "brisbane-qld-4000",
@@ -36,6 +40,11 @@ export const TOP_BOND_CLEANING_SLUGS: readonly string[] = [
   "ballarat-vic-3350",
 ];
 
+/** Deduped: regional QLD focus first, then national legacy slugs. */
+export const TOP_BOND_CLEANING_SLUGS: readonly string[] = [
+  ...new Set([...SUNSHINE_COAST_REGION_BOND_CLEANING_SLUGS, ...LEGACY_BOND_CLEANING_SLUGS]),
+];
+
 /** Short `/cleaning/[city]` paths → primary bond-cleaning slug (SEO aliases). */
 export const CLEANING_CITY_TO_SLUG: Record<string, string> = {
   sydney: "sydney-nsw-2000",
@@ -50,4 +59,10 @@ export const CLEANING_CITY_TO_SLUG: Record<string, string> = {
   parramatta: "parramatta-nsw-2150",
   newcastle: "newcastle-nsw-2300",
   wollongong: "wollongong-nsw-2500",
+  "sunshine-coast": "maroochydore-qld-4558",
+  maroochydore: "maroochydore-qld-4558",
+  caloundra: "caloundra-qld-4551",
+  noosa: "noosa-heads-qld-4567",
+  gympie: "gympie-qld-4570",
+  mooloolaba: "mooloolaba-qld-4557",
 };

@@ -5,6 +5,8 @@ import { getSiteUrl } from "@/lib/site";
 import type { SuburbSeoRow } from "@/lib/seo/fetch-suburb-for-slug";
 import { fetchSuburbForSlug } from "@/lib/seo/fetch-suburb-for-slug";
 import { TOP_BOND_CLEANING_SLUGS } from "@/lib/seo/location-top-slugs";
+import { SUNSHINE_COAST_REGION_BOND_CLEANING_SLUGS } from "@/lib/seo/qld-regional-static-seo";
+import { BOND_BACK_ORG_ID, buildLocationFaqGraphNode } from "@/lib/seo/home-json-ld";
 
 export const revalidate = 86400;
 export const dynamicParams = true;
@@ -13,9 +15,9 @@ export function generateStaticParams(): { slug: string }[] {
   return TOP_BOND_CLEANING_SLUGS.map((slug) => ({ slug }));
 }
 
-function locationKeywords(row: SuburbSeoRow): string[] {
+function locationKeywords(row: SuburbSeoRow, slug: string): string[] {
   const s = row.suburb;
-  return [
+  const base = [
     "bond cleaning",
     "end of lease cleaning",
     "bond back",
@@ -25,6 +27,20 @@ function locationKeywords(row: SuburbSeoRow): string[] {
     `bond clean ${row.postcode}`,
     `${s} ${row.state} cleaner`,
   ];
+  if (
+    row.state === "QLD" &&
+    SUNSHINE_COAST_REGION_BOND_CLEANING_SLUGS.includes(slug)
+  ) {
+    return [
+      "bond cleaning Sunshine Coast",
+      "end of lease cleaning Sunshine Coast",
+      "bond clean Sunshine Coast",
+      `bond cleaning ${s}`,
+      `end of lease cleaning ${s}`,
+      ...base,
+    ];
+  }
+  return base;
 }
 
 function buildLocationJsonLd(
@@ -70,6 +86,8 @@ function buildLocationJsonLd(
     description: `Post a bond clean or compare cleaner bids in ${row.suburb} — reverse-auction pricing on Bond Back.`,
   };
 
+  const faqNode = buildLocationFaqGraphNode(row, pageUrl);
+
   return {
     "@context": "https://schema.org",
     "@graph": [
@@ -83,6 +101,7 @@ function buildLocationJsonLd(
       },
       localBusiness,
       service,
+      faqNode,
     ],
   };
 }
@@ -96,13 +115,20 @@ export async function generateMetadata({
   const row = await fetchSuburbForSlug(slug);
   if (!row) notFound();
   const area = `${row.suburb}, ${row.state}`;
-  const title = `Bond cleaning ${row.suburb} ${row.state} | Bond Back`;
-  const description = `Bond cleaning and end of lease cleaning in ${area}. Compare cleaner bids for your bond back clean — postcode ${row.postcode}. List or bid on Bond Back.`;
+  const regional =
+    row.state === "QLD" &&
+    SUNSHINE_COAST_REGION_BOND_CLEANING_SLUGS.includes(slug);
+  const title = regional
+    ? `Bond cleaning ${row.suburb} & Sunshine Coast QLD | End of lease cleaning`
+    : `Bond cleaning ${row.suburb} ${row.state} | Bond Back`;
+  const description = regional
+    ? `Bond cleaning Sunshine Coast & end of lease cleaning in ${row.suburb} (${area}). Compare bids for your bond clean — postcode ${row.postcode}. Vacate cleaning on Bond Back.`
+    : `Bond cleaning and end of lease cleaning in ${area}. Compare cleaner bids for your bond back clean — postcode ${row.postcode}. List or bid on Bond Back.`;
   const canonical = `/bond-cleaning/${slug}`;
   return {
     title,
     description,
-    keywords: locationKeywords(row),
+    keywords: locationKeywords(row, slug),
     alternates: { canonical },
     openGraph: {
       type: "website",

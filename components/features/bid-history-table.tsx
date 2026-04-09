@@ -23,7 +23,7 @@ export type BidHistoryTableProps = {
   bids: BidWithBidder[];
   /** When set, show Accept bid button for lister (listing owner, no job yet). */
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
-  /** True if any bid is awaiting cleaner confirmation (other rows cannot start a new early accept). */
+  /** True if any bid is still in legacy `pending_confirmation` (blocks a second accept until cleared). */
   hasPendingEarlyAcceptance?: boolean;
 };
 
@@ -140,7 +140,7 @@ export function BidHistoryTable({
                 disabled={!!acceptingId}
                 onClick={() => openConfirm(bid)}
               >
-                {acceptingId === bid.id ? "Sending…" : "Accept Bid Early"}
+                {acceptingId === bid.id ? "Working…" : "Accept bid"}
               </Button>
             )}
           </li>
@@ -196,7 +196,7 @@ export function BidHistoryTable({
                           disabled={!!acceptingId}
                           onClick={() => openConfirm(bid)}
                         >
-                          {acceptingId === bid.id ? "Sending…" : "Accept Bid Early"}
+                          {acceptingId === bid.id ? "Working…" : "Accept bid"}
                         </Button>
                       ) : hasPendingEarlyAcceptance && bid.status !== "pending_confirmation" ? (
                         <span className="max-w-[12rem] text-[11px] text-muted-foreground dark:text-gray-500">
@@ -221,13 +221,14 @@ export function BidHistoryTable({
       >
         <DialogContent className="max-w-md dark:border-gray-800 dark:bg-gray-950 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="dark:text-gray-100">Accept early bid?</DialogTitle>
+            <DialogTitle className="dark:text-gray-100">Accept this bid?</DialogTitle>
             <DialogDescription className="text-left text-sm leading-relaxed dark:text-gray-400">
-              Are you sure you want to accept this bid of{" "}
+              This creates the job at{" "}
               <span className="font-semibold tabular-nums text-foreground dark:text-gray-100">
                 {confirmBid != null ? formatCents(confirmBid.amount_cents) : "—"}
               </span>
-              ? We&apos;ll email the cleaner to confirm and let them know.
+              . The cleaner is notified by email and in-app. You can then pay &amp; start the job when
+              you&apos;re ready.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">
@@ -246,7 +247,7 @@ export function BidHistoryTable({
               disabled={!!acceptingId}
               onClick={handleConfirmAccept}
             >
-              {acceptingId ? "Sending…" : "Accept bid"}
+              {acceptingId ? "Working…" : "Accept bid"}
             </Button>
           </DialogFooter>
         </DialogContent>

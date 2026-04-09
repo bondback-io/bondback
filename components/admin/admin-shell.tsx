@@ -11,6 +11,7 @@ import {
   CreditCard,
   FileText,
   Globe,
+  Search,
   LayoutDashboard,
   List,
   Mail,
@@ -51,6 +52,7 @@ export const ADMIN_NAV_GROUPS: {
     label: "Platform",
     items: [
       { label: "Overview", href: "/admin/dashboard", icon: LayoutDashboard },
+      { label: "SEO", href: "/admin/seo", icon: Search },
       { label: "Users", href: "/admin/users", icon: UserCog },
       { label: "Listings", href: "/admin/listings", icon: List },
       { label: "Jobs", href: "/admin/jobs", icon: Briefcase },

@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -12,19 +11,11 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { AdminOnlyToast } from "@/components/admin/admin-only-toast";
 import { cn } from "@/lib/utils";
+import { buildHomePageMetadata } from "@/lib/seo/home-metadata";
+import { buildHomePageJsonLd } from "@/lib/seo/home-json-ld";
+import { getSiteUrl } from "@/lib/site";
 
-export const metadata: Metadata = {
-  title: "Bond cleaning & end of lease cleaning marketplace",
-  description:
-    "Bond Back is Australia’s marketplace for bond cleaning and end of lease cleaning. Post a job, receive bids in a reverse auction, and get your bond back with clear pricing.",
-  alternates: { canonical: "/" },
-  openGraph: {
-    title: "Bond Back — Bond cleaning & end of lease cleaning (Australia)",
-    description:
-      "List bond cleans, compare cleaner bids, and pay securely — built for Australian renters and cleaners.",
-    url: "/",
-  },
-};
+export const metadata = buildHomePageMetadata();
 
 const STEPS = [
   {
@@ -60,8 +51,15 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   } = await supabase.auth.getSession();
   const isLoggedIn = !!session;
 
+  const site = getSiteUrl();
+  const homeJsonLd = buildHomePageJsonLd(site.origin);
+
   return (
     <main className="min-h-[85vh] bg-background pb-20 pt-6 dark:bg-gray-950 sm:pb-24 sm:pt-10 md:pt-14">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }}
+      />
       {showAdminOnlyToast && <AdminOnlyToast />}
 
       <div className="container max-w-5xl px-4 sm:px-6">
@@ -75,14 +73,14 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
           <div className="mx-auto max-w-2xl text-center">
             <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-950/90 dark:text-emerald-100">
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden />
-              Australia&apos;s bond clean marketplace
+              Sunshine Coast · QLD · Australia
             </p>
             <h1 className="text-balance text-3xl font-bold leading-[1.15] tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl md:text-5xl">
-              Get your bond back with cleaner bids you can trust
+              Bond cleaning Sunshine Coast &amp; Australia — bids you can trust
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-lg">
-              Post a bond clean or find paid work — simple pricing, verified cleaners, and secure
-              payments. Built for renters and cleaners, not clutter.
+              End of lease cleaning and bond cleans from Maroochydore to Gympie and nationwide — simple
+              pricing, verified cleaners, and secure payments. Built for renters and cleaners.
             </p>
 
             {/* Primary CTAs — large tap targets, vertical on narrow screens */}

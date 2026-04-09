@@ -54,6 +54,9 @@ export const metadata: Metadata = {
     "Australian marketplace for bond cleaning and end of lease cleaning. Listers post jobs, cleaners bid in a reverse auction, and you get your bond back with transparent pricing.",
   applicationName: "Bond Back",
   keywords: [
+    "bond cleaning Sunshine Coast",
+    "end of lease cleaning Sunshine Coast",
+    "bond clean Sunshine Coast",
     "bond cleaning",
     "end of lease cleaning",
     "bond back",

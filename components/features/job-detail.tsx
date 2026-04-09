@@ -313,9 +313,9 @@ export function JobDetail({
       const result = await requestEarlyBidAcceptance(listingId, bid.id);
       if (result.ok) {
         toast({
-          title: "Early acceptance requested",
+          title: "Bid accepted — job created",
           description:
-            "We emailed the cleaner. They must confirm within 24 hours to create the job. The listing stays open until then.",
+            "The cleaner has been notified by email and in-app. They can open the job when the lister pays & starts.",
         });
         scheduleRouterAction(() => router.refresh());
       } else {

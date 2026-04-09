@@ -866,6 +866,29 @@ export interface Database {
           }
         ];
       };
+      seo_manual_checklist: {
+        Row: {
+          task_key: string;
+          completed_at: string | null;
+          notes: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          task_key: string;
+          completed_at?: string | null;
+          notes?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          completed_at?: string | null;
+          notes?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

@@ -1,21 +1,14 @@
 "use server";
 
-import { randomBytes, timingSafeEqual } from "crypto";
+import { timingSafeEqual } from "crypto";
 import { revalidatePath } from "next/cache";
-import { render } from "@react-email/render";
-import React from "react";
-import { EarlyBidConfirmationEmail } from "@/emails/EarlyBidConfirmationEmail";
 import { createNotification } from "@/lib/actions/notifications";
 import { finalizeBidAcceptanceCore } from "@/lib/actions/jobs";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
-import { sendEmail } from "@/lib/notifications/email";
-import { emailPublicOrigin } from "@/emails/email-public-url";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { trimStr } from "@/lib/utils";
-
-const EARLY_ACCEPT_HOURS = 24;
 
 function safeEqualToken(a: string, b: string): boolean {
   try {
@@ -42,8 +35,8 @@ export type EarlyBidRequestResult =
   | { ok: false; error: string };
 
 /**
- * Lister: request cleaner confirmation before the bid is officially accepted.
- * Sets bid to `pending_confirmation`, sends email with confirm/decline links.
+ * Lister accepts a bid: creates the job immediately (no cleaner email confirmation step).
+ * Cleaner is notified via `job_accepted` (in-app + email + SMS/push per preferences) in {@link finalizeBidAcceptanceCore}.
  */
 export async function requestEarlyBidAcceptance(
   listingId: string,
@@ -68,9 +61,7 @@ export async function requestEarlyBidAcceptance(
 
   const { data: listing, error: le } = await admin
     .from("listings")
-    .select(
-      "id, lister_id, status, title, suburb, postcode, property_type, bedrooms, bathrooms, special_instructions"
-    )
+    .select("id, lister_id, status, title")
     .eq("id", listingUuid)
     .maybeSingle();
   if (le || !listing) {
@@ -80,12 +71,6 @@ export async function requestEarlyBidAcceptance(
     lister_id: string;
     status: string;
     title: string | null;
-    suburb: string | null;
-    postcode: string | null;
-    property_type: string | null;
-    bedrooms: number | null;
-    bathrooms: number | null;
-    special_instructions: string | null;
   };
   if (!sameUuid(list.lister_id, user.id)) {
     return { ok: false, error: "Only the lister can accept a bid." };
@@ -147,104 +132,17 @@ export async function requestEarlyBidAcceptance(
     }
   }
 
-  const expiresAt = new Date(Date.now() + EARLY_ACCEPT_HOURS * 60 * 60 * 1000).toISOString();
-  const token = randomBytes(32).toString("hex");
-
-  await admin
-    .from("bids")
-    .update({
-      status: "active",
-      early_action_token: null,
-      pending_confirmation_expires_at: null,
-    } as never)
-    .eq("listing_id", listingUuid)
-    .eq("status", "pending_confirmation");
-
-  const { data: updatedBid, error: upErr } = await admin
-    .from("bids")
-    .update({
-      status: "pending_confirmation",
-      early_action_token: token,
-      pending_confirmation_expires_at: expiresAt,
-    } as never)
-    .eq("id", bidUuid)
-    .eq("status", "active")
-    .select("id")
-    .maybeSingle();
-
-  if (upErr || !updatedBid) {
-    return {
-      ok: false,
-      error: upErr?.message ?? "Could not reserve this bid. It may have changed—refresh and try again.",
-    };
-  }
-
-  const appUrl = emailPublicOrigin();
-  const confirmUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=confirm`;
-  const declineUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=decline`;
-
-  const jobTitle = trimStr(list.title) || "Bond clean";
-  const addressLine = [list.suburb, list.postcode].filter(Boolean).join(", ") || "—";
-  const propertySizeLine = [
-    list.property_type ? `${list.property_type}` : null,
-    list.bedrooms != null ? `${list.bedrooms} bed` : null,
-    list.bathrooms != null ? `${list.bathrooms} bath` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  const element = React.createElement(EarlyBidConfirmationEmail, {
-    jobTitle,
-    addressLine,
-    bidAmountDisplay: formatAud(b.amount_cents),
-    propertySizeLine: propertySizeLine || "—",
-    confirmUrl,
-    declineUrl,
-    expiresSummary: `${EARLY_ACCEPT_HOURS} hours`,
+  const result = await finalizeBidAcceptanceCore({
+    listingId: listingUuid,
+    listerId: list.lister_id,
+    cleanerId: b.cleaner_id,
+    acceptedAmountCents: b.amount_cents,
+    listingTitle: list.title ?? null,
   });
-  const html = await render(element);
-  const subject = `You’re first pick on “${jobTitle}” — tap to confirm – Bond Back`;
 
-  const cleanerEmail = await getEmailForUserId(b.cleaner_id);
-  if (!trimStr(cleanerEmail)) {
-    await admin
-      .from("bids")
-      .update({
-        status: "active",
-        early_action_token: null,
-        pending_confirmation_expires_at: null,
-      } as never)
-      .eq("id", bidUuid);
-    return { ok: false, error: "Could not find the cleaner’s email address." };
+  if (!result.ok) {
+    return { ok: false, error: result.error };
   }
-
-  const sendResult = await sendEmail(trimStr(cleanerEmail), subject, html, {
-    log: { userId: b.cleaner_id, kind: "early_bid_confirmation" },
-  });
-  if (!sendResult.ok || sendResult.skipped) {
-    await admin
-      .from("bids")
-      .update({
-        status: "active",
-        early_action_token: null,
-        pending_confirmation_expires_at: null,
-      } as never)
-      .eq("id", bidUuid);
-    return {
-      ok: false,
-      error: sendResult.skipped
-        ? "Email could not be sent (check global email settings)."
-        : sendResult.error ?? "Email could not be sent.",
-    };
-  }
-
-  revalidateJobsBrowseCaches();
-  revalidatePath("/jobs");
-  revalidatePath(`/jobs/${listingUuid}`);
-  revalidatePath("/my-listings");
-  revalidatePath("/dashboard");
-  revalidatePath("/lister/dashboard");
-  revalidatePath("/cleaner/dashboard");
 
   return { ok: true };
 }
