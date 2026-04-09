@@ -6,6 +6,14 @@ import { formatCents } from "@/lib/listings";
 import type { BidRow } from "@/lib/listings";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export type BidWithBidder = BidRow & {
   bidder_email?: string | null;
@@ -25,6 +33,7 @@ export function BidHistoryTable({
   hasPendingEarlyAcceptance = false,
 }: BidHistoryTableProps) {
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [confirmBid, setConfirmBid] = useState<BidWithBidder | null>(null);
   const sorted = [...bids].sort(
     (a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -36,14 +45,22 @@ export function BidHistoryTable({
     );
   }
 
-  const handleAccept = async (bid: BidWithBidder) => {
-    if (!onAcceptBid) return;
-    setAcceptingId(bid.id);
-    try {
-      await onAcceptBid(bid);
-    } finally {
-      setAcceptingId(null);
-    }
+  const openConfirm = (bid: BidWithBidder) => {
+    setConfirmBid(bid);
+  };
+
+  const handleConfirmAccept = () => {
+    if (!confirmBid || !onAcceptBid) return;
+    const bid = confirmBid;
+    void (async () => {
+      setAcceptingId(bid.id);
+      try {
+        await onAcceptBid(bid);
+      } finally {
+        setAcceptingId(null);
+        setConfirmBid(null);
+      }
+    })();
   };
 
   const showEarlyButton = (bid: BidWithBidder) => {
@@ -121,7 +138,7 @@ export function BidHistoryTable({
                 variant="default"
                 className="mt-4 h-12 w-full text-base font-semibold"
                 disabled={!!acceptingId}
-                onClick={() => handleAccept(bid)}
+                onClick={() => openConfirm(bid)}
               >
                 {acceptingId === bid.id ? "Sending…" : "Accept Bid Early"}
               </Button>
@@ -177,7 +194,7 @@ export function BidHistoryTable({
                           variant="default"
                           className="text-xs font-semibold"
                           disabled={!!acceptingId}
-                          onClick={() => handleAccept(bid)}
+                          onClick={() => openConfirm(bid)}
                         >
                           {acceptingId === bid.id ? "Sending…" : "Accept Bid Early"}
                         </Button>
@@ -194,6 +211,46 @@ export function BidHistoryTable({
           </tbody>
         </table>
       </div>
+
+      <Dialog
+        open={confirmBid != null}
+        onOpenChange={(open) => {
+          if (!open && acceptingId) return;
+          if (!open) setConfirmBid(null);
+        }}
+      >
+        <DialogContent className="max-w-md dark:border-gray-800 dark:bg-gray-950 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="dark:text-gray-100">Accept early bid?</DialogTitle>
+            <DialogDescription className="text-left text-sm leading-relaxed dark:text-gray-400">
+              Are you sure you want to accept this bid of{" "}
+              <span className="font-semibold tabular-nums text-foreground dark:text-gray-100">
+                {confirmBid != null ? formatCents(confirmBid.amount_cents) : "—"}
+              </span>
+              ? We&apos;ll email the cleaner to confirm within 24 hours before the job is created.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12 dark:border-gray-600 dark:hover:bg-gray-800"
+              disabled={!!acceptingId}
+              onClick={() => setConfirmBid(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="min-h-12 font-semibold"
+              disabled={!!acceptingId}
+              onClick={handleConfirmAccept}
+            >
+              {acceptingId ? "Sending…" : "Accept bid"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

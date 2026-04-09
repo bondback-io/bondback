@@ -31,8 +31,8 @@ function formatAud(cents: number): string {
   return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
 }
 
-/** Listing UUIDs from the URL and from Postgres can differ in letter case; JS `===` is strict. */
-function sameListingId(a: string, b: string): boolean {
+/** UUIDs from the URL, cookies, and Postgres can differ in letter case; JS `===` is strict. */
+function sameUuid(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
@@ -48,11 +48,15 @@ export async function requestEarlyBidAcceptance(
   listingId: string,
   bidId: string
 ): Promise<EarlyBidRequestResult> {
+  const listingUuid = listingId.trim().toLowerCase();
+  const bidUuid = bidId.trim().toLowerCase();
+
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) {
+    data: { user },
+    error: authErr,
+  } = await supabase.auth.getUser();
+  if (authErr || !user) {
     return { ok: false, error: "You must be logged in." };
   }
 
@@ -66,7 +70,7 @@ export async function requestEarlyBidAcceptance(
     .select(
       "id, lister_id, status, title, suburb, postcode, property_type, bedrooms, bathrooms, special_instructions"
     )
-    .eq("id", listingId)
+    .eq("id", listingUuid)
     .maybeSingle();
   if (le || !listing) {
     return { ok: false, error: "Listing not found." };
@@ -82,7 +86,7 @@ export async function requestEarlyBidAcceptance(
     bathrooms: number | null;
     special_instructions: string | null;
   };
-  if (list.lister_id !== session.user.id) {
+  if (!sameUuid(list.lister_id, user.id)) {
     return { ok: false, error: "Only the lister can accept a bid." };
   }
   if (list.status !== "live") {
@@ -92,7 +96,7 @@ export async function requestEarlyBidAcceptance(
   const { data: jobExists } = await admin
     .from("jobs")
     .select("id")
-    .eq("listing_id", listingId)
+    .eq("listing_id", listingUuid)
     .maybeSingle();
   if (jobExists) {
     return { ok: false, error: "A job already exists for this listing." };
@@ -101,7 +105,7 @@ export async function requestEarlyBidAcceptance(
   const { data: bid, error: be } = await admin
     .from("bids")
     .select("id, listing_id, cleaner_id, amount_cents, status")
-    .eq("id", bidId)
+    .eq("id", bidUuid)
     .maybeSingle();
   if (be || !bid) {
     return { ok: false, error: "Bid not found." };
@@ -113,7 +117,7 @@ export async function requestEarlyBidAcceptance(
     amount_cents: number;
     status: string;
   };
-  if (!sameListingId(b.listing_id, listingId)) {
+  if (!sameUuid(b.listing_id, listingUuid)) {
     return { ok: false, error: "This bid does not belong to this listing." };
   }
   if (b.status !== "active") {
@@ -147,7 +151,7 @@ export async function requestEarlyBidAcceptance(
       early_action_token: null,
       pending_confirmation_expires_at: null,
     } as never)
-    .eq("listing_id", listingId)
+    .eq("listing_id", listingUuid)
     .eq("status", "pending_confirmation");
 
   const { data: updatedBid, error: upErr } = await admin
@@ -157,7 +161,7 @@ export async function requestEarlyBidAcceptance(
       early_action_token: token,
       pending_confirmation_expires_at: expiresAt,
     } as never)
-    .eq("id", bidId)
+    .eq("id", bidUuid)
     .eq("status", "active")
     .select("id")
     .maybeSingle();
@@ -204,7 +208,7 @@ export async function requestEarlyBidAcceptance(
         early_action_token: null,
         pending_confirmation_expires_at: null,
       } as never)
-      .eq("id", bidId);
+      .eq("id", bidUuid);
     return { ok: false, error: "Could not find the cleaner’s email address." };
   }
 
@@ -219,7 +223,7 @@ export async function requestEarlyBidAcceptance(
         early_action_token: null,
         pending_confirmation_expires_at: null,
       } as never)
-      .eq("id", bidId);
+      .eq("id", bidUuid);
     return {
       ok: false,
       error: sendResult.skipped
@@ -230,7 +234,7 @@ export async function requestEarlyBidAcceptance(
 
   revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
-  revalidatePath(`/jobs/${listingId}`);
+  revalidatePath(`/jobs/${listingUuid}`);
   revalidatePath("/my-listings");
   revalidatePath("/dashboard");
   revalidatePath("/lister/dashboard");
