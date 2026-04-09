@@ -35,6 +35,11 @@ function firstSearchParam(
   return Array.isArray(v) ? v[0] : v;
 }
 
+/** Compare auth/profile IDs — PostgREST may return values that are not plain strings at runtime. */
+function sameUserId(a: unknown, b: unknown): boolean {
+  return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+}
+
 /** `?payment=success` or malformed `?payment-success` (flag-only) from some redirects */
 function isStripePaymentSuccessReturn(
   sp: Record<string, string | string[] | undefined>
@@ -186,7 +191,7 @@ export default async function JobDetailPage({
     resolution_at?: string | null;
     refund_amount?: number | null;
   };
-  const hasPaymentHold = !!(j?.payment_intent_id?.trim());
+  const hasPaymentHold = !!String(j?.payment_intent_id ?? "").trim();
   const canLeaveReview =
     Boolean(job?.status === "completed") && Boolean(j?.payment_released_at);
   const paymentTimeline =
@@ -379,15 +384,13 @@ export default async function JobDetailPage({
         isJobLister={
           !!session &&
           !!job &&
-          session.user.id.trim().toLowerCase() ===
-            String(job.lister_id).trim().toLowerCase() &&
+          sameUserId(session.user?.id, job.lister_id) &&
           isListerActive
         }
         /** Same as lister-side job checks: owning the row is not enough — must be viewing as lister (hide cancel / lister tools in cleaner role). */
         isListingOwner={
           !!session &&
-          listingRow.lister_id.trim().toLowerCase() ===
-            session.user.id.trim().toLowerCase() &&
+          sameUserId(listingRow.lister_id, session.user?.id) &&
           isListerActive
         }
         isJobCleaner={
