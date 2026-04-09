@@ -13,6 +13,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/notifications/email";
 import { emailPublicOrigin } from "@/emails/email-public-url";
+import { trimStr } from "@/lib/utils";
 
 const EARLY_ACCEPT_HOURS = 24;
 
@@ -32,8 +33,8 @@ function formatAud(cents: number): string {
 }
 
 /** UUIDs from the URL, cookies, and Postgres can differ in letter case; JS `===` is strict. */
-function sameUuid(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+function sameUuid(a: unknown, b: unknown): boolean {
+  return trimStr(a).toLowerCase() === trimStr(b).toLowerCase();
 }
 
 export type EarlyBidRequestResult =
@@ -48,8 +49,8 @@ export async function requestEarlyBidAcceptance(
   listingId: string,
   bidId: string
 ): Promise<EarlyBidRequestResult> {
-  const listingUuid = listingId.trim().toLowerCase();
-  const bidUuid = bidId.trim().toLowerCase();
+  const listingUuid = trimStr(listingId).toLowerCase();
+  const bidUuid = trimStr(bidId).toLowerCase();
 
   const supabase = await createServerSupabaseClient();
   const {
@@ -137,7 +138,7 @@ export async function requestEarlyBidAcceptance(
       .eq("id", b.cleaner_id)
       .maybeSingle();
     const cp = cleanerProfile as { stripe_connect_id?: string | null; stripe_onboarding_complete?: boolean } | null;
-    if (!cp?.stripe_connect_id?.trim() || cp?.stripe_onboarding_complete !== true) {
+    if (!trimStr(cp?.stripe_connect_id) || cp?.stripe_onboarding_complete !== true) {
       return {
         ok: false,
         error:
@@ -182,7 +183,7 @@ export async function requestEarlyBidAcceptance(
   const confirmUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=confirm`;
   const declineUrl = `${appUrl}/api/bids/early-action?token=${encodeURIComponent(token)}&action=decline`;
 
-  const jobTitle = (list.title ?? "").trim() || "Bond clean";
+  const jobTitle = trimStr(list.title) || "Bond clean";
   const addressLine = [list.suburb, list.postcode].filter(Boolean).join(", ") || "—";
   const propertySizeLine = [
     list.property_type ? `${list.property_type}` : null,
@@ -205,7 +206,7 @@ export async function requestEarlyBidAcceptance(
   const subject = `You’re first pick on “${jobTitle}” — tap to confirm – Bond Back`;
 
   const cleanerEmail = await getEmailForUserId(b.cleaner_id);
-  if (!cleanerEmail?.trim()) {
+  if (!trimStr(cleanerEmail)) {
     await admin
       .from("bids")
       .update({
@@ -217,7 +218,7 @@ export async function requestEarlyBidAcceptance(
     return { ok: false, error: "Could not find the cleaner’s email address." };
   }
 
-  const sendResult = await sendEmail(cleanerEmail.trim(), subject, html, {
+  const sendResult = await sendEmail(trimStr(cleanerEmail), subject, html, {
     log: { userId: b.cleaner_id, kind: "early_bid_confirmation" },
   });
   if (!sendResult.ok || sendResult.skipped) {
@@ -366,8 +367,8 @@ export async function declineEarlyBidByToken(token: string): Promise<EarlyBidTok
     .maybeSingle();
   const pr = profile as { display_name?: string | null; full_name?: string | null } | null;
   const cleanerName =
-    (pr?.display_name ?? "").trim() ||
-    (pr?.full_name ?? "").trim() ||
+    trimStr(pr?.display_name) ||
+    trimStr(pr?.full_name) ||
     "The cleaner";
 
   await admin

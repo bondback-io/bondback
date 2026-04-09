@@ -22,6 +22,7 @@ import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewa
 import { logTimerActivity } from "@/lib/admin-activity-log";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
+import { trimStr } from "@/lib/utils";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -58,8 +59,8 @@ export async function createJobPayment(
     payment_intent_id: string | null;
   };
 
-  if (j.payment_intent_id?.trim()) {
-    return { ok: true, paymentIntentId: j.payment_intent_id };
+  if (trimStr(j.payment_intent_id)) {
+    return { ok: true, paymentIntentId: String(j.payment_intent_id) };
   }
 
   let agreedCents = j.agreed_amount_cents ?? null;
@@ -180,7 +181,7 @@ export async function finalizeBidAcceptanceCore(params: {
     const cp = cleanerProfile as { stripe_connect_id?: string | null; stripe_onboarding_complete?: boolean } | null;
     const stripeConnectId = cp?.stripe_connect_id;
     const onboardingComplete = cp?.stripe_onboarding_complete === true;
-    if (!stripeConnectId?.trim() || !onboardingComplete) {
+    if (!trimStr(stripeConnectId) || !onboardingComplete) {
       return {
         ok: false,
         error:
@@ -312,7 +313,7 @@ export async function secureJobAtPrice(
       .eq("id", session.user.id)
       .maybeSingle();
     const pr = profileRow as { stripe_connect_id?: string | null; stripe_onboarding_complete?: boolean } | null;
-    if (!pr?.stripe_connect_id?.trim() || pr?.stripe_onboarding_complete !== true) {
+    if (!trimStr(pr?.stripe_connect_id) || pr?.stripe_onboarding_complete !== true) {
       return {
         ok: false,
         error: "Please connect your bank account to receive payment. Go to Profile or Settings to connect.",
@@ -432,7 +433,7 @@ export async function createJobCheckoutSession(
     return { ok: false, error: "Job must be in 'accepted' status to pay and start." };
   }
 
-  if (row.payment_intent_id?.trim()) {
+  if (trimStr(row.payment_intent_id)) {
     return { ok: false, error: "Payment is already held in escrow for this job." };
   }
 
@@ -474,8 +475,13 @@ export async function createJobCheckoutSession(
     .eq("id", row.lister_id)
     .maybeSingle();
 
-  const pmId = (listerProfile as { stripe_payment_method_id?: string | null } | null)?.stripe_payment_method_id?.trim();
-  const customerId = (listerProfile as { stripe_customer_id?: string | null } | null)?.stripe_customer_id?.trim() ?? null;
+  const pmId = trimStr(
+    (listerProfile as { stripe_payment_method_id?: string | null } | null)?.stripe_payment_method_id
+  );
+  const customerId =
+    trimStr(
+      (listerProfile as { stripe_customer_id?: string | null } | null)?.stripe_customer_id
+    ) || null;
 
   if (pmId) {
     try {
@@ -942,7 +948,7 @@ export async function approveJobStart(
     };
   }
 
-  if (!approveRow.payment_intent_id?.trim()) {
+  if (!trimStr(approveRow.payment_intent_id)) {
     return {
       ok: false,
       error: "Pay and start the job first (Pay & Start Job) so funds are in escrow.",
@@ -1083,7 +1089,7 @@ export async function cancelJobByLister(
     return { ok: false, error: "Job can only be cancelled while it is pending your payment (accepted, before Pay & Start Job)." };
   }
 
-  if (cancelRow.payment_intent_id?.trim()) {
+  if (trimStr(cancelRow.payment_intent_id)) {
     return { ok: false, error: "Payment is already held in escrow. To cancel after payment, please open a dispute or contact support." };
   }
 
@@ -1132,7 +1138,7 @@ export async function markJobChecklistFinished(
 
   // Load by numeric job id only. Do NOT use `.or(..., listing_id.eq.jobId)` — listing_id is
   // uuid; comparing it to a numeric id string makes Postgres error ("invalid input syntax for type uuid").
-  const raw = String(jobId).trim();
+  const raw = trimStr(jobId);
   const numericId = Number(raw);
   let jobQuery = supabase
     .from("jobs")
@@ -1303,18 +1309,20 @@ export async function releaseJobFunds(
     return { ok: true };
   }
 
-  if (!j.payment_intent_id?.trim()) {
+  if (!trimStr(j.payment_intent_id)) {
     return { ok: false, error: "Job has no payment hold (payment_intent_id)." };
   }
+  const paymentIntentId = trimStr(j.payment_intent_id);
 
   const agreedCents = j.agreed_amount_cents ?? 0;
   if (agreedCents < 1) {
     return { ok: false, error: "Job has no agreed amount." };
   }
 
-  if (!j.winner_id?.trim()) {
+  if (!trimStr(j.winner_id)) {
     return { ok: false, error: "Job has no cleaner (winner_id)." };
   }
+  const winnerId = trimStr(j.winner_id);
 
   /** RLS usually allows users to read only their own profile; listers cannot read the cleaner's row. */
   const adminForPayout = createSupabaseAdminClient();
@@ -1322,13 +1330,14 @@ export async function releaseJobFunds(
   const { data: profile } = await profileClient
     .from("profiles")
     .select("stripe_connect_id")
-    .eq("id", j.winner_id)
+    .eq("id", winnerId)
     .maybeSingle();
 
-  const stripeConnectId = (profile as { stripe_connect_id?: string | null } | null)?.stripe_connect_id;
-  if (!stripeConnectId?.trim()) {
+  const stripeConnectIdRaw = (profile as { stripe_connect_id?: string | null } | null)?.stripe_connect_id;
+  if (!trimStr(stripeConnectIdRaw)) {
     return { ok: false, error: "Cleaner has not connected a bank account (Stripe Connect)." };
   }
+  const stripeConnectId = trimStr(stripeConnectIdRaw);
 
   let stripe;
   try {
@@ -1338,7 +1347,7 @@ export async function releaseJobFunds(
   }
 
   try {
-    const pi = await stripe.paymentIntents.retrieve(j.payment_intent_id);
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
     if (pi.status === "requires_action") {
       return {
         ok: false,
@@ -1354,12 +1363,12 @@ export async function releaseJobFunds(
 
     let chargeId: string | undefined;
     if (pi.status === "requires_capture") {
-      const captured = await stripe.paymentIntents.capture(j.payment_intent_id);
+      const captured = await stripe.paymentIntents.capture(paymentIntentId);
       chargeId =
         typeof captured.latest_charge === "string"
           ? captured.latest_charge
           : (captured.latest_charge as { id?: string } | null)?.id;
-    } else if (pi.status === "succeeded" && j.stripe_transfer_id?.trim()) {
+    } else if (pi.status === "succeeded" && trimStr(j.stripe_transfer_id)) {
       // Already captured and transfer created previously; ensure DB is in sync
       const nowIso = new Date().toISOString();
       const { error: updateError } = await supabase
@@ -1428,11 +1437,11 @@ export async function releaseJobFunds(
 
     const testMode = await isStripeTestMode();
     if (testMode) {
-      console.log("[Stripe Test] PaymentIntent captured:", j.payment_intent_id, "Transfer created:", transfer.id);
+      console.log("[Stripe Test] PaymentIntent captured:", paymentIntentId, "Transfer created:", transfer.id);
     }
     return {
       ok: true,
-      ...(testMode ? { transferId: transfer.id, paymentIntentId: j.payment_intent_id } : {}),
+      ...(testMode ? { transferId: transfer.id, paymentIntentId: paymentIntentId } : {}),
     };
   } catch (e) {
     const err = e as Error & { type?: string; code?: string; raw?: { message?: string } };
@@ -1492,9 +1501,10 @@ export async function executeRefund(
     payment_released_at: string | null;
   };
 
-  if (!j.payment_intent_id?.trim()) {
+  if (!trimStr(j.payment_intent_id)) {
     return { ok: false, error: "Job has no payment hold; cannot process Stripe refund." };
   }
+  const paymentIntentId = trimStr(j.payment_intent_id);
 
   const agreedCents = j.agreed_amount_cents ?? 0;
   const settings = await getGlobalSettings();
@@ -1513,22 +1523,23 @@ export async function executeRefund(
 
   try {
     // Ensure funds are captured before creating a refund. (Manual capture escrow holds until release/dispute resolution.)
-    const pi = await stripe.paymentIntents.retrieve(j.payment_intent_id);
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
     if (pi.status === "requires_capture") {
-      await stripe.paymentIntents.capture(j.payment_intent_id);
+      await stripe.paymentIntents.capture(paymentIntentId);
     }
 
     await stripe.refunds.create({
-      payment_intent: j.payment_intent_id,
+      payment_intent: paymentIntentId,
       amount,
       reason: "requested_by_customer",
       metadata: { job_id: String(jobId) },
     });
 
-    if (j.stripe_transfer_id?.trim() && amount > feeCents && agreedCents >= 1) {
+    const stripeTransferId = trimStr(j.stripe_transfer_id);
+    if (stripeTransferId && amount > feeCents && agreedCents >= 1) {
       const reverseCents = Math.min(agreedCents, amount - feeCents);
       if (reverseCents >= 1) {
-        await stripe.transfers.createReversal(j.stripe_transfer_id, {
+        await stripe.transfers.createReversal(stripeTransferId, {
           amount: reverseCents,
           metadata: { job_id: String(jobId), reason: "dispute_partial_refund" },
         });
@@ -2064,11 +2075,13 @@ export async function openDispute(
     : null;
 
   const reasonText =
-    payload.reason === "other" && payload.reasonOther?.trim()
-      ? `Other: ${payload.reasonOther.trim()}`
+    payload.reason === "other" && trimStr(payload.reasonOther)
+      ? `Other: ${trimStr(payload.reasonOther)}`
       : payload.reason;
   const fullReason =
-    payload.message?.trim() ? `${reasonText}\n\nAdditional details: ${payload.message.trim()}` : reasonText;
+    trimStr(payload.message)
+      ? `${reasonText}\n\nAdditional details: ${trimStr(payload.message)}`
+      : reasonText;
 
   const nowIso = new Date().toISOString();
   const updatePayload = {
@@ -2170,14 +2183,15 @@ export async function extendListerReview24h(
   if (row.review_extension_used_at) {
     return { ok: false, error: "You have already used this one-time extension." };
   }
-  if (!row.auto_release_at?.trim()) {
+  if (!trimStr(row.auto_release_at)) {
     return {
       ok: false,
       error: "No active review timer is set (cannot extend when auto-release is paused).",
     };
   }
+  const autoReleaseAt = trimStr(row.auto_release_at);
 
-  const prev = new Date(row.auto_release_at).getTime();
+  const prev = new Date(autoReleaseAt).getTime();
   const newIso = new Date(prev + 24 * 60 * 60 * 1000).toISOString();
   const usedIso = new Date().toISOString();
 
@@ -2342,7 +2356,7 @@ export async function counterRefund(jobId: number, payload: CounterRefundPayload
   if (session.user.id !== j.winner_id) return { ok: false, error: "Only the cleaner can counter." };
 
   const amountCents = Math.max(0, Math.round(payload.amountCents));
-  const responseMessage = payload.message?.trim() || null;
+  const responseMessage = trimStr(payload.message) || null;
   const responsePhotos =
     Array.isArray(payload.photoUrls) && payload.photoUrls.length > 0
       ? payload.photoUrls.slice(0, 5)
@@ -2551,17 +2565,17 @@ export async function respondToDispute(
 
   const photoUrls = Array.isArray(payload.photoUrls) ? payload.photoUrls.slice(0, 5) : [];
   const reasonText =
-    payload.reason === "other" && payload.reasonOther?.trim()
-      ? `Other: ${payload.reasonOther.trim()}`
+    payload.reason === "other" && trimStr(payload.reasonOther)
+      ? `Other: ${trimStr(payload.reasonOther)}`
       : payload.reason;
   const fullReason =
-    payload.message?.trim() ? `${reasonText}\n\n${payload.message.trim()}` : reasonText;
+    trimStr(payload.message) ? `${reasonText}\n\n${trimStr(payload.message)}` : reasonText;
 
   const nowIso = new Date().toISOString();
   const updatePayload = {
     dispute_response_reason: fullReason,
     dispute_response_evidence: photoUrls,
-    dispute_response_message: payload.message?.trim() || null,
+    dispute_response_message: trimStr(payload.message) || null,
     dispute_response_at: nowIso,
   };
 
