@@ -11,19 +11,20 @@ type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 const META_DESC_MAX = 165;
 
 function plainTextFromListingDescription(raw: string | null | undefined): string {
-  if (!raw?.trim()) return "";
-  return raw.replace(/\s+/g, " ").trim();
+  const s = String(raw ?? "");
+  if (!s.trim()) return "";
+  return s.replace(/\s+/g, " ").trim();
 }
 
 function truncateMeta(s: string, max: number): string {
-  const t = s.trim();
+  const t = String(s ?? "").trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1).trim()}…`;
 }
 
 function toAbsoluteImageUrl(raw: string | null | undefined, siteOrigin: string): string | undefined {
-  if (!raw?.trim()) return undefined;
-  const u = raw.trim();
+  const u = String(raw ?? "").trim();
+  if (!u) return undefined;
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
   const path = u.startsWith("/") ? u : `/${u}`;
   return new URL(path, siteOrigin).href;
@@ -33,10 +34,11 @@ function pickListingImage(listing: ListingRow, siteOrigin: string): string | und
   const cover = listing.cover_photo_url;
   const urls = listing.photo_urls;
   const initial = listing.initial_photos;
+  const coverStr = String(cover ?? "").trim();
   const first =
-    (cover && cover.trim()) ||
-    (Array.isArray(urls) && urls[0]) ||
-    (Array.isArray(initial) && initial[0]) ||
+    coverStr ||
+    (Array.isArray(urls) && urls[0] != null ? String(urls[0]).trim() : "") ||
+    (Array.isArray(initial) && initial[0] != null ? String(initial[0]).trim() : "") ||
     null;
   return toAbsoluteImageUrl(first, siteOrigin);
 }
@@ -117,7 +119,7 @@ export async function buildJobListingMetadata(
     jobForPrice = (j2 as JobRow | null) ?? null;
   }
 
-  const title = listing.title?.trim() || "Bond clean job";
+  const title = String(listing.title ?? "").trim() || "Bond clean job";
   const place = [listing.suburb, listing.postcode].filter(Boolean).join(" ");
   const body = plainTextFromListingDescription(listing.description ?? "");
   const priceCents = metaPriceCents(listing, jobForPrice);
@@ -186,7 +188,7 @@ export function buildJobPostingJsonLd(opts: {
   canonicalJobUrl: string;
 }): Record<string, unknown> {
   const { listing, job, canonicalJobUrl } = opts;
-  const title = listing.title?.trim() || "Bond clean";
+  const title = String(listing.title ?? "").trim() || "Bond clean";
   const body = plainTextFromListingDescription(listing.description ?? "");
   const place = [listing.suburb, listing.postcode].filter(Boolean).join(" ");
   const priceCents = metaPriceCents(listing, job);
