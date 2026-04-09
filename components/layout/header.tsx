@@ -59,14 +59,39 @@ export const Header = async ({
       )}
     >
       {session ? (
-        <>
-          {/* Mobile: logo + lister create · notifications · theme + role + avatar */}
-          <div className="flex min-h-[3.25rem] w-full items-center justify-between gap-2 px-3 py-2 md:hidden">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <LogoMark />
-              {isLister && <ListerMobileCreateListingHeaderButton />}
+        /**
+         * One toolbar row + a single account-tools cluster (bell, bids, role, avatar).
+         * Previously we rendered the same tools twice (mobile row + desktop row); after
+         * `router.refresh()` that could show both clusters at once (duplicate bells / role UI).
+         */
+        <div className="container mx-auto min-h-[3.25rem] min-w-0 max-w-7xl px-3 py-2 sm:min-h-14 sm:px-4 md:px-6">
+          <div className="flex w-full flex-nowrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              {/* Mobile: logo + quick create */}
+              <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
+                <LogoMark />
+                {isLister && <ListerMobileCreateListingHeaderButton />}
+              </div>
+              {/* Desktop: logo · tagline · main nav (includes mobile hamburger via MainNav) */}
+              <div className="hidden min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] md:flex sm:min-h-0 sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
+                <LogoMark />
+                <span className="hidden shrink-0 truncate text-xs text-muted-foreground xl:inline xl:max-w-[11rem] xl:text-[13px]">
+                  Bond clean marketplace
+                </span>
+                <MainNav
+                  isLoggedIn={isLoggedIn}
+                  hasCleanerRole={hasCleanerRole}
+                  isCleaner={isCleaner}
+                  isLister={isLister}
+                  session={session ?? null}
+                />
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
+
+            <nav
+              className="flex min-w-0 shrink-0 flex-nowrap items-center justify-end gap-x-1 sm:gap-x-1.5 lg:gap-x-2"
+              aria-label="Account and tools"
+            >
               <NotificationBell
                 key={session.user.id}
                 userId={session.user.id}
@@ -74,54 +99,27 @@ export const Header = async ({
                 inAppSoundEnabled={inAppSoundEnabled}
                 inAppVibrateEnabled={inAppVibrateEnabled}
               />
-              <RoleSwitcher key={session.user.id} session={session} variant="compact" />
-              <UserMenu key={session.user.id} session={session} />
-            </div>
-          </div>
-
-          {/* Desktop — single row; inner nav + account tools */}
-          <div className="container hidden min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-x-2 gap-y-0 px-3 py-2 sm:min-h-14 sm:gap-x-3 sm:px-4 md:flex md:px-6">
-            <div className="flex min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] sm:min-h-0 sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
-              <LogoMark />
-              <span className="hidden shrink-0 truncate text-xs text-muted-foreground xl:inline xl:max-w-[11rem] xl:text-[13px]">
-                Bond clean marketplace
-              </span>
-              <MainNav
-                isLoggedIn={isLoggedIn}
-                hasCleanerRole={hasCleanerRole}
-                isCleaner={isCleaner}
-                isLister={isLister}
-                session={session ?? null}
-              />
-            </div>
-
-            <nav
-              className="flex min-w-0 shrink-0 flex-nowrap items-center justify-end gap-x-1 sm:gap-x-1.5 lg:gap-x-2"
-              aria-label="Account and tools"
-            >
-              <div className="flex min-w-0 flex-nowrap items-center justify-end gap-x-1 sm:gap-x-1.5 lg:gap-x-2">
-                <NotificationBell
-                  key={session.user.id}
-                  userId={session.user.id}
-                  activeRole={session.activeRole}
-                  inAppSoundEnabled={inAppSoundEnabled}
-                  inAppVibrateEnabled={inAppVibrateEnabled}
-                />
+              <span className="hidden md:inline-flex">
                 <PendingBidsBadge isCleaner={isCleaner} />
-                <RoleSwitcher key={session.user.id} session={session} />
-                {stripeTestMode && (
-                  <span
-                    className="rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:bg-amber-400/90 dark:text-amber-950"
-                    title="Stripe test mode is on. No real charges."
-                  >
-                    Test mode
-                  </span>
-                )}
-                <UserMenu key={session.user.id} session={session} />
-              </div>
+              </span>
+              <span className="md:hidden">
+                <RoleSwitcher key={`${session.user.id}-compact`} session={session} variant="compact" />
+              </span>
+              <span className="hidden md:inline-flex">
+                <RoleSwitcher key={`${session.user.id}-full`} session={session} />
+              </span>
+              {stripeTestMode && (
+                <span
+                  className="rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:bg-amber-400/90 dark:text-amber-950"
+                  title="Stripe test mode is on. No real charges."
+                >
+                  Test mode
+                </span>
+              )}
+              <UserMenu key={session.user.id} session={session} />
             </nav>
           </div>
-        </>
+        </div>
       ) : (
         <div className="container flex min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-2 px-3 py-2 sm:min-h-14 sm:gap-4 sm:px-4 md:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4 md:gap-8">

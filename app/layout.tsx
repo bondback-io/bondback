@@ -171,7 +171,10 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         <Toaster>
           <div className="page-shell">
             {session?.user?.id ? <PushPermissionBanner userId={session.user.id} /> : null}
-            <Header stripeTestMode={stripeTestMode} />
+            <Header
+              key={session?.user?.id ?? "guest"}
+              stripeTestMode={stripeTestMode}
+            />
             <GlobalOfflineBanner />
             <main className="page-main pt-4 pb-[max(4.75rem,env(safe-area-inset-bottom))] md:pb-4">
               <div className="container mx-auto px-4 pt-2">
