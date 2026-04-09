@@ -5,6 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { placeBid } from "@/lib/actions/bids";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCents } from "@/lib/listings";
@@ -44,6 +52,8 @@ export function PlaceBidForm({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingAmountCents, setPendingAmountCents] = useState<number | null>(null);
 
   const isLive = listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
   const currentLowest = listing.current_lowest_bid_cents;
@@ -53,7 +63,65 @@ export function PlaceBidForm({
   const minAllowedBidCents = Math.max(1, currentLowest - MAX_BID_DROP_PER_BID_CENTS);
   const minAllowedBidDollars = minAllowedBidCents / 100;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const listingLabel =
+    listing.title?.trim() ||
+    [listing.suburb, listing.postcode].filter(Boolean).join(", ").trim() ||
+    "this listing";
+
+  const executePlaceBid = async (amount: number) => {
+    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+    if (isOffline) {
+      setIsSubmitting(true);
+      try {
+        await addPendingBid({ jobId: listingId, amount });
+        notifyPendingBidsChanged();
+        registerSyncPendingBids();
+        toast({
+          title: "Bid queued",
+          description: "Will send when online",
+        });
+        setAmountDollars("");
+        setConfirmOpen(false);
+        setPendingAmountCents(null);
+      } catch (err) {
+        logClientError("placeBid.offlineQueue", err);
+        showAppErrorToast(toast, {
+          flow: "bid",
+          error: err,
+          context: "placeBid.offlineQueue",
+        });
+      }
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(true);
+    const result = await placeBid(listingId, amount);
+    setIsSubmitting(false);
+    if (result.ok) {
+      setAmountDollars("");
+      setConfirmOpen(false);
+      setPendingAmountCents(null);
+      toast({
+        title: "Bid sent",
+        description: "Your bid was placed successfully.",
+      });
+      router.refresh();
+    } else {
+      setConfirmOpen(false);
+      setPendingAmountCents(null);
+      const errMsg = result.error ?? "";
+      logClientError("placeBid", errMsg, { listingId });
+      if (errMsg.toLowerCase().includes(CONNECT_ERROR_MARKER) && currentUserId) {
+        setConnectModalOpen(true);
+      } else {
+        const friendly = getFriendlyError("bid", new Error(errMsg));
+        setError(`${friendly.description} — ${friendly.nextAction}`);
+      }
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     const amount = Math.round(parseFloat(amountDollars) * 100);
@@ -72,50 +140,13 @@ export function PlaceBidForm({
       return;
     }
 
-    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
-    if (isOffline) {
-      setIsSubmitting(true);
-      try {
-        await addPendingBid({ jobId: listingId, amount });
-        notifyPendingBidsChanged();
-        registerSyncPendingBids();
-        toast({
-          title: "Bid queued",
-          description: "Will send when online",
-        });
-        setAmountDollars("");
-      } catch (err) {
-        logClientError("placeBid.offlineQueue", err);
-        showAppErrorToast(toast, {
-          flow: "bid",
-          error: err,
-          context: "placeBid.offlineQueue",
-        });
-      }
-      setIsSubmitting(false);
-      return;
-    }
+    setPendingAmountCents(amount);
+    setConfirmOpen(true);
+  };
 
-    setIsSubmitting(true);
-    const result = await placeBid(listingId, amount);
-    setIsSubmitting(false);
-    if (result.ok) {
-      setAmountDollars("");
-      toast({
-        title: "Bid sent",
-        description: "Your bid was placed successfully.",
-      });
-      router.refresh();
-    } else {
-      const errMsg = result.error ?? "";
-      logClientError("placeBid", errMsg, { listingId });
-      if (errMsg.toLowerCase().includes(CONNECT_ERROR_MARKER) && currentUserId) {
-        setConnectModalOpen(true);
-      } else {
-        const friendly = getFriendlyError("bid", new Error(errMsg));
-        setError(`${friendly.description} — ${friendly.nextAction}`);
-      }
-    }
+  const handleConfirmPlaceBid = () => {
+    if (pendingAmountCents == null) return;
+    void executePlaceBid(pendingAmountCents);
   };
 
   if (!isLive) {
@@ -282,6 +313,59 @@ export function PlaceBidForm({
           </div>
         ) : null}
       </form>
+
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (!open && isSubmitting) return;
+          setConfirmOpen(open);
+          if (!open) setPendingAmountCents(null);
+        }}
+      >
+        <DialogContent className="max-w-md dark:border-gray-800 dark:bg-gray-950 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="dark:text-gray-100">Place a bid?</DialogTitle>
+            <DialogDescription className="text-left text-sm leading-relaxed dark:text-gray-400">
+              You&apos;re about to place a bid on{" "}
+              <span className="font-medium text-foreground dark:text-gray-200">{listingLabel}</span>
+              {pendingAmountCents != null ? (
+                <>
+                  {" "}
+                  for{" "}
+                  <span className="font-semibold tabular-nums text-foreground dark:text-gray-100">
+                    ${(pendingAmountCents / 100).toFixed(2)}
+                  </span>
+                </>
+              ) : null}
+              . Continue?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12 dark:border-gray-600 dark:hover:bg-gray-800"
+              disabled={isSubmitting}
+              onClick={() => {
+                setConfirmOpen(false);
+                setPendingAmountCents(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="min-h-12 gap-2 font-semibold"
+              disabled={isSubmitting || pendingAmountCents == null}
+              onClick={handleConfirmPlaceBid}
+            >
+              <Gavel className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+              {isSubmitting ? "Placing bid…" : "Place Bid"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {currentUserId && (
         <ConnectRequiredModal
           open={connectModalOpen}
