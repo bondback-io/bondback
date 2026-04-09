@@ -93,12 +93,17 @@ export async function requestEarlyBidAcceptance(
     return { ok: false, error: "This listing is no longer accepting bids." };
   }
 
-  const { data: jobExists } = await admin
+  /**
+   * Block only when a non-cancelled job exists. Cancelled jobs leave the listing live again;
+   * the job page also treats cancelled jobs as "no active job" for auction UI.
+   */
+  const { data: blockingJobs } = await admin
     .from("jobs")
     .select("id")
     .eq("listing_id", listingUuid)
-    .maybeSingle();
-  if (jobExists) {
+    .neq("status", "cancelled")
+    .limit(1);
+  if (blockingJobs && blockingJobs.length > 0) {
     return { ok: false, error: "A job already exists for this listing." };
   }
 

@@ -227,7 +227,7 @@ export function BidHistoryTable({
               <span className="font-semibold tabular-nums text-foreground dark:text-gray-100">
                 {confirmBid != null ? formatCents(confirmBid.amount_cents) : "—"}
               </span>
-              ? We&apos;ll email the cleaner to confirm within 24 hours before the job is created.
+              ? We&apos;ll email the cleaner to confirm and let them know.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">

@@ -129,6 +129,25 @@ export default async function JobDetailPage({
 
   const listingRow = listing as ListingRow;
 
+  /**
+   * Route `/jobs/[id]` may use a job id (numeric) or a listing UUID. If we only matched by job PK
+   * and missed a row, resolve an active job by listing so `hasActiveJob` and lister tools stay
+   * consistent (avoids showing "Accept bid" while the server rejects "job already exists").
+   */
+  if (!job) {
+    const { data: jobByListing } = await supabase
+      .from("jobs")
+      .select(JOB_DETAIL_PAGE_SELECT)
+      .eq("listing_id", listingRow.id)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (jobByListing) {
+      job = jobByListing as JobRow;
+    }
+  }
+
   const { data: bids } = await supabase
     .from("bids")
     .select(BID_FULL_SELECT)
@@ -360,13 +379,15 @@ export default async function JobDetailPage({
         isJobLister={
           !!session &&
           !!job &&
-          session.user.id === job.lister_id &&
+          session.user.id.trim().toLowerCase() ===
+            String(job.lister_id).trim().toLowerCase() &&
           isListerActive
         }
         /** Same as lister-side job checks: owning the row is not enough — must be viewing as lister (hide cancel / lister tools in cleaner role). */
         isListingOwner={
           !!session &&
-          listingRow.lister_id === session.user.id &&
+          listingRow.lister_id.trim().toLowerCase() ===
+            session.user.id.trim().toLowerCase() &&
           isListerActive
         }
         isJobCleaner={
