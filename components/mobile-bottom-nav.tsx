@@ -11,11 +11,9 @@ import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-coun
 import { clearMessagesUnreadForNav } from "@/lib/messages/clear-messages-unread-nav";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
+import { MOBILE_NAV_ROLE_STORAGE_KEY } from "@/lib/auth/mobile-nav-role-storage";
 
 type Role = "lister" | "cleaner" | null;
-
-/** Persist last known role so neutral routes (e.g. /profile) show Listings vs Jobs before fetch completes. */
-const MOBILE_NAV_ROLE_KEY = "bb_mobile_nav_active_role";
 
 const BOTTOM_NAV_ROUTES = [
   "/dashboard",
@@ -167,7 +165,7 @@ export type MobileBottomNavProps = {
 function readStoredMobileNavRole(): Role {
   if (typeof window === "undefined") return null;
   try {
-    const v = sessionStorage.getItem(MOBILE_NAV_ROLE_KEY);
+    const v = sessionStorage.getItem(MOBILE_NAV_ROLE_STORAGE_KEY);
     if (v === "lister" || v === "cleaner") return v;
   } catch {
     /* ignore */
@@ -197,7 +195,7 @@ export function MobileBottomNav({
     if (!user) {
       setActiveRole(null);
       try {
-        sessionStorage.removeItem(MOBILE_NAV_ROLE_KEY);
+        sessionStorage.removeItem(MOBILE_NAV_ROLE_STORAGE_KEY);
       } catch {
         /* ignore */
       }
@@ -235,7 +233,7 @@ export function MobileBottomNav({
     setActiveRole(next);
     if (next !== null) {
       try {
-        sessionStorage.setItem(MOBILE_NAV_ROLE_KEY, next);
+        sessionStorage.setItem(MOBILE_NAV_ROLE_STORAGE_KEY, next);
       } catch {
         /* ignore */
       }

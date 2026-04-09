@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { signOutAndReloadApp } from "@/lib/auth/client-logout";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 
@@ -9,11 +9,7 @@ export function LogoutButton() {
   const queryClient = useQueryClient();
 
   const handleLogout = async () => {
-    const supabase = createBrowserSupabaseClient();
-    await supabase.auth.signOut();
-    queryClient.clear();
-    /** Full document load matches account menu logout — avoids stale RSC + React Query user state. */
-    window.location.assign("/login");
+    await signOutAndReloadApp({ queryClient, redirectTo: "/login" });
   };
 
   return (

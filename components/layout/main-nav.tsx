@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Menu,
   Home,
@@ -20,8 +21,7 @@ import { NotificationBell } from "@/components/layout/notification-bell";
 import { CreateListingConfirmDialog } from "@/components/listing/create-listing-confirm-dialog";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { scheduleRouterAction } from "@/lib/deferred-router";
+import { signOutAndReloadApp } from "@/lib/auth/client-logout";
 import type { SessionWithProfile } from "@/lib/types";
 import { getInAppNotificationFeedbackPrefs } from "@/lib/notifications/in-app-notification-prefs";
 export type MainNavProps = {
@@ -137,6 +137,7 @@ function MobileNavContent({
 }: MainNavProps & { onNavigate?: () => void; onRequestCreateListing?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const isHomePage = pathname === "/";
   const isActive = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(href));
@@ -149,9 +150,7 @@ function MobileNavContent({
     );
 
   const handleLogout = async () => {
-    const supabase = createBrowserSupabaseClient();
-    await supabase.auth.signOut();
-    scheduleRouterAction(() => router.push("/"));
+    await signOutAndReloadApp({ queryClient, redirectTo: "/login" });
   };
 
   const inAppPrefs = session

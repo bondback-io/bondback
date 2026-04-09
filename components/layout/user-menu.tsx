@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { signOutAndReloadApp } from "@/lib/auth/client-logout";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -192,14 +192,8 @@ export function UserMenu({ session }: UserMenuProps) {
   const handleLogout = async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
-    const supabase = createBrowserSupabaseClient();
-    await supabase.auth.signOut();
-    queryClient.clear();
-    setIsLoggingOut(false);
     setLogoutDialogOpen(false);
-    // Full document navigation resets RSC/client cache and in-memory state so the next login
-    // does not show the previous user's avatar or account UI until a manual refresh.
-    window.location.assign("/login");
+    await signOutAndReloadApp({ queryClient, redirectTo: "/login" });
   };
 
   /** Prefetch likely next navigations when the account menu opens (desktop + mobile). */
