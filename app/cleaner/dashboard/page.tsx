@@ -89,7 +89,9 @@ export default async function CleanerDashboardPage() {
 
   const { data: jobsData } = await supabase
     .from("jobs")
-    .select("id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete")
+    .select(
+      "id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents"
+    )
     .eq("winner_id", user.id)
     .in("status", ["accepted", "in_progress", "completed", "completed_pending_approval", "cancelled"])
     .order("created_at", { ascending: false });
@@ -380,6 +382,7 @@ export default async function CleanerDashboardPage() {
                   listing_id: String(job.listing_id),
                   status: job.status,
                   cleaner_confirmed_complete: job.cleaner_confirmed_complete,
+                  agreed_amount_cents: job.agreed_amount_cents,
                 },
                 listing,
                 daysLeft,

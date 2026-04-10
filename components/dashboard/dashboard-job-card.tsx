@@ -21,7 +21,6 @@ import {
   CheckCircle,
   Bed,
   Bath,
-  DollarSign,
   Clock,
   Eye,
   Flame,
@@ -34,6 +33,7 @@ type JobRow = {
   listing_id: string;
   status: string;
   cleaner_confirmed_complete?: boolean | null;
+  agreed_amount_cents?: number | null;
 };
 
 export type DashboardJobCardProps = {
@@ -117,7 +117,14 @@ function DashboardJobCardInner({
       ? "bg-amber-500/90 text-white dark:bg-amber-500"
       : "bg-emerald-600/90 text-white dark:bg-emerald-500";
 
-  const gross = listing?.current_lowest_bid_cents ?? 0;
+  const agreed = job.agreed_amount_cents;
+  const gross =
+    agreed != null && agreed > 0
+      ? agreed
+      : (listing?.current_lowest_bid_cents ??
+          listing?.buy_now_cents ??
+          listing?.reserve_cents ??
+          0);
   const bedrooms = listing ? (listing as { bedrooms?: number }).bedrooms : null;
   const bathrooms = listing ? (listing as { bathrooms?: number }).bathrooms : null;
   const title = listing?.title ?? `Job #${job.id}`;
@@ -309,8 +316,7 @@ function DashboardJobCardInner({
           )}
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-3 dark:border-emerald-800/40 dark:bg-emerald-950/35">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="flex items-center gap-2 text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                <DollarSign className="h-5 w-5 shrink-0" />
+              <span className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
                 {formatCents(gross)}
               </span>
               {daysLine != null && (

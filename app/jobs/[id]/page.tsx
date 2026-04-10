@@ -105,21 +105,28 @@ export default async function JobDetailPage({
   const isCleaner = roles.includes("cleaner") && activeRole === "cleaner";
   const isListerActive = roles.includes("lister") && activeRole === "lister";
 
-  // Try to load a job using the id from the route. If not found,
-  // fall back to treating the id as a listing id so listers can
-  // still view "View & bids" / history for listings without a job.
-  const { data: jobRow, error: jobError } = await supabase
-    .from("jobs")
-    .select(JOB_DETAIL_PAGE_SELECT)
-    .eq("id", id)
-    .maybeSingle();
+  // `/jobs/[id]`: numeric `id` is always a job PK (`jobs.id` is integer). UUID-shaped `id` is a
+  // listing id — never query `listings` with a numeric string (e.g. "68") or Postgres errors / 404.
+  const raw = String(id).trim();
+  const isNumericJobId = /^\d+$/.test(raw);
 
   let job: JobRow | null = null;
-  let listingId: string = id;
+  let listingId: string;
 
-  if (!jobError && jobRow) {
+  if (isNumericJobId) {
+    const { data: jobRow, error: jobError } = await supabase
+      .from("jobs")
+      .select(JOB_DETAIL_PAGE_SELECT)
+      .eq("id", parseInt(raw, 10))
+      .maybeSingle();
+
+    if (jobError || !jobRow) {
+      notFound();
+    }
     job = jobRow as JobRow;
-    listingId = job.listing_id as unknown as string;
+    listingId = String(job.listing_id);
+  } else {
+    listingId = raw;
   }
 
   const { data: listing, error: listError } = await supabase
@@ -135,8 +142,7 @@ export default async function JobDetailPage({
   const listingRow = listing as ListingRow;
 
   /**
-   * Route `/jobs/[id]` may use a job id (numeric) or a listing UUID. If we only matched by job PK
-   * and missed a row, resolve an active job by listing so `hasActiveJob` and lister tools stay
+   * Listing UUID routes: resolve the active job by listing so `hasActiveJob` and lister tools stay
    * consistent (avoids showing "Accept bid" while the server rejects "job already exists").
    */
   if (!job) {

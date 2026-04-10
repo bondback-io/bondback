@@ -195,7 +195,8 @@ export async function finalizeBidAcceptanceCore(params: {
   const { data: existingJob } = await admin
     .from("jobs")
     .select("id")
-    .eq("id", listRow.id as never)
+    .eq("listing_id", listRow.id)
+    .neq("status", "cancelled")
     .maybeSingle();
 
   if (existingJob) {
@@ -210,7 +211,6 @@ export async function finalizeBidAcceptanceCore(params: {
   const { data: inserted, error: insertError } = await admin
     .from("jobs")
     .insert({
-      id: listRow.id,
       listing_id: listRow.id,
       lister_id: listRow.lister_id,
       winner_id: params.cleanerId,
@@ -260,6 +260,7 @@ export async function finalizeBidAcceptanceCore(params: {
 
   revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
+  revalidatePath(`/jobs/${numericJobId}`);
   revalidatePath(`/jobs/${params.listingId}`);
   revalidatePath("/my-listings");
   revalidatePath("/dashboard");
@@ -335,7 +336,8 @@ export async function secureJobAtPrice(
   const { data: existingJob } = await supabase
     .from("jobs")
     .select("id")
-    .eq("id", listRow.id)
+    .eq("listing_id", listRow.id)
+    .neq("status", "cancelled")
     .maybeSingle();
 
   if (existingJob) {
@@ -345,7 +347,6 @@ export async function secureJobAtPrice(
   const { data: inserted, error: insertError } = await supabase
     .from("jobs")
     .insert({
-      id: listRow.id,
       listing_id: listRow.id,
       lister_id: listRow.lister_id,
       winner_id: session.user.id,
@@ -382,6 +383,7 @@ export async function secureJobAtPrice(
 
   revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
+  revalidatePath(`/jobs/${numericJobId}`);
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/my-listings");
   revalidatePath("/dashboard");
