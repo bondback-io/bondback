@@ -55,20 +55,21 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
-  return buildJobListingMetadata(id, { canonical: "jobs" });
+  const resolvedParams = await params;
+  return buildJobListingMetadata(resolvedParams.id, { canonical: "jobs" });
 }
 
-export default async function JobDetailPage({
-  params,
-  searchParams,
-}: {
+/** Next.js 15: `params` (and often `searchParams`) are Promises — await before reading. */
+export interface JobDetailPageProps {
   params: Promise<{ id: string }>;
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  // Next.js 15 App Router: `params` is a Promise — must await before use (not the sync object from Pages Router).
-  const { id } = await params; // `id` is numeric `jobs.id` OR a listing UUID — see loaders below
-  console.log("Loading job with ID:", id);
+}
+
+export default async function JobDetailPage({ params, searchParams }: JobDetailPageProps) {
+  // Next.js 15 App Router: `params` is a Promise — must await (sync `params` from Pages Router does not apply).
+  const resolvedParams = await params;
+  const id = resolvedParams.id;
+  console.log("🔍 Loading job detail for ID:", id);
   const sp = searchParams ? await searchParams : {};
   const paymentParam = firstSearchParam(sp.payment);
   const checkoutSessionId = firstSearchParam(sp.session_id);
@@ -127,6 +128,10 @@ export default async function JobDetailPage({
     );
 
     if (!jobRow) {
+      console.warn("[jobs/[id]] job not loaded (numeric PK). Check RLS + SUPABASE_SERVICE_ROLE_KEY on server.", {
+        numericPk,
+        hasUser: !!sessionUserId,
+      });
       notFound();
     }
     job = jobRow as JobRow;
@@ -144,6 +149,10 @@ export default async function JobDetailPage({
   );
 
   if (!listingLoaded) {
+    console.warn("[jobs/[id]] listing not loaded. Check RLS + SUPABASE_SERVICE_ROLE_KEY on server.", {
+      listingId,
+      hasJob: !!job,
+    });
     notFound();
   }
 

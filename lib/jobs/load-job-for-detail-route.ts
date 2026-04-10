@@ -9,6 +9,9 @@ type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 /** Matches `createServerSupabaseClient()` return type (avoids SupabaseClient generic mismatch). */
 export type ServerSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
+let loggedMissingServiceRoleForJobLoad = false;
+let loggedMissingServiceRoleForListingLoad = false;
+
 function sameUserId(a: unknown, b: unknown): boolean {
   return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
 }
@@ -56,6 +59,12 @@ export async function loadJobByNumericIdForSession(
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
+    if (!loggedMissingServiceRoleForJobLoad) {
+      loggedMissingServiceRoleForJobLoad = true;
+      console.warn(
+        "[loadJobByNumericIdForSession] SUPABASE_SERVICE_ROLE_KEY missing — job detail cannot bypass RLS. Set it in Vercel/server env."
+      );
+    }
     return null;
   }
 
@@ -122,6 +131,12 @@ export async function loadListingFullForSession(
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
+    if (!loggedMissingServiceRoleForListingLoad) {
+      loggedMissingServiceRoleForListingLoad = true;
+      console.warn(
+        "[loadListingFullForSession] SUPABASE_SERVICE_ROLE_KEY missing — listing detail cannot bypass RLS. Set it in Vercel/server env."
+      );
+    }
     return null;
   }
 
