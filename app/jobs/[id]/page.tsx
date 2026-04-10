@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { getSiteUrl } from "@/lib/site";
+import { normalizeJobRouteIdParam } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
@@ -83,7 +84,10 @@ export interface JobDetailPageProps {
 async function JobDetailPageContent({ params, searchParams }: JobDetailPageProps) {
   // Next.js 15 App Router: `params` is a Promise — must await (sync `params` from Pages Router does not apply).
   const resolvedParams = await params;
-  const id = resolvedParams.id;
+  const id = normalizeJobRouteIdParam(resolvedParams.id);
+  if (!id) {
+    notFound();
+  }
   console.log("🚀 [Job Detail] Starting render for ID:", id);
   console.log("✅ Loading full job details for ID:", id);
   const sp = searchParams ? await searchParams : {};

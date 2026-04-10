@@ -52,10 +52,20 @@ function isProtected(pathname: string): boolean {
 
 /** Edge entry — also exported as `middleware` for Next.js compatibility. */
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  /** `/jobs//70` → `/jobs/70` — double slashes break `app/jobs/[id]` matching. */
+  if (pathname.startsWith("/jobs") && pathname.includes("//")) {
+    const collapsed = pathname.replace(/\/{2,}/g, "/");
+    if (collapsed !== pathname) {
+      const url = request.nextUrl.clone();
+      url.pathname = collapsed;
+      return NextResponse.redirect(url, 308);
+    }
+  }
+
   const apexRedirect = redirectApexToWww(request);
   if (apexRedirect) return apexRedirect;
-
-  const pathname = request.nextUrl.pathname;
   const sp = request.nextUrl.searchParams;
 
   /**

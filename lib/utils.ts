@@ -8,6 +8,14 @@ export function trimStr(v: unknown): string {
   return String(v ?? "").trim();
 }
 
+/** Strip leading/trailing slashes from `[id]` so `/jobs//0` and `//uuid` still resolve. */
+export function normalizeJobRouteIdParam(raw: unknown): string {
+  return String(raw ?? "")
+    .trim()
+    .replace(/^\/+/g, "")
+    .replace(/\/+$/g, "");
+}
+
 /**
  * Parse an ISO timestamp as UTC. If the string has no timezone (Z or ±HH:MM),
  * treat it as UTC to avoid local-time interpretation (which causes wrong countdowns
