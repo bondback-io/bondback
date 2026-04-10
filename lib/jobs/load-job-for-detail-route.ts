@@ -12,6 +12,7 @@ export type ServerSupabaseClient = Awaited<ReturnType<typeof createServerSupabas
 
 let loggedMissingServiceRoleForJobLoad = false;
 let loggedMissingServiceRoleForListingLoad = false;
+let loggedMissingServiceRoleForListingUuidJob = false;
 
 function sameUserId(a: unknown, b: unknown): boolean {
   return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
@@ -211,7 +212,13 @@ export async function loadJobForListingDetailPage(
   }
 
   const admin = createSupabaseAdminClient();
-  if (!admin || !sessionUserId?.trim()) {
+  if (!admin) {
+    if (!loggedMissingServiceRoleForListingUuidJob) {
+      loggedMissingServiceRoleForListingUuidJob = true;
+      console.warn(
+        "[loadJobForListingDetailPage] SUPABASE_SERVICE_ROLE_KEY missing — cannot load job for listing UUID."
+      );
+    }
     return null;
   }
 
@@ -229,7 +236,25 @@ export async function loadJobForListingDetailPage(
   }
 
   const j = full as JobRow;
-  if (sameUserId(j.lister_id, sessionUserId) || sameUserId(j.winner_id, sessionUserId)) {
+
+  if (sessionUserId?.trim()) {
+    if (sameUserId(j.lister_id, sessionUserId) || sameUserId(j.winner_id, sessionUserId)) {
+      return j;
+    }
+    return null;
+  }
+
+  const { data: listRow } = await admin
+    .from("listings")
+    .select(LISTING_FULL_SELECT)
+    .eq("id", listingId)
+    .maybeSingle();
+
+  if (!listRow) {
+    return null;
+  }
+
+  if (isMarketplaceVisibleListing(listRow as ListingRow)) {
     return j;
   }
 
