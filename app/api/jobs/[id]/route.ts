@@ -8,6 +8,7 @@ import {
   JOB_MESSAGES_FULL_SELECT,
   LISTING_FULL_SELECT,
 } from "@/lib/supabase/queries";
+import { loadJobByNumericIdForSession } from "@/lib/jobs/load-job-for-detail-route";
 
 type Params = Promise<{ id: string }>;
 
@@ -28,14 +29,33 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: jobRow, error: jobError } = await supabase
-    .from("jobs")
-    .select(JOB_DETAIL_PAGE_SELECT)
-    .eq("id", id)
-    .maybeSingle();
+  const raw = String(id).trim();
+  const isNumericJobId = /^\d+$/.test(raw);
+
+  let jobRow: Awaited<ReturnType<typeof loadJobByNumericIdForSession>> | null = null;
+
+  if (isNumericJobId) {
+    jobRow = await loadJobByNumericIdForSession(
+      supabase,
+      parseInt(raw, 10),
+      session.user.id
+    );
+    if (!jobRow) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+  } else {
+    const { data: jr, error: jobError } = await supabase
+      .from("jobs")
+      .select(JOB_DETAIL_PAGE_SELECT)
+      .eq("id", id)
+      .maybeSingle();
+    if (!jobError && jr) {
+      jobRow = jr as typeof jobRow;
+    }
+  }
 
   let listingId: string = id;
-  if (!jobError && jobRow) {
+  if (jobRow) {
     listingId = String((jobRow as { listing_id: string | number }).listing_id);
   }
 

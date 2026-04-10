@@ -21,6 +21,7 @@ import {
   JOB_DETAIL_PAGE_SELECT,
   LISTING_FULL_SELECT,
 } from "@/lib/supabase/queries";
+import { loadJobByNumericIdForSession } from "@/lib/jobs/load-job-for-detail-route";
 
 export const dynamic = "force-dynamic";
 
@@ -114,13 +115,14 @@ export default async function JobDetailPage({
   let listingId: string;
 
   if (isNumericJobId) {
-    const { data: jobRow, error: jobError } = await supabase
-      .from("jobs")
-      .select(JOB_DETAIL_PAGE_SELECT)
-      .eq("id", parseInt(raw, 10))
-      .maybeSingle();
+    const numericPk = parseInt(raw, 10);
+    const jobRow = await loadJobByNumericIdForSession(
+      supabase,
+      numericPk,
+      session?.user?.id
+    );
 
-    if (jobError || !jobRow) {
+    if (!jobRow) {
       notFound();
     }
     job = jobRow as JobRow;
