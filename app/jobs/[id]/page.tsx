@@ -86,16 +86,18 @@ export default async function JobDetailPage({
 
   const supabase = await createServerSupabaseClient();
 
+  /** Prefer getUser() over getSession() in RSC: validates JWT so loaders get a stable user id for admin fallbacks. */
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
+  const sessionUserId = user?.id;
 
   let profile: Pick<ProfileRow, "roles" | "active_role"> | null = null;
-  if (session) {
+  if (user) {
     const { data } = await supabase
       .from("profiles")
       .select("roles, active_role")
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .maybeSingle();
     profile = data as any;
   }
@@ -119,7 +121,7 @@ export default async function JobDetailPage({
     const jobRow = await loadJobByNumericIdForSession(
       supabase,
       numericPk,
-      session?.user?.id
+      sessionUserId
     );
 
     if (!jobRow) {
@@ -129,13 +131,13 @@ export default async function JobDetailPage({
     listingId = String(job.listing_id);
   } else {
     listingId = raw;
-    job = await loadJobForListingDetailPage(supabase, listingId, session?.user?.id);
+    job = await loadJobForListingDetailPage(supabase, listingId, sessionUserId);
   }
 
   const listingLoaded = await loadListingFullForSession(
     supabase,
     listingId,
-    session?.user?.id,
+    sessionUserId,
     job
   );
 
@@ -270,12 +272,12 @@ export default async function JobDetailPage({
 
   let hasReviewedCleaner = false;
   let hasReviewedLister = false;
-  if (session && job?.id && canLeaveReview) {
+  if (user && job?.id && canLeaveReview) {
     const { data: myReviews } = await supabase
       .from("reviews")
       .select("reviewee_type")
       .eq("job_id", job.id)
-      .eq("reviewer_id", session.user.id);
+      .eq("reviewer_id", user.id);
     const types = (myReviews ?? []).map((r: { reviewee_type: string }) => r.reviewee_type);
     hasReviewedCleaner = types.includes("cleaner");
     hasReviewedLister = types.includes("lister");
@@ -315,7 +317,7 @@ export default async function JobDetailPage({
           <AlertDescription>Payment was canceled. You can try again when you are ready.</AlertDescription>
         </Alert>
       )}
-      {session && jobId && <RecordJobView jobId={jobId} />}
+      {user && jobId && <RecordJobView jobId={jobId} />}
       <Button variant="ghost" asChild className="dark:hover:bg-gray-800 dark:hover:text-gray-100">
         <Link href={backHref}>← {backLabel}</Link>
       </Button>
@@ -372,23 +374,23 @@ export default async function JobDetailPage({
         hasPaymentHold={hasPaymentHold}
         isStripeTestMode={stripeTestMode}
         feePercentage={feePercentage}
-        currentUserId={session?.user?.id ?? null}
+        currentUserId={sessionUserId ?? null}
         isJobLister={
-          !!session &&
+          !!user &&
           !!job &&
-          sameUserId(session.user?.id, job.lister_id) &&
+          sameUserId(user.id, job.lister_id) &&
           isListerActive
         }
         /** Same as lister-side job checks: owning the row is not enough — must be viewing as lister (hide cancel / lister tools in cleaner role). */
         isListingOwner={
-          !!session &&
-          sameUserId(listingRow.lister_id, session.user?.id) &&
+          !!user &&
+          sameUserId(listingRow.lister_id, user.id) &&
           isListerActive
         }
         isJobCleaner={
-          !!session &&
+          !!user &&
           !!job &&
-          session.user.id === job.winner_id &&
+          user.id === job.winner_id &&
           isCleaner
         }
         hasReviewedCleaner={hasReviewedCleaner}

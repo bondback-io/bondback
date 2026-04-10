@@ -25,9 +25,9 @@ export async function GET(
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -40,13 +40,13 @@ export async function GET(
     jobRow = await loadJobByNumericIdForSession(
       supabase,
       parseInt(raw, 10),
-      session.user.id
+      user.id
     );
     if (!jobRow) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
   } else {
-    jobRow = await loadJobForListingDetailPage(supabase, raw, session.user.id);
+    jobRow = await loadJobForListingDetailPage(supabase, raw, user.id);
   }
 
   let listingId: string = id;
@@ -57,7 +57,7 @@ export async function GET(
   const listingLoaded = await loadListingFullForSession(
     supabase,
     listingId,
-    session.user.id,
+    user.id,
     jobRow
   );
 

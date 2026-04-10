@@ -88,9 +88,9 @@ export async function buildJobListingMetadata(
   const siteOrigin = site.origin;
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const uid = session?.user?.id;
+    data: { user },
+  } = await supabase.auth.getUser();
+  const uid = user?.id;
 
   let listingId = routeId;
   const numericId = /^\d+$/.test(routeId) ? Number(routeId) : NaN;
