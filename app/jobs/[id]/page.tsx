@@ -67,6 +67,7 @@ export default async function JobDetailPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params; // id can be a job id or listing id
+  console.log(`Loading job ID: ${id}`);
   const sp = searchParams ? await searchParams : {};
   const paymentParam = firstSearchParam(sp.payment);
   const checkoutSessionId = firstSearchParam(sp.session_id);

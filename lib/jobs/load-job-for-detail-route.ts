@@ -36,7 +36,8 @@ function isMarketplaceVisibleListing(row: ListingRow): boolean {
 /**
  * Load a job by numeric PK for `/jobs/[id]`. Uses the user-scoped client first; if no row is
  * returned (common when RLS allows cleaners but not listers to read `jobs`), falls back to the
- * service role and returns the row only when `sessionUserId` is `lister_id` or `winner_id`.
+ * service role and returns the row when `sessionUserId` is `lister_id` or `winner_id`.
+ * Without a session, returns the job only when the linked listing is marketplace-visible (public).
  */
 export async function loadJobByNumericIdForSession(
   supabase: ServerSupabaseClient,
@@ -54,7 +55,7 @@ export async function loadJobByNumericIdForSession(
   }
 
   const admin = createSupabaseAdminClient();
-  if (!admin || !sessionUserId?.trim()) {
+  if (!admin) {
     return null;
   }
 
@@ -69,7 +70,26 @@ export async function loadJobByNumericIdForSession(
   }
 
   const j = full as JobRow;
-  if (sameUserId(j.lister_id, sessionUserId) || sameUserId(j.winner_id, sessionUserId)) {
+
+  if (sessionUserId?.trim()) {
+    if (sameUserId(j.lister_id, sessionUserId) || sameUserId(j.winner_id, sessionUserId)) {
+      return j;
+    }
+    return null;
+  }
+
+  const { data: listRow } = await admin
+    .from("listings")
+    .select(LISTING_FULL_SELECT)
+    .eq("id", j.listing_id)
+    .maybeSingle();
+
+  if (!listRow) {
+    return null;
+  }
+
+  const lr = listRow as ListingRow;
+  if (isMarketplaceVisibleListing(lr)) {
     return j;
   }
 
@@ -121,10 +141,17 @@ export async function loadListingFullForSession(
     if (String(accessJob.listing_id) !== String(listingId)) {
       return null;
     }
-    if (!sameUserId(accessJob.lister_id, sessionUserId) && !sameUserId(accessJob.winner_id, sessionUserId)) {
-      return null;
+    const isParty =
+      !!sessionUserId?.trim() &&
+      (sameUserId(accessJob.lister_id, sessionUserId) ||
+        sameUserId(accessJob.winner_id, sessionUserId));
+    if (isParty) {
+      return row;
     }
-    return row;
+    if (!sessionUserId?.trim() && isMarketplaceVisibleListing(row)) {
+      return row;
+    }
+    return null;
   }
 
   if (sessionUserId?.trim() && sameUserId(row.lister_id, sessionUserId)) {
