@@ -29,10 +29,10 @@ export function getNotificationHref(row: NotificationRow): string | null {
     return `/jobs/${listingUuid}`;
   }
 
-  const listingFromData = data?.listing_id != null ? numFromData(data.listing_id) : null;
   const jobFromData = data?.job_id != null ? numFromData(data.job_id) : null;
   const jobFromRow = row.job_id != null ? Number(row.job_id) : null;
-  const targetId = jobFromRow ?? jobFromData ?? listingFromData;
+  /** Only real job PKs — never use legacy numeric `data.listing_id` here (it was not jobs.id). */
+  const targetId = jobFromRow ?? jobFromData;
   if (targetId != null && !Number.isNaN(targetId)) {
     const base = `/jobs/${targetId}`;
     if (row.type === "dispute_opened" || row.type === "dispute_resolved") {

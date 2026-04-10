@@ -8,6 +8,7 @@ import { MyListingsList, type ListerViewTab } from "@/components/features/my-lis
 import { MyListingsNewListingButton } from "@/components/listing/my-listings-new-listing-button";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -25,7 +26,7 @@ function preferJobRow<
 }
 
 type MyListingsPageProps = {
-  searchParams?: Promise<{ edit?: string; tab?: string; cancel?: string }>;
+  searchParams?: Promise<{ edit?: string; tab?: string; cancel?: string; published?: string }>;
 };
 
 /** Fresh list after admin deletes listing or job status changes */
@@ -62,6 +63,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
   const editId = resolved?.edit ?? null;
   const cancelListingIdParam = resolved?.cancel?.trim() || null;
   const tab = parseTabParam(resolved?.tab);
+  const showPublishedBanner = resolved?.published === "1";
 
   const {
     data: { session },
@@ -274,6 +276,15 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
           </MyListingsNewListingButton>
         </div>
       </div>
+
+      {showPublishedBanner && (
+        <Alert variant="success" className="mt-4 border-emerald-200 bg-emerald-50/90 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-50">
+          <AlertDescription>
+            Your listing is live — cleaners can bid now. Open it below to manage bids or view the
+            listing page.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="mt-6 sm:mt-8">
         <MyListingsList

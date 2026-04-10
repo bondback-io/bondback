@@ -92,6 +92,15 @@ export async function buildJobListingMetadata(
     if (jl?.listing_id) {
       listingId = String(jl.listing_id);
       jobRowMeta = jl;
+    } else {
+      // All-digit route segment with no matching job row — not a listing UUID; avoid querying
+      // listings.id with a non-UUID string (would 404 every time).
+      return {
+        title: "Bond Back",
+        description:
+          "Bond cleaning and end-of-lease cleaning marketplace in Australia — list, bid, and get your bond back.",
+        robots: { index: false, follow: true },
+      };
     }
   }
 
