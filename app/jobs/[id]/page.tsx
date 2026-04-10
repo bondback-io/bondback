@@ -58,7 +58,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   try {
     const resolvedParams = await params;
-    return await buildJobListingMetadata(resolvedParams.id, { canonical: "jobs" });
+    const routeId = normalizeJobRouteIdParam(resolvedParams.id);
+    if (!routeId) {
+      return { title: "Job · Bond Back", robots: { index: false, follow: true } };
+    }
+    return await buildJobListingMetadata(routeId, { canonical: "jobs" });
   } catch (e) {
     console.error("[jobs/[id]] generateMetadata failed", e);
     return { title: "Job · Bond Back", robots: { index: false, follow: true } };

@@ -62,6 +62,10 @@ export async function loadJobByNumericIdForSession(
     .eq("id", jobId)
     .maybeSingle();
 
+  if (error) {
+    console.warn("[loadJobByNumericIdForSession] user-scoped jobs read error", error.code, error.message);
+  }
+
   if (!error && fromUser) {
     return fromUser as JobRow;
   }
@@ -133,6 +137,10 @@ export async function loadListingFullForSession(
     .select(LISTING_FULL_SELECT)
     .eq("id", listingId)
     .maybeSingle();
+
+  if (error) {
+    console.warn("[loadListingFullForSession] user-scoped listings read error", error.code, error.message);
+  }
 
   if (!error && fromUser) {
     return fromUser as ListingRow;
