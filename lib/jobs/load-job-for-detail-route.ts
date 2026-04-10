@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
+import { parseUtcTimestamp } from "@/lib/utils";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { JOB_DETAIL_PAGE_SELECT, LISTING_FULL_SELECT } from "@/lib/supabase/queries";
 
@@ -16,7 +17,11 @@ function sameUserId(a: unknown, b: unknown): boolean {
   return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
 }
 
-/** Matches Find Jobs / `buildLiveListingsQuery` — safe to show to any signed-in user (and OG for public rows). */
+/**
+ * Matches Find Jobs / `isListingLive` timing — must use `parseUtcTimestamp` so timezoneless
+ * ISO strings match DB/PostgREST (plain `new Date()` treats them as local and can wrongly hide
+ * live listings, causing 404 on `/jobs/[id]` for new/live rows).
+ */
 function isMarketplaceVisibleListing(row: ListingRow): boolean {
   const st = String(row.status ?? "").toLowerCase();
   if (st === "ended" || st === "expired") {
@@ -32,8 +37,11 @@ function isMarketplaceVisibleListing(row: ListingRow): boolean {
   if (endRaw == null || String(endRaw).trim() === "") {
     return true;
   }
-  const endMs = new Date(String(endRaw)).getTime();
-  return !Number.isNaN(endMs) && endMs > Date.now();
+  const endMs = parseUtcTimestamp(String(endRaw));
+  if (Number.isNaN(endMs)) {
+    return true;
+  }
+  return endMs > Date.now();
 }
 
 /**
