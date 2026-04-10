@@ -66,8 +66,9 @@ export default async function JobDetailPage({
   params: Promise<{ id: string }>;
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { id } = await params; // id can be a job id or listing id
-  console.log(`Loading job ID: ${id}`);
+  // Next.js 15 App Router: `params` is a Promise — must await before use (not the sync object from Pages Router).
+  const { id } = await params; // `id` is numeric `jobs.id` OR a listing UUID — see loaders below
+  console.log("Loading job with ID:", id);
   const sp = searchParams ? await searchParams : {};
   const paymentParam = firstSearchParam(sp.payment);
   const checkoutSessionId = firstSearchParam(sp.session_id);
