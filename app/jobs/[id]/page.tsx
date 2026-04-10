@@ -55,8 +55,23 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-  const resolvedParams = await params;
-  return buildJobListingMetadata(resolvedParams.id, { canonical: "jobs" });
+  try {
+    const resolvedParams = await params;
+    return await buildJobListingMetadata(resolvedParams.id, { canonical: "jobs" });
+  } catch (e) {
+    console.error("[jobs/[id]] generateMetadata failed", e);
+    return { title: "Job · Bond Back", robots: { index: false, follow: true } };
+  }
+}
+
+/** Let `notFound()` propagate; log real unexpected errors for debugging. */
+function isNextNotFoundError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    String((error as { digest?: unknown }).digest) === "NEXT_NOT_FOUND"
+  );
 }
 
 /** Next.js 15: `params` (and often `searchParams`) are Promises — await before reading. */
@@ -65,10 +80,11 @@ export interface JobDetailPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function JobDetailPage({ params, searchParams }: JobDetailPageProps) {
+async function JobDetailPageContent({ params, searchParams }: JobDetailPageProps) {
   // Next.js 15 App Router: `params` is a Promise — must await (sync `params` from Pages Router does not apply).
   const resolvedParams = await params;
   const id = resolvedParams.id;
+  console.log("🚀 [Job Detail] Starting render for ID:", id);
   console.log("✅ Loading full job details for ID:", id);
   const sp = searchParams ? await searchParams : {};
   const paymentParam = firstSearchParam(sp.payment);
@@ -128,10 +144,10 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
     );
 
     if (!jobRow) {
-      console.warn("[jobs/[id]] job not loaded (numeric PK). Check RLS + SUPABASE_SERVICE_ROLE_KEY on server.", {
-        numericPk,
-        hasUser: !!sessionUserId,
-      });
+      console.warn(
+        "[jobs/[id]] calling notFound() — job row not authorized or missing (numeric PK). Check RLS + SUPABASE_SERVICE_ROLE_KEY.",
+        { numericPk, hasUser: !!sessionUserId }
+      );
       notFound();
     }
     job = jobRow as JobRow;
@@ -149,10 +165,10 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
   );
 
   if (!listingLoaded) {
-    console.warn("[jobs/[id]] listing not loaded. Check RLS + SUPABASE_SERVICE_ROLE_KEY on server.", {
-      listingId,
-      hasJob: !!job,
-    });
+    console.warn(
+      "[jobs/[id]] calling notFound() — listing row not authorized or missing. Check RLS + SUPABASE_SERVICE_ROLE_KEY.",
+      { listingId, hasJob: !!job }
+    );
     notFound();
   }
 
@@ -224,7 +240,11 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
       job.status === "completed_pending_approval") &&
     job.id != null
   ) {
-    await ensureJobChecklistIfEmpty(job.id);
+    try {
+      await ensureJobChecklistIfEmpty(job.id);
+    } catch (e) {
+      console.error("[jobs/[id]] ensureJobChecklistIfEmpty failed (non-fatal)", e);
+    }
   }
 
   let listerName: string | null = null;
@@ -294,11 +314,17 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
     hasReviewedLister = types.includes("lister");
   }
 
-  const jsonLd = buildJobPostingJsonLd({
-    listing: listingRow,
-    job,
-    canonicalJobUrl: `${getSiteUrl().origin}/jobs/${id}`,
-  });
+  let jsonLd: Record<string, unknown>;
+  try {
+    jsonLd = buildJobPostingJsonLd({
+      listing: listingRow,
+      job,
+      canonicalJobUrl: `${getSiteUrl().origin}/jobs/${id}`,
+    });
+  } catch (e) {
+    console.error("[jobs/[id]] buildJobPostingJsonLd failed (non-fatal)", e);
+    jsonLd = {};
+  }
 
   return (
     <OfflineJobsPrimer jobId={jobId ? String(jobId) : id}>
@@ -411,4 +437,16 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
     </section>
     </OfflineJobsPrimer>
   );
+}
+
+export default async function JobDetailPage(props: JobDetailPageProps) {
+  try {
+    return await JobDetailPageContent(props);
+  } catch (error) {
+    if (isNextNotFoundError(error)) {
+      throw error;
+    }
+    console.error("[jobs/[id]] unexpected server error (this is not intentional notFound):", error);
+    throw error;
+  }
 }
