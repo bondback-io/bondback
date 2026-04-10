@@ -81,6 +81,8 @@ type GlobalSettingsRow = {
   pricing_addon_blinds_aud?: number | null;
   /** When true, new listings may use starting price below $100 (e.g. $1 tests). */
   allow_low_amount_listings?: boolean;
+  /** When true, new listing form may offer a 2-minute auction (duration_days = 0 sentinel). */
+  allow_two_minute_auction_test?: boolean;
 };
 
 /** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
@@ -333,6 +335,8 @@ export type SaveGlobalSettingsInput = {
   adminNotifyDispute?: boolean;
   /** When true, bypass $100 AUD minimum starting price for new listings. */
   allowLowAmountListings?: boolean;
+  /** When true, show a 2-minute auction duration on the new listing form (testing). */
+  allowTwoMinuteAuctionTest?: boolean;
 };
 
 export type SaveGlobalSettingsResult =
@@ -453,6 +457,7 @@ export async function saveGlobalSettings(
     admin_notify_new_listing: data.adminNotifyNewListing !== false,
     admin_notify_dispute: data.adminNotifyDispute !== false,
     allow_low_amount_listings: data.allowLowAmountListings === true,
+    allow_two_minute_auction_test: data.allowTwoMinuteAuctionTest === true,
   };
 
   const { error } = admin
@@ -482,6 +487,7 @@ export async function saveGlobalSettings(
       emails_enabled: data.emailsEnabled,
       maintenance_active: data.maintenanceActive,
       allow_low_amount_listings: data.allowLowAmountListings === true,
+      allow_two_minute_auction_test: data.allowTwoMinuteAuctionTest === true,
     },
   });
 

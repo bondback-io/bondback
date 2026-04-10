@@ -135,6 +135,8 @@ export default async function AdminGlobalSettingsPage() {
         adminNotifyDispute: (existing as { admin_notify_dispute?: boolean }).admin_notify_dispute ?? true,
         allowLowAmountListings:
           (existing as { allow_low_amount_listings?: boolean }).allow_low_amount_listings === true,
+        allowTwoMinuteAuctionTest:
+          (existing as { allow_two_minute_auction_test?: boolean }).allow_two_minute_auction_test === true,
       }
     : null;
 

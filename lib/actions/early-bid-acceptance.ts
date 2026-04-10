@@ -138,6 +138,7 @@ export async function requestEarlyBidAcceptance(
     cleanerId: b.cleaner_id,
     acceptedAmountCents: b.amount_cents,
     listingTitle: list.title ?? null,
+    acceptedBidId: b.id,
   });
 
   if (!result.ok) {
@@ -202,6 +203,7 @@ export async function confirmEarlyBidByToken(token: string): Promise<EarlyBidTok
     cleanerId: b.cleaner_id,
     acceptedAmountCents: b.amount_cents,
     listingTitle: list.title ?? null,
+    acceptedBidId: b.id,
   });
 
   if (!result.ok) {

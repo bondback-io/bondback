@@ -78,8 +78,39 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.72,
   }));
 
-  const dynamicEntries: MetadataRoute.Sitemap = [];
+  /** SEO pipeline: only list bond-cleaning URLs that are marked completed in `seo_suburbs`. */
+  const seoLocationEntries: MetadataRoute.Sitemap = [];
   const admin = createSupabaseAdminClient();
+  if (admin) {
+    const { data: completedSuburbs } = await admin
+      .from("seo_suburbs")
+      .select("id")
+      .eq("completed", true);
+
+    const completedIds = (completedSuburbs ?? []).map((r) => (r as { id: string }).id);
+    if (completedIds.length > 0) {
+      const { data: contents } = await admin
+        .from("seo_content")
+        .select("page_slug, updated_at")
+        .in("suburb_id", completedIds);
+
+      const seen = new Set(TOP_BOND_CLEANING_SLUGS);
+      for (const row of contents ?? []) {
+        const slug = (row as { page_slug: string }).page_slug;
+        if (!slug || seen.has(slug)) continue;
+        seen.add(slug);
+        const updated = (row as { updated_at?: string }).updated_at;
+        seoLocationEntries.push({
+          url: `${base}/bond-cleaning/${encodeURIComponent(slug)}`,
+          lastModified: updated ? new Date(updated) : new Date(),
+          changeFrequency: changeFreq.location,
+          priority: 0.72,
+        });
+      }
+    }
+  }
+
+  const dynamicEntries: MetadataRoute.Sitemap = [];
   if (admin) {
     const { data: liveListings } = await admin
       .from("listings")
@@ -100,5 +131,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  return [...staticEntries, ...helpEntries, ...locationEntries, ...dynamicEntries];
+  return [
+    ...staticEntries,
+    ...helpEntries,
+    ...locationEntries,
+    ...seoLocationEntries,
+    ...dynamicEntries,
+  ];
 }

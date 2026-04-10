@@ -117,6 +117,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [allowLowAmountListings, setAllowLowAmountListings] = React.useState(
     initial?.allowLowAmountListings === true
   );
+  const [allowTwoMinuteAuctionTest, setAllowTwoMinuteAuctionTest] = React.useState(
+    initial?.allowTwoMinuteAuctionTest === true
+  );
   const [floatingChatEnabledState, setFloatingChatEnabledState] = React.useState({
     value: initial?.floatingChatEnabled ?? true,
     saving: false,
@@ -315,6 +318,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       pricingAddonFridgeAud: Math.max(0, Number(pricingAddonFridgeAud) || DEFAULT_PRICING_MODIFIERS.addonFridgeAud),
       pricingAddonBlindsAud: Math.max(0, Number(pricingAddonBlindsAud) || DEFAULT_PRICING_MODIFIERS.addonBlindsAud),
       allowLowAmountListings,
+      allowTwoMinuteAuctionTest,
     };
 
     startTransition(async () => {
@@ -401,7 +405,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             Use only when you understand Stripe minimum charge rules. Saves with <strong>Save global settings</strong> below.
           </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="allow-low-amount-listings" className="text-xs font-medium text-sky-900 dark:text-sky-100">
               Allow low starting prices (bypass $100 minimum)
@@ -410,6 +414,20 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               id="allow-low-amount-listings"
               checked={allowLowAmountListings}
               onCheckedChange={(v) => setAllowLowAmountListings(Boolean(v))}
+            />
+          </div>
+          <p className="text-[11px] text-sky-800/80 dark:text-sky-200/80">
+            <strong>2-minute auction (testing):</strong> adds a &quot;2 minutes&quot; duration next to 1 / 3 / 5 / 7 days so you can exercise
+            end-of-auction and job flows without waiting a full day. Uses the same save button below.
+          </p>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="allow-two-minute-auction" className="text-xs font-medium text-sky-900 dark:text-sky-100">
+              Allow 2-minute auction duration on new listings
+            </Label>
+            <Switch
+              id="allow-two-minute-auction"
+              checked={allowTwoMinuteAuctionTest}
+              onCheckedChange={(v) => setAllowTwoMinuteAuctionTest(Boolean(v))}
             />
           </div>
         </CardContent>

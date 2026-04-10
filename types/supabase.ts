@@ -278,6 +278,7 @@ export interface Database {
           created_at: string;
           status:
             | "active"
+            | "accepted"
             | "cancelled"
             | "pending_confirmation"
             | "declined_early";
@@ -292,6 +293,7 @@ export interface Database {
           created_at?: string;
           status?:
             | "active"
+            | "accepted"
             | "cancelled"
             | "pending_confirmation"
             | "declined_early";
@@ -305,6 +307,7 @@ export interface Database {
           created_at?: string;
           status?:
             | "active"
+            | "accepted"
             | "cancelled"
             | "pending_confirmation"
             | "declined_early";
@@ -865,6 +868,154 @@ export interface Database {
             referencedColumns: ["id"];
           }
         ];
+      };
+      seo_regions: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          name?: string;
+          slug?: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      seo_suburbs: {
+        Row: {
+          id: string;
+          region_id: string;
+          suburb_name: string;
+          postcode: string;
+          slug: string;
+          priority: number;
+          completed: boolean;
+          completed_at: string | null;
+          last_checked: string | null;
+          notes: string | null;
+        };
+        Insert: {
+          id?: string;
+          region_id: string;
+          suburb_name: string;
+          postcode: string;
+          slug: string;
+          priority?: number;
+          completed?: boolean;
+          completed_at?: string | null;
+          last_checked?: string | null;
+          notes?: string | null;
+        };
+        Update: {
+          region_id?: string;
+          suburb_name?: string;
+          postcode?: string;
+          slug?: string;
+          priority?: number;
+          completed?: boolean;
+          completed_at?: string | null;
+          last_checked?: string | null;
+          notes?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "seo_suburbs_region_id_fkey";
+            columns: ["region_id"];
+            isOneToOne: false;
+            referencedRelation: "seo_regions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      seo_content: {
+        Row: {
+          id: string;
+          suburb_id: string;
+          region_id: string;
+          page_slug: string;
+          landing: Json;
+          blog_posts: Json;
+          faq_schema: Json;
+          meta_title: string | null;
+          meta_description: string | null;
+          last_error: string | null;
+          last_checked_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          suburb_id: string;
+          region_id: string;
+          page_slug: string;
+          landing?: Json;
+          blog_posts?: Json;
+          faq_schema?: Json;
+          meta_title?: string | null;
+          meta_description?: string | null;
+          last_error?: string | null;
+          last_checked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          suburb_id?: string;
+          region_id?: string;
+          page_slug?: string;
+          landing?: Json;
+          blog_posts?: Json;
+          faq_schema?: Json;
+          meta_title?: string | null;
+          meta_description?: string | null;
+          last_error?: string | null;
+          last_checked_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "seo_content_suburb_id_fkey";
+            columns: ["suburb_id"];
+            isOneToOne: true;
+            referencedRelation: "seo_suburbs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "seo_content_region_id_fkey";
+            columns: ["region_id"];
+            isOneToOne: false;
+            referencedRelation: "seo_regions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      seo_manual_task_state: {
+        Row: {
+          user_id: string;
+          region_slug: string;
+          task_key: string;
+          completed_at: string;
+        };
+        Insert: {
+          user_id: string;
+          region_slug: string;
+          task_key: string;
+          completed_at?: string;
+        };
+        Update: {
+          completed_at?: string;
+        };
+        Relationships: [];
       };
       seo_manual_checklist: {
         Row: {

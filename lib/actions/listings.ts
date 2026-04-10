@@ -7,6 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PHOTO_LIMITS } from "@/lib/photo-validation";
 import type { Database } from "@/types/supabase";
 import { createNotification, notifyListerListingLive } from "@/lib/actions/notifications";
+import { relistDurationMsFromDurationDays } from "@/lib/listings";
 
 type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -346,10 +347,8 @@ export async function relistExpiredListing(
     return { ok: false, error: "Only expired listings can be relisted." };
   }
 
-  const durationDays = Number(row.duration_days) > 0 ? Number(row.duration_days) : 7;
-  const endTime = new Date(
-    Date.now() + durationDays * 24 * 60 * 60 * 1000
-  ).toISOString();
+  const durationDays = Number(row.duration_days);
+  const endTime = new Date(Date.now() + relistDurationMsFromDurationDays(durationDays)).toISOString();
   const starting = (row.starting_price_cents as number) ?? 0;
 
   const admin = createSupabaseAdminClient();

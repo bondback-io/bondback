@@ -140,6 +140,8 @@ export async function finalizeBidAcceptanceCore(params: {
   cleanerId: string;
   acceptedAmountCents: number;
   listingTitle: string | null;
+  /** Winning bid row — marked `accepted`; all other bids for the listing become `cancelled`. */
+  acceptedBidId: string;
 }): Promise<AcceptBidResult> {
   const admin = createSupabaseAdminClient();
   if (!admin) {
@@ -228,7 +230,16 @@ export async function finalizeBidAcceptanceCore(params: {
   const jobId = (inserted as { id: number | string }).id;
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
-  await admin.from("bids").update({ status: "cancelled" } as never).eq("listing_id", params.listingId);
+  const acceptedId = trimStr(params.acceptedBidId);
+  if (!acceptedId) {
+    return { ok: false, error: "Missing accepted bid." };
+  }
+  await admin
+    .from("bids")
+    .update({ status: "cancelled" } as never)
+    .eq("listing_id", params.listingId)
+    .neq("id", acceptedId);
+  await admin.from("bids").update({ status: "accepted" } as never).eq("id", acceptedId);
 
   await admin.from("listings").update({ status: "ended" } as never).eq("id", params.listingId);
 

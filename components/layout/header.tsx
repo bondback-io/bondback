@@ -66,26 +66,24 @@ export const Header = async ({
          */
         <div className="container mx-auto min-h-[3.25rem] min-w-0 max-w-7xl px-3 py-2 sm:min-h-14 sm:px-4 md:px-6">
           <div className="flex w-full flex-nowrap items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-              {/* Mobile: logo + quick create */}
-              <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
-                <LogoMark />
-                {isLister && <ListerMobileCreateListingHeaderButton />}
-              </div>
-              {/* Desktop: logo · tagline · main nav (includes mobile hamburger via MainNav) */}
-              <div className="hidden min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] md:flex sm:min-h-0 sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
-                <LogoMark />
-                <span className="hidden shrink-0 truncate text-xs text-muted-foreground xl:inline xl:max-w-[11rem] xl:text-[13px]">
-                  Bond clean marketplace
-                </span>
-                <MainNav
-                  isLoggedIn={isLoggedIn}
-                  hasCleanerRole={hasCleanerRole}
-                  isCleaner={isCleaner}
-                  isLister={isLister}
-                  session={session ?? null}
-                />
-              </div>
+            {/* Mobile: logo + quick create — shrink-0 so bell/role row never clips the brand */}
+            <div className="flex min-w-0 shrink-0 items-center gap-2 md:hidden">
+              <LogoMark />
+              {isLister && <ListerMobileCreateListingHeaderButton />}
+            </div>
+            {/* Desktop (md+): logo, tagline, MainNav + menu trigger */}
+            <div className="hidden min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] md:flex sm:min-h-0 sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
+              <LogoMark />
+              <span className="hidden shrink-0 truncate text-xs text-muted-foreground xl:inline xl:max-w-[11rem] xl:text-[13px]">
+                Bond clean marketplace
+              </span>
+              <MainNav
+                isLoggedIn={isLoggedIn}
+                hasCleanerRole={hasCleanerRole}
+                isCleaner={isCleaner}
+                isLister={isLister}
+                session={session ?? null}
+              />
             </div>
 
             <nav

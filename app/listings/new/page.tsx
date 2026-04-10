@@ -105,6 +105,8 @@ const NewListingPage = async () => {
   );
 
   const allowLowAmountListings = settings?.allow_low_amount_listings === true;
+  const allowTwoMinuteAuctionTest =
+    (settings as { allow_two_minute_auction_test?: boolean } | null)?.allow_two_minute_auction_test === true;
 
   return (
     <NewListingFormLazy
@@ -114,6 +116,7 @@ const NewListingPage = async () => {
       feePercentage={feePercentage}
       pricingModifiers={pricingModifiers}
       allowLowAmountListings={allowLowAmountListings}
+      allowTwoMinuteAuctionTest={allowTwoMinuteAuctionTest}
     />
   );
 };

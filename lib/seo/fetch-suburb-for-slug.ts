@@ -30,6 +30,39 @@ async function querySuburbRow(
   return data as SuburbSeoRow;
 }
 
+/** Generated SEO rows — only when `seo_suburbs.completed` is true (live pages). */
+async function querySuburbFromSeoContent(
+  client: SupabaseClient<Database, "public", any>,
+  pageSlugNorm: string,
+  parsed: ParsedSlug
+): Promise<SuburbSeoRow | null> {
+  const { data: sc, error: scErr } = await client
+    .from("seo_content")
+    .select("suburb_id")
+    .eq("page_slug", pageSlugNorm)
+    .maybeSingle();
+
+  if (scErr || !sc) return null;
+
+  const { data: sub, error: subErr } = await client
+    .from("seo_suburbs")
+    .select("completed, suburb_name, postcode")
+    .eq("id", (sc as { suburb_id: string }).suburb_id)
+    .maybeSingle();
+
+  if (subErr || !sub) return null;
+  const row = sub as { completed: boolean; suburb_name: string; postcode: string };
+  if (!row.completed) return null;
+
+  return {
+    suburb: row.suburb_name,
+    postcode: row.postcode,
+    state: parsed.state,
+    lat: null,
+    lon: null,
+  };
+}
+
 /**
  * Resolve a location slug against `public.suburbs` (case-insensitive suburb match).
  * Cached path uses service role only — `unstable_cache` must not call `cookies()`.
@@ -48,6 +81,10 @@ export async function fetchSuburbForSlug(
     const supabase = await createServerSupabaseClient();
     const fromDb = await querySuburbRow(supabase, parsed);
     if (fromDb) return fromDb;
+    const { data: scRow } = await supabase.from("seo_content").select("suburb_id").eq("page_slug", norm).maybeSingle();
+    if (scRow) {
+      return await querySuburbFromSeoContent(supabase, norm, parsed);
+    }
     return fallback;
   }
 
@@ -57,6 +94,10 @@ export async function fetchSuburbForSlug(
       if (!a) return fallback;
       const fromDb = await querySuburbRow(a, parsed);
       if (fromDb) return fromDb;
+      const { data: scRow } = await a.from("seo_content").select("suburb_id").eq("page_slug", norm).maybeSingle();
+      if (scRow) {
+        return await querySuburbFromSeoContent(a, norm, parsed);
+      }
       return fallback;
     },
     ["suburb-seo-by-slug", norm],

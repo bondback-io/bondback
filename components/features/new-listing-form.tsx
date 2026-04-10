@@ -11,7 +11,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { buildListingInsertRow } from "@/lib/listings";
+import { buildListingInsertRow, computeListingEndTimeIso } from "@/lib/listings";
 import {
   Card,
   CardContent,
@@ -121,8 +121,6 @@ type PropertyType = (typeof propertyTypes)[number];
 const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
 type SpecialAreaKey = (typeof specialAreaKeys)[number];
 
-const durationOptions = [1, 3, 5, 7] as const;
-
 const propertyConditionKeys = [
   "excellent_very_good",
   "good",
@@ -143,7 +141,8 @@ function reservePriceMinMessage(minAud: number): string {
   return `Starting price must be at least ${label} AUD`;
 }
 
-function buildListingSchema(minReserveAud: number) {
+function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolean) {
+  const allowedDurations = allowTwoMinuteAuction ? [0, 1, 3, 5, 7] : [1, 3, 5, 7];
   return z
     .object({
       propertyType: z.enum(propertyTypes),
@@ -162,7 +161,10 @@ function buildListingSchema(minReserveAud: number) {
       instructions: z.string().max(2000).optional(),
       moveOutDate: z.date({ required_error: "Select your move-out date" }),
       reservePrice: z.coerce.number().min(minReserveAud, reservePriceMinMessage(minReserveAud)),
-      durationDays: z.coerce.number().int().min(1),
+      durationDays: z.coerce
+        .number()
+        .int()
+        .refine((v) => allowedDurations.includes(v), "Select a valid auction duration"),
       buyNowPrice: z.string().optional(),
     })
     .superRefine((data, ctx) => {
@@ -220,6 +222,8 @@ export type NewListingFormProps = {
   pricingModifiers: PricingModifiersConfig;
   /** When true (admin global setting), starting price may be below $100 for live payment tests. */
   allowLowAmountListings?: boolean;
+  /** When true, auction duration may include a 2-minute test option (admin global setting). */
+  allowTwoMinuteAuctionTest?: boolean;
 };
 
 function platformFeeCents(jobAmountDollars: number, feePct: number): number {
@@ -252,13 +256,14 @@ export function NewListingForm({
   feePercentage = 12,
   pricingModifiers,
   allowLowAmountListings = false,
+  allowTwoMinuteAuctionTest = false,
 }: NewListingFormProps) {
   const minReserveAud = allowLowAmountListings
     ? LOW_AMOUNT_MIN_RESERVE_AUD
     : DEFAULT_MIN_LISTING_STARTING_PRICE_AUD;
   const listingSchema = useMemo(
-    () => buildListingSchema(minReserveAud),
-    [minReserveAud]
+    () => buildListingSchema(minReserveAud, allowTwoMinuteAuctionTest),
+    [minReserveAud, allowTwoMinuteAuctionTest]
   );
   const listingResolver = useMemo(
     () => zodResolver(listingSchema),
@@ -307,6 +312,11 @@ export function NewListingForm({
       levels: "1",
     }),
     minReserveAud
+  );
+
+  const durationOptions = useMemo(
+    () => (allowTwoMinuteAuctionTest ? ([0, 1, 3, 5, 7] as const) : ([1, 3, 5, 7] as const)),
+    [allowTwoMinuteAuctionTest]
   );
 
   const form = useForm<ListingFormValues>({
@@ -394,6 +404,12 @@ export function NewListingForm({
     const sub = form.getValues("suburb");
     if (sub) setSuburbQuery(sub);
   }, []);
+
+  useEffect(() => {
+    if (!allowTwoMinuteAuctionTest && form.getValues("durationDays") === 0) {
+      form.setValue("durationDays", 3, { shouldValidate: true });
+    }
+  }, [allowTwoMinuteAuctionTest, form]);
 
   useEffect(() => {
     return () => {
@@ -557,9 +573,7 @@ export function NewListingForm({
 
       const durationDays = values.durationDays;
       const moveOutDateStr = format(values.moveOutDate, "yyyy-MM-dd");
-      const endTime = new Date(
-        Date.now() + durationDays * 24 * 60 * 60 * 1000
-      ).toISOString();
+      const endTime = computeListingEndTimeIso({ durationDays });
 
       const specialParts = values.specialAreas.length
         ? `Special areas: ${values.specialAreas.join(", ")}. `
@@ -1690,7 +1704,10 @@ export function NewListingForm({
                       <RadioGroup
                         value={String(field.value)}
                         onValueChange={(v) => field.onChange(Number(v))}
-                        className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+                        className={cn(
+                          "grid grid-cols-2 gap-2",
+                          durationOptions.length >= 5 ? "sm:grid-cols-5" : "sm:grid-cols-4"
+                        )}
                       >
                         {durationOptions.map((days) => (
                           <label
@@ -1699,7 +1716,11 @@ export function NewListingForm({
                           >
                             <RadioGroupItem value={String(days)} />
                             <span className="dark:text-gray-200">
-                              {days === 1 ? "1 day" : `${days} days`}
+                              {days === 0
+                                ? "2 minutes"
+                                : days === 1
+                                  ? "1 day"
+                                  : `${days} days`}
                             </span>
                           </label>
                         ))}

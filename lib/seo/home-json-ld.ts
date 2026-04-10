@@ -128,3 +128,23 @@ export function buildLocationFaqGraphNode(
     ],
   };
 }
+
+/** FAQPage node from admin-generated FAQ pairs (replaces default location FAQ when present). */
+export function buildGeneratedFaqGraphNode(
+  questions: Array<{ question: string; answer: string }>,
+  pageUrl: string
+): Record<string, unknown> {
+  const mainEntity = questions.map((q) => ({
+    "@type": "Question",
+    name: q.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: q.answer,
+    },
+  }));
+  return {
+    "@type": "FAQPage",
+    "@id": `${pageUrl}#faq`,
+    mainEntity,
+  };
+}

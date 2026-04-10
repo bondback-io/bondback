@@ -113,6 +113,36 @@ export type ListingInsertPayload = ListingInsert & {
 };
 
 /**
+ * `duration_days === 0` means a 2-minute test auction (only when global_settings.allow_two_minute_auction_test is on).
+ * Otherwise use 1, 3, 5, or 7.
+ */
+export const AUCTION_DURATION_TWO_MINUTE_SENTINEL_DAYS = 0;
+
+export function computeListingEndTimeIso(params: {
+  durationDays: number;
+  nowMs?: number;
+}): string {
+  const now = params.nowMs ?? Date.now();
+  if (params.durationDays === AUCTION_DURATION_TWO_MINUTE_SENTINEL_DAYS) {
+    return new Date(now + 2 * 60 * 1000).toISOString();
+  }
+  return new Date(now + params.durationDays * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/** Milliseconds for a fresh timer when relisting an expired auction. */
+export function relistDurationMsFromDurationDays(durationDays: number | null | undefined): number {
+  if (durationDays == null || Number.isNaN(Number(durationDays))) {
+    return 7 * 24 * 60 * 60 * 1000;
+  }
+  const raw = Number(durationDays);
+  if (raw === AUCTION_DURATION_TWO_MINUTE_SENTINEL_DAYS) {
+    return 2 * 60 * 1000;
+  }
+  const d = raw > 0 ? raw : 7;
+  return d * 24 * 60 * 60 * 1000;
+}
+
+/**
  * Build the row to insert into public.listings (Supabase).
  * Column names must match the table exactly (snake_case). See docs/LISTINGS_TABLE_SCHEMA.md.
  */
