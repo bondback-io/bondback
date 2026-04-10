@@ -8,7 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { sendSeoGscUrlEmail, setSeoGscSubmitted, SEO_GSC_TASK_KEY } from "@/lib/actions/seo-gsc";
+import { sendSeoGscUrlEmail, setSeoGscSubmitted } from "@/lib/actions/seo-gsc";
+import { SEO_GSC_TASK_KEY } from "@/lib/seo/seo-gsc-constants";
 import { getSiteOriginClient } from "@/lib/site-url-client";
 import { cn } from "@/lib/utils";
 

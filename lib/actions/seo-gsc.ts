@@ -6,10 +6,9 @@ import { getEmailForUserId } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
 import { getSiteUrl } from "@/lib/site";
 import { sendEmail } from "@/lib/notifications/email";
+import { SEO_GSC_TASK_KEY } from "@/lib/seo/seo-gsc-constants";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
-
-export const SEO_GSC_TASK_KEY = "gsc_url_submission" as const;
 
 function isAdminTruthy(v: ProfileRow["is_admin"]): boolean {
   if (v === true) return true;
