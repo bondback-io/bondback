@@ -1,9 +1,12 @@
-import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { getSiteUrl } from "@/lib/site";
-import { JOB_TYPED_SELECT, LISTING_FULL_SELECT } from "@/lib/supabase/queries";
+import {
+  loadJobByNumericIdForSession,
+  loadJobForListingDetailPage,
+  loadListingFullForSession,
+} from "@/lib/jobs/load-job-for-detail-route";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -70,6 +73,13 @@ export type JobListingCanonical = "jobs" | "listings";
  * Shared dynamic SEO for `/jobs/[id]` and `/listings/[id]`.
  * `routeId` is the URL segment (job id or listing id).
  */
+const GENERIC_JOB_LISTING_META: Metadata = {
+  title: "Bond Back",
+  description:
+    "Bond cleaning and end-of-lease cleaning marketplace in Australia — list, bid, and get your bond back.",
+  robots: { index: false, follow: true },
+};
+
 export async function buildJobListingMetadata(
   routeId: string,
   options: { canonical: JobListingCanonical }
@@ -77,55 +87,38 @@ export async function buildJobListingMetadata(
   const site = getSiteUrl();
   const siteOrigin = site.origin;
   const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const uid = session?.user?.id;
 
   let listingId = routeId;
   const numericId = /^\d+$/.test(routeId) ? Number(routeId) : NaN;
   let jobRowMeta: JobRow | null = null;
 
   if (!Number.isNaN(numericId)) {
-    const { data: jr } = await supabase
-      .from("jobs")
-      .select(JOB_TYPED_SELECT)
-      .eq("id", numericId)
-      .maybeSingle();
-    const jl = jr as JobRow | null;
+    const jl = await loadJobByNumericIdForSession(supabase, numericId, uid);
     if (jl?.listing_id) {
       listingId = String(jl.listing_id);
       jobRowMeta = jl;
     } else {
-      // All-digit route segment with no matching job row — not a listing UUID; avoid querying
-      // listings.id with a non-UUID string (would 404 every time).
-      return {
-        title: "Bond Back",
-        description:
-          "Bond cleaning and end-of-lease cleaning marketplace in Australia — list, bid, and get your bond back.",
-        robots: { index: false, follow: true },
-      };
+      return GENERIC_JOB_LISTING_META;
     }
+  } else {
+    jobRowMeta = await loadJobForListingDetailPage(supabase, routeId, uid);
   }
 
-  const { data: listingRaw, error: listErr } = await supabase
-    .from("listings")
-    .select(LISTING_FULL_SELECT)
-    .eq("id", listingId)
-    .maybeSingle();
+  const listingRaw = await loadListingFullForSession(supabase, listingId, uid, jobRowMeta);
 
-  if (listErr || !listingRaw) {
-    notFound();
+  if (!listingRaw) {
+    return GENERIC_JOB_LISTING_META;
   }
 
   const listing = listingRaw as ListingRow;
 
   let jobForPrice: JobRow | null = jobRowMeta;
   if (!jobForPrice) {
-    const { data: j2 } = await supabase
-      .from("jobs")
-      .select(JOB_TYPED_SELECT)
-      .eq("listing_id", listingId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    jobForPrice = (j2 as JobRow | null) ?? null;
+    jobForPrice = await loadJobForListingDetailPage(supabase, listingId, uid);
   }
 
   const title = String(listing.title ?? "").trim() || "Bond clean job";

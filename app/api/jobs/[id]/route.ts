@@ -4,11 +4,13 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import {
   BID_FULL_SELECT,
-  JOB_DETAIL_PAGE_SELECT,
   JOB_MESSAGES_FULL_SELECT,
-  LISTING_FULL_SELECT,
 } from "@/lib/supabase/queries";
-import { loadJobByNumericIdForSession } from "@/lib/jobs/load-job-for-detail-route";
+import {
+  loadJobByNumericIdForSession,
+  loadJobForListingDetailPage,
+  loadListingFullForSession,
+} from "@/lib/jobs/load-job-for-detail-route";
 
 type Params = Promise<{ id: string }>;
 
@@ -44,14 +46,7 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
   } else {
-    const { data: jr, error: jobError } = await supabase
-      .from("jobs")
-      .select(JOB_DETAIL_PAGE_SELECT)
-      .eq("id", id)
-      .maybeSingle();
-    if (!jobError && jr) {
-      jobRow = jr as typeof jobRow;
-    }
+    jobRow = await loadJobForListingDetailPage(supabase, raw, session.user.id);
   }
 
   let listingId: string = id;
@@ -59,15 +54,18 @@ export async function GET(
     listingId = String((jobRow as { listing_id: string | number }).listing_id);
   }
 
-  const { data: listing, error: listError } = await supabase
-    .from("listings")
-    .select(LISTING_FULL_SELECT)
-    .eq("id", listingId)
-    .single();
+  const listingLoaded = await loadListingFullForSession(
+    supabase,
+    listingId,
+    session.user.id,
+    jobRow
+  );
 
-  if (listError || !listing) {
+  if (!listingLoaded) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  const listing = listingLoaded;
 
   const { data: bids } = await supabase
     .from("bids")

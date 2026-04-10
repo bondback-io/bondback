@@ -16,12 +16,12 @@ import { ScrollToDispute } from "@/components/features/scroll-to-dispute";
 import { RecordJobView } from "@/components/features/record-job-view";
 import { OfflineJobsPrimer } from "@/components/offline/offline-jobs-primer";
 import { buildJobListingMetadata, buildJobPostingJsonLd } from "@/lib/seo/jobs-listings-seo";
+import { BID_FULL_SELECT } from "@/lib/supabase/queries";
 import {
-  BID_FULL_SELECT,
-  JOB_DETAIL_PAGE_SELECT,
-  LISTING_FULL_SELECT,
-} from "@/lib/supabase/queries";
-import { loadJobByNumericIdForSession } from "@/lib/jobs/load-job-for-detail-route";
+  loadJobByNumericIdForSession,
+  loadJobForListingDetailPage,
+  loadListingFullForSession,
+} from "@/lib/jobs/load-job-for-detail-route";
 
 export const dynamic = "force-dynamic";
 
@@ -129,37 +129,21 @@ export default async function JobDetailPage({
     listingId = String(job.listing_id);
   } else {
     listingId = raw;
+    job = await loadJobForListingDetailPage(supabase, listingId, session?.user?.id);
   }
 
-  const { data: listing, error: listError } = await supabase
-    .from("listings")
-    .select(LISTING_FULL_SELECT)
-    .eq("id", listingId)
-    .single();
+  const listingLoaded = await loadListingFullForSession(
+    supabase,
+    listingId,
+    session?.user?.id,
+    job
+  );
 
-  if (listError || !listing) {
+  if (!listingLoaded) {
     notFound();
   }
 
-  const listingRow = listing as ListingRow;
-
-  /**
-   * Listing UUID routes: resolve the active job by listing so `hasActiveJob` and lister tools stay
-   * consistent (avoids showing "Accept bid" while the server rejects "job already exists").
-   */
-  if (!job) {
-    const { data: jobByListing } = await supabase
-      .from("jobs")
-      .select(JOB_DETAIL_PAGE_SELECT)
-      .eq("listing_id", listingRow.id)
-      .neq("status", "cancelled")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (jobByListing) {
-      job = jobByListing as JobRow;
-    }
-  }
+  const listingRow = listingLoaded as ListingRow;
 
   const { data: bids } = await supabase
     .from("bids")
