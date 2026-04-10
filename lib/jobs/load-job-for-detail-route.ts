@@ -13,6 +13,26 @@ function sameUserId(a: unknown, b: unknown): boolean {
   return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
 }
 
+/** Matches Find Jobs / `buildLiveListingsQuery` — safe to show to any signed-in user (and OG for public rows). */
+function isMarketplaceVisibleListing(row: ListingRow): boolean {
+  const st = String(row.status ?? "").toLowerCase();
+  if (st === "ended" || st === "expired") {
+    return true;
+  }
+  if (st !== "live") {
+    return false;
+  }
+  if (row.cancelled_early_at != null) {
+    return false;
+  }
+  const endRaw = row.end_time;
+  if (endRaw == null || String(endRaw).trim() === "") {
+    return true;
+  }
+  const endMs = new Date(String(endRaw)).getTime();
+  return !Number.isNaN(endMs) && endMs > Date.now();
+}
+
 /**
  * Load a job by numeric PK for `/jobs/[id]`. Uses the user-scoped client first; if no row is
  * returned (common when RLS allows cleaners but not listers to read `jobs`), falls back to the
@@ -57,9 +77,12 @@ export async function loadJobByNumericIdForSession(
 }
 
 /**
- * Load listing row for `/jobs/[id]`. Many DB setups let winners read `jobs` but not `listings`;
- * listers can be the opposite. When `accessJob` proves the user is lister or winner, fall back to
- * the service role to load the listing (same security model as {@link loadJobByNumericIdForSession}).
+ * Load listing row for `/jobs/[id]`.
+ * - User-scoped client first (RLS).
+ * - Service role when the user is lister/winner on `accessJob` (RLS mismatch between jobs vs listings).
+ * - When there is no job context (Find Jobs / browse), service role only for marketplace-visible rows
+ *   or rows owned by the current user (new lister viewing their listing before RLS exposes it).
+ * - Without `sessionUserId`, only marketplace-visible rows are returned via admin (e.g. OG metadata).
  */
 export async function loadListingFullForSession(
   supabase: ServerSupabaseClient,
@@ -78,12 +101,7 @@ export async function loadListingFullForSession(
   }
 
   const admin = createSupabaseAdminClient();
-  if (!admin || !sessionUserId?.trim() || !accessJob) {
-    return null;
-  }
-
-  const j = accessJob;
-  if (!sameUserId(j.lister_id, sessionUserId) && !sameUserId(j.winner_id, sessionUserId)) {
+  if (!admin) {
     return null;
   }
 
@@ -93,7 +111,31 @@ export async function loadListingFullForSession(
     .eq("id", listingId)
     .maybeSingle();
 
-  return (full as ListingRow) ?? null;
+  if (!full) {
+    return null;
+  }
+
+  const row = full as ListingRow;
+
+  if (accessJob) {
+    if (String(accessJob.listing_id) !== String(listingId)) {
+      return null;
+    }
+    if (!sameUserId(accessJob.lister_id, sessionUserId) && !sameUserId(accessJob.winner_id, sessionUserId)) {
+      return null;
+    }
+    return row;
+  }
+
+  if (sessionUserId?.trim() && sameUserId(row.lister_id, sessionUserId)) {
+    return row;
+  }
+
+  if (isMarketplaceVisibleListing(row)) {
+    return row;
+  }
+
+  return null;
 }
 
 /**
