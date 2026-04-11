@@ -91,7 +91,7 @@ export const Header = async ({
               aria-label="Account and tools"
             >
               <NotificationBell
-                key={session.user.id}
+                key={`${session.user.id}-notification-bell`}
                 userId={session.user.id}
                 activeRole={session.activeRole}
                 inAppSoundEnabled={inAppSoundEnabled}
@@ -114,7 +114,7 @@ export const Header = async ({
                   Test mode
                 </span>
               )}
-              <UserMenu key={session.user.id} session={session} />
+              <UserMenu key={`${session.user.id}-user-menu`} session={session} />
             </nav>
           </div>
         </div>

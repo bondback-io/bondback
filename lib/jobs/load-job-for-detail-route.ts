@@ -50,10 +50,9 @@ function isMarketplaceVisibleListing(row: ListingRow): boolean {
 }
 
 /**
- * Load a job by numeric PK for `/jobs/[id]`. Uses the user-scoped client first; if no row is
- * returned (common when RLS allows cleaners but not listers to read `jobs`), falls back to the
- * service role and returns the row when `sessionUserId` is `lister_id` or `winner_id`.
- * Without a session, returns the job only when the linked listing is marketplace-visible (public).
+ * Load a job by numeric PK for `/jobs/[id]` and `/listings/[digits]` redirect resolution.
+ * User-scoped client first; then service role. Returns the row for lister/winner, or when the
+ * linked listing is marketplace-visible (same for anonymous and logged-in non-parties, e.g. cleaners).
  */
 export async function loadJobByNumericIdForSession(
   supabase: ServerSupabaseClient,
@@ -101,7 +100,6 @@ export async function loadJobByNumericIdForSession(
     if (sameUserId(j.lister_id, sessionUserId) || sameUserId(j.winner_id, sessionUserId)) {
       return j;
     }
-    return null;
   }
 
   const { data: listRow } = await admin
@@ -173,10 +171,11 @@ export async function loadListingFullForSession(
 
   const row = full as ListingRow;
 
+  if (accessJob && String(accessJob.listing_id) !== String(listingId)) {
+    return null;
+  }
+
   if (accessJob) {
-    if (String(accessJob.listing_id) !== String(listingId)) {
-      return null;
-    }
     const isParty =
       !!sessionUserId?.trim() &&
       (sameUserId(accessJob.lister_id, sessionUserId) ||
@@ -184,10 +183,6 @@ export async function loadListingFullForSession(
     if (isParty) {
       return row;
     }
-    if (!sessionUserId?.trim() && isMarketplaceVisibleListing(row)) {
-      return row;
-    }
-    return null;
   }
 
   if (sessionUserId?.trim() && sameUserId(row.lister_id, sessionUserId)) {
@@ -264,6 +259,14 @@ export async function loadJobForListingDetailPage(
 
   if (sessionUserId?.trim()) {
     if (sameUserId(j.lister_id, sessionUserId) || sameUserId(j.winner_id, sessionUserId)) {
+      return j;
+    }
+    const { data: listRow } = await admin
+      .from("listings")
+      .select(LISTING_FULL_SELECT)
+      .eq("id", listingId)
+      .maybeSingle();
+    if (listRow && isMarketplaceVisibleListing(listRow as ListingRow)) {
       return j;
     }
     return null;
