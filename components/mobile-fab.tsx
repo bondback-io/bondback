@@ -8,6 +8,7 @@ import { Plus, Search, Star, Briefcase, MapPin, ChevronRight } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { formatCents } from "@/lib/listings";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import type { DashboardJobCardProps } from "@/components/dashboard/dashboard-job-card";
 import { DashboardJobCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 
@@ -99,6 +100,10 @@ ResponsiveCleanerJobCards.displayName = "ResponsiveCleanerJobCards";
 
 export type ListerActiveJobItem = {
   jobId: number;
+  /** Listing UUID — used when the row should open `/listings/[id]`. */
+  listingId: string;
+  /** Assigned cleaner (mirrors jobs.winner_id) — strengthens job-route detection. */
+  winnerId?: string | null;
   title: string;
   status: string;
   agreedAmountCents: number | null;
@@ -173,11 +178,17 @@ export function ListerActiveJobsList({
           item.bedrooms != null && item.bathrooms != null
             ? `${item.bedrooms} bed · ${item.bathrooms} bath`
             : null;
+        const detailHref = detailUrlForCardItem({
+          id: item.jobId,
+          listing_id: item.listingId,
+          status: item.status,
+          winner_id: item.winnerId,
+        });
 
         return (
           <li key={item.jobId}>
             <Link
-              href={`/jobs/${item.jobId}`}
+              href={detailHref}
               className={cn(
                 "flex min-h-[4.5rem] gap-3 rounded-xl border border-border/70 bg-muted/15 p-3 pr-2 transition-colors",
                 "hover:bg-muted/40 active:bg-muted/50",

@@ -6,7 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { ActiveJobCard } from "@/components/features/active-job-card";
 import type { ListingRow } from "@/lib/listings";
 
-type JobItem = { id: string | number; listing_id: string; status: string };
+type JobItem = {
+  id: string | number;
+  listing_id: string;
+  status: string;
+  winner_id?: string | null;
+  cleaner_id?: string | null;
+};
 
 export type DashboardJobTabsProps = {
   jobs: { job: JobItem; listing: ListingRow | null; daysLeft: number | null }[];
@@ -82,7 +88,13 @@ export function DashboardJobTabs({
             {filteredJobs.map(({ job, listing, daysLeft }) => (
               <ActiveJobCard
                 key={job.id}
-                job={{ id: String(job.id), listing_id: job.listing_id, status: job.status }}
+                job={{
+                  id: String(job.id),
+                  listing_id: job.listing_id,
+                  status: job.status,
+                  winner_id: job.winner_id,
+                  cleaner_id: job.cleaner_id,
+                }}
                 listing={listing}
                 daysLeft={daysLeft}
               />

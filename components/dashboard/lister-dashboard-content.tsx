@@ -12,8 +12,15 @@ import { DashboardListingCardWithSwipe } from "@/components/dashboard/dashboard-
 import { XCircle, ChevronDown } from "lucide-react";
 import type { ListingRow } from "@/lib/listings";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 
-type JobRow = { id: number; listing_id: string; status: string; updated_at?: string | null };
+type JobRow = {
+  id: number;
+  listing_id: string;
+  status: string;
+  updated_at?: string | null;
+  winner_id?: string | null;
+};
 
 export type CancelledDashboardRow =
   | { kind: "job"; id: string; cancelledAt: string; job: JobRow }
@@ -138,10 +145,16 @@ export function ListerDashboardContent({
               <ul className="space-y-1">
                 {activeJobs.slice(0, 5).map((job) => {
                   const listing = listingMap.get(String(job.listing_id));
+                  const href = detailUrlForCardItem({
+                    id: job.id,
+                    listing_id: job.listing_id,
+                    status: job.status,
+                    winner_id: job.winner_id,
+                  });
                   return (
                     <li key={job.id}>
                       <Link
-                        href={`/jobs/${job.id}`}
+                        href={href}
                         className="block rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-muted/50 dark:hover:bg-gray-800/50"
                       >
                         <span className="font-medium text-foreground dark:text-gray-100">
@@ -193,10 +206,16 @@ export function ListerDashboardContent({
                   const cancelledAt = jobRow.updated_at
                     ? format(new Date(jobRow.updated_at), "d MMM yyyy")
                     : null;
+                  const jobHref = detailUrlForCardItem({
+                    id: job.id,
+                    listing_id: job.listing_id,
+                    status: job.status,
+                    winner_id: job.winner_id,
+                  });
                   return (
                     <li key={row.id}>
                       <Link
-                        href={`/jobs/${job.id}`}
+                        href={jobHref}
                         className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
                       >
                         <div className="min-w-0 flex-1">

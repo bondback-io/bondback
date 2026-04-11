@@ -21,6 +21,7 @@ import type { ListingRow } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { cn } from "@/lib/utils";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import {
   Briefcase,
   MapPin,
@@ -31,7 +32,13 @@ import {
   Share2,
 } from "lucide-react";
 
-type JobRow = { id: string; listing_id: string; status: string };
+type JobRow = {
+  id: string;
+  listing_id: string;
+  status: string;
+  winner_id?: string | null;
+  cleaner_id?: string | null;
+};
 
 export type ActiveJobCardProps = {
   job: JobRow;
@@ -43,7 +50,13 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
   const router = useRouter();
   const dueLine = formatPreferredCleaningDueLine(daysLeft);
   const overdue = daysLeft != null && daysLeft < 0;
-  const jobHref = `/jobs/${job.id}`;
+  const jobHref = detailUrlForCardItem({
+    id: job.id,
+    listing_id: job.listing_id,
+    status: job.status,
+    winner_id: job.winner_id,
+    cleaner_id: job.cleaner_id,
+  });
   const title = listing?.title ?? "Bond clean job";
   const thumb = getListingCoverUrl(listing);
   const isDisputed =

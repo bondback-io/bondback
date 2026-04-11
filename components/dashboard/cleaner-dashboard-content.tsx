@@ -15,11 +15,13 @@ import {
   daysUntilPreferredCleaningDeadline,
   type ListingRow,
 } from "@/lib/listings";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 
 type JobRow = {
   id: number;
   listing_id: string;
   status: string;
+  winner_id?: string | null;
   cleaner_confirmed_complete?: boolean | null;
   updated_at?: string | null;
 };
@@ -107,6 +109,7 @@ export function CleanerDashboardContent({
                     id: job.id,
                     listing_id: job.listing_id,
                     status: job.status,
+                    winner_id: job.winner_id,
                     cleaner_confirmed_complete: job.cleaner_confirmed_complete,
                   }}
                   listing={listing}
@@ -149,10 +152,16 @@ export function CleanerDashboardContent({
                 const cancelledAt = job.updated_at
                   ? format(new Date(job.updated_at), "d MMM yyyy")
                   : null;
+                const jobHref = detailUrlForCardItem({
+                  id: job.id,
+                  listing_id: job.listing_id,
+                  status: job.status,
+                  winner_id: job.winner_id,
+                });
                 return (
                   <li key={job.id}>
                     <Link
-                      href={`/jobs/${job.id}`}
+                      href={jobHref}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
                     >
                       <div className="min-w-0 flex-1">

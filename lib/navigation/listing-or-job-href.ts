@@ -1,9 +1,10 @@
 /**
- * Marketplace detail URLs:
- * - `/listings/[uuid]` — live/bidding / no assignee yet (or job not in assigned work state)
- * - `/jobs/[numericId]` — assigned / in-progress job row
+ * Routing model:
+ * - Live/bidding work lives in `listings` → `/listings/[uuid]`
+ * - Assigned / in-progress jobs live in `jobs` → `/jobs/[numericId]`
  *
- * Jobs table uses `winner_id` (assigned cleaner). Some call sites may pass `cleaner_id` as an alias.
+ * `jobs` uses `winner_id` for the assigned cleaner. `cleaner_id` is accepted as an alias
+ * (e.g. merged shapes) to match call-site naming.
  */
 
 export type ListingLinkInput = {
@@ -15,30 +16,59 @@ export type JobLinkInput = {
   id: number;
   status?: string | null;
   winner_id?: string | null;
-  /** Alias for `winner_id` when mirroring user-facing naming */
   cleaner_id?: string | null;
 };
 
-function hasAssigneeId(job: JobLinkInput): boolean {
-  const w = job.winner_id;
-  if (w != null && String(w).trim() !== "") return true;
-  const c = job.cleaner_id;
-  return c != null && String(c).trim() !== "";
-}
+/** Card / row shape: either a listing row, a job row, or a merged object with `listing_id` + job fields. */
+export type MarketplaceDetailItem = {
+  id: string | number;
+  listing_id?: string | null;
+  status?: string | null;
+  winner_id?: string | null;
+  cleaner_id?: string | null;
+};
 
 /**
- * True when the job row represents assigned / active work that should use `/jobs/[id]`.
- * Matches: assignee id present, or status `in_progress` / `assigned`.
+ * True when the row should open the job detail route (assigned work).
+ * Uses assignee fields (`winner_id` / `cleaner_id`) plus job lifecycle statuses such as
+ * `accepted`, `in_progress`, `completed`, dispute phases, etc.
  */
-export function isAssignedJobRoute(job: JobLinkInput | null | undefined): boolean {
-  if (!job) return false;
-  const st = String(job.status ?? "").toLowerCase();
-  if (st === "in_progress" || st === "assigned") return true;
-  return hasAssigneeId(job);
+export function isJobAssigned(item: MarketplaceDetailItem | null | undefined): boolean {
+  if (!item) return false;
+  const assignee = item.cleaner_id ?? item.winner_id;
+  if (assignee != null && String(assignee).trim() !== "") return true;
+  const st = String(item.status ?? "").toLowerCase();
+  return (
+    st === "accepted" ||
+    st === "in_progress" ||
+    st === "assigned" ||
+    st === "completed" ||
+    st === "completed_pending_approval" ||
+    st === "disputed" ||
+    st === "in_review" ||
+    st === "dispute_negotiating"
+  );
 }
 
 /**
- * Prefer listing URL until the job is in an assigned-work state; then use numeric job URL.
+ * Single conditional for cards: job route when assigned, else listing URL.
+ * For listing-only rows, `id` is the listing UUID and `listing_id` is usually omitted.
+ */
+export function detailUrlForCardItem(item: MarketplaceDetailItem): string {
+  if (isJobAssigned(item)) {
+    return `/jobs/${item.id}`;
+  }
+  const listingKey =
+    item.listing_id ??
+    (typeof item.id === "string" ? item.id : null);
+  if (!listingKey) {
+    return "/jobs";
+  }
+  return `/listings/${listingKey}`;
+}
+
+/**
+ * Prefer listing URL until the job is assigned; then use numeric job URL.
  */
 export function hrefListingOrJob(
   listing: ListingLinkInput,
@@ -47,10 +77,13 @@ export function hrefListingOrJob(
   if (!job) {
     return `/listings/${listing.id}`;
   }
-  if (!isAssignedJobRoute(job)) {
-    return `/listings/${listing.id}`;
-  }
-  return `/jobs/${job.id}`;
+  return detailUrlForCardItem({
+    id: job.id,
+    listing_id: listing.id,
+    status: job.status,
+    winner_id: job.winner_id,
+    cleaner_id: job.cleaner_id,
+  });
 }
 
 export function hrefListingOnly(listingId: string): string {
@@ -60,3 +93,7 @@ export function hrefListingOnly(listingId: string): string {
 export function hrefJobOnly(jobId: number): string {
   return `/jobs/${jobId}`;
 }
+
+/** @deprecated Use {@link isJobAssigned} */
+export const isAssignedJobRoute = (job: JobLinkInput | null | undefined) =>
+  isJobAssigned(job ?? undefined);

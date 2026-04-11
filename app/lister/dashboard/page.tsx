@@ -29,6 +29,7 @@ import { getListingCoverUrl } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import {
   normalizeProfileRolesFromDb,
   resolveActiveRoleFromProfile,
@@ -398,6 +399,8 @@ export default async function ListerDashboardPage() {
                     : null;
                 return {
                   jobId: Number(job.id),
+                  listingId: String(job.listing_id),
+                  winnerId: j.winner_id?.trim() ? j.winner_id : null,
                   title: listing?.title ?? `Job #${job.id}`,
                   status: job.status,
                   agreedAmountCents: typeof agreed === "number" && agreed > 0 ? agreed : null,
@@ -453,10 +456,16 @@ export default async function ListerDashboardPage() {
             <ul className="space-y-2">
               {completedJobs.slice(0, 5).map((job) => {
                 const listing = listingMap.get(job.listing_id);
+                const href = detailUrlForCardItem({
+                  id: job.id,
+                  listing_id: job.listing_id,
+                  status: job.status,
+                  winner_id: job.winner_id,
+                });
                 return (
                   <li key={job.id}>
                     <Link
-                      href={`/jobs/${job.id}`}
+                      href={href}
                       className="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 transition-colors hover:bg-muted/50 dark:border-gray-800 dark:hover:bg-gray-800/50 md:min-h-12"
                     >
                       <div className="min-w-0 flex-1">
@@ -511,10 +520,16 @@ export default async function ListerDashboardPage() {
                   const cancelledAt = jobRow.updated_at
                     ? format(new Date(jobRow.updated_at), "d MMM yyyy")
                     : null;
+                  const jobHref = detailUrlForCardItem({
+                    id: job.id,
+                    listing_id: job.listing_id,
+                    status: job.status,
+                    winner_id: job.winner_id,
+                  });
                   return (
                     <li key={row.id}>
                       <Link
-                        href={`/jobs/${job.id}`}
+                        href={jobHref}
                         className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
                       >
                         <div className="min-w-0 flex-1">

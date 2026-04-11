@@ -27,11 +27,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 
 type JobRow = {
   id: number | string;
   listing_id: string;
   status: string;
+  winner_id?: string | null;
+  cleaner_id?: string | null;
   cleaner_confirmed_complete?: boolean | null;
   agreed_amount_cents?: number | null;
 };
@@ -135,6 +138,14 @@ function DashboardJobCardInner({
     daysLeft != null && daysLeft >= 0 && daysLeft <= 1;
   const daysLine = formatPreferredCleaningDueLine(daysLeft);
 
+  const detailUrl = detailUrlForCardItem({
+    id: job.id,
+    listing_id: job.listing_id,
+    status: job.status,
+    winner_id: job.winner_id,
+    cleaner_id: job.cleaner_id,
+  });
+
   return (
     <Card
       className={cn(
@@ -147,7 +158,7 @@ function DashboardJobCardInner({
       <div className="md:hidden">
         <div className="relative h-[200px] w-full min-h-[180px] max-h-[220px] overflow-hidden bg-muted dark:bg-gray-800">
           <Link
-            href={`/jobs/${job.id}`}
+            href={detailUrl}
             className="absolute inset-0 block"
             aria-label={`View job: ${title}`}
           >
@@ -229,7 +240,7 @@ function DashboardJobCardInner({
 
           <div className="flex flex-col gap-3.5 pt-1">
             <Button asChild size="lg" variant="default" className="min-h-14 w-full rounded-xl text-lg font-semibold">
-              <Link href={`/jobs/${job.id}`} className="flex items-center justify-center gap-2">
+              <Link href={detailUrl} className="flex items-center justify-center gap-2">
                 <Eye className="h-6 w-6" aria-hidden />
                 View Details
               </Link>
@@ -260,7 +271,7 @@ function DashboardJobCardInner({
       {/* Desktop */}
       <div className="hidden md:block">
         <Link
-          href={`/jobs/${job.id}`}
+          href={detailUrl}
           className="block"
           aria-label={`View job: ${title}`}
         >
@@ -338,7 +349,7 @@ function DashboardJobCardInner({
           </div>
           <div className="mt-auto flex flex-wrap gap-2.5 pt-1">
             <Button asChild className="min-h-11 rounded-full px-5 text-sm font-semibold" variant="default">
-              <Link href={`/jobs/${job.id}`}>View Job</Link>
+              <Link href={detailUrl}>View Job</Link>
             </Button>
             <Button asChild variant="outline" className="min-h-11 rounded-full px-5 text-sm font-semibold">
               <Link href={`/messages?job=${job.id}`}>

@@ -44,6 +44,7 @@ import {
   resolveActiveRoleFromProfile,
 } from "@/lib/profile-roles";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -90,7 +91,7 @@ export default async function CleanerDashboardPage() {
   const { data: jobsData } = await supabase
     .from("jobs")
     .select(
-      "id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents"
+      "id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id"
     )
     .eq("winner_id", user.id)
     .in("status", ["accepted", "in_progress", "completed", "completed_pending_approval", "cancelled"])
@@ -381,6 +382,7 @@ export default async function CleanerDashboardPage() {
                   id: job.id,
                   listing_id: String(job.listing_id),
                   status: job.status,
+                  winner_id: job.winner_id,
                   cleaner_confirmed_complete: job.cleaner_confirmed_complete,
                   agreed_amount_cents: job.agreed_amount_cents,
                 },
@@ -420,10 +422,16 @@ export default async function CleanerDashboardPage() {
             <ul className="space-y-2">
               {completedJobs.slice(0, 5).map((job) => {
                 const listing = listingsMap.get(job.listing_id as string);
+                const href = detailUrlForCardItem({
+                  id: job.id,
+                  listing_id: job.listing_id as string,
+                  status: job.status,
+                  winner_id: job.winner_id,
+                });
                 return (
                   <li key={job.id}>
                     <Link
-                      href={`/jobs/${job.id}`}
+                      href={href}
                       className="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 transition-colors hover:bg-muted/50 dark:border-gray-800 dark:hover:bg-gray-800/50 md:min-h-12"
                     >
                       <div className="min-w-0 flex-1">
@@ -479,10 +487,16 @@ export default async function CleanerDashboardPage() {
                 const cancelledAt = jobRow.updated_at
                   ? format(new Date(jobRow.updated_at), "d MMM yyyy")
                   : null;
+                const detailHref = detailUrlForCardItem({
+                  id: job.id,
+                  listing_id: job.listing_id as string,
+                  status: job.status,
+                  winner_id: job.winner_id,
+                });
                 return (
                   <li key={job.id}>
                     <Link
-                      href={`/jobs/${job.id}`}
+                      href={detailHref}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
                     >
                       <div className="min-w-0 flex-1">
