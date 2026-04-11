@@ -6,6 +6,11 @@ import type { Database } from "@/types/supabase";
  * Server Supabase client for App Router (Server Components, Route Handlers, Server Actions).
  * Import only from server code.
  */
+/** Alias for `createServerSupabaseClient` (same async server client). */
+export async function createClient() {
+  return createServerSupabaseClient();
+}
+
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();
 
