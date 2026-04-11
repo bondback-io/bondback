@@ -15,14 +15,14 @@ type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type BidRow = Database["public"]["Tables"]["bids"]["Row"];
 
 /**
- * Job detail URLs use `/jobs/[id]` where `id` may be a listing id or a job id
- * (see `app/jobs/[id]/page.tsx`). Revalidate both so `router.refresh()` sees new bids.
+ * Listing detail is `/listings/[uuid]`; assigned work is `/jobs/[numericId]`. Revalidate both.
  */
 async function revalidateJobDetailPagesForListing(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   listingId: string
 ) {
   revalidatePath("/jobs");
+  revalidatePath(`/listings/${listingId}`);
   revalidatePath(`/jobs/${listingId}`);
   const { data: jobRows } = await supabase
     .from("jobs")

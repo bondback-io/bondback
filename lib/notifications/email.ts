@@ -367,7 +367,11 @@ export async function buildNotificationEmail(
   const listingIdStr = listingId != null ? String(listingId) : idStr;
   const messageSnippet = messageText.length > 100 ? `${messageText.slice(0, 97)}…` : messageText;
   const hrefForJob =
-    id > 0 ? `/jobs/${idStr}` : listingUuid?.trim() ? `/jobs/${listingUuid.trim()}` : "/dashboard";
+    id > 0
+      ? `/jobs/${idStr}`
+      : listingUuid?.trim()
+        ? `/listings/${listingUuid.trim()}`
+        : "/dashboard";
 
   const subjects: Record<NotificationType, string> = {
     new_message: `${senderName ?? "Someone"} messaged you — Job #${id} – Bond Back`,

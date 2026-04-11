@@ -43,7 +43,7 @@ export function ListerDisputedCard({
 }: Props) {
   const cover = getListingCoverUrl(listing) ?? "/placeholder-listing.png";
   const jobId = job.jobId;
-  const jobPageBase = `/jobs/${listing.id}`;
+  const jobPageBase = `/jobs/${jobId}`;
   const disputeHash = `${jobPageBase}#dispute`;
   const releaseHash = `${jobPageBase}#job-approve-release`;
   const messagesHref = `/messages?job=${jobId}`;

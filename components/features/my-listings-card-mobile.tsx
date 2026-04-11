@@ -83,7 +83,7 @@ export function MyListingsCardMobile({
     >
       <div className={HERO}>
         <Link
-          href={`/jobs/${jid}`}
+          href={`/listings/${jid}`}
           className="absolute inset-0 block"
           aria-label={`Open listing: ${title}`}
         >

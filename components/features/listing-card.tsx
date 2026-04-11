@@ -50,9 +50,17 @@ import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { useDistanceUnit } from "@/hooks/use-distance-unit";
 import { formatDistanceKmLabel } from "@/lib/distance-format";
 import { NEXT_IMAGE_SIZES_LISTING_CARD_DESKTOP } from "@/lib/next-image-sizes";
+import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 export type ListingCardProps = {
   listing: ListingRow;
+  /** When set, detail links use `hrefListingOrJob` (assigned / in-progress → `/jobs/[id]`). */
+  job?: {
+    id: number;
+    winner_id?: string | null;
+    cleaner_id?: string | null;
+    status?: string | null;
+  } | null;
   showPlaceBid?: boolean;
   isCleaner?: boolean;
   isListerOwner?: boolean;
@@ -186,7 +194,7 @@ function ListingCardOverflowMenu({
             {isLive && (
               <DropdownMenuItem asChild>
                 <Link
-                  href={`/jobs/${listingId}?cancel=1`}
+                  href={`/listings/${listingId}?cancel=1`}
                   className="flex cursor-pointer items-center gap-2 text-destructive focus:text-destructive"
                 >
                   <XCircle className="h-4 w-4 shrink-0" />
@@ -272,9 +280,13 @@ function ListingCardInner({
   jobStatus = null,
   hasAssignedCleaner = false,
   compactMobileMarketplace = false,
+  job = null,
 }: ListingCardProps) {
   const distanceUnit = useDistanceUnit();
-  const jobHref = `/jobs/${listing.id}`;
+  const jobHref = hrefListingOrJob(
+    { id: listing.id, status: listing.status },
+    job ?? undefined
+  );
 
   const handleShare = () => {
     const url = typeof window !== "undefined" ? `${window.location.origin}${jobHref}` : jobHref;

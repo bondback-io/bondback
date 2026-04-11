@@ -58,6 +58,7 @@ import {
   loadListingDraftLocal,
   clearListingDraftLocal,
 } from "@/lib/listing-draft-storage";
+import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 function preferJobRow<
   T extends { status: string | null; updated_at?: string | null },
@@ -957,7 +958,16 @@ export function MyListingsList({
                   timeLabel={timeLabel}
                   isLiveBidding={liveBidding}
                   showEndEarly={showEndEarly}
-                  href={`/jobs/${listing.id}`}
+                  href={hrefListingOrJob(
+                    { id: String(listing.id), status: listing.status },
+                    job && job.jobId != null
+                      ? {
+                          id: Number(job.jobId),
+                          winner_id: job.winnerId,
+                          status: job.status,
+                        }
+                      : null
+                  )}
                   onEndEarly={showEndEarly ? () => openCancelListingConfirm(listing) : undefined}
                   onRelist={
                     isExpired

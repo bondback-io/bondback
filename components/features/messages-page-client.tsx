@@ -17,7 +17,6 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 export type Conversation = {
   jobId: number;
-  /** Listing id for `/jobs/[id]` (job detail accepts listing or job id). */
   listingId: string | null;
   jobStatus: string | null;
   listingTitle: string | null;
@@ -214,7 +213,7 @@ export function MessagesPageClient({
                 }
 
                 const initial = (titleLine.trim().charAt(0) || "?").toUpperCase();
-                const jobHref = `/jobs/${encodeURIComponent(c.listingId ?? String(c.jobId))}`;
+                const jobHref = `/jobs/${c.jobId}`;
 
                 return (
                   <div

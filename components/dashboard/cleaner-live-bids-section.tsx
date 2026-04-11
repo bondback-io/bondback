@@ -48,7 +48,7 @@ export function CleanerLiveBidsSection({ items }: { items: CleanerLiveBidItem[] 
         return (
           <li key={item.listingId}>
             <Link
-              href={`/jobs/${item.listingId}`}
+              href={`/listings/${item.listingId}`}
               className={cn(
                 "flex min-h-[100px] gap-3 rounded-2xl border-2 bg-card p-3 shadow-sm transition-all active:scale-[0.99] sm:min-h-[96px] sm:p-4",
                 "hover:border-emerald-500/40 hover:shadow-md dark:bg-gray-950/60",

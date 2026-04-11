@@ -60,7 +60,7 @@ export function CleanerCurrentBids({ items }: CleanerCurrentBidsProps) {
             className="flex flex-col gap-1 p-3 text-sm hover:bg-muted/60"
           >
             <a
-              href={`/jobs/${listing.id}`}
+              href={`/listings/${listing.id}`}
               className="flex flex-col gap-1"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">

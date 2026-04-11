@@ -290,6 +290,7 @@ export async function declineEarlyBidByToken(token: string): Promise<EarlyBidTok
 
   revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
+  revalidatePath(`/listings/${b.listing_id}`);
   revalidatePath(`/jobs/${b.listing_id}`);
   revalidatePath("/dashboard");
   revalidatePath("/lister/dashboard");
@@ -297,7 +298,7 @@ export async function declineEarlyBidByToken(token: string): Promise<EarlyBidTok
 
   return {
     ok: true,
-    redirectPath: `/jobs/${encodeURIComponent(b.listing_id)}?early_decline=1`,
+    redirectPath: `/listings/${encodeURIComponent(b.listing_id)}?early_decline=1`,
   };
 }
 

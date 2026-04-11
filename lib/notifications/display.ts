@@ -21,14 +21,6 @@ export function getNotificationHref(row: NotificationRow): string | null {
   if (data?.admin_test === true) return "/notifications";
   if (row.type === "daily_digest") return "/dashboard";
 
-  const listingUuid =
-    typeof data?.listing_uuid === "string" && data.listing_uuid.trim() !== ""
-      ? data.listing_uuid.trim()
-      : null;
-  if (listingUuid) {
-    return `/jobs/${listingUuid}`;
-  }
-
   const jobFromData = data?.job_id != null ? numFromData(data.job_id) : null;
   const jobFromRow = row.job_id != null ? Number(row.job_id) : null;
   /** Only real job PKs — never use legacy numeric `data.listing_id` here (it was not jobs.id). */
@@ -40,6 +32,15 @@ export function getNotificationHref(row: NotificationRow): string | null {
     }
     return base;
   }
+
+  const listingUuid =
+    typeof data?.listing_uuid === "string" && data.listing_uuid.trim() !== ""
+      ? data.listing_uuid.trim()
+      : null;
+  if (listingUuid) {
+    return `/listings/${listingUuid}`;
+  }
+
   return null;
 }
 

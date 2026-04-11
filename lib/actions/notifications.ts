@@ -199,7 +199,11 @@ export async function createNotification(
     if (type === "new_bid") {
       const who = (options?.senderName ?? "").trim();
       const path =
-        options?.listingUuid?.trim() ? `/jobs/${options.listingUuid.trim()}` : options?.listingId ? `/jobs/${options.listingId}` : "/jobs";
+        options?.listingUuid?.trim()
+          ? `/listings/${options.listingUuid.trim()}`
+          : options?.listingId
+            ? `/listings/${options.listingId}`
+            : "/jobs";
       body = who
         ? `New bid from ${who.slice(0, 40)} on your listing. View: ${appUrl}${path}`
         : `New bid on your listing. View: ${appUrl}${path}`;

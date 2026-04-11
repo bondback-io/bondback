@@ -173,7 +173,7 @@ export default async function AdminActivityLogPage() {
                       r.target_type === "job" && r.target_id
                         ? `/jobs/${r.target_id}`
                         : r.target_type === "listing" && r.target_id
-                          ? `/admin/listings`
+                          ? `/listings/${r.target_id}`
                           : null;
                     const detailsStr =
                       r.details && Object.keys(r.details).length > 0

@@ -55,11 +55,19 @@ async function requireAdmin() {
   return { profile, supabase };
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function DiagnosticCard({ row }: { row: SystemErrorRow }) {
   const isError = row.severity === "error";
   const border = isError ? "border-red-500/50" : "border-amber-500/50";
   const bg = isError ? "bg-red-500/10" : "bg-amber-500/10";
   const text = isError ? "text-red-400" : "text-amber-200";
+  const ctx = row.context as Record<string, unknown> | null | undefined;
+  const routeParam =
+    ctx && typeof ctx.routeParam === "string" ? ctx.routeParam : null;
+  const looksLikeListingUuidOnJobRoute =
+    row.route_path === "/jobs/[id]" && routeParam != null && UUID_RE.test(routeParam);
 
   return (
     <div
@@ -91,6 +99,14 @@ function DiagnosticCard({ row }: { row: SystemErrorRow }) {
               </Link>
             </Button>
           ) : null}
+          {row.listing_id != null ? (
+            <Button variant="outline" size="sm" asChild className="h-8 border-current/40">
+              <Link href={`/listings/${encodeURIComponent(row.listing_id)}`}>
+                Open listing
+                <ExternalLink className="ml-1 h-3 w-3" aria-hidden />
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -102,6 +118,25 @@ function DiagnosticCard({ row }: { row: SystemErrorRow }) {
       ) : null}
 
       <p className="mt-4 font-mono text-sm whitespace-pre-wrap">{row.message}</p>
+
+      {looksLikeListingUuidOnJobRoute ? (
+        <div className="mt-4 rounded-xl border border-sky-500/40 bg-sky-500/10 p-4 text-sm text-sky-100">
+          <p className="font-medium text-sky-50">Likely cause: listing opened on the job URL</p>
+          <p className="mt-2 text-sky-100/90">
+            The path <code className="rounded bg-black/20 px-1">/jobs/[id]</code> expects a{" "}
+            <strong>numeric job id</strong> (database id of the job row). A UUID-shaped id is almost
+            always a <strong>listing id</strong>. Open the listing detail page instead:
+          </p>
+          <p className="mt-2 font-mono text-xs break-all">
+            <Link
+              href={`/listings/${encodeURIComponent(routeParam!)}`}
+              className="text-sky-300 underline underline-offset-2 hover:text-sky-200"
+            >
+              /listings/{routeParam}
+            </Link>
+          </p>
+        </div>
+      ) : null}
 
       {(row.code || row.details || row.hint) && (
         <p className="mt-3 font-mono text-xs opacity-90">

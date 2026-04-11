@@ -789,7 +789,7 @@ export function NewListingForm({
         publishRedirectTimerRef.current = null;
         /** Full navigation avoids soft-nav edge cases and stuck modal on mobile after publish.
          *  Send listers to My Listings (listing has no job row yet); avoids /jobs/[n] confusion
-         *  with numeric URLs from legacy notification data. View listing: /jobs/{listingUuid}. */
+         *  with numeric URLs from legacy notification data. View listing: /listings/{listingUuid}. */
         window.location.assign(`/my-listings?published=1`);
       }, 1800);
     } catch (err) {

@@ -33,7 +33,7 @@ export async function notifyNewBid(
   await notifyEmail(
     listerEmail,
     `New bid on "${listingTitle}"`,
-    `A cleaner placed a bid of $${amount} AUD. View: /jobs/${listingId}`
+    `A cleaner placed a bid of $${amount} AUD. View: /listings/${listingId}`
   );
 }
 
@@ -63,7 +63,7 @@ export async function notifyListingEnded(
     listerEmail,
     `Listing ended: ${listingTitle}`,
     hadWinner
-      ? `Your listing received a winning bid. View details: /jobs/${listingId}`
+      ? `Your listing received a winning bid. View details: /listings/${listingId}`
       : `Your listing ended with no winning bid. You can create a new listing.`
   );
 }

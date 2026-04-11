@@ -3,8 +3,7 @@ import { PageLoadingShell } from "@/components/skeletons/page-loading-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
- * Brief shell while `/listings/[id]` redirects to `/jobs/[id]`.
- * Avoids a blank flash on client navigations to legacy listing URLs.
+ * Brief shell while the listing detail page loads (`/listings/[id]`).
  */
 export default function ListingRedirectLoading() {
   return (

@@ -167,7 +167,7 @@ export async function sendNewJobAlert(
   const suburbDisplay = (suburb ?? "").trim() || "Your area";
   const beds = Math.max(1, Math.min(20, Number.isFinite(bedrooms) ? Math.floor(bedrooms) : 1));
   const midAud = Math.round((minPriceCents + maxPriceCents) / 2 / 100);
-  const message = `New bond clean in ${suburbDisplay}: ${beds} bed, $${midAud}. View now: ${APP_URL}/jobs/${listingId}`;
+  const message = `New bond clean in ${suburbDisplay}: ${beds} bed, $${midAud}. View now: ${APP_URL}/listings/${listingId}`;
 
   return sendSmsToUser(cleanerId, prefs.phone, message);
 }

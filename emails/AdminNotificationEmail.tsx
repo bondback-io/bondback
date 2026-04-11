@@ -131,7 +131,7 @@ export function AdminNotificationEmail(props: AdminNotificationEmailProps) {
               <Row label="Created" value={props.createdAtFormatted} />
             </Section>
             <Section style={ctaWrap}>
-              <Link href={`${APP_URL}/jobs/${props.listingId}`} style={ctaLink}>
+              <Link href={`${APP_URL}/listings/${props.listingId}`} style={ctaLink}>
                 View listing
               </Link>
               {" · "}

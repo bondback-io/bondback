@@ -8,7 +8,7 @@ const APP_URL = emailPublicOrigin();
 export interface GenericNotificationProps {
   headline: string;
   messageText: string;
-  /** Path after APP_URL, e.g. `/jobs/abc-uuid` */
+  /** Path after APP_URL, e.g. `/listings/[uuid]` or `/jobs/[numericId]` */
   hrefPath: string;
   ctaLabel?: string;
   preview?: string;
