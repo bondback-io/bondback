@@ -6,7 +6,13 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildJobListingMetadata } from "@/lib/seo/jobs-listings-seo";
 import { fieldsFromPostgrestError, logSystemError } from "@/lib/system-error-log";
 import { JobDetailPageContent } from "@/app/jobs/job-detail-page-content";
+import { JobRouteDebugPanel } from "@/app/jobs/[id]/job-route-debug-panel";
 import { Button } from "@/components/ui/button";
+
+function firstSearchParam(v: string | string[] | undefined): string | undefined {
+  if (v == null) return undefined;
+  return Array.isArray(v) ? v[0] : v;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +46,9 @@ export default async function JobDetailPage({
 }) {
   const resolvedParams = await params;
   const raw = resolvedParams.id.trim();
+  const sp = (await searchParams) ?? {};
+  const debugMode =
+    firstSearchParam(sp.debug) === "1" || firstSearchParam(sp.debug) === "true";
 
   if (!/^\d+$/.test(raw)) {
     if (UUID_RE.test(raw)) {
@@ -121,6 +130,28 @@ export default async function JobDetailPage({
       });
     }
     if (!userSawRow) {
+      if (debugMode) {
+        return (
+          <JobRouteDebugPanel
+            payload={{
+              routeParam: raw,
+              numericJobId: numericId,
+              sessionPresent: !!sessionUserId,
+              sessionUserIdPrefix: sessionUserId ? `${sessionUserId.slice(0, 8)}…` : null,
+              userSawJobRow: userSawRow,
+              adminClientConfigured: !!admin,
+              adminSawJobRow: adminSawRow,
+              userQueryError: userRes.error
+                ? { code: userRes.error.code, message: userRes.error.message }
+                : null,
+              adminQueryError: adminRes.error
+                ? { code: adminRes.error.code, message: adminRes.error.message }
+                : null,
+              listingIdFromAdmin: listingIdForHint,
+            }}
+          />
+        );
+      }
       notFound();
     }
   }
