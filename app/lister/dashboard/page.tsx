@@ -29,7 +29,7 @@ import { getListingCoverUrl } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
-import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
+import { detailUrlForCardItem, bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
 import {
   normalizeProfileRolesFromDb,
@@ -107,19 +107,8 @@ export default async function ListerDashboardPage() {
   const notifications = (notificationsRes.data ?? []) as NotificationRow[];
 
   const listingIds = listings.map((l) => l.id);
-  let bidCountByListingId: Record<string, number> = {};
-  if (listingIds.length > 0) {
-    const { data: bidsData } = await supabase
-      .from("bids")
-      .select("listing_id")
-      .in("listing_id", listingIds as string[]);
-    const bids = bidsData ?? [];
-    bidCountByListingId = bids.reduce<Record<string, number>>((acc, b) => {
-      const id = String((b as { listing_id: string }).listing_id);
-      acc[id] = (acc[id] ?? 0) + 1;
-      return acc;
-    }, {});
-  }
+  const bidCountByListingId =
+    listingIds.length > 0 ? await bidCountsForListingIds(listingIds) : {};
 
   const listingIdsWithActiveJob = new Set(
     jobs
@@ -554,10 +543,14 @@ export default async function ListerDashboardPage() {
                 const cancelledAt = row.cancelledAt
                   ? format(new Date(row.cancelledAt), "d MMM yyyy")
                   : null;
+                const listingHref = detailUrlForCardItem({
+                  id: listing.id,
+                  status: listing.status,
+                });
                 return (
                   <li key={row.id}>
                     <Link
-                      href={`/listings/${listing.id}`}
+                      href={listingHref}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
                     >
                       <div className="min-w-0 flex-1">

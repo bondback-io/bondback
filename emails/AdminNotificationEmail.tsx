@@ -8,9 +8,14 @@ import {
   Text,
 } from "@react-email/components";
 import * as React from "react";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import {
+  emailAdminDisputesUrl,
+  emailAdminListingsUrl,
+  emailAdminUrl,
+  emailJobUrl,
+  emailListingUrl,
+  emailPublicOrigin,
+} from "@/lib/marketplace/email-links";
 
 export type AdminNotificationEventType = "new_user" | "new_listing" | "dispute_opened";
 
@@ -56,17 +61,18 @@ function header(): React.ReactNode {
 }
 
 function internalFooter(): React.ReactNode {
+  const siteHome = emailPublicOrigin();
   return (
     <Section style={footerSection}>
       <Text style={footerMuted}>
         Internal message for Bond Back administrators. Not sent to customers.
       </Text>
       <Text style={footerMuted}>
-        <Link href={`${APP_URL}/admin`} style={link}>
+        <Link href={emailAdminUrl()} style={link}>
           Open admin
         </Link>
         {" · "}
-        <Link href={APP_URL} style={link}>
+        <Link href={siteHome} style={link}>
           www.bondback.io
         </Link>
       </Text>
@@ -84,8 +90,6 @@ export function AdminNotificationEmail(props: AdminNotificationEmailProps) {
       : props.eventType === "new_listing"
         ? `New listing: ${props.listingTitle}`
         : `Dispute opened on job #${props.jobId}`;
-
-  const adminBase = `${APP_URL}/admin`;
 
   if (props.eventType === "new_user") {
     return (
@@ -131,11 +135,11 @@ export function AdminNotificationEmail(props: AdminNotificationEmailProps) {
               <Row label="Created" value={props.createdAtFormatted} />
             </Section>
             <Section style={ctaWrap}>
-              <Link href={`${APP_URL}/listings/${props.listingId}`} style={ctaLink}>
+              <Link href={emailListingUrl(props.listingId)} style={ctaLink}>
                 View listing
               </Link>
               {" · "}
-              <Link href={`${adminBase}/listings`} style={ctaLink}>
+              <Link href={emailAdminListingsUrl()} style={ctaLink}>
                 Admin listings
               </Link>
             </Section>
@@ -166,11 +170,11 @@ export function AdminNotificationEmail(props: AdminNotificationEmailProps) {
             {props.reasonSnippet}
           </Text>
           <Section style={ctaWrap}>
-            <Link href={`${APP_URL}/jobs/${props.jobId}`} style={ctaLink}>
+            <Link href={emailJobUrl(props.jobId)} style={ctaLink}>
               View job
             </Link>
             {" · "}
-            <Link href={`${adminBase}/disputes`} style={ctaLink}>
+            <Link href={emailAdminDisputesUrl()} style={ctaLink}>
               Admin disputes
             </Link>
           </Section>

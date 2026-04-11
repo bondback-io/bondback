@@ -1,9 +1,7 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailDashboardUrl } from "@/lib/marketplace/email-links";
 
 export interface WelcomeProps {
   /** First name or display name */
@@ -17,7 +15,7 @@ export const WELCOME_PREHEADER =
   "Fair bids, secure pay, and one less thing to worry about before handover";
 
 export function Welcome({ firstName, role }: WelcomeProps) {
-  const dashboardUrl = `${APP_URL}/dashboard`;
+  const dashboardUrl = emailDashboardUrl();
   const displayName = (firstName ?? "").trim() || "there";
   const greeting = `Hi ${displayName},`;
 

@@ -1,9 +1,11 @@
 import { Section, Text, Link } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import {
+  emailBrowseJobsUrl,
+  emailDashboardUrl,
+  emailEarningsUrl,
+} from "@/lib/marketplace/email-links";
 
 export const CLEANER_TUTORIAL_PREHEADER =
   "From browse to paid — your five-step Bond Back rhythm";
@@ -17,35 +19,35 @@ const STEPS = [
     emoji: "🔍",
     title: "Hunt jobs that fit",
     body: "Filter by suburb and travel radius so you’re not crossing the Harbour Bridge for a studio clean unless you really want to.",
-    learnUrl: `${APP_URL}/jobs`,
+    learnUrl: emailBrowseJobsUrl(),
     learnLabel: "Browse jobs",
   },
   {
     emoji: "🛒",
     title: "Bid smart or Buy Now",
     body: "Reverse auction = lowest bid wins. Spot a price you’re happy with? Buy Now can lock it in before someone else does.",
-    learnUrl: `${APP_URL}/jobs`,
+    learnUrl: emailBrowseJobsUrl(),
     learnLabel: "See live listings",
   },
   {
     emoji: "💬",
     title: "Chat like a pro",
     body: "Once the job is in progress (after pay & start), use in-app messages for keys, parking, and timing — keeps everything above board if questions pop up later.",
-    learnUrl: `${APP_URL}/dashboard`,
+    learnUrl: emailDashboardUrl(),
     learnLabel: "Dashboard",
   },
   {
     emoji: "📷",
     title: "Show your work",
     body: "Before/after photos aren’t just for Instagram — they help listers approve fast and protect you if anything’s questioned.",
-    learnUrl: `${APP_URL}/dashboard`,
+    learnUrl: emailDashboardUrl(),
     learnLabel: "Upload from dashboard",
   },
   {
     emoji: "💰",
     title: "Get paid",
     body: "When the lister releases funds, money heads your way. Track it all under Earnings — no shoebox of invoices required.",
-    learnUrl: `${APP_URL}/earnings`,
+    learnUrl: emailEarningsUrl(),
     learnLabel: "View earnings",
   },
 ] as const;
@@ -58,7 +60,7 @@ export function CleanerTutorial({ firstName }: CleanerTutorialProps) {
   return (
     <EmailLayout
       preview={CLEANER_TUTORIAL_PREHEADER}
-      viewJobUrl={`${APP_URL}/dashboard`}
+      viewJobUrl={emailDashboardUrl()}
       viewJobLabel="Open your dashboard"
     >
       <Section style={contentSection}>

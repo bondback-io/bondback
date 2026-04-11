@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 
 export type DashboardListingCardProps = {
   listing: ListingRow;
@@ -44,6 +45,10 @@ function DashboardListingCardInner({
   feePercentage = 12,
   onCancelClick,
 }: DashboardListingCardProps) {
+  const detailUrl = detailUrlForCardItem({
+    id: listing.id,
+    status: listing.status,
+  });
   const coverUrl = getListingCoverUrl(listing);
   const currentBid = (listing.current_lowest_bid_cents as number | null) ?? 0;
   const buyNow = listing.buy_now_cents;
@@ -62,7 +67,7 @@ function DashboardListingCardInner({
       {/* Mobile */}
       <div className="md:hidden">
         <div className="relative h-[200px] w-full min-h-[180px] max-h-[220px] overflow-hidden bg-muted dark:bg-gray-800">
-          <Link href={`/listings/${listing.id}`} className="absolute inset-0 block" aria-label={`View listing: ${listing.title}`}>
+          <Link href={detailUrl} className="absolute inset-0 block" aria-label={`View listing: ${listing.title}`}>
             {coverUrl ? (
               <OptimizedImage src={coverUrl} alt="" fill sizes="100vw" className="object-cover" />
             ) : (
@@ -129,7 +134,7 @@ function DashboardListingCardInner({
 
           <div className="flex flex-col gap-3 pt-1">
             <Button asChild size="lg" variant="default" className="min-h-12 w-full rounded-xl text-base font-semibold">
-              <Link href={`/listings/${listing.id}`} className="flex items-center justify-center gap-2">
+              <Link href={detailUrl} className="flex items-center justify-center gap-2">
                 <Eye className="h-5 w-5" aria-hidden />
                 View Listing
               </Link>
@@ -177,7 +182,7 @@ function DashboardListingCardInner({
 
       {/* Desktop */}
       <div className="hidden md:block">
-        <Link href={`/listings/${listing.id}`} className="block" aria-label={`View listing: ${listing.title}`}>
+        <Link href={detailUrl} className="block" aria-label={`View listing: ${listing.title}`}>
           <div className="relative aspect-[16/10] w-full bg-muted dark:bg-gray-800">
             {coverUrl ? (
               <OptimizedImage src={coverUrl} alt="" fill sizes="33vw" className="object-cover" />
@@ -257,7 +262,7 @@ function DashboardListingCardInner({
           )}
           <div className="mt-auto flex flex-wrap gap-2 pt-1">
             <Button asChild size="sm" className="rounded-full" variant="default">
-              <Link href={`/listings/${listing.id}`}>View Listing</Link>
+              <Link href={detailUrl}>View Listing</Link>
             </Button>
             {!compact && (
               <>

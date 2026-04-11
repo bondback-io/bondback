@@ -243,10 +243,14 @@ export function ListerDashboardContent({
                 const cancelledAt = row.cancelledAt
                   ? format(new Date(row.cancelledAt), "d MMM yyyy")
                   : null;
+                const listingHref = detailUrlForCardItem({
+                  id: listing.id,
+                  status: listing.status,
+                });
                 return (
                   <li key={row.id}>
                     <Link
-                      href={`/listings/${listing.id}`}
+                      href={listingHref}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
                     >
                       <div className="min-w-0 flex-1">

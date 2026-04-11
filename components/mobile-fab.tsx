@@ -183,6 +183,7 @@ export function ListerActiveJobsList({
           listing_id: item.listingId,
           status: item.status,
           winner_id: item.winnerId,
+          cleaner_id: item.winnerId ?? undefined,
         });
 
         return (

@@ -1,9 +1,11 @@
 import { Section, Text, Link } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import {
+  emailDashboardUrl,
+  emailMyListingsUrl,
+  emailNewListingUrl,
+} from "@/lib/marketplace/email-links";
 
 export const LISTER_TUTORIAL_PREHEADER =
   "Four steps from listing to bond handover — minus the stress";
@@ -17,28 +19,28 @@ const STEPS = [
     emoji: "📝",
     title: "List your clean",
     body: "Add photos, move-out date, and anything quirky about access or parking. The clearer you are, the sharper the bids — no one likes guessing games at 7am on a Saturday.",
-    learnUrl: `${APP_URL}/listings/new`,
+    learnUrl: emailNewListingUrl(),
     learnLabel: "Create a listing",
   },
   {
     emoji: "💵",
     title: "Set a fair reserve",
     body: "Your reserve is the ceiling; cleaners bid down in a reverse auction. Think of it as setting the bar — then watching the competition do the limbo.",
-    learnUrl: `${APP_URL}/listings/new`,
+    learnUrl: emailNewListingUrl(),
     learnLabel: "How pricing works",
   },
   {
     emoji: "📊",
     title: "Compare bids & choose",
     body: "Review offers and cleaner profiles — price, experience, and reviews. Accept a bid when you’re ready. In-app job chat opens once the job is in progress (after pay & start), so access and timing stay on the platform — not lost in SMS threads.",
-    learnUrl: `${APP_URL}/my-listings`,
+    learnUrl: emailMyListingsUrl(),
     learnLabel: "My listings",
   },
   {
     emoji: "✅",
     title: "Approve, then release",
     body: "When the clean’s done, check the photos and checklist. Happy? Release payment from escrow. Your bond inspector can bring the magnifying glass — you’ve already done the hard yards.",
-    learnUrl: `${APP_URL}/my-listings`,
+    learnUrl: emailMyListingsUrl(),
     learnLabel: "Manage jobs",
   },
 ] as const;
@@ -51,7 +53,7 @@ export function ListerTutorial({ firstName }: ListerTutorialProps) {
   return (
     <EmailLayout
       preview={LISTER_TUTORIAL_PREHEADER}
-      viewJobUrl={`${APP_URL}/dashboard`}
+      viewJobUrl={emailDashboardUrl()}
       viewJobLabel="Open your dashboard"
     >
       <Section style={contentSection}>

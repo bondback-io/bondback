@@ -1,9 +1,7 @@
 import * as React from "react";
 import { Section, Text } from "@react-email/components";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailProfileUrl } from "@/lib/marketplace/email-links";
 
 export type ReferralRewardVariant = "referred" | "referrer";
 
@@ -18,7 +16,7 @@ export type ReferralRewardProps = {
  */
 export function ReferralReward({ variant, creditDollars, jobId }: ReferralRewardProps) {
   const isReferred = variant === "referred";
-  const profileUrl = `${APP_URL}/profile`;
+  const profileUrl = emailProfileUrl();
 
   return (
     <EmailLayout

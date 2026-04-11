@@ -1,14 +1,12 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailAbsoluteUrl } from "@/lib/marketplace/email-links";
 
 export interface GenericNotificationProps {
   headline: string;
   messageText: string;
-  /** Path after APP_URL, e.g. `/listings/[uuid]` or `/jobs/[numericId]` */
+  /** Absolute URL or path; absolute preferred (from `emailJobUrl` / `emailListingUrl`). */
   hrefPath: string;
   ctaLabel?: string;
   preview?: string;
@@ -21,7 +19,7 @@ export function GenericNotification({
   ctaLabel = "Open in Bond Back",
   preview,
 }: GenericNotificationProps) {
-  const url = hrefPath.startsWith("http") ? hrefPath : `${APP_URL}${hrefPath.startsWith("/") ? "" : "/"}${hrefPath}`;
+  const url = hrefPath.startsWith("http") ? hrefPath : emailAbsoluteUrl(hrefPath);
   const bodyCopy = (messageText ?? "").trim() || "You’ve got an update waiting on Bond Back.";
 
   return (

@@ -1,9 +1,7 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailBrowseJobsUrl, emailEarningsUrl } from "@/lib/marketplace/email-links";
 
 export interface TutorialCleanerProps {
   firstName?: string;
@@ -11,8 +9,8 @@ export interface TutorialCleanerProps {
 
 export function TutorialCleaner({ firstName }: TutorialCleanerProps) {
   const greeting = firstName ? `Hi ${firstName},` : "Hi,";
-  const jobsUrl = `${APP_URL}/jobs`;
-  const earningsUrl = `${APP_URL}/earnings`;
+  const jobsUrl = emailBrowseJobsUrl();
+  const earningsUrl = emailEarningsUrl();
 
   return (
     <EmailLayout

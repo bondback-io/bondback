@@ -21,6 +21,7 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminDeleteListingButton } from "@/components/admin/admin-delete-listing-button";
 import { adminForceEndListing, adminResetAllListings } from "@/lib/actions/admin-listings";
 import { LISTING_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
+import { fetchBidCountsByListingIds } from "@/lib/marketplace/bid-counts";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -87,19 +88,18 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
   const bidCountByListingId = new Map<string, number>();
 
   if (listingIds.length > 0) {
-    const [jobsRes, bidsRes] = await Promise.all([
+    const [jobsRes, bidCountsRecord] = await Promise.all([
       db.from("jobs").select("listing_id").in("listing_id", listingIds),
-      db.from("bids").select("listing_id").in("listing_id", listingIds),
+      fetchBidCountsByListingIds(db, listingIds),
     ]);
 
     (jobsRes.data ?? []).forEach((job: { listing_id: string | number | null }) => {
       if (job.listing_id != null) assignedListingIds.add(listingIdKey(job.listing_id));
     });
 
-    (bidsRes.data ?? []).forEach((row: { listing_id: string | number }) => {
-      const lid = listingIdKey(row.listing_id);
-      bidCountByListingId.set(lid, (bidCountByListingId.get(lid) ?? 0) + 1);
-    });
+    for (const [lid, n] of Object.entries(bidCountsRecord)) {
+      bidCountByListingId.set(listingIdKey(lid), n);
+    }
   }
 
   const listerIds = Array.from(new Set(listings.map((l) => l.lister_id).filter(Boolean))) as string[];

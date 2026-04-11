@@ -72,8 +72,6 @@ export function MyListingsCardMobile({
   relistLoading,
   cardClassName,
 }: MyListingsCardMobileProps) {
-  const jid = String(listingId);
-
   return (
     <div
       className={cn(
@@ -83,7 +81,7 @@ export function MyListingsCardMobile({
     >
       <div className={HERO}>
         <Link
-          href={`/listings/${jid}`}
+          href={primaryHref}
           className="absolute inset-0 block"
           aria-label={`Open listing: ${title}`}
         >

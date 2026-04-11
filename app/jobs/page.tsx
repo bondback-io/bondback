@@ -9,6 +9,7 @@ import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
 import { buildLiveListingsQuery } from "@/lib/jobs-query";
 import { buildListerCardDataByListingId } from "@/lib/lister-card-data";
+import { bidCountsForListingIds } from "@/lib/marketplace/server-cache";
 import { JobsList } from "@/components/features/jobs-list";
 import { Button } from "@/components/ui/button";
 import {
@@ -143,21 +144,9 @@ export default async function JobsPage({
   const liveListings = (listings ?? []) as ListingRow[];
   let initialListings = liveListings;
 
-  // Bid counts per listing for card badges
   const listingIds = initialListings.map((l) => l.id);
-  let bidCountByListingId: Record<string, number> = {};
-  if (listingIds.length > 0) {
-    const { data: bidsData } = await supabase
-      .from("bids")
-      .select("listing_id")
-      .in("listing_id", listingIds);
-    const counts: Record<string, number> = {};
-    (bidsData ?? []).forEach((row: { listing_id: string | number }) => {
-      const id = String(row.listing_id);
-      counts[id] = (counts[id] ?? 0) + 1;
-    });
-    bidCountByListingId = counts;
-  }
+  const bidCountByListingId =
+    listingIds.length > 0 ? await bidCountsForListingIds(listingIds) : {};
 
   const radiusParsed = radiusFilter ? Number(radiusFilter) : NaN;
   const activeRadiusKm =

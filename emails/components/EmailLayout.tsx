@@ -10,7 +10,10 @@ import {
   Text,
 } from "@react-email/components";
 import * as React from "react";
-import { emailPublicOrigin } from "../email-public-url";
+import {
+  emailProfileNotificationsUrl,
+  emailPublicOrigin,
+} from "@/lib/marketplace/email-links";
 
 const BRAND_BLUE = "#1d4ed8";
 const BRAND_SKY = "#0ea5e9";
@@ -32,7 +35,7 @@ export function EmailLayout({
   viewJobLabel = "Open Bond Back",
 }: EmailLayoutProps) {
   const APP_URL = emailPublicOrigin();
-  const unsubscribeUrl = `${APP_URL}/profile?tab=notifications`;
+  const unsubscribeUrl = emailProfileNotificationsUrl();
   const SUPPORT_EMAIL = "support@bondback.io";
 
   return (

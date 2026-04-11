@@ -1,9 +1,7 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailJobUrl } from "@/lib/marketplace/email-links";
 
 export interface JobCreatedProps {
   jobId: number | string;
@@ -11,7 +9,7 @@ export interface JobCreatedProps {
 }
 
 export function JobCreated({ jobId, messageText }: JobCreatedProps) {
-  const viewJobUrl = `${APP_URL}/jobs/${jobId}`;
+  const viewJobUrl = emailJobUrl(jobId);
   const bodyCopy =
     (messageText ?? "").trim() ||
     "Your cleaner accepted your job—now’s the time to pay & start so they can see the address and checklist.";

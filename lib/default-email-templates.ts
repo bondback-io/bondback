@@ -6,12 +6,13 @@
 
 import type { EmailTemplateType } from "./admin-email-templates-utils";
 import { EMAIL_TEMPLATE_TYPES } from "./admin-email-templates-utils";
+import { EMAIL_CANONICAL_ORIGIN } from "@/emails/email-public-url";
 
 export type DefaultTemplate = { subject: string; body: string };
 
 const APP_NAME = "Bond Back";
-/** Canonical public site for links in admin default copy (always www). */
-const APP_URL = "https://www.bondback.io";
+/** Canonical public site for links in admin default copy — same origin as outbound React Email. */
+const APP_URL = EMAIL_CANONICAL_ORIGIN;
 const PH_JOB = "{{jobId}}";
 const PH_LISTING = "{{listingId}}";
 const PH_MESSAGE = "{{message}}";

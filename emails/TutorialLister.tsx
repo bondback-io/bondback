@@ -1,9 +1,7 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailMyListingsUrl, emailNewListingUrl } from "@/lib/marketplace/email-links";
 
 export interface TutorialListerProps {
   firstName?: string;
@@ -11,8 +9,8 @@ export interface TutorialListerProps {
 
 export function TutorialLister({ firstName }: TutorialListerProps) {
   const greeting = firstName ? `Hi ${firstName},` : "Hi,";
-  const createUrl = `${APP_URL}/listings/new`;
-  const myListingsUrl = `${APP_URL}/my-listings`;
+  const createUrl = emailNewListingUrl();
+  const myListingsUrl = emailMyListingsUrl();
 
   return (
     <EmailLayout

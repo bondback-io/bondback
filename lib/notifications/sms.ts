@@ -7,6 +7,8 @@
 import Twilio from "twilio";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getAppBaseUrl } from "@/lib/site";
+import { listingDetailPath } from "@/lib/marketplace/paths";
 
 const DEFAULT_MAX_SMS_PER_USER_PER_DAY = 5;
 
@@ -139,11 +141,9 @@ export function isTwilioSmsAllowedForType(
   return map[type] !== false;
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
-
 /**
  * Send "new job near you" SMS to a cleaner. Uses rate limit (max 5/day unless overridden by global_settings).
- * Message: "New bond clean in [Suburb]: [n] bed, $[est]. View now: [url]/jobs/[listingId]"
+ * Message links to the live listing (`/listings/[uuid]`).
  */
 export async function sendNewJobAlert(
   cleanerId: string,
@@ -167,7 +167,8 @@ export async function sendNewJobAlert(
   const suburbDisplay = (suburb ?? "").trim() || "Your area";
   const beds = Math.max(1, Math.min(20, Number.isFinite(bedrooms) ? Math.floor(bedrooms) : 1));
   const midAud = Math.round((minPriceCents + maxPriceCents) / 2 / 100);
-  const message = `New bond clean in ${suburbDisplay}: ${beds} bed, $${midAud}. View now: ${APP_URL}/listings/${listingId}`;
+  const base = getAppBaseUrl().replace(/\/$/, "");
+  const message = `New bond clean in ${suburbDisplay}: ${beds} bed, $${midAud}. View now: ${base}${listingDetailPath(listingId)}`;
 
   return sendSmsToUser(cleanerId, prefs.phone, message);
 }

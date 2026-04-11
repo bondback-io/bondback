@@ -6,6 +6,7 @@ import { formatCents } from "@/lib/listings";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { cn } from "@/lib/utils";
 import { DashboardEmptyState } from "@/components/dashboard";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 
 export type CleanerLiveBidItem = {
   listingId: string;
@@ -45,10 +46,11 @@ export function CleanerLiveBidsSection({ items }: { items: CleanerLiveBidItem[] 
           }
         })();
 
+        const detailUrl = detailUrlForCardItem({ id: item.listingId });
         return (
           <li key={item.listingId}>
             <Link
-              href={`/listings/${item.listingId}`}
+              href={detailUrl}
               className={cn(
                 "flex min-h-[100px] gap-3 rounded-2xl border-2 bg-card p-3 shadow-sm transition-all active:scale-[0.99] sm:min-h-[96px] sm:p-4",
                 "hover:border-emerald-500/40 hover:shadow-md dark:bg-gray-950/60",

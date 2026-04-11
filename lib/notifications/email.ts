@@ -23,6 +23,11 @@ import { Welcome } from "@/emails/Welcome";
 import { ListerTutorial } from "@/emails/ListerTutorial";
 import { CleanerTutorial } from "@/emails/CleanerTutorial";
 import { GenericNotification } from "@/emails/GenericNotification";
+import {
+  emailDashboardUrl,
+  emailJobUrl,
+  emailListingUrl,
+} from "@/lib/marketplace/email-links";
 
 const resend = process.env.RESEND_API_KEY?.trim()
   ? new Resend(process.env.RESEND_API_KEY.trim())
@@ -368,10 +373,10 @@ export async function buildNotificationEmail(
   const messageSnippet = messageText.length > 100 ? `${messageText.slice(0, 97)}…` : messageText;
   const hrefForJob =
     id > 0
-      ? `/jobs/${idStr}`
+      ? emailJobUrl(idStr)
       : listingUuid?.trim()
-        ? `/listings/${listingUuid.trim()}`
-        : "/dashboard";
+        ? emailListingUrl(listingUuid.trim())
+        : emailDashboardUrl();
 
   const subjects: Record<NotificationType, string> = {
     new_message: `${senderName ?? "Someone"} messaged you — Job #${id} – Bond Back`,

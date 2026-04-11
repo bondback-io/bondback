@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { scheduleRouterAction } from "@/lib/deferred-router";
+import { jobDetailPath } from "@/lib/marketplace/paths";
 
 /** Cold-open from a notification: only handle once per tab load. */
 let lastColdOpenHandled = false;
@@ -28,7 +29,7 @@ export function ExpoPushDeepLinkHandler() {
             if (type === "new_message") {
               router.push(`/messages?job=${encodeURIComponent(jobId)}`);
             } else {
-              router.push(`/jobs/${jobId}`);
+              router.push(jobDetailPath(jobId));
             }
           });
         };

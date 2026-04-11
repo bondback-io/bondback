@@ -1,9 +1,7 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailListingUrl, emailPublicOrigin } from "@/lib/marketplace/email-links";
 
 export interface NewBidProps {
   listingId?: number | string;
@@ -11,7 +9,7 @@ export interface NewBidProps {
 }
 
 export function NewBid({ listingId, messageText }: NewBidProps) {
-  const viewUrl = listingId ? `${APP_URL}/listings/${listingId}` : APP_URL;
+  const viewUrl = listingId ? emailListingUrl(String(listingId)) : emailPublicOrigin();
 
   return (
     <EmailLayout

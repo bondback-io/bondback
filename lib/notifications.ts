@@ -3,6 +3,8 @@
  * Later: integrate Resend (email) and/or Twilio (SMS) for real delivery.
  */
 
+import { emailListingUrl } from "@/lib/marketplace/email-links";
+
 export type NotifyChannel = "email" | "sms";
 
 /** Stub: send email. Later use Resend. */
@@ -33,7 +35,7 @@ export async function notifyNewBid(
   await notifyEmail(
     listerEmail,
     `New bid on "${listingTitle}"`,
-    `A cleaner placed a bid of $${amount} AUD. View: /listings/${listingId}`
+    `A cleaner placed a bid of $${amount} AUD. View: ${emailListingUrl(listingId)}`
   );
 }
 
@@ -63,7 +65,7 @@ export async function notifyListingEnded(
     listerEmail,
     `Listing ended: ${listingTitle}`,
     hadWinner
-      ? `Your listing received a winning bid. View details: /listings/${listingId}`
+      ? `Your listing received a winning bid. View details: ${emailListingUrl(listingId)}`
       : `Your listing ended with no winning bid. You can create a new listing.`
   );
 }

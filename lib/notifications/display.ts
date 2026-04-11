@@ -1,4 +1,5 @@
 import type { Database } from "@/types/supabase";
+import { jobDetailPath, listingDetailPath } from "@/lib/marketplace/paths";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
@@ -26,7 +27,7 @@ export function getNotificationHref(row: NotificationRow): string | null {
   /** Only real job PKs — never use legacy numeric `data.listing_id` here (it was not jobs.id). */
   const targetId = jobFromRow ?? jobFromData;
   if (targetId != null && !Number.isNaN(targetId)) {
-    const base = `/jobs/${targetId}`;
+    const base = jobDetailPath(targetId);
     if (row.type === "dispute_opened" || row.type === "dispute_resolved") {
       return `${base}#dispute`;
     }
@@ -42,7 +43,7 @@ export function getNotificationHref(row: NotificationRow): string | null {
         ? data.listingId.trim()
         : null;
   if (listingUuid) {
-    return `/listings/${listingUuid}`;
+    return listingDetailPath(listingUuid);
   }
 
   return null;

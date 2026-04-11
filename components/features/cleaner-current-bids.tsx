@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cancelLastBid } from "@/lib/actions/bids";
 import { formatCents } from "@/lib/listings";
 import type { Database } from "@/types/supabase";
+import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type BidRow = Database["public"]["Tables"]["bids"]["Row"];
@@ -54,13 +55,17 @@ export function CleanerCurrentBids({ items }: CleanerCurrentBidsProps) {
         const { bid, listing, isWinning } = latest;
         const listingCancelled =
           String(listing.status).toLowerCase() === "cancelled";
+        const detailUrl = detailUrlForCardItem({
+          id: listing.id,
+          status: listing.status,
+        });
         return (
           <div
             key={listing.id}
             className="flex flex-col gap-1 p-3 text-sm hover:bg-muted/60"
           >
             <a
-              href={`/listings/${listing.id}`}
+              href={detailUrl}
               className="flex flex-col gap-1"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">

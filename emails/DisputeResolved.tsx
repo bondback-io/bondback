@@ -1,9 +1,7 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailJobUrl } from "@/lib/marketplace/email-links";
 
 export interface DisputeResolvedProps {
   jobId: number | string;
@@ -11,7 +9,7 @@ export interface DisputeResolvedProps {
 }
 
 export function DisputeResolved({ jobId, messageText }: DisputeResolvedProps) {
-  const viewJobUrl = `${APP_URL}/jobs/${jobId}`;
+  const viewJobUrl = emailJobUrl(jobId);
 
   return (
     <EmailLayout

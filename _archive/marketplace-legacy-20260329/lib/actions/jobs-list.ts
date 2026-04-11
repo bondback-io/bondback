@@ -9,7 +9,7 @@ import {
   buildListerCardDataByListingId,
   type ListerCardData,
 } from "@/lib/lister-card-data";
-import { bidCountsForListingIds } from "@/lib/marketplace/server-cache";
+import { fetchBidCountsByListingIds } from "@/lib/marketplace/bid-counts";
 
 export type GetJobsPageResult =
   | {
@@ -49,7 +49,9 @@ export async function getJobsPage(
   const rows = (listings ?? []) as Array<{ id: string; lister_id: string }>;
   const listingIds = rows.map((r) => r.id);
   const bidCountByListingId =
-    listingIds.length > 0 ? await bidCountsForListingIds(listingIds) : {};
+    listingIds.length > 0
+      ? await fetchBidCountsByListingIds(supabase, listingIds)
+      : {};
 
   const listerRows = rows.map((r) => ({
     id: String(r.id),

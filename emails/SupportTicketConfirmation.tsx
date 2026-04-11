@@ -1,9 +1,7 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailSupportUrl } from "@/lib/marketplace/email-links";
 
 export interface SupportTicketConfirmationProps {
   /** First name or friendly fallback */
@@ -22,7 +20,7 @@ export function SupportTicketConfirmation({
   ticketDisplayId,
   ticketSubject,
 }: SupportTicketConfirmationProps) {
-  const supportUrl = `${APP_URL}/support`;
+  const supportUrl = emailSupportUrl();
   const preview = `Ticket #${ticketDisplayId} — we’ve got your message`;
 
   return (

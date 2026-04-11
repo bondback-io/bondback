@@ -1,9 +1,7 @@
 import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
-import { emailPublicOrigin } from "./email-public-url";
-
-const APP_URL = emailPublicOrigin();
+import { emailJobUrl } from "@/lib/marketplace/email-links";
 
 export interface PaymentReleasedProps {
   jobId: number | string;
@@ -13,7 +11,7 @@ export interface PaymentReleasedProps {
 }
 
 export function PaymentReleased({ jobId, messageText, amountDisplay }: PaymentReleasedProps) {
-  const viewJobUrl = `${APP_URL}/jobs/${jobId}`;
+  const viewJobUrl = emailJobUrl(jobId);
 
   return (
     <EmailLayout
