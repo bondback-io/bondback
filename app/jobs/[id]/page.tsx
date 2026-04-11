@@ -1,5 +1,9 @@
 import { notFound } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  fieldsFromPostgrestError,
+  logSystemError,
+} from "@/lib/system-error-log";
 import type { Database } from "@/types/supabase";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +60,10 @@ export default async function JobDetailPage({ params }: Props) {
   }
 
   const supabase = await createServerSupabaseClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  const sessionUserId = authUser?.id ?? null;
 
   const { data: jobRaw, error } = await supabase
     .from("jobs")
@@ -70,6 +78,15 @@ export default async function JobDetailPage({ params }: Props) {
     console.error("Error details:", error.details);
     console.error("Error code:", error.code);
     console.error("Error hint:", error.hint);
+    await logSystemError({
+      source: "job_detail:jobs",
+      severity: "error",
+      routePath: "/jobs/[id]",
+      jobId: numericId,
+      userId: sessionUserId,
+      context: { routeParam: raw },
+      ...fieldsFromPostgrestError(error),
+    });
     return (
       <div className="max-w-4xl mx-auto p-10">
         <div className="bg-red-500/10 border border-red-500 rounded-3xl p-10 text-red-400">
@@ -104,6 +121,16 @@ export default async function JobDetailPage({ params }: Props) {
 
   if (!jobRaw) {
     console.error("❌ No job row returned for ID:", numericId);
+    await logSystemError({
+      source: "job_detail:jobs",
+      severity: "warning",
+      routePath: "/jobs/[id]",
+      jobId: numericId,
+      userId: sessionUserId,
+      message:
+        "No row returned (null) without PostgREST error — often RLS hiding the row, or the job id does not exist.",
+      context: { routeParam: raw, note: "maybeSingle returned null" },
+    });
     notFound();
   }
 
@@ -122,6 +149,16 @@ export default async function JobDetailPage({ params }: Props) {
   if (listingError) {
     console.error("❌ SUPABASE ERROR for listing", job.listing_id, ":", listingError.message);
     console.error("Listing error code:", listingError.code);
+    await logSystemError({
+      source: "job_detail:listings",
+      severity: "warning",
+      routePath: "/jobs/[id]",
+      jobId: job.id,
+      listingId: job.listing_id,
+      userId: sessionUserId,
+      context: { routeParam: raw, job_status: job.status },
+      ...fieldsFromPostgrestError(listingError),
+    });
     return (
       <div className="max-w-4xl mx-auto p-10">
         <div className="bg-amber-500/10 border border-amber-500 rounded-3xl p-10 text-amber-200">

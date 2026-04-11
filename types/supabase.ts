@@ -869,6 +869,52 @@ export interface Database {
           }
         ];
       };
+      system_error_log: {
+        Row: {
+          id: string;
+          created_at: string;
+          source: string;
+          severity: string;
+          route_path: string | null;
+          job_id: number | null;
+          listing_id: string | null;
+          message: string;
+          code: string | null;
+          details: string | null;
+          hint: string | null;
+          context: Json;
+          user_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          source: string;
+          severity?: string;
+          route_path?: string | null;
+          job_id?: number | null;
+          listing_id?: string | null;
+          message: string;
+          code?: string | null;
+          details?: string | null;
+          hint?: string | null;
+          context?: Json;
+          user_id?: string | null;
+        };
+        Update: {
+          source?: string;
+          severity?: string;
+          route_path?: string | null;
+          job_id?: number | null;
+          listing_id?: string | null;
+          message?: string;
+          code?: string | null;
+          details?: string | null;
+          hint?: string | null;
+          context?: Json;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
       seo_regions: {
         Row: {
           id: string;

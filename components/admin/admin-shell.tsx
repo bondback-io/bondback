@@ -21,6 +21,7 @@ import {
   UserCog,
   LifeBuoy,
   Database,
+  Bug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ export const ADMIN_NAV_GROUPS: {
     label: "System",
     items: [
       { label: "Global settings", href: "/admin/global-settings", icon: Globe },
+      { label: "System errors", href: "/admin/system-errors", icon: Bug },
       { label: "Activity log", href: "/admin/activity", icon: Activity },
       { label: "Backups", href: "/admin/settings", icon: Database },
     ],
