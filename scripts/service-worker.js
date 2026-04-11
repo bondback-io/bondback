@@ -5,7 +5,7 @@
  * Strategies: app shell cache-first, images cache with TTL, API network-first, pages stale-while-revalidate.
  */
 
-const CACHE_VERSION = "bondback-v1";
+const CACHE_VERSION = "bondback-v2";
 const SHELL_CACHE = CACHE_VERSION + "-shell";
 const IMAGES_CACHE = CACHE_VERSION + "-images";
 const PAGES_CACHE = CACHE_VERSION + "-pages";
@@ -17,8 +17,7 @@ const SHELL_URLS = [
   "/",
   "/manifest.json",
   "/offline",
-  "/icons/icon-192x192.png",
-  "/icons/icon-512x512.png"
+  "/icon"
 ];
 
 // Paths that get stale-while-revalidate (semi-dynamic)
@@ -38,6 +37,7 @@ function isAppShellRequest(url) {
     path === "/" ||
     path === "/manifest.json" ||
     path === "/offline" ||
+    path === "/icon" ||
     /^\/(_next\/static\/|icons\/|favicon)/.test(path) ||
     /\.(js|css|woff2?)$/i.test(path)
   );
@@ -60,7 +60,14 @@ function isImageRequest(url) {
 function isSwrPageRequest(url) {
   const path = new URL(url).pathname;
   if (url.includes("_rsc=") || url.includes("?_")) return false;
-  return SWR_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+  return SWR_PATHS.some((p) => {
+    // Only the jobs list — NOT /jobs/123 (dynamic job detail). SWR there serves stale HTML
+    // and caused "Page not found" / broken navigations when cache was out of date.
+    if (p === "/jobs") {
+      return path === "/jobs" || path === "/jobs/";
+    }
+    return path === p || path.startsWith(p + "/");
+  });
 }
 
 function isNavigationRequest(request) {
@@ -299,6 +306,8 @@ self.addEventListener("fetch", (event) => {
                 }
               };
             });
+          }).catch(function () {
+            return res;
           });
         })
         .catch(function () {
@@ -432,7 +441,7 @@ self.addEventListener("fetch", (event) => {
           return cached;
         }
         return fetchPromise.then((fresh) => fresh || caches.match("/offline"));
-      })
+      }).catch(() => fetch(request))
     );
     return;
   }

@@ -83,9 +83,6 @@ export const metadata: Metadata = {
     description:
       "Australian marketplace for bond cleaning and end of lease cleaning. List, bid, and release payment securely.",
   },
-  icons: {
-    icon: [{ url: "/favicon.ico" }],
-  },
 };
 
 export type RootLayoutProps = {
@@ -122,7 +119,6 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
     <html lang="en" suppressHydrationWarning data-bb-theme={serverTheme}>
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <link rel="preload" href="/manifest.json" as="fetch" />
         <Script
           id="bb-theme-init"
           strategy="beforeInteractive"

@@ -3,6 +3,12 @@ import type { Database } from "@/types/supabase";
 
 export type BrowserSupabaseAuthFlow = "pkce" | "implicit";
 
+type BrowserClient = ReturnType<typeof createBrowserClient<Database>>;
+
+/** One client per flow — avoids gotrue-js auth storage lock contention (Strict Mode + many mounts). */
+let browserPkce: BrowserClient | undefined;
+let browserImplicit: BrowserClient | undefined;
+
 /**
  * Browser Supabase client for Client Components ('use client').
  *
@@ -14,13 +20,22 @@ export function createBrowserSupabaseClient(options?: {
   authFlow?: BrowserSupabaseAuthFlow;
 }) {
   const authFlow = options?.authFlow ?? "pkce";
-  return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: {
-        flowType: authFlow,
-      },
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+  if (authFlow === "implicit") {
+    if (!browserImplicit) {
+      browserImplicit = createBrowserClient<Database>(url, key, {
+        auth: { flowType: "implicit" },
+      });
     }
-  );
+    return browserImplicit;
+  }
+
+  if (!browserPkce) {
+    browserPkce = createBrowserClient<Database>(url, key, {
+      auth: { flowType: "pkce" },
+    });
+  }
+  return browserPkce;
 }
