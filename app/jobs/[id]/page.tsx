@@ -1,24 +1,16 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   fieldsFromPostgrestError,
   logSystemError,
 } from "@/lib/system-error-log";
+import { Button } from "@/components/ui/button";
 import type { Database } from "@/types/supabase";
 
 export const dynamic = "force-dynamic";
 
-type JobRow = Pick<
-  Database["public"]["Tables"]["jobs"]["Row"],
-  | "id"
-  | "title"
-  | "status"
-  | "lister_id"
-  | "winner_id"
-  | "agreed_amount_cents"
-  | "listing_id"
-  | "created_at"
->;
+type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
 type ListingExtras = Pick<
   Database["public"]["Tables"]["listings"]["Row"],
@@ -36,27 +28,20 @@ interface Props {
 }
 
 /**
- * Job detail diagnostic: surfaces PostgREST/RLS errors on the page (not only in server logs).
- * `jobs` has no description/address/rooms/price — merged from `listings` when the job row loads.
+ * Job detail: graceful handling when RLS returns no row (live/bidding / wrong role).
+ * `jobs` has no address/rooms/description/price — those come from `listings`.
+ * Assigned cleaner is `winner_id` (not `cleaner_id`).
  */
 export default async function JobDetailPage({ params }: Props) {
   const resolvedParams = await params;
   const raw = resolvedParams.id.trim();
 
-  console.log("🚀 [Job Detail Diagnostic] Starting for ID:", raw);
+  console.log("🚀 Job detail route hit for ID:", raw);
 
   const numericId = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
   if (!Number.isFinite(numericId)) {
-    return (
-      <div className="max-w-4xl mx-auto p-10">
-        <div className="bg-red-500/10 border border-red-500 rounded-3xl p-10 text-red-400">
-          <h1 className="text-3xl font-bold mb-4">Invalid job ID</h1>
-          <p className="font-mono text-sm whitespace-pre-wrap">
-            Expected a numeric job id; got: {JSON.stringify(raw)}
-          </p>
-        </div>
-      </div>
-    );
+    console.warn("[jobs/[id]] invalid route param (non-numeric):", raw);
+    notFound();
   }
 
   const supabase = await createServerSupabaseClient();
@@ -68,59 +53,39 @@ export default async function JobDetailPage({ params }: Props) {
   const { data: jobRaw, error } = await supabase
     .from("jobs")
     .select(
-      "id, title, status, lister_id, winner_id, agreed_amount_cents, listing_id, created_at"
+      "id, title, status, lister_id, winner_id, agreed_amount_cents, listing_id, created_at, updated_at"
     )
     .eq("id", numericId)
     .maybeSingle();
 
   if (error) {
-    console.error("❌ SUPABASE ERROR for job", numericId, ":", error.message);
-    console.error("Error details:", error.details);
-    console.error("Error code:", error.code);
-    console.error("Error hint:", error.hint);
+    console.error("[jobs/[id]] Supabase jobs query error:", {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      jobId: numericId,
+      userId: sessionUserId ?? "(anonymous)",
+    });
     await logSystemError({
       source: "job_detail:jobs",
       severity: "error",
       routePath: "/jobs/[id]",
       jobId: numericId,
       userId: sessionUserId,
-      context: { routeParam: raw },
+      context: { routeParam: raw, phase: "jobs_select" },
       ...fieldsFromPostgrestError(error),
     });
-    return (
-      <div className="max-w-4xl mx-auto p-10">
-        <div className="bg-red-500/10 border border-red-500 rounded-3xl p-10 text-red-400">
-          <h1 className="text-3xl font-bold mb-4">Error Loading Job</h1>
-          <p className="mb-6">Job ID: {numericId}</p>
-          <p className="font-mono text-sm whitespace-pre-wrap">{error.message}</p>
-          {error.code ? (
-            <p className="font-mono text-xs mt-4 text-red-300">
-              code: {error.code}
-              {error.details ? (
-                <>
-                  {" "}
-                  · details: {error.details}
-                </>
-              ) : null}
-              {error.hint ? (
-                <>
-                  {" "}
-                  · hint: {error.hint}
-                </>
-              ) : null}
-            </p>
-          ) : null}
-          <p className="text-xs mt-8 text-red-300">
-            This is often RLS blocking SELECT on `jobs` for listings in bidding/live (or missing
-            policies for your role).
-          </p>
-        </div>
-      </div>
-    );
+    notFound();
   }
 
   if (!jobRaw) {
-    console.error("❌ No job row returned for ID:", numericId);
+    console.error(
+      "[jobs/[id]] No job row returned — likely RLS (no error) or invalid id. userId:",
+      sessionUserId ?? "(anonymous)",
+      "jobId:",
+      numericId
+    );
     await logSystemError({
       source: "job_detail:jobs",
       severity: "warning",
@@ -128,27 +93,61 @@ export default async function JobDetailPage({ params }: Props) {
       jobId: numericId,
       userId: sessionUserId,
       message:
-        "No row returned (null) without PostgREST error — often RLS hiding the row, or the job id does not exist.",
-      context: { routeParam: raw, note: "maybeSingle returned null" },
+        "No row returned (null) without PostgREST error — often RLS hiding the row, or invalid job id.",
+      context: {
+        routeParam: raw,
+        note: "maybeSingle returned null",
+        hint: "Apply docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql if lister/bidder/winner should see this job.",
+      },
     });
-    notFound();
+
+    return (
+      <div className="max-w-4xl mx-auto p-10 text-center">
+        <h1 className="text-3xl font-bold mb-4 text-foreground">Job not visible</h1>
+        <p className="text-muted-foreground max-w-lg mx-auto leading-relaxed">
+          We couldn&apos;t load this job with your account. It may still be in bidding or live
+          status, and only the lister, bidders, or assigned cleaner can open it — or the link may
+          be wrong.
+        </p>
+        <Button className="mt-8 rounded-xl" asChild>
+          <Link href="/jobs">Browse jobs</Link>
+        </Button>
+      </div>
+    );
   }
 
   const job = jobRaw as JobRow;
 
-  console.log("✅ Job loaded successfully:", job.id, job.status);
+  console.log("✅ Job loaded:", job.id, job.status, {
+    lister_id: job.lister_id,
+    winner_id: job.winner_id ?? null,
+    userId: sessionUserId ?? "(anonymous)",
+  });
 
-  const { data: listingRaw, error: listingError } = await supabase
-    .from("listings")
-    .select(
-      "description, suburb, postcode, bedrooms, bathrooms, buy_now_cents, reserve_cents"
-    )
-    .eq("id", job.listing_id)
-    .maybeSingle();
+  const [{ data: listerProfile }, { data: winnerProfile }, listingRes] = await Promise.all([
+    supabase.from("profiles").select("full_name").eq("id", job.lister_id).maybeSingle(),
+    job.winner_id
+      ? supabase.from("profiles").select("full_name").eq("id", job.winner_id).maybeSingle()
+      : Promise.resolve({ data: null as { full_name: string | null } | null }),
+    supabase
+      .from("listings")
+      .select(
+        "description, suburb, postcode, bedrooms, bathrooms, buy_now_cents, reserve_cents"
+      )
+      .eq("id", job.listing_id)
+      .maybeSingle(),
+  ]);
+
+  const listingError = listingRes.error;
+  const listingRaw = listingRes.data;
 
   if (listingError) {
-    console.error("❌ SUPABASE ERROR for listing", job.listing_id, ":", listingError.message);
-    console.error("Listing error code:", listingError.code);
+    console.error("[jobs/[id]] listing query error:", {
+      message: listingError.message,
+      code: listingError.code,
+      listing_id: job.listing_id,
+      userId: sessionUserId,
+    });
     await logSystemError({
       source: "job_detail:listings",
       severity: "warning",
@@ -162,20 +161,11 @@ export default async function JobDetailPage({ params }: Props) {
     return (
       <div className="max-w-4xl mx-auto p-10">
         <div className="bg-amber-500/10 border border-amber-500 rounded-3xl p-10 text-amber-200">
-          <h1 className="text-3xl font-bold mb-4">Job loaded — listing blocked</h1>
-          <p className="mb-4">
+          <h1 className="text-3xl font-bold mb-4">Job loaded — listing unavailable</h1>
+          <p className="mb-4 text-sm">
             Job ID: {job.id} · listing_id: {job.listing_id}
           </p>
           <p className="font-mono text-sm whitespace-pre-wrap">{listingError.message}</p>
-          {listingError.code ? (
-            <p className="font-mono text-xs mt-4 text-amber-100/90">
-              code: {listingError.code}
-              {listingError.details ? ` · details: ${listingError.details}` : ""}
-            </p>
-          ) : null}
-          <p className="text-xs mt-6 text-amber-100/80">
-            RLS on `listings` may allow `jobs` but not the related listing row for this user.
-          </p>
         </div>
       </div>
     );
@@ -192,15 +182,25 @@ export default async function JobDetailPage({ params }: Props) {
         ? ((listing.buy_now_cents ?? listing.reserve_cents) / 100).toFixed(2)
         : "0";
 
+  const listerName = (listerProfile as { full_name: string | null } | null)?.full_name ?? null;
+  const winnerName = (winnerProfile as { full_name: string | null } | null)?.full_name ?? null;
+
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto p-6 space-y-8">
       <div className="bg-card border rounded-3xl p-10">
         <h1 className="text-4xl font-bold">{job.title ?? "Job"}</h1>
         <p className="text-muted-foreground mt-2">
-          Job ID: {job.id} • Status: {job.status}
+          Status: {job.status} · ID: {job.id}
         </p>
+        {(listerName || winnerName) && (
+          <p className="text-sm text-muted-foreground mt-3">
+            {listerName ? <>Lister: {listerName}</> : null}
+            {listerName && winnerName ? " · " : null}
+            {winnerName ? <>Assigned cleaner: {winnerName}</> : null}
+          </p>
+        )}
 
-        <div className="mt-10 grid grid-cols-2 gap-6 text-lg">
+        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
             <strong>Address:</strong> {address}
           </div>
@@ -215,9 +215,9 @@ export default async function JobDetailPage({ params }: Props) {
           </div>
         </div>
 
-        <div className="mt-12">
-          <h2 className="text-2xl font-semibold mb-4">Description</h2>
-          <p className="whitespace-pre-wrap">
+        <div className="mt-10">
+          <h2 className="font-semibold mb-3 text-lg">Description</h2>
+          <p className="whitespace-pre-wrap text-foreground leading-relaxed">
             {listing?.description ?? "No description."}
           </p>
         </div>
