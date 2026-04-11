@@ -15,6 +15,22 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 type SystemErrorRow = Database["public"]["Tables"]["system_error_log"]["Row"];
 
+/** PostgREST / Postgres wording varies ("does not exist" vs "schema cache"). */
+function isMissingTableError(
+  err: { message?: string; code?: string } | null,
+  tableName: string
+): boolean {
+  if (!err) return false;
+  const msg = String(err.message ?? "").toLowerCase();
+  const code = String(err.code ?? "");
+  const t = tableName.toLowerCase();
+  if (code === "42P01") return true;
+  if (msg.includes("does not exist") && msg.includes(t)) return true;
+  if (msg.includes("could not find the table") && msg.includes(t)) return true;
+  if (msg.includes("schema cache") && msg.includes(t)) return true;
+  return false;
+}
+
 async function requireAdmin() {
   const supabase = await createServerSupabaseClient();
   const {
@@ -122,10 +138,7 @@ export default async function AdminSystemErrorsPage() {
     .order("created_at", { ascending: false })
     .limit(200);
 
-  const tableMissing =
-    logError &&
-    (String(logError.message).toLowerCase().includes("does not exist") ||
-      String(logError.code) === "42P01");
+  const tableMissing = logError && isMissingTableError(logError, "system_error_log");
 
   const rows = (logData ?? []) as SystemErrorRow[];
 
@@ -152,10 +165,15 @@ export default async function AdminSystemErrorsPage() {
                 Table not found
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p>
-                Apply <code className="rounded bg-muted px-1">supabase/sql/20260329120000_system_error_log.sql</code>{" "}
-                in the Supabase SQL editor (or add it as a migration), then refresh this page.
+                Run the SQL in <code className="rounded bg-muted px-1">docs/SYSTEM_ERROR_LOG.sql</code>{" "}
+                (same as <code className="rounded bg-muted px-1">supabase/sql/20260329120000_system_error_log.sql</code>)
+                in the Supabase Dashboard → SQL → New query → Run, then refresh this page.
+              </p>
+              <p className="text-xs">
+                If you still see errors, click <strong>Reload schema</strong> under Project Settings → API
+                (PostgREST schema cache can lag right after creating a table).
               </p>
             </CardContent>
           </Card>
