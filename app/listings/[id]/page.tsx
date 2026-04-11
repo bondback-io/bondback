@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -7,11 +6,9 @@ import { fulfillStripeCheckoutReturn } from "@/lib/actions/jobs";
 import { buildJobListingMetadata } from "@/lib/seo/jobs-listings-seo";
 import { BID_FULL_SELECT } from "@/lib/supabase/queries";
 import {
-  loadJobByNumericIdForSession,
   loadJobForListingDetailPage,
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
-import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ListingAuctionDetail } from "@/components/features/listing-auction-detail";
 import type { BidWithBidder } from "@/components/features/bid-history-table";
@@ -37,8 +34,8 @@ function isStripePaymentSuccessReturn(
   return false;
 }
 
-/** Pure digits in the URL are treated as a job PK; we resolve to the listing UUID when possible. */
-function isNumericOnlySegment(raw: string): boolean {
+/** Listing rows use UUID `id`. Pure digits are job PKs — same convention as `/jobs/[id]` redirecting UUIDs to listings. */
+function isNumericJobStyleId(raw: string): boolean {
   return /^\d+$/.test(raw.trim());
 }
 
@@ -87,46 +84,9 @@ export default async function ListingDetailPage({
 
   const sp = searchParams ? await searchParams : {};
 
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const sessionUserId = user?.id;
-
-  if (isNumericOnlySegment(raw)) {
-    const jobByNum = await loadJobByNumericIdForSession(
-      supabase,
-      Number(raw),
-      sessionUserId
-    );
-    if (jobByNum?.listing_id) {
-      const qs = searchParamsToQueryString(sp);
-      redirect(
-        `/listings/${encodeURIComponent(String(jobByNum.listing_id))}${qs}`
-      );
-    }
-    return (
-      <section className="mx-auto max-w-lg space-y-5 px-4 py-16 text-center">
-        <h1 className="text-xl font-semibold text-foreground">This isn&apos;t a listing URL</h1>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Listing pages use a long ID (UUID) from the database.{" "}
-          <span className="font-mono text-foreground">{raw}</span> looks like a{" "}
-          <strong className="text-foreground">job number</strong>, not a listing ID — and we
-          couldn&apos;t find a job with that number.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button asChild>
-            <Link href={`/jobs/${encodeURIComponent(raw)}`}>Open job #{raw}</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/jobs">Browse jobs</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/dashboard">Dashboard</Link>
-          </Button>
-        </div>
-      </section>
-    );
+  if (isNumericJobStyleId(raw)) {
+    const qs = searchParamsToQueryString(sp);
+    redirect(`/jobs/${encodeURIComponent(raw)}${qs}`);
   }
 
   const paymentParam = firstSearchParam(sp.payment);
@@ -146,6 +106,12 @@ export default async function ListingDetailPage({
   if (paymentParam === "canceled") {
     redirect(`${paymentRedirectBase}?payment_notice=canceled`);
   }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const sessionUserId = user?.id;
 
   let profile: Pick<ProfileRow, "roles" | "active_role"> | null = null;
   if (user) {
