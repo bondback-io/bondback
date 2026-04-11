@@ -32,24 +32,30 @@ interface Props {
 }
 
 /**
- * Diagnostic job detail: step-by-step server logs + UI sections.
- * `jobs` has no description/address/rooms/price — those come from `listings` via `listing_id`.
+ * Job detail diagnostic: surfaces PostgREST/RLS errors on the page (not only in server logs).
+ * `jobs` has no description/address/rooms/price — merged from `listings` when the job row loads.
  */
 export default async function JobDetailPage({ params }: Props) {
   const resolvedParams = await params;
   const raw = resolvedParams.id.trim();
 
-  console.log("🚀 STEP 1: Route started for job ID:", raw);
+  console.log("🚀 [Job Detail Diagnostic] Starting for ID:", raw);
 
   const numericId = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
   if (!Number.isFinite(numericId)) {
-    console.error("❌ STEP 1 FAILED - Not a numeric job id:", raw);
-    notFound();
+    return (
+      <div className="max-w-4xl mx-auto p-10">
+        <div className="bg-red-500/10 border border-red-500 rounded-3xl p-10 text-red-400">
+          <h1 className="text-3xl font-bold mb-4">Invalid job ID</h1>
+          <p className="font-mono text-sm whitespace-pre-wrap">
+            Expected a numeric job id; got: {JSON.stringify(raw)}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const supabase = await createServerSupabaseClient();
-
-  console.log("📎 STEP 2: Fetching job row (minimal columns only)…");
 
   const { data: jobRaw, error } = await supabase
     .from("jobs")
@@ -59,23 +65,51 @@ export default async function JobDetailPage({ params }: Props) {
     .eq("id", numericId)
     .maybeSingle();
 
-  if (error || !jobRaw) {
-    console.error("❌ STEP 2 FAILED - Job fetch error:", error?.message ?? error, {
-      code: error?.code,
-      details: error?.details,
-    });
+  if (error) {
+    console.error("❌ SUPABASE ERROR for job", numericId, ":", error.message);
+    console.error("Error details:", error.details);
+    console.error("Error code:", error.code);
+    console.error("Error hint:", error.hint);
+    return (
+      <div className="max-w-4xl mx-auto p-10">
+        <div className="bg-red-500/10 border border-red-500 rounded-3xl p-10 text-red-400">
+          <h1 className="text-3xl font-bold mb-4">Error Loading Job</h1>
+          <p className="mb-6">Job ID: {numericId}</p>
+          <p className="font-mono text-sm whitespace-pre-wrap">{error.message}</p>
+          {error.code ? (
+            <p className="font-mono text-xs mt-4 text-red-300">
+              code: {error.code}
+              {error.details ? (
+                <>
+                  {" "}
+                  · details: {error.details}
+                </>
+              ) : null}
+              {error.hint ? (
+                <>
+                  {" "}
+                  · hint: {error.hint}
+                </>
+              ) : null}
+            </p>
+          ) : null}
+          <p className="text-xs mt-8 text-red-300">
+            This is often RLS blocking SELECT on `jobs` for listings in bidding/live (or missing
+            policies for your role).
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!jobRaw) {
+    console.error("❌ No job row returned for ID:", numericId);
     notFound();
   }
 
   const job = jobRaw as JobRow;
 
-  console.log("✅ STEP 2 SUCCESS - Basic job data loaded:", {
-    id: job.id,
-    title: job.title,
-    listing_id: job.listing_id,
-  });
-
-  console.log("📎 STEP 3: Fetching listing for listing_id:", job.listing_id);
+  console.log("✅ Job loaded successfully:", job.id, job.status);
 
   const { data: listingRaw, error: listingError } = await supabase
     .from("listings")
@@ -86,16 +120,28 @@ export default async function JobDetailPage({ params }: Props) {
     .maybeSingle();
 
   if (listingError) {
-    console.error("❌ STEP 3 FAILED - Listing fetch error:", listingError.message, {
-      code: listingError.code,
-      details: listingError.details,
-    });
-  } else if (!listingRaw) {
-    console.warn(
-      "⚠️ STEP 3 - Listing row is null (RLS or missing row for listing_id)"
+    console.error("❌ SUPABASE ERROR for listing", job.listing_id, ":", listingError.message);
+    console.error("Listing error code:", listingError.code);
+    return (
+      <div className="max-w-4xl mx-auto p-10">
+        <div className="bg-amber-500/10 border border-amber-500 rounded-3xl p-10 text-amber-200">
+          <h1 className="text-3xl font-bold mb-4">Job loaded — listing blocked</h1>
+          <p className="mb-4">
+            Job ID: {job.id} · listing_id: {job.listing_id}
+          </p>
+          <p className="font-mono text-sm whitespace-pre-wrap">{listingError.message}</p>
+          {listingError.code ? (
+            <p className="font-mono text-xs mt-4 text-amber-100/90">
+              code: {listingError.code}
+              {listingError.details ? ` · details: ${listingError.details}` : ""}
+            </p>
+          ) : null}
+          <p className="text-xs mt-6 text-amber-100/80">
+            RLS on `listings` may allow `jobs` but not the related listing row for this user.
+          </p>
+        </div>
+      </div>
     );
-  } else {
-    console.log("✅ STEP 3 SUCCESS - Listing row loaded");
   }
 
   const listing = listingRaw as ListingExtras | null;
@@ -109,22 +155,15 @@ export default async function JobDetailPage({ params }: Props) {
         ? ((listing.buy_now_cents ?? listing.reserve_cents) / 100).toFixed(2)
         : "0";
 
-  console.log("✅ STEP 4: Render — header + details + description (merged view)");
-
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-10">
-      {/* Step 3 (UI): Header only */}
+    <div className="max-w-6xl mx-auto p-6">
       <div className="bg-card border rounded-3xl p-10">
-        <h1 className="text-4xl font-bold mb-3">{job.title ?? "Job"}</h1>
-        <p className="text-xl text-muted-foreground">
+        <h1 className="text-4xl font-bold">{job.title ?? "Job"}</h1>
+        <p className="text-muted-foreground mt-2">
           Job ID: {job.id} • Status: {job.status}
         </p>
-      </div>
 
-      {/* Step 4 (UI): Basic details — data from listing + job.agreed_amount_cents */}
-      <div className="bg-card border rounded-3xl p-10">
-        <h2 className="text-2xl font-semibold mb-6">Basic Details</h2>
-        <div className="grid grid-cols-2 gap-y-6 text-lg">
+        <div className="mt-10 grid grid-cols-2 gap-6 text-lg">
           <div>
             <strong>Address:</strong> {address}
           </div>
@@ -138,25 +177,13 @@ export default async function JobDetailPage({ params }: Props) {
             <strong>Price:</strong> ${priceDollars}
           </div>
         </div>
-      </div>
 
-      {/* Step 5 (UI): Description — from listing */}
-      <div className="bg-card border rounded-3xl p-10">
-        <h2 className="text-2xl font-semibold mb-6">Description</h2>
-        <p className="text-lg leading-relaxed whitespace-pre-wrap">
-          {listing?.description ?? "No description provided."}
-        </p>
-      </div>
-
-      <div className="text-center text-sm text-muted-foreground pt-8">
-        If you see this page, the route + basic data is working.
-        <br />
-        Next step will be to safely add photos and role-based actions.
-        <br />
-        <span className="text-xs mt-2 inline-block">
-          Server logs: STEP 1 → 2 (job) → 3 (listing) → 4 (render). Check Vercel/runtime
-          logs, not the browser console.
-        </span>
+        <div className="mt-12">
+          <h2 className="text-2xl font-semibold mb-4">Description</h2>
+          <p className="whitespace-pre-wrap">
+            {listing?.description ?? "No description."}
+          </p>
+        </div>
       </div>
     </div>
   );
