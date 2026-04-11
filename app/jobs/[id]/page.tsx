@@ -11,8 +11,8 @@ import type { Database } from "@/types/supabase";
 
 export const dynamic = "force-dynamic";
 
-/** No joins — smallest column set for `jobs` (real columns only). */
-const JOB_MINIMAL_SELECT =
+/** User client: minimal columns (RLS test). */
+const JOB_USER_SELECT =
   "id, title, status, lister_id, winner_id, agreed_amount_cents, listing_id, created_at, updated_at";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -50,93 +50,60 @@ export default async function JobDetailPage({ params }: Props) {
   } = await supabase.auth.getUser();
   const sessionUserId = authUser?.id ?? null;
 
-  // 1) User-scoped client — minimal select, no joins
-  const { data: jobUser, error: jobError } = await supabase
-    .from("jobs")
-    .select(JOB_MINIMAL_SELECT)
-    .eq("id", numericId)
-    .maybeSingle();
+  const admin = createSupabaseAdminClient();
 
-  if (jobError) {
-    console.error("[jobs/[id]] Supabase jobs query error:", {
-      message: jobError.message,
-      code: jobError.code,
-      details: jobError.details,
-      hint: jobError.hint,
-      jobId: numericId,
-      userId: sessionUserId ?? "(anonymous)",
-    });
+  // Parallel: user (RLS) vs service role (bypass) — strongest RLS diagnostic
+  const [userRes, adminRes] = await Promise.all([
+    supabase.from("jobs").select(JOB_USER_SELECT).eq("id", numericId).maybeSingle(),
+    admin
+      ? admin.from("jobs").select("*").eq("id", numericId).maybeSingle()
+      : Promise.resolve({ data: null as JobRow | null, error: null }),
+  ]);
+
+  const userSawRow = !!userRes.data;
+  const adminSawRow = !!adminRes.data;
+  const rlsLikelyBlocking = !userSawRow && adminSawRow;
+
+  if (userRes.error) {
+    console.error("[jobs/[id]] user jobs query error:", userRes.error.message, userRes.error.code);
+  }
+  if (adminRes.error) {
+    console.error("[jobs/[id]] service role jobs query error:", adminRes.error.message);
+  }
+
+  if (userRes.error && !adminSawRow) {
     await logSystemError({
       source: "job_detail:jobs",
       severity: "error",
       routePath: "/jobs/[id]",
       jobId: numericId,
       userId: sessionUserId,
-      context: { routeParam: raw, phase: "jobs_select_user" },
-      ...fieldsFromPostgrestError(jobError),
+      context: { routeParam: raw, phase: "jobs_user", admin_saw_row: adminSawRow },
+      ...fieldsFromPostgrestError(userRes.error),
     });
     return (
       <div className="max-w-4xl mx-auto p-10 text-center">
         <h1 className="text-3xl font-bold mb-4 text-red-400">Error loading job</h1>
-        <p className="text-muted-foreground font-mono text-sm">{jobError.message}</p>
-        {jobError.code ? (
-          <p className="mt-4 text-xs text-muted-foreground">code: {jobError.code}</p>
-        ) : null}
+        <p className="text-muted-foreground font-mono text-sm">{userRes.error.message}</p>
       </div>
     );
   }
 
-  let job = jobUser as JobRow | null;
-  let usedServiceRoleFallback = false;
-  const admin = createSupabaseAdminClient();
-  /** Whether a row exists for this id when read with service role (null = not checked or error). */
-  let serviceRoleRowExists: boolean | null = null;
-
-  // 2) RLS returned no row — try service role read (same minimal select) for display
-  if (!job && admin) {
-    const { data: jobAdmin, error: adminJobErr } = await admin
-      .from("jobs")
-      .select(JOB_MINIMAL_SELECT)
-      .eq("id", numericId)
-      .maybeSingle();
-
-    if (adminJobErr) {
-      console.error("[jobs/[id]] admin jobs read failed:", adminJobErr.message);
-      serviceRoleRowExists = null;
-    } else {
-      serviceRoleRowExists = !!jobAdmin;
-      if (jobAdmin) {
-        job = jobAdmin as JobRow;
-        usedServiceRoleFallback = true;
-        console.warn("[jobs/[id]] User client returned no row; loaded job via service role", {
-          jobId: numericId,
-          userId: sessionUserId,
-        });
-      }
-    }
-  }
+  const job = (userRes.data ?? adminRes.data) as JobRow | null;
+  const usedServiceRoleFallback = !userSawRow && adminSawRow;
 
   if (!job) {
-    const dbHasJobRow = admin ? serviceRoleRowExists : null;
-
-    console.error("[jobs/[id]] No job visible after user + admin fallback:", {
-      jobId: numericId,
-      userId: sessionUserId ?? "(anonymous)",
-      dbHasJobRow,
-      serviceRoleConfigured: !!admin,
-    });
-
     await logSystemError({
       source: "job_detail:jobs",
       severity: "warning",
       routePath: "/jobs/[id]",
       jobId: numericId,
       userId: sessionUserId,
-      message:
-        "No job row for user; admin fallback empty or missing — RLS, invalid id, or no service role.",
+      message: "No job row for user or service role — invalid id or DB error.",
       context: {
         routeParam: raw,
-        db_has_row_service_role: dbHasJobRow,
+        user_saw_row: userSawRow,
+        admin_saw_row: adminSawRow,
         supabase_service_role_configured: !!admin,
       },
     });
@@ -144,55 +111,44 @@ export default async function JobDetailPage({ params }: Props) {
     return (
       <div className="max-w-4xl mx-auto p-10">
         <div className="text-center">
-          <h1 className="text-3xl font-bold mb-4 text-foreground">Job not visible</h1>
-          <p className="text-muted-foreground max-w-lg mx-auto leading-relaxed mb-6">
-            We couldn&apos;t load this job with your account. If RLS policies are still tightening,
-            only the lister, a bidder, or the assigned cleaner may see it — or this id may not
-            exist.
+          <h1 className="text-3xl font-bold mb-4 text-foreground">Job not found</h1>
+          <p className="text-muted-foreground mb-2">Job ID: {numericId}</p>
+          <p className="text-muted-foreground max-w-lg mx-auto text-sm mb-6">
+            No row for this id with your session or with the service role. The id may be wrong, or
+            the job was removed.
           </p>
           <Button className="rounded-xl" asChild>
             <Link href="/jobs">Browse jobs</Link>
           </Button>
         </div>
 
-        <div className="mt-10 rounded-2xl border border-border bg-muted/30 p-6 text-left text-sm">
-          <p className="font-semibold text-foreground mb-3">Debug</p>
-          <ul className="space-y-2 font-mono text-xs text-muted-foreground break-all">
-            <li>
-              <span className="text-foreground">route id:</span> {raw}
-            </li>
-            <li>
-              <span className="text-foreground">parsed job id:</span> {numericId}
-            </li>
-            <li>
-              <span className="text-foreground">auth.uid():</span>{" "}
-              {sessionUserId ?? "(not signed in)"}
-            </li>
-            <li>
-              <span className="text-foreground">user client row:</span> none (RLS or missing)
-            </li>
-            <li>
-              <span className="text-foreground">SUPABASE_SERVICE_ROLE_KEY:</span>{" "}
-              {admin ? "set (fallback attempted)" : "missing — add on server for bypass read"}
-            </li>
-            <li>
-              <span className="text-foreground">row exists (service role):</span>{" "}
-              {dbHasJobRow === null
-                ? "unknown (admin read failed or not run)"
-                : dbHasJobRow
-                  ? "yes — user SELECT blocked by RLS"
-                  : "no — no row for this id"}
-            </li>
-          </ul>
-        </div>
+        <DiagnosticBlock
+          raw={raw}
+          numericId={numericId}
+          sessionUserId={sessionUserId}
+          adminConfigured={!!admin}
+          userSawRow={userSawRow}
+          adminSawRow={adminSawRow}
+          userError={userRes.error?.message ?? null}
+          adminError={adminRes.error?.message ?? null}
+        />
       </div>
     );
   }
 
-  console.log("✅ Job loaded:", job.id, job.status, {
+  if (usedServiceRoleFallback) {
+    console.warn("[jobs/[id]] User SELECT returned no row; service role has row (RLS)", {
+      jobId: numericId,
+      userId: sessionUserId,
+    });
+  }
+
+  console.log("✅ Job resolved:", job.id, job.status, {
     lister_id: job.lister_id,
     winner_id: job.winner_id ?? null,
     userId: sessionUserId ?? "(anonymous)",
+    userSawRow,
+    adminSawRow,
     usedServiceRoleFallback,
   });
 
@@ -224,13 +180,6 @@ export default async function JobDetailPage({ params }: Props) {
   const listingRaw = listingRes.data;
 
   if (listingError) {
-    console.error("[jobs/[id]] listing query error:", {
-      message: listingError.message,
-      code: listingError.code,
-      listing_id: job.listing_id,
-      userId: sessionUserId,
-      usedServiceRoleFallback,
-    });
     await logSystemError({
       source: "job_detail:listings",
       severity: "warning",
@@ -238,7 +187,11 @@ export default async function JobDetailPage({ params }: Props) {
       jobId: job.id,
       listingId: job.listing_id,
       userId: sessionUserId,
-      context: { routeParam: raw, job_status: job.status, usedServiceRoleFallback },
+      context: {
+        routeParam: raw,
+        job_status: job.status,
+        usedServiceRoleFallback,
+      },
       ...fieldsFromPostgrestError(listingError),
     });
     return (
@@ -269,13 +222,31 @@ export default async function JobDetailPage({ params }: Props) {
   const winnerName = (winnerProfile as { full_name: string | null } | null)?.full_name ?? null;
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-8">
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <DiagnosticBlock
+        raw={raw}
+        numericId={numericId}
+        sessionUserId={sessionUserId}
+        adminConfigured={!!admin}
+        userSawRow={userSawRow}
+        adminSawRow={adminSawRow}
+        userError={userRes.error?.message ?? null}
+        adminError={adminRes.error?.message ?? null}
+      />
+
       {usedServiceRoleFallback ? (
         <p className="text-xs text-amber-600 dark:text-amber-400/90 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-2">
-          Loaded with service role because your user session could not read this job row (RLS).
-          Fix policies in{" "}
+          <strong>RLS:</strong> Your session could not SELECT this job row; the page used the
+          service-role read. Apply{" "}
           <code className="rounded bg-muted px-1">docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql</code> so
-          listers/bidders/winners can SELECT without bypass.
+          listers/bidders/winners can read without bypass.
+        </p>
+      ) : null}
+
+      {rlsLikelyBlocking ? (
+        <p className="text-xs text-blue-600 dark:text-blue-400 rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-2">
+          Diagnostic: <code>user_saw_row=false</code> and <code>service_role_saw_row=true</code> →
+          policies blocked the user client for this id.
         </p>
       ) : null}
 
@@ -314,6 +285,62 @@ export default async function JobDetailPage({ params }: Props) {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function DiagnosticBlock({
+  raw,
+  numericId,
+  sessionUserId,
+  adminConfigured,
+  userSawRow,
+  adminSawRow,
+  userError,
+  adminError,
+}: {
+  raw: string;
+  numericId: number;
+  sessionUserId: string | null;
+  adminConfigured: boolean;
+  userSawRow: boolean;
+  adminSawRow: boolean;
+  userError: string | null;
+  adminError: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-muted/30 p-4 text-left text-sm">
+      <p className="font-semibold text-foreground mb-2">RLS diagnostic</p>
+      <ul className="space-y-1.5 font-mono text-[11px] text-muted-foreground break-all">
+        <li>
+          <span className="text-foreground">route id:</span> {raw} → <span className="text-foreground">parsed:</span>{" "}
+          {numericId}
+        </li>
+        <li>
+          <span className="text-foreground">auth.uid():</span> {sessionUserId ?? "(not signed in)"}
+        </li>
+        <li>
+          <span className="text-foreground">user client row:</span> {userSawRow ? "yes" : "no"}
+          {userError ? ` (error: ${userError})` : ""}
+        </li>
+        <li>
+          <span className="text-foreground">service role row:</span>{" "}
+          {!adminConfigured ? "not queried (SUPABASE_SERVICE_ROLE_KEY missing)" : adminSawRow ? "yes" : "no"}
+          {adminError ? ` (error: ${adminError})` : ""}
+        </li>
+        <li>
+          <span className="text-foreground">verdict:</span>{" "}
+          {!adminConfigured
+            ? "Set service role on server to compare RLS vs DB truth."
+            : !userSawRow && adminSawRow
+              ? "RLS is hiding this row from the user client."
+              : userSawRow && adminSawRow
+                ? "User and service role both see the row."
+                : !userSawRow && !adminSawRow
+                  ? "No row for this id (or both queries failed)."
+                  : "User sees row."}
+        </li>
+      </ul>
     </div>
   );
 }
