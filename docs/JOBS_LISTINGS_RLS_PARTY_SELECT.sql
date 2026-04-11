@@ -1,6 +1,10 @@
 -- Allow listers and assigned cleaners to read job + listing rows via the user (anon) client.
 -- Without these policies, `/jobs/[numericId]` often returns 404 unless SUPABASE_SERVICE_ROLE_KEY bypasses RLS on the server.
 --
+-- **Also run** `supabase/migrations/20260430120000_listings_select_marketplace.sql` (or paste below).
+-- Party-only listing SELECT blocks **Find Jobs** and **listing detail** for cleaners browsing
+-- other users' live listings — marketplace policies allow `live`/`ended`/`expired` rows (not cancelled early).
+--
 -- Apply in Supabase SQL Editor (Dashboard → SQL) or via `supabase db push` if you add this under supabase/migrations/.
 -- Review existing policies first: SELECT * FROM pg_policies WHERE tablename IN ('jobs','listings');
 --
@@ -49,4 +53,28 @@ CREATE POLICY "listings_select_when_job_party"
       WHERE j.listing_id = listings.id
         AND (j.lister_id = auth.uid() OR j.winner_id = auth.uid())
     )
+  );
+
+-- -----------------------------------------------------------------------------
+-- Marketplace browse (required for Find Jobs + `/listings/[uuid]` for other users' listings)
+-- Duplicated in: supabase/migrations/20260430120000_listings_select_marketplace.sql
+-- -----------------------------------------------------------------------------
+DROP POLICY IF EXISTS "listings_select_marketplace_authenticated" ON public.listings;
+CREATE POLICY "listings_select_marketplace_authenticated"
+  ON public.listings
+  FOR SELECT
+  TO authenticated
+  USING (
+    status IN ('live', 'ended', 'expired')
+    AND cancelled_early_at IS NULL
+  );
+
+DROP POLICY IF EXISTS "listings_select_marketplace_anon" ON public.listings;
+CREATE POLICY "listings_select_marketplace_anon"
+  ON public.listings
+  FOR SELECT
+  TO anon
+  USING (
+    status IN ('live', 'ended', 'expired')
+    AND cancelled_early_at IS NULL
   );

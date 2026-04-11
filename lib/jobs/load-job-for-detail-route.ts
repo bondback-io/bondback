@@ -42,6 +42,10 @@ function isMarketplaceVisibleListing(row: ListingRow): boolean {
   if (Number.isNaN(endMs)) {
     return true;
   }
+  // Still `live` in DB but auction time passed — cron may not have flipped status yet; keep readable.
+  if (endMs <= Date.now()) {
+    return true;
+  }
   return endMs > Date.now();
 }
 
@@ -188,6 +192,19 @@ export async function loadListingFullForSession(
 
   if (sessionUserId?.trim() && sameUserId(row.lister_id, sessionUserId)) {
     return row;
+  }
+
+  if (sessionUserId?.trim()) {
+    const { data: bidExists } = await admin
+      .from("bids")
+      .select("id")
+      .eq("listing_id", listingId)
+      .eq("cleaner_id", sessionUserId)
+      .limit(1)
+      .maybeSingle();
+    if (bidExists) {
+      return row;
+    }
   }
 
   if (isMarketplaceVisibleListing(row)) {
