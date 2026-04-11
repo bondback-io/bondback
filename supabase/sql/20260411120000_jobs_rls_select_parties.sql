@@ -19,7 +19,10 @@ CREATE POLICY "jobs_select_parties"
   ON public.jobs
   FOR SELECT
   TO authenticated
-  USING (auth.uid() = lister_id OR auth.uid() = winner_id);
+  USING (
+    auth.uid()::text = lister_id::text
+    OR (winner_id IS NOT NULL AND auth.uid()::text = winner_id::text)
+  );
 
 -- Bidding cleaners: can read the job row linked to a listing they have bid on
 CREATE POLICY "jobs_select_if_bidder"
@@ -30,7 +33,7 @@ CREATE POLICY "jobs_select_if_bidder"
     EXISTS (
       SELECT 1
       FROM public.bids b
-      WHERE b.listing_id = jobs.listing_id
-        AND b.cleaner_id = auth.uid()
+      WHERE b.listing_id::text = jobs.listing_id::text
+        AND b.cleaner_id::text = auth.uid()::text
     )
   );

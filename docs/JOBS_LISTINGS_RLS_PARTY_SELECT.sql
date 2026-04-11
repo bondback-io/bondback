@@ -9,6 +9,9 @@
 -- Review existing policies first: SELECT * FROM pg_policies WHERE tablename IN ('jobs','listings');
 --
 -- NOTE: `public.jobs` uses `winner_id` for the assigned cleaner (there is no `cleaner_id` column).
+--
+-- Compare `auth.uid()` to id columns using `::text` on both sides. Some projects store these as
+-- `text`; `auth.uid()` is `uuid` — without casts Postgres errors: operator does not exist: text = uuid.
 
 ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.listings ENABLE ROW LEVEL SECURITY;
@@ -25,7 +28,10 @@ CREATE POLICY "jobs_select_parties"
   ON public.jobs
   FOR SELECT
   TO authenticated
-  USING (auth.uid() = lister_id OR auth.uid() = winner_id);
+  USING (
+    auth.uid()::text = lister_id::text
+    OR (winner_id IS NOT NULL AND auth.uid()::text = winner_id::text)
+  );
 
 CREATE POLICY "jobs_select_if_bidder"
   ON public.jobs
@@ -35,8 +41,8 @@ CREATE POLICY "jobs_select_if_bidder"
     EXISTS (
       SELECT 1
       FROM public.bids b
-      WHERE b.listing_id = jobs.listing_id
-        AND b.cleaner_id = auth.uid()
+      WHERE b.listing_id::text = jobs.listing_id::text
+        AND b.cleaner_id::text = auth.uid()::text
     )
   );
 
@@ -46,12 +52,15 @@ CREATE POLICY "listings_select_when_job_party"
   FOR SELECT
   TO authenticated
   USING (
-    auth.uid() = lister_id
+    auth.uid()::text = lister_id::text
     OR EXISTS (
       SELECT 1
       FROM public.jobs j
-      WHERE j.listing_id = listings.id
-        AND (j.lister_id = auth.uid() OR j.winner_id = auth.uid())
+      WHERE j.listing_id::text = listings.id::text
+        AND (
+          j.lister_id::text = auth.uid()::text
+          OR (j.winner_id IS NOT NULL AND j.winner_id::text = auth.uid()::text)
+        )
     )
   );
 

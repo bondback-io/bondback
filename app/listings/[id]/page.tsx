@@ -34,6 +34,11 @@ function isStripePaymentSuccessReturn(
   return false;
 }
 
+/** Listing rows use UUID `id`. Pure digits are job PKs — same convention as `/jobs/[id]` redirecting UUIDs to here. */
+function isNumericJobStyleId(raw: string): boolean {
+  return /^\d+$/.test(raw.trim());
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -41,7 +46,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   try {
     const resolvedParams = await params;
-    return await buildJobListingMetadata(resolvedParams.id, {
+    const id = resolvedParams.id.trim();
+    if (isNumericJobStyleId(id)) {
+      redirect(`/jobs/${encodeURIComponent(id)}`);
+    }
+    return await buildJobListingMetadata(id, {
       canonical: "listings",
     });
   } catch (e) {
@@ -63,8 +72,8 @@ export default async function ListingDetailPage({
   const resolvedParams = await params;
   const raw = resolvedParams.id.trim();
 
-  if (/^\d+$/.test(raw)) {
-    notFound();
+  if (isNumericJobStyleId(raw)) {
+    redirect(`/jobs/${encodeURIComponent(raw)}`);
   }
 
   const sp = searchParams ? await searchParams : {};
