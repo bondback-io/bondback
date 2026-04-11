@@ -33,10 +33,14 @@ export function getNotificationHref(row: NotificationRow): string | null {
     return base;
   }
 
+  const uuidLike = (s: string) =>
+    /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(s);
   const listingUuid =
     typeof data?.listing_uuid === "string" && data.listing_uuid.trim() !== ""
       ? data.listing_uuid.trim()
-      : null;
+      : typeof data?.listingId === "string" && data.listingId.trim() !== "" && uuidLike(data.listingId.trim())
+        ? data.listingId.trim()
+        : null;
   if (listingUuid) {
     return `/listings/${listingUuid}`;
   }

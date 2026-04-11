@@ -34,7 +34,14 @@ export type ListerDashboardContentProps = {
   totalCancelledItems: number;
   listingMap: Map<string, ListingRow>;
   stats: { label: string; value: string | number }[];
-  activityItems: { id: string; type: string; message_text: string | null; job_id: number | null; created_at: string }[];
+  activityItems: {
+    id: string;
+    type: string;
+    message_text: string | null;
+    job_id: number | null;
+    created_at: string;
+    href?: string | null;
+  }[];
   bidCountByListingId: Record<string, number>;
   nowMs: number;
   oneDayMs: number;

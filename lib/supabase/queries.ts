@@ -65,9 +65,9 @@ export const PROFILE_LISTER_DASHBOARD_SELECT =
  */
 export const PROFILE_CLEANER_DASHBOARD_SELECT = PROFILE_LISTER_DASHBOARD_SELECT;
 
-/** Activity feed on dashboards. */
+/** Activity feed on dashboards — `data` powers listing vs job deep links via `getNotificationHref`. */
 export const NOTIFICATION_FEED_SELECT =
-  "id, type, message_text, job_id, created_at";
+  "id, type, message_text, job_id, created_at, data";
 
 /** `public.job_messages` row. */
 export const JOB_MESSAGES_FULL_SELECT =

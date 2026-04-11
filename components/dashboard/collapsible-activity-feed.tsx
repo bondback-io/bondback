@@ -18,6 +18,8 @@ export type ActivityItem = {
   message_text: string | null;
   job_id: number | null;
   created_at: string;
+  /** Precomputed path (e.g. from `getNotificationHref`) so listing-only rows link to `/listings/…`. */
+  href?: string | null;
 };
 
 export type CollapsibleActivityFeedProps = {
@@ -74,9 +76,10 @@ export function CollapsibleActivityFeed({
 
               const label = item.message_text || "Update";
               const timeAgo = formatDistanceToNow(new Date(item.created_at), { addSuffix: true });
+              const linkHref = item.href ?? (item.job_id != null ? `/jobs/${item.job_id}` : null);
               const rowClassName = cn(
                 "flex items-start gap-3 py-3 transition-colors",
-                item.job_id &&
+                linkHref &&
                   "hover:bg-muted/50 dark:hover:bg-gray-800/50 rounded-md -mx-1 px-2"
               );
               const body = (
@@ -92,7 +95,7 @@ export function CollapsibleActivityFeed({
                       {timeAgo}
                     </p>
                   </div>
-                  {item.job_id && (
+                  {linkHref != null && (
                     <span className="shrink-0 text-xs font-medium text-primary">
                       View
                     </span>
@@ -102,8 +105,8 @@ export function CollapsibleActivityFeed({
 
               return (
                 <li key={item.id}>
-                  {item.job_id != null ? (
-                    <Link href={`/jobs/${item.job_id}`} className={cn("block", rowClassName)}>
+                  {linkHref != null ? (
+                    <Link href={linkHref} className={cn("block", rowClassName)}>
                       {body}
                     </Link>
                   ) : (

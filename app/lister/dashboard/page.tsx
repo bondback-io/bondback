@@ -30,6 +30,7 @@ import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
+import { getNotificationHref } from "@/lib/notifications/display";
 import {
   normalizeProfileRolesFromDb,
   resolveActiveRoleFromProfile,
@@ -258,6 +259,7 @@ export default async function ListerDashboardPage() {
     message_text: n.message_text,
     job_id: n.job_id,
     created_at: n.created_at,
+    href: getNotificationHref(n as NotificationRow),
   }));
 
   const nowMs = Date.now();

@@ -54,7 +54,7 @@ import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 export type ListingCardProps = {
   listing: ListingRow;
-  /** When set, detail links use `hrefListingOrJob` (assigned / in-progress → `/jobs/[id]`). */
+  /** When set, detail links use `hrefListingOrJob` (assigned job → `/jobs/[id]`, else listing). */
   job?: {
     id: number;
     winner_id?: string | null;

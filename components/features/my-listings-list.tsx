@@ -964,6 +964,7 @@ export function MyListingsList({
                       ? {
                           id: Number(job.jobId),
                           winner_id: job.winnerId,
+                          cleaner_id: job.winnerId,
                           status: job.status,
                         }
                       : null

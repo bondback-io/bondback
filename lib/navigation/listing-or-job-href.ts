@@ -29,33 +29,29 @@ export type MarketplaceDetailItem = {
 };
 
 /**
- * True when the row should open the job detail route (assigned work).
- * Uses assignee fields (`winner_id` / `cleaner_id`) plus job lifecycle statuses such as
- * `accepted`, `in_progress`, `completed`, dispute phases, etc.
+ * Assigned job work → `/jobs/[id]`. Matches:
+ * `!!cleaner_id` OR `winner_id` (DB column) OR status in `in_progress` | `assigned` | `completed`.
+ * Status checks are case-insensitive.
  */
-export function isJobAssigned(item: MarketplaceDetailItem | null | undefined): boolean {
+export function isAssignedJob(item: MarketplaceDetailItem | null | undefined): boolean {
   if (!item) return false;
   const assignee = item.cleaner_id ?? item.winner_id;
   if (assignee != null && String(assignee).trim() !== "") return true;
   const st = String(item.status ?? "").toLowerCase();
-  return (
-    st === "accepted" ||
-    st === "in_progress" ||
-    st === "assigned" ||
-    st === "completed" ||
-    st === "completed_pending_approval" ||
-    st === "disputed" ||
-    st === "in_review" ||
-    st === "dispute_negotiating"
-  );
+  return st === "in_progress" || st === "assigned" || st === "completed";
+}
+
+/** @deprecated Use {@link isAssignedJob} */
+export function isJobAssigned(item: MarketplaceDetailItem | null | undefined): boolean {
+  return isAssignedJob(item);
 }
 
 /**
  * Single conditional for cards: job route when assigned, else listing URL.
- * For listing-only rows, `id` is the listing UUID and `listing_id` is usually omitted.
+ * Listing branch: prefers `listing_id` when `id` is a numeric job PK (see `listings` vs `jobs` tables).
  */
 export function detailUrlForCardItem(item: MarketplaceDetailItem): string {
-  if (isJobAssigned(item)) {
+  if (isAssignedJob(item)) {
     return `/jobs/${item.id}`;
   }
   const listingKey =
@@ -94,6 +90,6 @@ export function hrefJobOnly(jobId: number): string {
   return `/jobs/${jobId}`;
 }
 
-/** @deprecated Use {@link isJobAssigned} */
+/** @deprecated Use {@link isAssignedJob} */
 export const isAssignedJobRoute = (job: JobLinkInput | null | undefined) =>
-  isJobAssigned(job ?? undefined);
+  isAssignedJob(job ?? undefined);

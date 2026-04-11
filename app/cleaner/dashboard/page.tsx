@@ -45,11 +45,12 @@ import {
 } from "@/lib/profile-roles";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
+import { getNotificationHref } from "@/lib/notifications/display";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
-type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
+type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
 /** Notifications + job rows are per-user; “taken listing” set for live-bid filtering is cached when service role exists. */
 export const revalidate = 30;
@@ -191,6 +192,7 @@ export default async function CleanerDashboardPage() {
     message_text: n.message_text,
     job_id: n.job_id,
     created_at: n.created_at,
+    href: getNotificationHref(n as NotificationRow),
   }));
 
   const nowMs = Date.now();
