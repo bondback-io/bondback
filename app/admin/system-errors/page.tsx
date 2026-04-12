@@ -185,8 +185,9 @@ export default async function AdminSystemErrorsPage() {
             System errors
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground dark:text-gray-400">
-            Latest runtime diagnostics captured from the app (e.g. job detail Supabase/RLS errors).
-            Rows are written with the service role when{" "}
+            Latest runtime diagnostics captured from the app (e.g. job detail Supabase/RLS errors, and{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">not_found:page_view</code> when
+            someone hits the global 404 page). Rows are written with the service role when{" "}
             <code className="rounded bg-muted px-1 py-0.5 text-xs">SUPABASE_SERVICE_ROLE_KEY</code>{" "}
             is set. Run the SQL migration if this list is empty and the table is missing.
           </p>

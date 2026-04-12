@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { FileQuestion } from "lucide-react";
+import { NotFoundDebugPanel } from "@/components/not-found-debug-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
  */
 export default function NotFound() {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4 py-12">
+    <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 py-12">
       <Card className="w-full max-w-md border-border bg-card/80 dark:border-gray-800 dark:bg-gray-950/60">
         <CardHeader className="flex flex-row items-center gap-2">
           <FileQuestion className="h-5 w-5 text-muted-foreground" aria-hidden />
@@ -42,6 +43,7 @@ export default function NotFound() {
           </div>
         </CardContent>
       </Card>
+      <NotFoundDebugPanel />
     </div>
   );
 }
