@@ -7,11 +7,54 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PHOTO_LIMITS } from "@/lib/photo-validation";
 import type { Database } from "@/types/supabase";
 import { createNotification, notifyListerListingLive } from "@/lib/actions/notifications";
-import { relistDurationMsFromDurationDays } from "@/lib/listings";
+import { relistDurationMsFromDurationDays, type ListingInsertPayload } from "@/lib/listings";
 
 type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
+
+export type CreateListingForPublishResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+/**
+ * Inserts a listing on the server so publish works even when browser `anon` + RLS has no INSERT
+ * policy, or when PostgREST rejects client payloads. Validates `lister_id` == session user.
+ * Uses `SUPABASE_SERVICE_ROLE_KEY` when set (bypasses RLS); otherwise the user-scoped client.
+ */
+export async function createListingForPublish(
+  row: ListingInsertPayload
+): Promise<CreateListingForPublishResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+  if (String(row.lister_id) !== String(session.user.id)) {
+    return { ok: false, error: "Invalid lister." };
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  const insertQuery = admin
+    ? await admin.from("listings").insert(row as never).select("id").maybeSingle()
+    : await supabase.from("listings").insert(row as never).select("id").maybeSingle();
+
+  const { data, error } = insertQuery;
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  if (!data?.id) {
+    return { ok: false, error: "Failed to create listing." };
+  }
+
+  revalidatePath("/my-listings");
+  revalidatePath("/jobs");
+  return { ok: true, id: String(data.id) };
+}
 
 export type UpdateListingDetailsResult =
   | { ok: true }

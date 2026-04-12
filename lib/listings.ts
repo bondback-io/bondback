@@ -100,17 +100,8 @@ export function formatPreferredCleaningDueLine(daysLeft: number | null): string 
   return `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`;
 }
 
-/** Insert payload may include columns not in generated types (e.g. reserve_price, base_price, end_date). */
-export type ListingInsertPayload = ListingInsert & {
-  reserve_price?: number;
-  base_price?: number;
-  end_date?: string;
-  preferred_dates?: string[] | null;
-  initial_photos?: string[] | null;
-  property_address?: string | null;
-  property_condition?: string | null;
-  property_levels?: string | null;
-};
+/** Payload for `createListingForPublish` / `buildListingInsertRow` — matches generated `listings.Insert` (no stray columns). */
+export type ListingInsertPayload = ListingInsert;
 
 /**
  * `duration_days === 0` means a 2-minute test auction (only when global_settings.allow_two_minute_auction_test is on).
@@ -177,13 +168,18 @@ export function buildListingInsertRow(params: {
   property_condition: string | null;
   property_levels: string | null;
 }): ListingInsertPayload {
+  const addr = params.property_address?.trim();
+  const descParts = [addr ? `Property address: ${addr}` : null, params.description?.trim() || null].filter(
+    Boolean
+  ) as string[];
+  const description = descParts.length > 0 ? descParts.join("\n\n") : null;
+
   return {
     lister_id: params.lister_id,
     title: params.title,
-    description: params.description,
+    description,
     suburb: params.suburb,
     postcode: params.postcode,
-    property_address: params.property_address ?? null,
     property_type: params.property_type,
     bedrooms: params.bedrooms,
     bathrooms: params.bathrooms,
@@ -192,19 +188,15 @@ export function buildListingInsertRow(params: {
     move_out_date: params.move_out_date,
     photo_urls: params.photo_urls,
     reserve_cents: params.reserve_cents,
-    reserve_price: params.reserve_price,
     buy_now_cents: params.buy_now_cents,
-    base_price: params.base_price,
     starting_price_cents: params.starting_price_cents,
     current_lowest_bid_cents: params.current_lowest_bid_cents,
     duration_days: params.duration_days,
     status: params.status,
     end_time: params.end_time,
-    end_date: params.end_date,
     platform_fee_percentage: params.platform_fee_percentage,
     preferred_dates: params.preferred_dates ?? null,
     property_condition: params.property_condition,
     property_levels: params.property_levels,
-    // initial_photos are set in a second step via updateListingInitialPhotos (not sent on insert so DB without column still works)
   };
 }

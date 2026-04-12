@@ -91,6 +91,7 @@ import {
 } from "@/lib/photo-validation";
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
 import {
+  createListingForPublish,
   updateListingInitialPhotos,
   updateListingCoverPhoto,
   triggerNewListingJobAlerts,
@@ -642,18 +643,11 @@ export function NewListingForm({
 
       const insertResult = await retryWithBackoffResult<InsertResult>(
         async () => {
-          const r = await supabase
-            .from("listings")
-            .insert(row as never)
-            .select("id")
-            .maybeSingle();
-          if (r.error) {
-            return { ok: false as const, error: r.error.message };
+          const r = await createListingForPublish(row);
+          if (!r.ok) {
+            return { ok: false as const, error: r.error };
           }
-          if (!r.data) {
-            return { ok: false as const, error: "Failed to create listing." };
-          }
-          return { ok: true as const, data: r.data as { id: string } };
+          return { ok: true as const, data: { id: r.id } };
         },
         { scope: "newListing.insert", maxAttempts: 3 }
       );

@@ -86,4 +86,8 @@ ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS cover_photo_url text;
 | end_date               | date        | NOT NULL (date part of end_time) |
 | created_at             | timestamptz | Default now()            |
 
-The **new listing form** inserts via `lib/listings.ts` → `buildListingInsertRow()`, which uses exactly these names.
+The **new listing form** builds rows with `lib/listings.ts` → `buildListingInsertRow()` (columns aligned with generated `types/supabase.ts` → `listings.Insert`) and persists them via the server action **`createListingForPublish`** in `lib/actions/listings.ts` (not the browser client), so publishing works with RLS and avoids stray/unknown columns.
+
+### Row Level Security (listers must insert/update)
+
+If `ALTER TABLE public.listings ENABLE ROW LEVEL SECURITY` is on and only marketplace **SELECT** policies exist, **INSERT** from the app will fail until listers can write their own rows. Run **`supabase/sql/20260413120000_listings_rls_lister_insert_update.sql`** in the Supabase SQL editor, or ensure **`SUPABASE_SERVICE_ROLE_KEY`** is set on the server (the publish action uses it when available).
