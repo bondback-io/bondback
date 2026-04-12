@@ -56,6 +56,9 @@ function parseTabParam(raw: string | undefined): ListerViewTab {
   if (t === "active" || t === "active_listings" || t === "pending_payments") {
     return "active";
   }
+  if (t === "no_bids" || t === "no-bids" || t === "nobids") {
+    return "no_bids";
+  }
   return "active";
 }
 
@@ -136,6 +139,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
   let completedCount = 0;
   let disputedCount = 0;
   let paidJobsCount = 0;
+  let noBidsCount = 0;
 
   if (listingIds.length > 0) {
     const { data: jobsData } = await supabase
@@ -238,6 +242,12 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
     paidJobsCount = initialListings.filter((l) =>
       isListerPaidJobListing(jobByListing[String(l.id)])
     ).length;
+
+    noBidsCount = initialListings.filter(
+      (l) =>
+        String(l.status ?? "").toLowerCase() === "expired" &&
+        !listingIdsWithActiveJob.has(String(l.id))
+    ).length;
   }
 
   return (
@@ -293,6 +303,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
             disputed: disputedCount,
             completed: completedCount,
             all: initialListings.length,
+            no_bids: noBidsCount,
           }}
         />
       </div>

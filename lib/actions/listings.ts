@@ -447,10 +447,19 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
 }
 
 /**
- * Sets `expired` (no bids) or `ended` (had bids) when `end_time` has passed.
- * Call from server before loading marketplace / my-listings so status matches reality.
+ * Closes auctions whose `end_time` has passed: assigns lowest active bid (creates job) or sets
+ * `expired` / `ended`. Uses service role when available; otherwise falls back to DB RPC (no winner).
  */
 export async function applyListingAuctionOutcomes(): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    const { resolveExpiredLiveAuctions } = await import("@/lib/actions/auction-resolution");
+    const r = await resolveExpiredLiveAuctions();
+    if (r.errors.length) {
+      console.warn("[applyListingAuctionOutcomes]", r.errors);
+    }
+    return;
+  }
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase.rpc("apply_listing_auction_outcomes");
   if (error) {
@@ -462,11 +471,20 @@ export type RelistExpiredListingResult =
   | { ok: true }
   | { ok: false; error: string };
 
+/** Optional overrides when relisting an expired (no-bid) auction. */
+export type RelistExpiredListingOptions = {
+  moveOutDate?: string | null;
+  startingPriceCents?: number;
+  durationDays?: number;
+};
+
 /**
- * Relist an expired auction: same duration and pricing fields, fresh timer, bids cleared.
+ * Relist an expired auction: same details by default, fresh timer, bids cleared.
+ * Optionally override move-out date, starting price, and listing duration.
  */
 export async function relistExpiredListing(
-  listingId: string
+  listingId: string,
+  options?: RelistExpiredListingOptions
 ): Promise<RelistExpiredListingResult> {
   const supabase = await createServerSupabaseClient();
   const {
@@ -494,9 +512,16 @@ export async function relistExpiredListing(
     return { ok: false, error: "Only expired listings can be relisted." };
   }
 
-  const durationDays = Number(row.duration_days);
+  const durationDays = Number(
+    options?.durationDays != null && Number.isFinite(Number(options.durationDays))
+      ? options.durationDays
+      : row.duration_days
+  );
   const endTime = new Date(Date.now() + relistDurationMsFromDurationDays(durationDays)).toISOString();
-  const starting = (row.starting_price_cents as number) ?? 0;
+  const starting =
+    options?.startingPriceCents != null && Number.isFinite(Number(options.startingPriceCents))
+      ? Math.max(0, Math.round(Number(options.startingPriceCents)))
+      : ((row.starting_price_cents as number) ?? 0);
 
   const admin = createSupabaseAdminClient();
   if (admin) {
@@ -522,7 +547,13 @@ export async function relistExpiredListing(
     end_time: endTime,
     current_lowest_bid_cents: starting,
     cancelled_early_at: null,
+    starting_price_cents: starting,
+    duration_days: Number.isFinite(durationDays) && durationDays >= 0 ? durationDays : row.duration_days,
   };
+
+  if (options?.moveOutDate !== undefined) {
+    patch.move_out_date = options.moveOutDate;
+  }
 
   const { data: updatedRow, error: updErr } = await supabase
     .from("listings")
@@ -547,6 +578,7 @@ export async function relistExpiredListing(
   revalidatePath("/my-listings");
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${listingId}`);
+  revalidatePath(`/listings/${listingId}`);
   revalidatePath("/lister/dashboard");
   revalidatePath("/cleaner/dashboard");
 

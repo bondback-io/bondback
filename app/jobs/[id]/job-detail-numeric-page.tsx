@@ -10,6 +10,7 @@ import {
 import { buildJobRouteDebugSnapshot } from "@/lib/jobs/job-route-debug";
 import { JobDetailPageContent } from "@/app/jobs/job-detail-page-content";
 import { JobRouteDebugPanel } from "@/app/jobs/[id]/job-route-debug-panel";
+import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 
 function firstSearchParam(v: string | string[] | undefined): string | undefined {
   if (v == null) return undefined;
@@ -69,6 +70,8 @@ export default async function JobDetailPage({
   if (!Number.isFinite(numericId)) {
     notFound();
   }
+
+  await applyListingAuctionOutcomes();
 
   const supabase = await createClient();
   const {

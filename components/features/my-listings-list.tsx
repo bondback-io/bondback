@@ -24,6 +24,7 @@ import {
   cancelListing,
   relistExpiredListing,
   updateListingDetails,
+  type RelistExpiredListingOptions,
 } from "@/lib/actions/listings";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -90,7 +91,8 @@ export type ListerViewTab =
   | "disputed"
   | "completed"
   | "drafts"
-  | "all";
+  | "all"
+  | "no_bids";
 
 type JobRowState = {
   jobId: number | string;
@@ -136,6 +138,7 @@ export type MyListingsListProps = {
     disputed: number;
     completed: number;
     all: number;
+    no_bids: number;
   };
 };
 
@@ -178,6 +181,10 @@ export function MyListingsList({
   const [cancelListingTarget, setCancelListingTarget] = useState<ListingRow | null>(null);
   const [cancellingListing, setCancellingListing] = useState(false);
   const [relistingId, setRelistingId] = useState<string | null>(null);
+  const [relistDialogListing, setRelistDialogListing] = useState<ListingRow | null>(null);
+  const [relistMoveOut, setRelistMoveOut] = useState("");
+  const [relistStartingAud, setRelistStartingAud] = useState("");
+  const [relistDurationDays, setRelistDurationDays] = useState(7);
   const openedForEditIdRef = useRef<string | null>(null);
   const cancelParamHandledRef = useRef(false);
 
@@ -541,10 +548,30 @@ export function MyListingsList({
     closeEditor();
   };
 
-  const handleRelist = async (listingId: string) => {
-    setRelistingId(listingId);
-    const result = await relistExpiredListing(listingId);
+  const openRelistDialog = (listing: ListingRow) => {
+    setRelistDialogListing(listing);
+    setRelistMoveOut(listing.move_out_date?.trim() ?? "");
+    setRelistStartingAud(((listing.starting_price_cents ?? 0) / 100).toFixed(2));
+    setRelistDurationDays(
+      Number.isFinite(Number(listing.duration_days)) ? Number(listing.duration_days) : 7
+    );
+  };
+
+  const submitRelistDialog = async () => {
+    if (!relistDialogListing) return;
+    const id = String(relistDialogListing.id);
+    setRelistingId(id);
+    const aud = parseFloat(relistStartingAud.replace(/[^0-9.]/g, ""));
+    const opts: RelistExpiredListingOptions = {
+      durationDays: relistDurationDays,
+      moveOutDate: relistMoveOut.trim() || null,
+    };
+    if (Number.isFinite(aud) && aud >= 0) {
+      opts.startingPriceCents = Math.round(aud * 100);
+    }
+    const result = await relistExpiredListing(id, opts);
     setRelistingId(null);
+    setRelistDialogListing(null);
     if (!result.ok) {
       toast({
         variant: "destructive",
@@ -555,7 +582,7 @@ export function MyListingsList({
     }
     toast({
       title: "Listing relisted",
-      description: "Your auction is live again with the same settings and duration.",
+      description: "Your auction is live again. Cleaners can start bidding.",
     });
     router.refresh();
   };
@@ -675,6 +702,17 @@ export function MyListingsList({
     return arr;
   }, [listingsDeduped, activeJobs]);
 
+  const noBidsTabListings = useMemo(() => {
+    const arr = listingsDeduped.filter(
+      (l) => String(l.status ?? "").toLowerCase() === "expired"
+    );
+    arr.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return arr;
+  }, [listingsDeduped]);
+
   const searchLower = search.trim().toLowerCase();
   const matchesSearch = (l: ListingRow) => {
     if (!searchLower) return true;
@@ -721,6 +759,8 @@ export function MyListingsList({
           const j = activeJobs[String(l.id)];
           return matchesSearch(l) && passesListFilter(listFilter, l, j, nowMs);
         });
+      case "no_bids":
+        return noBidsTabListings.filter((l) => matchesSearch(l));
       default:
         return [];
     }
@@ -802,6 +842,15 @@ export function MyListingsList({
             <>
               Active <span className="ml-1 tabular-nums opacity-60">({tabCounts.active})</span>
             </>
+          )}
+          {tabPill(
+            `/my-listings?tab=no_bids`,
+            viewTab === "no_bids",
+            <>
+              Listings (no bids){" "}
+              <span className="ml-1 tabular-nums opacity-60">({tabCounts.no_bids})</span>
+            </>,
+            "amber"
           )}
           {tabPill(
             `/my-listings?tab=paid`,
@@ -908,6 +957,21 @@ export function MyListingsList({
                 <p className="mt-2 max-w-sm text-sm text-muted-foreground dark:text-gray-400">
                   When an auction closes and you move into escrow with a cleaner, those jobs appear
                   here — and at the top of Active and All.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {viewTab === "no_bids" && displayRows.length === 0 && (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-amber-200/80 bg-amber-50/40 px-6 py-16 text-center dark:border-amber-900/50 dark:bg-amber-950/20">
+              <ClipboardList className="h-12 w-12 text-amber-700 dark:text-amber-400" aria-hidden />
+              <div>
+                <p className="text-lg font-semibold text-foreground dark:text-gray-100">
+                  No listings without bids
+                </p>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                  When an auction ends with no bids, it appears here. Relist with the same details or
+                  adjust move-out date, price, and duration before going live again.
                 </p>
               </div>
             </div>
@@ -1057,17 +1121,90 @@ export function MyListingsList({
                       : null
                   )}
                   onEndEarly={showEndEarly ? () => openCancelListingConfirm(listing) : undefined}
-                  onRelist={
-                    isExpired
-                      ? () => void handleRelist(String(listing.id))
-                      : undefined
-                  }
+                  onRelist={isExpired ? () => openRelistDialog(listing) : undefined}
                   relistLoading={relistingId === String(listing.id)}
                 />
               );
             })}
         </div>
       </div>
+
+      <Dialog
+        open={relistDialogListing != null}
+        onOpenChange={(open) => {
+          if (!open) setRelistDialogListing(null);
+        }}
+      >
+        <DialogContent className="max-w-md dark:border-gray-800 dark:bg-gray-950">
+          <DialogHeader>
+            <DialogTitle>Relist auction</DialogTitle>
+            <DialogDescription>
+              Photos and property details stay the same. Choose how long the new auction runs and
+              optionally update move-out date and starting bid.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="relist-move-out">Move-out date</Label>
+              <Input
+                id="relist-move-out"
+                value={relistMoveOut}
+                onChange={(e) => setRelistMoveOut(e.target.value)}
+                placeholder="Optional"
+                className="h-11"
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="relist-start">Starting bid (AUD)</Label>
+              <Input
+                id="relist-start"
+                inputMode="decimal"
+                value={relistStartingAud}
+                onChange={(e) => setRelistStartingAud(e.target.value)}
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Listing duration</Label>
+              <Select
+                value={String(relistDurationDays)}
+                onValueChange={(v) => setRelistDurationDays(Number(v))}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7 days</SelectItem>
+                  <SelectItem value="14">14 days</SelectItem>
+                  <SelectItem value="21">21 days</SelectItem>
+                  <SelectItem value="28">28 days</SelectItem>
+                  <SelectItem value="60">60 days</SelectItem>
+                  <SelectItem value="90">90 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRelistDialogListing(null)}
+              disabled={relistingId !== null}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="font-semibold"
+              disabled={relistingId !== null}
+              onClick={() => void submitRelistDialog()}
+            >
+              {relistingId ? "Relisting…" : "Relist"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {editing && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">

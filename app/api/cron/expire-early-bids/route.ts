@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { expireStaleEarlyBidAcceptances } from "@/lib/actions/early-bid-acceptance";
+import { resolveExpiredLiveAuctions } from "@/lib/actions/auction-resolution";
 
 /**
  * Expire pending early-acceptance offers after 24h without cleaner response.
@@ -21,8 +22,9 @@ export async function GET(request: Request) {
     }
   }
 
-  const result = await expireStaleEarlyBidAcceptances();
-  return NextResponse.json(result);
+  const auctions = await resolveExpiredLiveAuctions();
+  const early = await expireStaleEarlyBidAcceptances();
+  return NextResponse.json({ auctions, early });
 }
 
 export async function POST(request: Request) {

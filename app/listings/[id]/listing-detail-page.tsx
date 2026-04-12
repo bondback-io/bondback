@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { fulfillStripeCheckoutReturn } from "@/lib/actions/jobs";
+import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 import { buildJobListingMetadata } from "@/lib/seo/jobs-listings-seo";
 import { BID_FULL_SELECT } from "@/lib/supabase/queries";
 import {
@@ -122,6 +123,9 @@ export default async function ListingDetailPage({
   const isListerActive = roles.includes("lister") && activeRole === "lister";
 
   const listingId = raw;
+
+  await applyListingAuctionOutcomes();
+
   const job = await loadJobForListingDetailPage(
     supabase,
     listingId,

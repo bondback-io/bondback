@@ -1,0 +1,201 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { finalizeBidAcceptanceCore } from "@/lib/actions/jobs";
+import { createNotification } from "@/lib/actions/notifications";
+import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { trimStr } from "@/lib/utils";
+
+export type ResolveAuctionsResult = {
+  processed: number;
+  jobsCreated: number;
+  expiredNoBids: number;
+  endedWithoutJob: number;
+  errors: string[];
+};
+
+type ResolveFilter = { listingId?: string };
+
+/**
+ * Closes live listings whose `end_time` has passed: assigns the lowest **active** bid to a new job
+ * (same path as lister “Accept bid”), or sets `expired` when there were no bids, or `ended` when
+ * bids exist but none are active (edge case) or assignment fails.
+ */
+export async function resolveExpiredLiveAuctions(
+  filter?: ResolveFilter
+): Promise<ResolveAuctionsResult> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      processed: 0,
+      jobsCreated: 0,
+      expiredNoBids: 0,
+      endedWithoutJob: 0,
+      errors: ["SUPABASE_SERVICE_ROLE_KEY not configured"],
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  let q = admin
+    .from("listings")
+    .select("id, lister_id, title")
+    .eq("status", "live")
+    .is("cancelled_early_at", null)
+    .lt("end_time", nowIso);
+
+  const lid = trimStr(filter?.listingId);
+  if (lid) {
+    q = q.eq("id", lid);
+  }
+
+  const { data: candidates, error: listErr } = await q;
+
+  if (listErr) {
+    return {
+      processed: 0,
+      jobsCreated: 0,
+      expiredNoBids: 0,
+      endedWithoutJob: 0,
+      errors: [listErr.message],
+    };
+  }
+
+  const rows = (candidates ?? []) as { id: string; lister_id: string; title: string | null }[];
+  let processed = 0;
+  let jobsCreated = 0;
+  let expiredNoBids = 0;
+  let endedWithoutJob = 0;
+  const errors: string[] = [];
+
+  for (const row of rows) {
+    const listingId = row.id;
+
+    const { data: blockingJobs } = await admin
+      .from("jobs")
+      .select("id")
+      .eq("listing_id", listingId)
+      .neq("status", "cancelled")
+      .limit(1);
+
+    if (blockingJobs && blockingJobs.length > 0) {
+      continue;
+    }
+
+    const { data: bidRows } = await admin
+      .from("bids")
+      .select("id, amount_cents, cleaner_id, status")
+      .eq("listing_id", listingId);
+
+    const bids = (bidRows ?? []) as {
+      id: string;
+      amount_cents: number;
+      cleaner_id: string;
+      status: string;
+    }[];
+
+    if (bids.length === 0) {
+      const { error: upErr } = await admin
+        .from("listings")
+        .update({ status: "expired" } as never)
+        .eq("id", listingId)
+        .eq("status", "live");
+      if (upErr) {
+        errors.push(`${listingId}: ${upErr.message}`);
+        continue;
+      }
+      processed++;
+      expiredNoBids++;
+      revalidateListingPaths(listingId);
+      continue;
+    }
+
+    const activeBids = bids
+      .filter((b) => b.status === "active")
+      .sort((a, b) => {
+        if (a.amount_cents !== b.amount_cents) return a.amount_cents - b.amount_cents;
+        return String(a.id).localeCompare(String(b.id));
+      });
+
+    if (activeBids.length === 0) {
+      const { error: upErr } = await admin
+        .from("listings")
+        .update({ status: "ended" } as never)
+        .eq("id", listingId)
+        .eq("status", "live");
+      if (upErr) {
+        errors.push(`${listingId}: ${upErr.message}`);
+        continue;
+      }
+      processed++;
+      endedWithoutJob++;
+      revalidateListingPaths(listingId);
+      continue;
+    }
+
+    const winningBid = activeBids[0]!;
+    const result = await finalizeBidAcceptanceCore({
+      listingId,
+      listerId: row.lister_id,
+      cleanerId: winningBid.cleaner_id,
+      acceptedAmountCents: winningBid.amount_cents,
+      listingTitle: row.title ?? null,
+      acceptedBidId: winningBid.id,
+    });
+
+    if (!result.ok) {
+      const { error: upErr } = await admin
+        .from("listings")
+        .update({ status: "ended" } as never)
+        .eq("id", listingId)
+        .eq("status", "live");
+      if (upErr) {
+        errors.push(`${listingId}: finalize failed (${result.error}); ${upErr.message}`);
+      } else {
+        endedWithoutJob++;
+        await createNotification(
+          row.lister_id,
+          "job_status_update",
+          null,
+          `The auction ended, but the winning bid could not be assigned automatically: ${result.error}. Please contact support or assign a cleaner manually if available.`,
+          { listingUuid: listingId }
+        );
+      }
+      processed++;
+      revalidateListingPaths(listingId);
+      continue;
+    }
+
+    processed++;
+    jobsCreated++;
+    revalidateListingPaths(listingId);
+  }
+
+  if (processed > 0) {
+    revalidateJobsBrowseCaches();
+  }
+
+  return {
+    processed,
+    jobsCreated,
+    expiredNoBids,
+    endedWithoutJob,
+    errors,
+  };
+}
+
+function revalidateListingPaths(listingId: string) {
+  revalidatePath("/jobs");
+  revalidatePath("/my-listings");
+  revalidatePath(`/listings/${listingId}`);
+  revalidatePath(`/jobs/${listingId}`);
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+}
+
+/** Single listing (e.g. when countdown hits zero on the listing page). */
+export async function resolveAuctionEndForListing(
+  listingId: string
+): Promise<ResolveAuctionsResult> {
+  return resolveExpiredLiveAuctions({ listingId: trimStr(listingId) });
+}

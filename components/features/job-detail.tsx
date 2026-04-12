@@ -95,6 +95,7 @@ import {
   extendListerReview24h,
 } from "@/lib/actions/jobs";
 import { requestEarlyBidAcceptance } from "@/lib/actions/early-bid-acceptance";
+import { resolveAuctionEndForListing } from "@/lib/actions/auction-resolution";
 import { cancelLastBid } from "@/lib/actions/bids";
 import {
   Select,
@@ -369,6 +370,12 @@ export function JobDetail({
   const [isRejectingRefund, startRejectingRefund] = useTransition();
   const [isAcceptingCounter, startAcceptCounter] = useTransition();
   const [showCounterDialog, setShowCounterDialog] = useState(false);
+  const handleAuctionTimerExpired = useCallback(() => {
+    void resolveAuctionEndForListing(listingId).then(() => {
+      router.refresh();
+    });
+  }, [listingId, router]);
+
   const handleAcceptBid = useCallback(
     async (bid: BidWithBidder) => {
       const result = await requestEarlyBidAcceptance(listingId, bid.id);
@@ -1265,6 +1272,7 @@ export function JobDetail({
                         expiredLabel="Auction ended"
                         className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 md:text-2xl"
                         urgentBelowHours={24}
+                        onExpired={handleAuctionTimerExpired}
                       />
                     </div>
                   </div>
@@ -1940,6 +1948,7 @@ export function JobDetail({
                       detailUiBoost ? "text-base font-semibold sm:text-lg" : "text-sm"
                     )}
                     expiredLabel="Auction ended"
+                    onExpired={handleAuctionTimerExpired}
                   />
                 )}
               </div>

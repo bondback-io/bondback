@@ -112,7 +112,7 @@ export function BidHistoryTable({
     if (bid.status === "accepted") {
       return (
         <Badge className="border-0 bg-emerald-600 font-normal text-white hover:bg-emerald-600 dark:bg-emerald-700 dark:hover:bg-emerald-700">
-          Accepted early bid
+          Bidder won
         </Badge>
       );
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 
 const DEFAULT_URGENT_CLASS =
@@ -25,6 +25,8 @@ export type CountdownTimerProps = {
   warningClassName?: string;
   /** Hours remaining at or above warning threshold (when warning tier is used) or ≥ urgent threshold otherwise → green. */
   safeClassName?: string;
+  /** Called once when the countdown first reaches zero (e.g. to resolve the auction server-side). */
+  onExpired?: () => void;
 };
 
 /**
@@ -41,12 +43,18 @@ export function CountdownTimer({
   warningBelowHours,
   warningClassName,
   safeClassName,
+  onExpired,
 }: CountdownTimerProps) {
+  const expiredOnceRef = useRef(false);
   const [text, setText] = useState<string>("");
   const [isExpired, setIsExpired] = useState(false);
   const [isUrgent, setIsUrgent] = useState(false);
   const [isWarning, setIsWarning] = useState(false);
   const [isSafe, setIsSafe] = useState(false);
+
+  useEffect(() => {
+    expiredOnceRef.current = false;
+  }, [endTime]);
 
   useEffect(() => {
     const end = parseUtcTimestamp(endTime);
@@ -64,6 +72,10 @@ export function CountdownTimer({
         setIsUrgent(false);
         setIsWarning(false);
         setIsSafe(false);
+        if (onExpired && !expiredOnceRef.current) {
+          expiredOnceRef.current = true;
+          onExpired();
+        }
         return;
       }
       setIsExpired(false);
@@ -102,6 +114,7 @@ export function CountdownTimer({
     urgentBelowHours,
     warningBelowHours,
     warningClassName,
+    onExpired,
   ]);
 
   const urgentStyle =

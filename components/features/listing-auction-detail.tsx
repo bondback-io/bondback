@@ -45,6 +45,7 @@ import {
   type BidWithBidder,
 } from "@/components/features/bid-history-table";
 import { requestEarlyBidAcceptance } from "@/lib/actions/early-bid-acceptance";
+import { resolveAuctionEndForListing } from "@/lib/actions/auction-resolution";
 import { cancelLastBid } from "@/lib/actions/bids";
 import { useToast } from "@/components/ui/use-toast";
 import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
@@ -124,6 +125,8 @@ export function ListingAuctionDetail({
 
   const isLive =
     listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
+  const isExpiredNoBids =
+    String(listing.status ?? "").toLowerCase() === "expired" && !hasActiveJob;
   const closedAuctionBidStatus = !isLive
     ? listing.cancelled_early_at
       ? ("lister_cancelled" as const)
@@ -170,6 +173,12 @@ export function ListingAuctionDetail({
             b.cleaner_id === currentUserId && b.status === "active"
         )
     );
+
+  const handleAuctionTimerExpired = useCallback(() => {
+    void resolveAuctionEndForListing(listing.id).then(() => {
+      router.refresh();
+    });
+  }, [listing.id, router]);
 
   const handleRevertLastBid = useCallback(async () => {
     try {
@@ -408,6 +417,7 @@ export function ListingAuctionDetail({
                     expiredLabel="Auction ended"
                     className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 md:text-2xl"
                     urgentBelowHours={24}
+                    onExpired={handleAuctionTimerExpired}
                   />
                 </div>
               </div>
@@ -419,6 +429,19 @@ export function ListingAuctionDetail({
           </div>
         )}
       </div>
+
+      {isExpiredNoBids && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <p className="font-semibold">Auction ended with no bids</p>
+          <p className="mt-1 text-amber-950/90 dark:text-amber-100/90">
+            This listing did not receive any bids before the timer ran out. You can relist it from{" "}
+            <Link href="/my-listings?tab=no_bids" className="font-medium underline underline-offset-2">
+              My listings → Listings (no bids)
+            </Link>
+            .
+          </p>
+        </div>
+      )}
 
       {/* Pricing — full-width strip on desktop; stacked on small screens */}
       <Card
