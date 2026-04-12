@@ -25,6 +25,8 @@ export type OptimizedImageProps = {
   className?: string;
   /** Aspect ratio container (e.g. aspect-[16/10]) when fill */
   containerClassName?: string;
+  /** e.g. try next URL when storage object missing */
+  onError?: React.ReactEventHandler<HTMLImageElement>;
 };
 
 /**
@@ -43,6 +45,7 @@ export function OptimizedImage({
   blur = true,
   className,
   containerClassName,
+  onError,
 }: OptimizedImageProps) {
   if (!src?.trim()) {
     return null;
@@ -67,6 +70,7 @@ export function OptimizedImage({
         blurDataURL={blur ? REMOTE_IMAGE_BLUR_DATA_URL : undefined}
         className={cn("object-cover", className)}
         unoptimized={false}
+        onError={onError}
       />
     );
     if (containerClassName) {
@@ -90,6 +94,7 @@ export function OptimizedImage({
       className={cn("h-full w-full object-cover", className)}
       width={width}
       height={height}
+      onError={onError}
     />
   );
 }

@@ -415,7 +415,7 @@ function JobCardMarketplaceMobileInner({
                 </Avatar>
               </div>
             )}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent dark:from-black/60" aria-hidden />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent dark:from-black/80 dark:via-black/30 md:from-black/55 md:via-black/12" aria-hidden />
           </Link>
           {secondaryThumb ? (
             <Link
@@ -434,7 +434,7 @@ function JobCardMarketplaceMobileInner({
                 placeholder="blur"
                 blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
               />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" aria-hidden />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent md:from-black/45" aria-hidden />
             </Link>
           ) : null}
         </div>

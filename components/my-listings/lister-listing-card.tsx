@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { MapPin, MoreHorizontal, Gavel, Ban, Trash2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatCents, getListingCoverUrl } from "@/lib/listings";
+import { formatCents } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
-import { OptimizedImage } from "@/components/ui/optimized-image";
+import { ListingCoverImage } from "@/components/listing/listing-cover-image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -66,8 +66,6 @@ export function ListerListingCard({
   onDiscardDraft,
   isLocalDraft = false,
 }: ListerListingCardProps) {
-  const cover = getListingCoverUrl(listing) ?? "/placeholder-listing.png";
-
   return (
     <article
       className={cn(
@@ -83,8 +81,8 @@ export function ListerListingCard({
           className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted sm:h-28 sm:w-28"
           aria-label={`Open ${listing.title}`}
         >
-          <OptimizedImage
-            src={cover}
+          <ListingCoverImage
+            listing={listing}
             alt=""
             fill
             sizes={NEXT_IMAGE_SIZES_LISTER_LISTING_THUMB}

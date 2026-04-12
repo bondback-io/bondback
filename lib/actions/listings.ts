@@ -311,6 +311,28 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
     return { ok: false, error: "You must be logged in." };
   }
 
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("roles, active_role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const profile = profileRow as {
+    roles: string[] | null;
+    active_role: string | null;
+  } | null;
+  const roles = (profile?.roles ?? []) as string[];
+  const activeRole =
+    (profile?.active_role as string | null) ?? (roles[0] ?? null);
+
+  if (!roles.includes("lister") || activeRole !== "lister") {
+    return {
+      ok: false,
+      error:
+        "Switch to lister mode in the header or Settings to cancel a listing.",
+    };
+  }
+
   const { data: listing, error: fetchError } = await supabase
     .from("listings")
     .select("id, lister_id, status")

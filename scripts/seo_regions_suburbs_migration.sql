@@ -4,6 +4,10 @@
 -- Run in Supabase SQL Editor (or supabase db push). Safe to re-run: idempotent
 -- seeds use ON CONFLICT.
 --
+-- Additional Queensland regions (Gold Coast, Ipswich, Logan, …): run
+-- scripts/seo_regions_suburbs_qld_expand.sql after this file (same as
+-- supabase/migrations/20260329200000_expand_qld_seo_regions_suburbs.sql).
+--
 -- "Super admin" here = public.profiles.is_admin truthy (same as other admin SEO
 -- tables; supports boolean or text column types).
 -- =============================================================================

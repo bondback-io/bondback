@@ -1888,7 +1888,7 @@ export function NewListingForm({
                   Are you sure you want to list? No payment required yet.
                 </DialogDescription>
               </DialogHeader>
-              <DialogFooter className="gap-2 sm:gap-0">
+              <DialogFooter className="gap-2 sm:gap-3">
                 <Button
                   type="button"
                   variant="outline"

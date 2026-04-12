@@ -125,7 +125,7 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
                 <Briefcase className="h-10 w-10" />
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-transparent" aria-hidden />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent md:from-black/55 md:via-black/12" aria-hidden />
           </Link>
           <div className="absolute left-3 top-3 z-10 min-w-0" onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>

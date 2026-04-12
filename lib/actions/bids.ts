@@ -13,6 +13,7 @@ import { MAX_BID_DROP_PER_BID_CENTS } from "@/lib/bidding-rules";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type BidRow = Database["public"]["Tables"]["bids"]["Row"];
+type BidInsert = Database["public"]["Tables"]["bids"]["Insert"];
 
 /**
  * Listing detail is `/listings/[uuid]`; assigned work is `/jobs/[numericId]`. Revalidate both.
@@ -241,24 +242,26 @@ export async function placeBid(
     };
   }
 
-  const bidAmount = amountCents / 100;
-
-  if (!Number.isFinite(bidAmount) || bidAmount <= 0) {
-    return { ok: false, error: "Bid amount must be greater than $0" };
+  if (!Number.isInteger(amountCents) || amountCents < 1) {
+    return { ok: false, error: "Bid amount must be greater than $0." };
   }
 
+  /**
+   * `amount_cents` is canonical. Legacy NOT NULL `amount` (whole AUD dollars) must be set on insert
+   * so PostgREST sends the column (also listed in `Database` types).
+   */
+  const legacyAmountWholeDollars = Math.max(1, Math.floor(amountCents / 100));
+  const insertRow: BidInsert = {
+    listing_id: listingId,
+    cleaner_id: session.user.id,
+    bidder_id: session.user.id,
+    amount_cents: amountCents,
+    amount: legacyAmountWholeDollars,
+    status: "active",
+  };
   const { data: inserted, error: insertError } = await supabase
     .from("bids")
-    .insert(
-      {
-        listing_id: listingId,
-        bidder_id: session.user.id,
-        cleaner_id: session.user.id,
-        amount: bidAmount,
-        amount_cents: amountCents,
-        status: "active",
-      } as never
-    )
+    .insert(insertRow)
     .select("id")
     .single();
 
@@ -288,7 +291,7 @@ export async function placeBid(
       (bpRow?.display_name ?? "").trim() || (bpRow?.full_name ?? "").trim();
     if (dn) cleanerName = dn;
 
-    await createNotification(row.lister_id, "new_bid", null, `${cleanerName} placed a bid of $${bidAmount.toFixed(2)} on your listing.`, {
+    await createNotification(row.lister_id, "new_bid", null, `${cleanerName} placed a bid of ${formatAudFromCents(amountCents)} on your listing.`, {
       listingUuid: listingId,
       senderName: cleanerName,
       amountCents: amountCents,

@@ -1169,7 +1169,7 @@ export function MyListingsList({
               history.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-3">
             <Button
               type="button"
               variant="outline"

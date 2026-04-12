@@ -296,7 +296,8 @@ export function AdminSeoAutomationPanel({ regions, suburbs }: Props) {
         <CardHeader>
           <CardTitle className="text-base">SEO management</CardTitle>
           <CardDescription>
-            Run <code className="text-xs">scripts/seo_regions_suburbs_migration.sql</code> and{" "}
+            Run <code className="text-xs">scripts/seo_regions_suburbs_migration.sql</code>,{" "}
+            <code className="text-xs">scripts/seo_regions_suburbs_qld_expand.sql</code> (extra QLD regions), and{" "}
             <code className="text-xs">scripts/seo_content_migration.sql</code> in Supabase, then reload.
           </CardDescription>
         </CardHeader>

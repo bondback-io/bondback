@@ -78,7 +78,7 @@ export function DashboardListingCardWithSwipe(props: DashboardListingCardProps) 
               listing has ended. The listing stays in your history. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-3">
             <Button
               type="button"
               variant="outline"

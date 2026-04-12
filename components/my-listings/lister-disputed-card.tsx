@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { MapPin, MessageCircle, Scale, ArrowRightCircle, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatCents, getListingCoverUrl } from "@/lib/listings";
+import { formatCents } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
-import { OptimizedImage } from "@/components/ui/optimized-image";
+import { ListingCoverImage } from "@/components/listing/listing-cover-image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -41,7 +41,6 @@ export function ListerDisputedCard({
   addressLine,
   amountCents,
 }: Props) {
-  const cover = getListingCoverUrl(listing) ?? "/placeholder-listing.png";
   const jobId = job.jobId;
   const jobPageBase = `/jobs/${jobId}`;
   const disputeHash = `${jobPageBase}#dispute`;
@@ -73,7 +72,7 @@ export function ListerDisputedCard({
           href={jobPageBase}
           className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted sm:h-28 sm:w-28"
         >
-          <OptimizedImage src={cover} alt="" fill sizes="112px" className="object-cover" />
+          <ListingCoverImage listing={listing} alt="" fill sizes="112px" className="object-cover" />
         </Link>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">

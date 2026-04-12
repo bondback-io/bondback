@@ -17,7 +17,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCents } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
-import { MAX_BID_DROP_PER_BID_CENTS } from "@/lib/bidding-rules";
+import {
+  MAX_BID_DROP_PER_BID_CENTS,
+  parseBidDollarsStringToCents,
+} from "@/lib/bidding-rules";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { ConnectRequiredModal } from "@/components/features/connect-required-modal";
 import {
@@ -124,11 +127,12 @@ export function PlaceBidForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const amount = Math.round(parseFloat(amountDollars) * 100);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError("Enter a valid amount in dollars.");
+    const parsed = parseBidDollarsStringToCents(amountDollars);
+    if (!parsed.ok) {
+      setError(parsed.message);
       return;
     }
+    const amount = parsed.cents;
     if (amount >= currentLowest) {
       setError(`Bid must be lower than ${formatCents(currentLowest)}.`);
       return;
@@ -286,7 +290,8 @@ export function PlaceBidForm({
                 isCleaner ? "text-sm" : "text-[11px]"
               )}
             >
-              Enter dollars and cents. We&apos;ll validate against the live lowest bid when you submit.
+              Enter dollars with up to two decimal places (e.g. 250.50). We&apos;ll validate against the
+              live lowest bid when you submit.
             </p>
 
             <Button

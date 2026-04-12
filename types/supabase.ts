@@ -274,6 +274,9 @@ export interface Database {
           id: string;
           listing_id: string;
           cleaner_id: string;
+          bidder_id: string;
+          /** Legacy NOT NULL column in some DBs — whole AUD dollars; keep aligned with amount_cents. */
+          amount: number;
           amount_cents: number;
           created_at: string;
           status:
@@ -289,6 +292,8 @@ export interface Database {
           id?: string;
           listing_id: string;
           cleaner_id: string;
+          bidder_id: string;
+          amount: number;
           amount_cents: number;
           created_at?: string;
           status?:
@@ -303,6 +308,8 @@ export interface Database {
         Update: {
           listing_id?: string;
           cleaner_id?: string;
+          bidder_id?: string;
+          amount?: number;
           amount_cents?: number;
           created_at?: string;
           status?:

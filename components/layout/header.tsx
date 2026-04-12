@@ -108,10 +108,11 @@ export const Header = async ({
               </span>
               {stripeTestMode && (
                 <span
-                  className="rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:bg-amber-400/90 dark:text-amber-950"
+                  className="shrink-0 rounded bg-amber-500/90 px-1 py-0.5 text-[8px] font-semibold uppercase leading-none tracking-tight text-amber-950 md:px-1.5 md:py-0.5 md:text-[10px] md:tracking-wide dark:bg-amber-400/90 dark:text-amber-950"
                   title="Stripe test mode is on. No real charges."
                 >
-                  Test mode
+                  <span className="md:hidden">Test</span>
+                  <span className="hidden md:inline">Test mode</span>
                 </span>
               )}
               <UserMenu key={`${session.user.id}-user-menu`} session={session} />

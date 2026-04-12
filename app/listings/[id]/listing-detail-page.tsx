@@ -9,7 +9,9 @@ import {
   loadJobForListingDetailPage,
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
+import { resolvePlatformFeePercent } from "@/lib/platform-fee";
+import { JobPaymentReturnAck } from "@/components/features/job-payment-return-ack";
 import { ListingAuctionDetail } from "@/components/features/listing-auction-detail";
 import type { BidWithBidder } from "@/components/features/bid-history-table";
 
@@ -117,6 +119,7 @@ export default async function ListingDetailPage({
   const activeRole =
     (profile?.active_role as string | null) ?? (roles[0] ?? null);
   const isCleaner = roles.includes("cleaner") && activeRole === "cleaner";
+  const isListerActive = roles.includes("lister") && activeRole === "lister";
 
   const listingId = raw;
   const job = await loadJobForListingDetailPage(
@@ -137,6 +140,24 @@ export default async function ListingDetailPage({
   }
 
   const listingRow = listingLoaded as ListingRow;
+  /** Named `jobRow` (not `j`) so fee/amount lines never hit TDZ if declaration order shifts. */
+  const jobRow = job as JobRow | null;
+
+  const settings = await getCachedGlobalSettingsForPages();
+  const stripeTestModeForPayment =
+    (settings as { stripe_test_mode?: boolean } | null)?.stripe_test_mode === true;
+  const feePercentage = resolvePlatformFeePercent(
+    listingRow.platform_fee_percentage,
+    settings
+  );
+  const jobAgreed = jobRow?.agreed_amount_cents;
+  const listingBuyNow = listingRow.buy_now_cents;
+  const listingReserve = listingRow.reserve_cents;
+  const agreedAmountCents = jobRow
+    ? jobAgreed != null && jobAgreed > 0
+      ? jobAgreed
+      : listingBuyNow ?? listingReserve ?? 0
+    : 0;
 
   const { data: bids } = await supabase
     .from("bids")
@@ -146,44 +167,35 @@ export default async function ListingDetailPage({
 
   const initialBids: BidWithBidder[] = (bids ?? []) as BidWithBidder[];
 
-  const j = job as JobRow | null;
-  const hasActiveJob = !!j && j.status !== "cancelled";
-  const numericJobId = j?.id ?? null;
+  const hasActiveJob = !!jobRow && jobRow.status !== "cancelled";
+  const numericJobId = jobRow?.id ?? null;
 
-  const isListingOwner =
+  /** You own the listing and have lister on your profile (independent of active role). */
+  const ownsListingAsLister =
     !!user &&
     String(listingRow.lister_id) === String(user.id) &&
     roles.includes("lister");
 
   return (
     <section className="space-y-6 py-6">
-      {paymentNotice === "success" && (
-        <Alert variant="success" className="text-sm">
-          <AlertDescription>
-            Payment confirmed. Funds are held in escrow and the job can proceed.
-          </AlertDescription>
-        </Alert>
-      )}
-      {paymentNotice === "error" && (
-        <Alert variant="destructive" className="text-sm">
-          <AlertDescription>
-            We could not confirm your payment from Stripe. If a charge appears on your card,
-            contact support with your checkout session details.
-          </AlertDescription>
-        </Alert>
-      )}
-      {paymentNotice === "canceled" && (
-        <Alert variant="warning" className="text-sm">
-          <AlertDescription>
-            Payment was canceled. You can try again when you are ready.
-          </AlertDescription>
-        </Alert>
-      )}
+      <JobPaymentReturnAck
+        notice={
+          paymentNotice === "success" ||
+          paymentNotice === "error" ||
+          paymentNotice === "canceled"
+            ? paymentNotice
+            : null
+        }
+        agreedAmountCents={agreedAmountCents}
+        feePercentage={feePercentage}
+        isStripeTestMode={stripeTestModeForPayment}
+      />
       <ListingAuctionDetail
         listing={listingRow}
         initialBids={initialBids}
         isCleaner={isCleaner}
-        isListerOwner={isListingOwner}
+        isListerOwner={ownsListingAsLister}
+        isListerSessionActive={isListerActive}
         hasActiveJob={hasActiveJob}
         numericJobId={numericJobId}
         currentUserId={sessionUserId ?? null}

@@ -12,6 +12,7 @@ import { JobDetail } from "@/components/features/job-detail";
 import type { BidWithBidder } from "@/components/features/job-detail";
 import { ScrollToDispute } from "@/components/features/scroll-to-dispute";
 import { RecordJobView } from "@/components/features/record-job-view";
+import { JobPaymentReturnAck } from "@/components/features/job-payment-return-ack";
 import { OfflineJobsPrimer } from "@/components/offline/offline-jobs-primer";
 import { buildJobPostingJsonLd } from "@/lib/seo/jobs-listings-seo";
 import { getSiteUrl } from "@/lib/site";
@@ -334,28 +335,18 @@ export async function JobDetailPageContent({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         <ScrollToDispute />
-        {paymentNotice === "success" && (
-          <Alert variant="success" className="text-sm">
-            <AlertDescription>
-              Payment confirmed. Funds are held in escrow and the job can proceed.
-            </AlertDescription>
-          </Alert>
-        )}
-        {paymentNotice === "error" && (
-          <Alert variant="destructive" className="text-sm">
-            <AlertDescription>
-              We could not confirm your payment from Stripe. If a charge appears on your card,
-              contact support with your checkout session details.
-            </AlertDescription>
-          </Alert>
-        )}
-        {paymentNotice === "canceled" && (
-          <Alert variant="warning" className="text-sm">
-            <AlertDescription>
-              Payment was canceled. You can try again when you are ready.
-            </AlertDescription>
-          </Alert>
-        )}
+        <JobPaymentReturnAck
+          notice={
+            paymentNotice === "success" ||
+            paymentNotice === "error" ||
+            paymentNotice === "canceled"
+              ? paymentNotice
+              : null
+          }
+          agreedAmountCents={agreedAmountCents}
+          feePercentage={feePercentage}
+          isStripeTestMode={stripeTestMode}
+        />
         {user && jobId && <RecordJobView jobId={jobId} />}
         {activeJobBanner ? (
           <Alert className="border-primary/40 bg-primary/5">
@@ -441,12 +432,14 @@ export async function JobDetailPageContent({
             !!user &&
             !!job &&
             sameUserId(user.id, job.lister_id) &&
-            roles.includes("lister")
+            roles.includes("lister") &&
+            isListerActive
           }
           isListingOwner={
             !!user &&
             sameUserId(listingRow.lister_id, user.id) &&
-            roles.includes("lister")
+            roles.includes("lister") &&
+            isListerActive
           }
           isJobCleaner={
             !!user && !!job && user.id === job.winner_id && isCleaner

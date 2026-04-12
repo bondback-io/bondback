@@ -6,12 +6,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CountdownTimer } from "@/components/features/countdown-timer";
-import { OptimizedImage } from "@/components/ui/optimized-image";
-import { formatCents, getListingCoverUrl } from "@/lib/listings";
+import { ListingCoverImage } from "@/components/listing/listing-cover-image";
+import { formatCents } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import {
   MapPin,
-  List,
   Gavel,
   XCircle,
   Bed,
@@ -53,7 +52,6 @@ function DashboardListingCardInner({
     },
     null
   );
-  const coverUrl = getListingCoverUrl(listing);
   const currentBid = (listing.current_lowest_bid_cents as number | null) ?? 0;
   const buyNow = listing.buy_now_cents;
   const currentPlatformFeeCents = Math.round((currentBid * feePercentage) / 100);
@@ -72,14 +70,8 @@ function DashboardListingCardInner({
       <div className="md:hidden">
         <div className="relative h-[200px] w-full min-h-[180px] max-h-[220px] overflow-hidden bg-muted dark:bg-gray-800">
           <Link href={detailUrl} className="absolute inset-0 block" aria-label={`View listing: ${listing.title}`}>
-            {coverUrl ? (
-              <OptimizedImage src={coverUrl} alt="" fill sizes="100vw" className="object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-400">
-                <List className="h-14 w-14" />
-              </div>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" aria-hidden />
+            <ListingCoverImage listing={listing} alt="" fill sizes="100vw" className="object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent md:from-black/55 md:via-black/12" aria-hidden />
           </Link>
           <div className="absolute left-3 right-3 top-3 z-10 flex flex-wrap items-center justify-between gap-2">
             <Badge className="bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow-sm">Live</Badge>
@@ -188,13 +180,7 @@ function DashboardListingCardInner({
       <div className="hidden md:block">
         <Link href={detailUrl} className="block" aria-label={`View listing: ${listing.title}`}>
           <div className="relative aspect-[16/10] w-full bg-muted dark:bg-gray-800">
-            {coverUrl ? (
-              <OptimizedImage src={coverUrl} alt="" fill sizes="33vw" className="object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-400">
-                <List className="h-10 w-10" />
-              </div>
-            )}
+            <ListingCoverImage listing={listing} alt="" fill sizes="33vw" className="object-cover" />
             <div className="absolute left-2 top-2 flex flex-wrap gap-1.5">
               <Badge className="bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow-sm">Live</Badge>
               {isUrgent && (

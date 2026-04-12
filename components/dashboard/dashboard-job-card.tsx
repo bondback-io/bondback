@@ -228,7 +228,7 @@ function DashboardJobCardInner({
             <Briefcase className="h-14 w-14" />
           </div>
         )}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" aria-hidden />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent md:from-black/55 md:via-black/10" aria-hidden />
       </Link>
       {secondImage ? (
         <Link
@@ -237,7 +237,7 @@ function DashboardJobCardInner({
           aria-label={`More photos: ${title}`}
         >
           <OptimizedImage src={secondImage} alt="" fill sizes="50vw" className="object-cover" />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" aria-hidden />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent md:from-black/45" aria-hidden />
         </Link>
       ) : null}
     </div>

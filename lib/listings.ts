@@ -29,25 +29,117 @@ export function listingIdsWithCancelledJobs(
 }
 
 /** Listing-like shape for cover URL (supports Row or partial). */
-type ListingWithPhotos = {
+export type ListingWithPhotos = {
   cover_photo_url?: string | null;
   initial_photos?: string[] | null;
   photo_urls?: string[] | null;
 };
 
 /**
+ * Normalize `initial_photos` / `photo_urls` from Postgres `text[]`, JSON string, or plain array.
+ */
+export function normalizeListingPhotoUrlArray(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+      .map((u) => u.trim());
+  }
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (!t) return [];
+    if (t.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(t) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+            .map((u) => u.trim());
+        }
+      } catch {
+        return [];
+      }
+    }
+  }
+  return [];
+}
+
+/**
+ * All distinct listing image URLs from DB: cover (when it matches gallery or is the only source),
+ * then initial_photos, then photo_urls (deduped in order).
+ *
+ * If `cover_photo_url` points at a removed/orphan URL (not in initial_photos/photo_urls) but the
+ * gallery still has photos, we **skip** the orphan so cards don’t prefer a broken first URL.
+ */
+export function collectListingPhotoUrls(listing: ListingWithPhotos): string[] {
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  const push = (u: string) => {
+    const s = u.trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    urls.push(s);
+  };
+
+  const initialArr = normalizeListingPhotoUrlArray(listing.initial_photos);
+  const urlsArr = normalizeListingPhotoUrlArray(listing.photo_urls);
+  const gallery = [...initialArr, ...urlsArr];
+
+  const cover =
+    typeof listing.cover_photo_url === "string" ? listing.cover_photo_url.trim() : "";
+
+  if (cover) {
+    if (gallery.length === 0) {
+      push(cover);
+    } else if (gallery.includes(cover)) {
+      push(cover);
+    }
+    /** else: orphan cover — omit; gallery URLs follow */
+  }
+
+  initialArr.forEach(push);
+  urlsArr.forEach(push);
+  return urls;
+}
+
+/** Merge ordered URL lists, skipping duplicates (later lists only add new URLs). */
+export function mergePhotoUrlLists(primary: string[], secondary: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (u: string) => {
+    const s = u.trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  };
+  primary.forEach(add);
+  secondary.forEach(add);
+  return out;
+}
+
+/** Put the lister's chosen cover URL first when it appears in the list (hero + gallery order). */
+export function orderCoverPhotoFirst(
+  urls: string[],
+  cover: string | null | undefined
+): string[] {
+  if (!cover?.trim()) return urls;
+  const c = cover.trim();
+  if (!urls.includes(c)) {
+    /** Orphan cover not in merged list — don’t force a broken URL to the front */
+    return urls;
+  }
+  const rest = urls.filter((u) => u !== c);
+  return [c, ...rest];
+}
+
+/**
  * Returns the URL to use as the listing card/cover image.
- * Prefers cover_photo_url (default photo), then first initial_photo, then first photo_url.
+ * Uses the same ordered list as {@link collectListingPhotoUrls} (skips orphan `cover_photo_url`).
  */
 export function getListingCoverUrl(listing: ListingWithPhotos | null | undefined): string | null {
   if (!listing) return null;
-  const cover = listing.cover_photo_url;
-  if (typeof cover === "string" && cover.trim()) return cover;
-  const initial = Array.isArray(listing.initial_photos) ? listing.initial_photos[0] : null;
-  if (typeof initial === "string" && initial.trim()) return initial;
-  const urls = Array.isArray(listing.photo_urls) ? listing.photo_urls : [];
-  const first = urls[0];
-  return typeof first === "string" && first.trim() ? first : null;
+  const urls = collectListingPhotoUrls(listing);
+  return urls[0] ?? null;
 }
 
 /**
@@ -55,14 +147,8 @@ export function getListingCoverUrl(listing: ListingWithPhotos | null | undefined
  */
 export function getListingSecondImageUrl(listing: ListingWithPhotos | null | undefined): string | null {
   if (!listing) return null;
-  const cover = getListingCoverUrl(listing);
-  const initial = Array.isArray(listing.initial_photos) ? listing.initial_photos : [];
-  const urls = Array.isArray(listing.photo_urls) ? listing.photo_urls : [];
-  const candidates = [...initial, ...urls].map((u) => (typeof u === "string" ? u.trim() : "")).filter(Boolean);
-  for (const u of candidates) {
-    if (u !== cover) return u;
-  }
-  return null;
+  const all = collectListingPhotoUrls(listing);
+  return all[1] ?? null;
 }
 
 /** Listing row may include `preferred_dates` (not always in generated DB types). */

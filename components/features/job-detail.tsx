@@ -472,7 +472,6 @@ export function JobDetail({
 
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const [paymentSuccessToastShown, setPaymentSuccessToastShown] = useState(false);
 
   /** Lister menu / card: ?cancel=1 opens “cancel listing early” (auction still live, no job yet). */
   useEffect(() => {
@@ -516,43 +515,6 @@ export function JobDetail({
     );
     return () => window.clearTimeout(t);
   }, [searchParams, pathname, router]);
-
-  useEffect(() => {
-    const payment = searchParams.get("payment");
-    const sessionId = searchParams.get("session_id");
-    const paymentSuccess =
-      payment === "success" || searchParams.has("payment-success");
-    if (paymentSuccessToastShown || !paymentSuccess || !sessionId || !jobId) return;
-
-    setPaymentSuccessToastShown(true);
-
-    (async () => {
-      try {
-        const { fulfillJobPaymentFromSession } = await import("@/lib/actions/jobs");
-        const res = await fulfillJobPaymentFromSession(sessionId);
-        if (res.ok) {
-          setLocalJobStatus("in_progress");
-          toast({
-            title: isStripeTestMode ? "Payment held in escrow (test mode)" : "Payment held in escrow",
-            description: "Job started. The cleaner can begin work.",
-          });
-          scheduleRouterAction(() => router.refresh());
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Could not confirm payment",
-            description: res.error,
-          });
-        }
-      } finally {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("payment");
-        url.searchParams.delete("payment-success");
-        url.searchParams.delete("session_id");
-        window.history.replaceState({}, "", url.pathname + (url.search || ""));
-      }
-    })();
-  }, [searchParams, paymentSuccessToastShown, isStripeTestMode, jobId, router, toast]);
 
   const [securingPayment, setSecuringPayment] = useState(false);
   const handleSecurePayment = async () => {
@@ -1680,7 +1642,7 @@ export function JobDetail({
                   listing has ended. The listing stays in your history. This cannot be undone.
                 </DialogDescription>
               </DialogHeader>
-              <DialogFooter>
+              <DialogFooter className="gap-2 sm:gap-3">
                 <Button
                   variant="outline"
                   onClick={() => setShowCancelListingDialog(false)}
