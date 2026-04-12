@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { ListingCard } from "@/components/features/listing-card";
+import { AnimatedListingCard } from "@/components/ui/listing-card";
 import {
   clampRadiusKm,
   getStoredRadiusKm,
@@ -321,7 +321,7 @@ export function JobsList({
     const isListerOwner = Boolean(currentUserId && (listing as { lister_id?: string }).lister_id === currentUserId);
     const listerCard = listerCardDataByListingId[String(listing.id)];
     return (
-      <ListingCard
+      <AnimatedListingCard
         key={listing.id}
         listing={listing}
         showPlaceBid

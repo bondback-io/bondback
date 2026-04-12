@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { DashboardJobCard } from "@/components/dashboard/dashboard-job-card";
+import { JobCard } from "@/components/ui/job-card";
 import type { DashboardJobCardProps } from "@/components/dashboard/dashboard-job-card";
 import { DashboardListingCard } from "@/components/dashboard/dashboard-listing-card";
 import type { DashboardListingCardProps } from "@/components/dashboard/dashboard-listing-card";
@@ -19,7 +19,7 @@ import { useToast } from "@/components/ui/use-toast";
 
 /** Cleaner active job — actions are on the card (View, Message, Mark complete). */
 export function DashboardJobCardWithSwipe(props: DashboardJobCardProps) {
-  return <DashboardJobCard {...props} />;
+  return <JobCard {...props} />;
 }
 
 /** Lister live listing — cancel confirmation dialog; other actions on the card. */
