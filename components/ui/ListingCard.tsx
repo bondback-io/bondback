@@ -19,16 +19,11 @@ function AnimatedListingCardInner(props: ListingCardProps) {
   const reduceMotion = useReducedMotion();
   return (
     <motion.div
-      className="h-full"
-      layout={false}
-      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
-      whileHover={
-        reduceMotion
-          ? undefined
-          : { y: -2, transition: { duration: 0.18 } }
-      }
+      className="h-full will-change-transform"
+      initial={false}
+      whileHover={reduceMotion ? undefined : { y: -3 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.992 }}
+      transition={{ type: "spring", stiffness: 420, damping: 28 }}
     >
       <ListingCardImpl {...props} />
     </motion.div>
@@ -55,13 +50,20 @@ export function ListingCardSkeleton({
         className
       )}
     >
-      <Skeleton
-        className={cn(
-          "w-full rounded-none",
-          compact ? "h-[140px] min-h-[120px]" : "h-[200px] min-h-[180px] max-h-[240px]"
-        )}
-        aria-hidden
-      />
+      {compact ? (
+        <Skeleton
+          className={cn(
+            "w-full rounded-none bg-muted/80 dark:bg-gray-800",
+            "h-[140px] min-h-[120px]"
+          )}
+          aria-hidden
+        />
+      ) : (
+        <div className="grid grid-cols-2 gap-0.5 bg-muted dark:bg-gray-900">
+          <Skeleton className="h-[200px] min-h-[180px] rounded-none bg-muted/80 dark:bg-gray-800" aria-hidden />
+          <Skeleton className="h-[200px] min-h-[180px] rounded-none bg-muted/60 dark:bg-gray-800/80" aria-hidden />
+        </div>
+      )}
       <CardContent className={cn("space-y-3 p-4", compact && "p-3")}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1 space-y-2">
@@ -70,11 +72,12 @@ export function ListingCardSkeleton({
           </div>
           <Skeleton className="h-9 w-20 shrink-0 rounded-md" />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Skeleton className="h-6 w-16 rounded-full" />
           <Skeleton className="h-6 w-16 rounded-full" />
           <Skeleton className="h-6 w-24 rounded-full" />
         </div>
+        <Skeleton className="h-12 w-full rounded-xl" />
       </CardContent>
     </Card>
   );

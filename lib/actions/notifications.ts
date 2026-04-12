@@ -50,8 +50,8 @@ export type CreateNotificationOptions = {
   senderName?: string;
   /** Legacy numeric listing id when available (some emails). Prefer listingUuid. */
   listingId?: number;
-  /** UUID for listing-scoped links and data.listing_uuid */
-  listingUuid?: string | null;
+  /** Listing PK for listing-scoped links and data.listing_uuid (string or numeric from DB). */
+  listingUuid?: string | number | null;
   /** For SMS: job/listing title (e.g. bid accepted, job won) */
   listingTitle?: string | null;
   /** For SMS: payment amount in cents (e.g. payment released) */
@@ -198,12 +198,13 @@ export async function createNotification(
     let body: string;
     if (type === "new_bid") {
       const who = (options?.senderName ?? "").trim();
-      const path =
-        options?.listingUuid?.trim()
-          ? `/listings/${options.listingUuid.trim()}`
-          : options?.listingId
-            ? `/listings/${options.listingId}`
-            : "/jobs";
+      const listingSeg =
+        options?.listingUuid != null
+          ? String(options.listingUuid).trim()
+          : options?.listingId != null
+            ? String(options.listingId)
+            : "";
+      const path = listingSeg ? `/listings/${listingSeg}` : "/jobs";
       body = who
         ? `New bid from ${who.slice(0, 40)} on your listing. View: ${appUrl}${path}`
         : `New bid on your listing. View: ${appUrl}${path}`;

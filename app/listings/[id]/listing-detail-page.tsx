@@ -34,11 +34,6 @@ function isStripePaymentSuccessReturn(
   return false;
 }
 
-/** Listing rows use UUID `id`. Pure digits are job PKs — same convention as `/jobs/[id]` redirecting UUIDs to listings. */
-function isNumericJobStyleId(raw: string): boolean {
-  return /^\d+$/.test(raw.trim());
-}
-
 function searchParamsToQueryString(
   sp: Record<string, string | string[] | undefined>
 ): string {
@@ -83,11 +78,6 @@ export default async function ListingDetailPage({
   const raw = resolvedParams.id.trim();
 
   const sp = searchParams ? await searchParams : {};
-
-  if (isNumericJobStyleId(raw)) {
-    const qs = searchParamsToQueryString(sp);
-    redirect(`/jobs/${encodeURIComponent(raw)}${qs}`);
-  }
 
   const paymentParam = firstSearchParam(sp.payment);
   const checkoutSessionId = firstSearchParam(sp.session_id);

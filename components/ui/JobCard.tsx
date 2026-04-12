@@ -13,17 +13,11 @@ function JobCardInner(props: DashboardJobCardProps) {
   const reduceMotion = useReducedMotion();
   return (
     <motion.div
-      className="h-full"
-      layout={false}
-      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
-      whileHover={
-        reduceMotion
-          ? undefined
-          : { y: -2, transition: { duration: 0.18 } }
-      }
-      whileTap={{ scale: 0.99 }}
+      className="h-full will-change-transform"
+      initial={false}
+      whileHover={reduceMotion ? undefined : { y: -3 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.992 }}
+      transition={{ type: "spring", stiffness: 420, damping: 28 }}
     >
       <DashboardJobCard {...props} />
     </motion.div>

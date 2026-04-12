@@ -50,6 +50,21 @@ export function getListingCoverUrl(listing: ListingWithPhotos | null | undefined
   return typeof first === "string" && first.trim() ? first : null;
 }
 
+/**
+ * Second distinct photo for card strips (e.g. before/after preview). Skips the same URL as the cover.
+ */
+export function getListingSecondImageUrl(listing: ListingWithPhotos | null | undefined): string | null {
+  if (!listing) return null;
+  const cover = getListingCoverUrl(listing);
+  const initial = Array.isArray(listing.initial_photos) ? listing.initial_photos : [];
+  const urls = Array.isArray(listing.photo_urls) ? listing.photo_urls : [];
+  const candidates = [...initial, ...urls].map((u) => (typeof u === "string" ? u.trim() : "")).filter(Boolean);
+  for (const u of candidates) {
+    if (u !== cover) return u;
+  }
+  return null;
+}
+
 /** Listing row may include `preferred_dates` (not always in generated DB types). */
 export type ListingWithPreferredDates = ListingRow & {
   preferred_dates?: string[] | null;

@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/use-toast";
 import { addSavedListingId } from "@/lib/saved-listings-local";
 import { cn } from "@/lib/utils";
-import { Home, Flame, Eye, Gavel, MessageCircle, Bookmark } from "lucide-react";
+import { Home, Flame, Eye, Gavel, MessageCircle, Bookmark, Timer } from "lucide-react";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { BuyNowButton } from "@/components/features/buy-now-button";
 import { VerificationBadges } from "@/components/shared/verification-badges";
@@ -65,6 +65,13 @@ export type JobCardMarketplaceMobileProps = {
   hideCleanerCancelledAuctionUi: boolean;
   /** Tighter horizontal row layout (e.g. /jobs mobile list). */
   layout?: "default" | "compact";
+  /** Bid count for marketplace trust row. */
+  bidCount?: number;
+  /** e.g. "$120" — shown when no bids yet as starting price. */
+  startingBidDisplay?: string | null;
+  /** Second image (e.g. another room) for a split hero preview. */
+  secondaryThumb?: string | null;
+  propertyType?: string | null;
 };
 
 function JobCardMarketplaceMobileInner({
@@ -95,6 +102,10 @@ function JobCardMarketplaceMobileInner({
   hasAssignedCleaner,
   hideCleanerCancelledAuctionUi,
   layout = "default",
+  bidCount,
+  startingBidDisplay,
+  secondaryThumb,
+  propertyType,
 }: JobCardMarketplaceMobileProps) {
   const { toast } = useToast();
 
@@ -235,6 +246,27 @@ function JobCardMarketplaceMobileInner({
                 {bedsBaths}
               </p>
             )}
+            {propertyType && (
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/90 dark:text-gray-500">
+                {propertyType}
+              </p>
+            )}
+            {(typeof bidCount === "number" || startingBidDisplay) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {typeof bidCount === "number" && (
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-muted/90 px-2 py-1 text-xs font-bold text-foreground dark:bg-gray-800 dark:text-gray-100">
+                    <Gavel className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {bidCount} bid{bidCount !== 1 ? "s" : ""}
+                  </span>
+                )}
+                {startingBidDisplay != null && startingBidDisplay !== "" && bidCount === 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground dark:border-gray-600 dark:text-gray-400">
+                    <Timer className="h-3 w-3 shrink-0" aria-hidden />
+                    Starts {startingBidDisplay}
+                  </span>
+                )}
+              </div>
+            )}
             {showListerTrust &&
               listerVerificationBadges &&
               listerVerificationBadges.length > 0 && (
@@ -349,36 +381,63 @@ function JobCardMarketplaceMobileInner({
         cleanerBoost && "shadow-lg shadow-emerald-950/10 ring-1 ring-border/90 dark:shadow-black/40 dark:ring-gray-700/90"
       )}
     >
-      {/* Hero */}
+      {/* Hero — full-width or 50/50 when a second photo exists */}
       <div className={cn("relative w-full overflow-hidden bg-muted dark:bg-gray-800", HERO_H)}>
-        <Link
-          href={jobHref}
-          className="absolute inset-0 z-0 flex min-h-[48px] min-w-[48px] items-center justify-center transition-transform active:scale-[0.99]"
-          aria-label={`View listing: ${title}`}
-        >
-          {thumb ? (
-            <Image
-              src={thumb}
-              alt={thumbAlt}
-              fill
-              sizes="(max-width: 767px) 100vw, 50vw"
-              quality={75}
-              className="object-cover"
-              priority={priority}
-              placeholder="blur"
-              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground" aria-hidden>
-              <Avatar className="h-20 w-20 rounded-2xl">
-                <AvatarFallback className="rounded-2xl bg-muted/80 dark:bg-gray-700">
-                  <Home className="h-10 w-10" />
-                </AvatarFallback>
-              </Avatar>
-            </div>
+        <div
+          className={cn(
+            "grid min-h-[200px] w-full gap-0.5",
+            secondaryThumb ? "grid-cols-2" : "grid-cols-1"
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent dark:from-black/60" aria-hidden />
-        </Link>
+        >
+          <Link
+            href={jobHref}
+            className="relative block min-h-[200px] w-full transition-transform active:scale-[0.99]"
+            aria-label={`View listing: ${title}`}
+          >
+            {thumb ? (
+              <Image
+                src={thumb}
+                alt={thumbAlt}
+                fill
+                sizes={secondaryThumb ? "(max-width: 767px) 50vw, 25vw" : "(max-width: 767px) 100vw, 50vw"}
+                quality={75}
+                className="object-cover"
+                priority={priority}
+                placeholder="blur"
+                blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+              />
+            ) : (
+              <div className="flex h-full min-h-[200px] w-full items-center justify-center text-muted-foreground" aria-hidden>
+                <Avatar className="h-20 w-20 rounded-2xl">
+                  <AvatarFallback className="rounded-2xl bg-muted/80 dark:bg-gray-700">
+                    <Home className="h-10 w-10" />
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            )}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent dark:from-black/60" aria-hidden />
+          </Link>
+          {secondaryThumb ? (
+            <Link
+              href={jobHref}
+              className="relative block min-h-[200px] w-full transition-transform active:scale-[0.99]"
+              aria-label={`More photos: ${title}`}
+            >
+              <Image
+                src={secondaryThumb}
+                alt=""
+                fill
+                sizes="(max-width: 767px) 50vw, 25vw"
+                quality={70}
+                className="object-cover"
+                loading="lazy"
+                placeholder="blur"
+                blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+              />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" aria-hidden />
+            </Link>
+          ) : null}
+        </div>
 
         {/* Top bar: menu left area + trust right */}
         <div className="absolute left-3 right-3 top-3 z-10 flex items-start justify-between gap-2">
@@ -463,6 +522,27 @@ function JobCardMarketplaceMobileInner({
               {bedsBaths}
             </p>
           )}
+          {propertyType && (
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-500">
+              {propertyType}
+            </p>
+          )}
+          {(typeof bidCount === "number" || startingBidDisplay) && (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {typeof bidCount === "number" && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary dark:bg-primary/20 dark:text-primary-foreground">
+                  <Gavel className="h-4 w-4 shrink-0" aria-hidden />
+                  {bidCount} bid{bidCount !== 1 ? "s" : ""}
+                </span>
+              )}
+              {startingBidDisplay != null && startingBidDisplay !== "" && bidCount === 0 && (
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground dark:text-gray-400">
+                  <Timer className="h-4 w-4 shrink-0" aria-hidden />
+                  Starting bid {startingBidDisplay}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* CTAs */}
@@ -477,7 +557,9 @@ function JobCardMarketplaceMobileInner({
           >
             <Link href={jobHref} className="flex items-center justify-center gap-2">
               <Eye className={cn("shrink-0", cleanerBoost ? "h-6 w-6" : "h-5 w-5")} aria-hidden />
-              View Details
+              {showCleanerMobileActions && showPlaceBid && isLive && !hideCleanerCancelledAuctionUi
+                ? "View & bid"
+                : "View Details"}
             </Link>
           </Button>
 

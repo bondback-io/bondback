@@ -10,8 +10,8 @@
  * `jobs` uses `winner_id` for the assigned cleaner. `cleaner_id` is accepted as an alias.
  *
  * **Do not** implement card URLs as `isAssignedJob ? /jobs/${item.id} : /listings/${item.id}`:
- * listing rows use UUID `id`; job rows use numeric `id` + `listing_id`. Use
- * {@link detailUrlForCardItem} or {@link hrefListingOrJob} everywhere.
+ * listing rows have `id` only (no `listing_id`); job rows include `listing_id` + job PK in `id`.
+ * Use {@link detailUrlForCardItem} or {@link hrefListingOrJob} everywhere.
  */
 
 import { parseUtcTimestamp } from "@/lib/utils";
@@ -41,7 +41,7 @@ export type MarketplaceDetailItem = {
   cleaner_id?: string | null;
 };
 
-/** Job-shaped rows (`jobs` table): numeric PK + separate listing UUID — safe for job-status routing. */
+/** Job-shaped rows include `listing_id` (FK to `listings`). Pure listing rows do not set `listing_id`. */
 function looksLikeJobsTableRow(item: MarketplaceDetailItem): boolean {
   const listingIdStr =
     item.listing_id != null ? String(item.listing_id).trim() : "";
@@ -50,7 +50,7 @@ function looksLikeJobsTableRow(item: MarketplaceDetailItem): boolean {
     return true;
   }
   const idStr = typeof item.id === "string" ? item.id.trim() : "";
-  return listingIdStr !== idStr && /^\d+$/.test(idStr);
+  return /^\d+$/.test(idStr);
 }
 
 /**
@@ -73,19 +73,16 @@ function resolveNumericJobId(item: MarketplaceDetailItem): number | null {
     const n = parseInt(item.job_id, 10);
     return Number.isFinite(n) ? n : null;
   }
+  const listingIdStr =
+    item.listing_id != null ? String(item.listing_id).trim() : "";
+  if (!listingIdStr) {
+    return null;
+  }
   if (typeof item.id === "number" && Number.isFinite(item.id)) {
     return item.id;
   }
   const idStr = typeof item.id === "string" ? item.id.trim() : "";
-  const listingIdStr =
-    item.listing_id != null ? String(item.listing_id).trim() : "";
-  // Job rows: numeric PK `id` + separate `listing_id` (listing UUID). Do not treat a bare
-  // numeric listing `id` as a job PK (detailUrlForCardItem({ id: listing.id }) only).
-  if (
-    listingIdStr !== "" &&
-    listingIdStr !== idStr &&
-    /^\d+$/.test(idStr)
-  ) {
+  if (/^\d+$/.test(idStr)) {
     const n = parseInt(idStr, 10);
     return Number.isFinite(n) ? n : null;
   }
@@ -146,7 +143,13 @@ export function detailUrlForCardItem(item: MarketplaceDetailItem): string {
     }
   }
   const listingKey =
-    item.listing_id ?? (typeof item.id === "string" ? item.id : null);
+    item.listing_id != null && String(item.listing_id).trim() !== ""
+      ? String(item.listing_id).trim()
+      : typeof item.id === "string"
+        ? item.id.trim()
+        : typeof item.id === "number" && Number.isFinite(item.id)
+          ? String(item.id)
+          : null;
   if (!listingKey) {
     return "/jobs";
   }

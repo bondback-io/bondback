@@ -24,7 +24,7 @@ export async function getCachedTakenListingIds(): Promise<(string | number)[]> {
       if (!a) return [];
       return fetchTakenListingIds(a, a);
     },
-    ["taken-listing-ids-v1"],
+    ["taken-listing-ids-v2-exclude-cancelled"],
     { revalidate: 45, tags: [CACHE_TAGS.takenListingIds, CACHE_TAGS.jobsBrowse] }
   )();
 }

@@ -12,6 +12,7 @@ import {
   formatCents,
   formatPreferredCleaningDueLine,
   getListingCoverUrl,
+  getListingSecondImageUrl,
 } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import {
@@ -24,6 +25,9 @@ import {
   Clock,
   Eye,
   Flame,
+  Camera,
+  Sparkles,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
@@ -39,6 +43,51 @@ type JobRow = {
   agreed_amount_cents?: number | null;
 };
 
+function jobCardStatusPresentation(status: string): {
+  label: string;
+  badgeClass: string;
+} {
+  const s = String(status ?? "").toLowerCase();
+  switch (s) {
+    case "accepted":
+      return {
+        label: "Awaiting start",
+        badgeClass: "bg-amber-500/90 text-white dark:bg-amber-500",
+      };
+    case "in_progress":
+      return {
+        label: "In progress",
+        badgeClass: "bg-emerald-600/90 text-white dark:bg-emerald-500",
+      };
+    case "completed_pending_approval":
+      return {
+        label: "Waiting for approval",
+        badgeClass: "bg-violet-600/95 text-white dark:bg-violet-500",
+      };
+    case "completed":
+      return {
+        label: "Completed",
+        badgeClass: "bg-slate-600/90 text-white dark:bg-slate-500",
+      };
+    case "cancelled":
+      return {
+        label: "Cancelled",
+        badgeClass: "bg-destructive text-destructive-foreground",
+      };
+    case "disputed":
+    case "in_review":
+      return {
+        label: "Disputed",
+        badgeClass: "bg-orange-600/95 text-white dark:bg-orange-600",
+      };
+    default:
+      return {
+        label: s.replace(/_/g, " ") || "Active",
+        badgeClass: "bg-muted text-foreground dark:bg-gray-700 dark:text-gray-100",
+      };
+  }
+}
+
 export type DashboardJobCardProps = {
   job: JobRow;
   listing: ListingRow | null;
@@ -48,6 +97,11 @@ export type DashboardJobCardProps = {
    * the same server action as job detail "Clean Complete — Request Payment".
    */
   canMarkCleanComplete?: boolean;
+  /** Other party on the job — lister name when you are the cleaner, cleaner name when you are the lister. */
+  counterpartyName?: string | null;
+  counterpartyRole?: "lister" | "cleaner";
+  /** Defaults to cleaner (cleaner dashboard). */
+  viewerRole?: "cleaner" | "lister";
 };
 
 function MarkCompleteActionButton({
@@ -108,17 +162,11 @@ function DashboardJobCardInner({
   listing,
   daysLeft,
   canMarkCleanComplete = false,
+  counterpartyName,
+  counterpartyRole,
+  viewerRole = "cleaner",
 }: DashboardJobCardProps) {
-  const statusLabel =
-    job.status === "accepted"
-      ? "Awaiting start"
-      : job.status === "in_progress"
-        ? "In progress"
-        : job.status;
-  const statusClass =
-    job.status === "accepted"
-      ? "bg-amber-500/90 text-white dark:bg-amber-500"
-      : "bg-emerald-600/90 text-white dark:bg-emerald-500";
+  const { label: statusLabel, badgeClass: statusClass } = jobCardStatusPresentation(job.status);
 
   const agreed = job.agreed_amount_cents;
   const gross =
@@ -130,12 +178,12 @@ function DashboardJobCardInner({
           0);
   const bedrooms = listing ? (listing as { bedrooms?: number }).bedrooms : null;
   const bathrooms = listing ? (listing as { bathrooms?: number }).bathrooms : null;
-  const title = listing?.title ?? `Job #${job.id}`;
+  const title = listing?.title ?? (job as { title?: string | null }).title ?? `Job #${job.id}`;
   const cover = listing && getListingCoverUrl(listing) ? getListingCoverUrl(listing)! : null;
+  const secondImage = listing ? getListingSecondImageUrl(listing) : null;
 
   const overdue = daysLeft != null && daysLeft < 0;
-  const dueSoon =
-    daysLeft != null && daysLeft >= 0 && daysLeft <= 1;
+  const dueSoon = daysLeft != null && daysLeft >= 0 && daysLeft <= 1;
   const daysLine = formatPreferredCleaningDueLine(daysLeft);
 
   const detailUrl = detailUrlForCardItem({
@@ -146,37 +194,67 @@ function DashboardJobCardInner({
     cleaner_id: job.cleaner_id,
   });
 
+  const jobNumericId = typeof job.id === "number" ? job.id : Number(job.id);
+  const messagesJobParam = Number.isFinite(jobNumericId) ? jobNumericId : job.id;
+
+  const messagePeerLabel =
+    viewerRole === "cleaner" ? "Message Lister" : "Message Cleaner";
+  const counterpartyLine =
+    counterpartyName != null && String(counterpartyName).trim() !== ""
+      ? `${counterpartyRole === "lister" ? "Lister" : "Cleaner"}: ${String(counterpartyName).trim()}`
+      : null;
+
+  const showAfterPhotosCta =
+    viewerRole === "cleaner" && job.status === "in_progress";
+  const showReviewReleaseCta =
+    viewerRole === "lister" && job.status === "completed_pending_approval";
+
+  const HeroImages = () => (
+    <div
+      className={cn(
+        "relative w-full overflow-hidden bg-muted dark:bg-gray-800",
+        secondImage ? "grid min-h-[200px] grid-cols-2 gap-0.5" : "h-[200px] min-h-[180px] max-h-[220px]"
+      )}
+    >
+      <Link
+        href={detailUrl}
+        className="relative block min-h-[180px] w-full"
+        aria-label={`View job: ${title}`}
+      >
+        {cover ? (
+          <OptimizedImage src={cover} alt="" fill sizes="50vw" className="object-cover" />
+        ) : (
+          <div className="flex h-full min-h-[180px] w-full items-center justify-center text-muted-foreground dark:text-gray-400">
+            <Briefcase className="h-14 w-14" />
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" aria-hidden />
+      </Link>
+      {secondImage ? (
+        <Link
+          href={detailUrl}
+          className="relative block min-h-[180px] w-full"
+          aria-label={`More photos: ${title}`}
+        >
+          <OptimizedImage src={secondImage} alt="" fill sizes="50vw" className="object-cover" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" aria-hidden />
+        </Link>
+      ) : null}
+    </div>
+  );
+
   return (
     <Card
       className={cn(
         "overflow-hidden border-border bg-card shadow-sm transition",
         "hover:shadow-md dark:border-gray-800 dark:bg-gray-900/50",
-        "active:scale-[0.95] md:active:scale-[0.99] md:hover:scale-[1.01]"
+        "active:scale-[0.98] md:active:scale-[0.995] md:hover:scale-[1.01]"
       )}
     >
-      {/* Mobile: hero + bold price + CTAs */}
+      {/* Mobile */}
       <div className="md:hidden">
-        <div className="relative h-[200px] w-full min-h-[180px] max-h-[220px] overflow-hidden bg-muted dark:bg-gray-800">
-          <Link
-            href={detailUrl}
-            className="absolute inset-0 block"
-            aria-label={`View job: ${title}`}
-          >
-            {cover ? (
-              <OptimizedImage
-                src={cover}
-                alt=""
-                fill
-                sizes="100vw"
-                className="object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-400">
-                <Briefcase className="h-14 w-14" />
-              </div>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" aria-hidden />
-          </Link>
+        <div className="relative">
+          <HeroImages />
           <div className="absolute left-3 right-3 top-3 z-10 flex flex-wrap items-start justify-between gap-2">
             <div className="flex flex-wrap gap-1.5">
               <Badge className={cn("px-2.5 py-1 text-xs font-bold shadow-sm", statusClass)}>
@@ -201,9 +279,16 @@ function DashboardJobCardInner({
             {title}
           </h3>
 
+          {counterpartyLine && (
+            <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-muted/40 px-3 py-2.5 text-sm font-semibold text-foreground dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-100">
+              <User className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+              <span className="line-clamp-2">{counterpartyLine}</span>
+            </div>
+          )}
+
           <div className="rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.12] to-transparent p-4 dark:border-emerald-800/50 dark:from-emerald-950/45">
             <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800/90 dark:text-emerald-400/90">
-              Job value
+              {agreed != null && agreed > 0 ? "Agreed price" : "Job value"}
             </p>
             <p className="text-5xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
               {formatCents(gross)}
@@ -251,11 +336,42 @@ function DashboardJobCardInner({
               variant="outline"
               className="min-h-14 w-full rounded-xl border-2 text-lg font-semibold dark:border-gray-500 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
             >
-              <Link href={`/messages?job=${job.id}`} className="flex items-center justify-center gap-2">
+              <Link
+                href={`/messages?job=${messagesJobParam}`}
+                className="flex items-center justify-center gap-2"
+              >
                 <MessageCircle className="h-6 w-6" aria-hidden />
-                Message Lister
+                {messagePeerLabel}
               </Link>
             </Button>
+            {showAfterPhotosCta && (
+              <Button
+                asChild
+                size="lg"
+                variant="secondary"
+                className="min-h-14 w-full rounded-xl border border-sky-500/30 bg-sky-500/10 text-lg font-semibold text-sky-900 hover:bg-sky-500/20 dark:border-sky-700/50 dark:bg-sky-950/50 dark:text-sky-100 dark:hover:bg-sky-950/80"
+              >
+                <Link
+                  href={`/jobs/${encodeURIComponent(String(job.id))}#job-after-photos`}
+                  className="flex items-center justify-center gap-2"
+                >
+                  <Camera className="h-6 w-6 shrink-0" aria-hidden />
+                  Upload after photos
+                </Link>
+              </Button>
+            )}
+            {showReviewReleaseCta && (
+              <Button
+                asChild
+                size="lg"
+                className="min-h-14 w-full rounded-xl bg-violet-600 text-lg font-semibold text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
+              >
+                <Link href={detailUrl} className="flex items-center justify-center gap-2">
+                  <Sparkles className="h-6 w-6 shrink-0" aria-hidden />
+                  Review &amp; release
+                </Link>
+              </Button>
+            )}
             {job.status === "in_progress" && canMarkCleanComplete && (
               <MarkCompleteActionButton
                 jobId={job.id}
@@ -270,20 +386,28 @@ function DashboardJobCardInner({
 
       {/* Desktop */}
       <div className="hidden md:block">
-        <Link
-          href={detailUrl}
-          className="block"
-          aria-label={`View job: ${title}`}
-        >
-          <div className="relative aspect-[16/10] w-full bg-muted dark:bg-gray-800">
-            {cover ? (
-              <OptimizedImage src={cover} alt="" fill sizes="33vw" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-400">
-                <Briefcase className="h-10 w-10" />
-              </div>
+        <Link href={detailUrl} className="block" aria-label={`View job: ${title}`}>
+          <div
+            className={cn(
+              "relative w-full bg-muted dark:bg-gray-800",
+              secondImage ? "grid aspect-[16/10] grid-cols-2 gap-0.5" : "aspect-[16/10]"
             )}
-            <div className="absolute left-2 top-2 flex flex-wrap gap-1.5">
+          >
+            <div className="relative min-h-0 w-full">
+              {cover ? (
+                <OptimizedImage src={cover} alt="" fill sizes="25vw" className="object-cover" />
+              ) : (
+                <div className="flex h-full min-h-[160px] w-full items-center justify-center text-muted-foreground dark:text-gray-400">
+                  <Briefcase className="h-10 w-10" />
+                </div>
+              )}
+            </div>
+            {secondImage ? (
+              <div className="relative min-h-0 w-full">
+                <OptimizedImage src={secondImage} alt="" fill sizes="25vw" className="object-cover" />
+              </div>
+            ) : null}
+            <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-1.5">
               <Badge className={cn("px-2.5 py-1 text-xs font-bold", statusClass)}>{statusLabel}</Badge>
               {overdue && (
                 <Badge className="bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">
@@ -309,6 +433,12 @@ function DashboardJobCardInner({
               {listing ? formatLocationWithState(listing.suburb, listing.postcode) : "—"}
             </p>
           </div>
+          {counterpartyLine && (
+            <p className="flex items-start gap-2 text-sm font-semibold text-foreground dark:text-gray-100">
+              <User className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+              {counterpartyLine}
+            </p>
+          )}
           {(bedrooms != null || bathrooms != null) && (
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               {bedrooms != null && (
@@ -326,6 +456,9 @@ function DashboardJobCardInner({
             </div>
           )}
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-3 dark:border-emerald-800/40 dark:bg-emerald-950/35">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-800/80 dark:text-emerald-400/90">
+              {agreed != null && agreed > 0 ? "Agreed price" : "Job value"}
+            </p>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
                 {formatCents(gross)}
@@ -352,11 +485,34 @@ function DashboardJobCardInner({
               <Link href={detailUrl}>View Job</Link>
             </Button>
             <Button asChild variant="outline" className="min-h-11 rounded-full px-5 text-sm font-semibold">
-              <Link href={`/messages?job=${job.id}`}>
+              <Link href={`/messages?job=${messagesJobParam}`}>
                 <MessageCircle className="mr-1.5 h-4 w-4" />
-                Message
+                {viewerRole === "cleaner" ? "Message" : "Chat"}
               </Link>
             </Button>
+            {showAfterPhotosCta && (
+              <Button
+                asChild
+                variant="secondary"
+                className="min-h-11 rounded-full border border-sky-500/30 bg-sky-500/10 px-5 text-sm font-semibold text-sky-900 dark:border-sky-700/40 dark:bg-sky-950/40 dark:text-sky-100"
+              >
+                <Link href={`/jobs/${encodeURIComponent(String(job.id))}#job-after-photos`}>
+                  <Camera className="mr-1.5 h-4 w-4" />
+                  After photos
+                </Link>
+              </Button>
+            )}
+            {showReviewReleaseCta && (
+              <Button
+                asChild
+                className="min-h-11 rounded-full bg-violet-600 px-5 text-sm font-semibold hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
+              >
+                <Link href={detailUrl}>
+                  <Sparkles className="mr-1.5 h-4 w-4" />
+                  Review
+                </Link>
+              </Button>
+            )}
             {job.status === "in_progress" && canMarkCleanComplete && (
               <MarkCompleteActionButton
                 jobId={job.id}

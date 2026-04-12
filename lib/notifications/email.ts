@@ -298,7 +298,8 @@ export async function getNotificationEmailContent(
   options: {
     senderName?: string;
     listingId?: number | null;
-    listingUuid?: string | null;
+    /** Listing primary key from DB (string UUID or numeric bigint). */
+    listingUuid?: string | number | null;
     recipientUserId?: string;
   },
   adminOverride?: AdminEmailOverride | null
@@ -365,17 +366,20 @@ export async function buildNotificationEmail(
   messageText: string,
   senderName?: string,
   listingId?: number | null,
-  listingUuid?: string | null
+  listingUuid?: string | number | null
 ): Promise<{ subject: string; html: string }> {
   const id = jobId ?? 0;
   const idStr = String(id);
   const listingIdStr = listingId != null ? String(listingId) : idStr;
+  const listingKeyFromOptions =
+    (listingUuid != null ? String(listingUuid).trim() : "") ||
+    (listingId != null ? String(listingId).trim() : "");
   const messageSnippet = messageText.length > 100 ? `${messageText.slice(0, 97)}…` : messageText;
   const hrefForJob =
     id > 0
       ? emailJobUrl(idStr)
-      : listingUuid?.trim()
-        ? emailListingUrl(listingUuid.trim())
+      : listingKeyFromOptions
+        ? emailListingUrl(listingKeyFromOptions)
         : emailDashboardUrl();
 
   const subjects: Record<NotificationType, string> = {
@@ -420,7 +424,7 @@ export async function buildNotificationEmail(
       element = React.createElement(JobCreated, { jobId: idStr, messageText });
       break;
     case "new_bid": {
-      const bidLinkId = (listingUuid ?? "").trim() || listingIdStr;
+      const bidLinkId = listingKeyFromOptions || listingIdStr;
       templateProps = { listingId: bidLinkId, messageText };
       element = React.createElement(NewBid, {
         listingId: bidLinkId,

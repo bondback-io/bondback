@@ -2,8 +2,8 @@
 export type NotificationPersistOptions = {
   senderName?: string;
   listingId?: number;
-  /** UUID string for listings (preferred over numeric listingId for links). */
-  listingUuid?: string | null;
+  /** Listing PK (string UUID or numeric id from DB). */
+  listingUuid?: string | number | null;
   listingTitle?: string | null;
   amountCents?: number | null;
   /** Override generated title (e.g. admin test notification). */

@@ -1,1 +1,7 @@
-export { dynamic, generateMetadata, default } from "./job-detail-numeric-page";
+import JobDetailPage, {
+  dynamic,
+  generateMetadata,
+} from "./job-detail-numeric-page";
+
+export { dynamic, generateMetadata };
+export default JobDetailPage;

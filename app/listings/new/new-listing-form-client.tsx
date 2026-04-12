@@ -1,23 +1,13 @@
 "use client";
 
-import { lazy, Suspense } from "react";
-import { NewListingFormSkeleton } from "@/components/skeletons/new-listing-form-skeleton";
+import { NewListingForm } from "@/components/features/new-listing-form";
 import type { NewListingFormProps } from "@/components/features/new-listing-form";
 
-const NewListingForm = lazy(() =>
-  import("@/components/features/new-listing-form").then((m) => ({
-    default: m.NewListingForm,
-  }))
-);
-
 /**
- * Code-splits the full new-listing form (incl. photo upload) so the initial /listings/new
- * JS payload stays smaller on mobile; shows the same skeleton as route loading.tsx.
+ * New listing form (client). Loaded synchronously so `next/dynamic` never resolves to
+ * `undefined` when `/listings/new` is prefetched from other routes (e.g. layout prefetch),
+ * which previously caused "Lazy element type must resolve to a class or function" on /jobs/[id].
  */
 export function NewListingFormLazy(props: NewListingFormProps) {
-  return (
-    <Suspense fallback={<NewListingFormSkeleton />}>
-      <NewListingForm {...props} />
-    </Suspense>
-  );
+  return <NewListingForm {...props} />;
 }

@@ -128,6 +128,31 @@ export default async function CleanerDashboardPage() {
     supabase,
     inProgressJobIds
 );
+
+  const listerIdsForActiveJobs = [
+    ...new Set(
+      activeJobs
+        .map((j) => {
+          const l = listingsMap.get(String(j.listing_id));
+          return l ? (l as { lister_id?: string }).lister_id : undefined;
+        })
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+    ),
+  ];
+  const listerFirstNameById: Record<string, string> = {};
+  if (listerIdsForActiveJobs.length > 0) {
+    const { data: listerProfiles } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", listerIdsForActiveJobs);
+    for (const row of listerProfiles ?? []) {
+      const r = row as { id: string; full_name: string | null };
+      const raw = (r.full_name ?? "").trim();
+      const first = raw.split(/\s+/)[0] ?? "";
+      listerFirstNameById[r.id] = first || "Lister";
+    }
+  }
+
   const completedJobs = jobs.filter((j) => j.status === "completed");
   const cancelledJobs = jobs.filter((j) => j.status === "cancelled");
 
@@ -371,6 +396,9 @@ export default async function CleanerDashboardPage() {
             }
             items={activeJobs.map((job) => {
               const listing = listingsMap.get(job.listing_id as string) ?? null;
+              const listerId = listing
+                ? (listing as { lister_id?: string }).lister_id
+                : undefined;
               const deadlineMs = listing
                 ? getPreferredCleaningDeadlineMs(listing)
                 : null;
@@ -394,6 +422,14 @@ export default async function CleanerDashboardPage() {
                   job.status === "in_progress"
                     ? (markCompleteReadyByJobId.get(Number(job.id)) ?? false)
                     : false,
+                counterpartyName:
+                  listerId && listerFirstNameById[listerId]
+                    ? listerFirstNameById[listerId]
+                    : listerId
+                      ? "Lister"
+                      : null,
+                counterpartyRole: "lister" as const,
+                viewerRole: "cleaner" as const,
               };
             })}
           />

@@ -222,7 +222,7 @@ export function buildPushPayload(
   jobId: number | null,
   options?: {
     listingId?: number;
-    listingUuid?: string | null;
+    listingUuid?: string | number | null;
     listingTitle?: string | null;
     amountCents?: number | null;
     suburb?: string | null;
@@ -234,7 +234,7 @@ export function buildPushPayload(
 ): PushPayload {
   const id = jobId != null ? String(jobId) : "";
   const listingIdStr =
-    options?.listingUuid?.trim() ||
+    (options?.listingUuid != null ? String(options.listingUuid).trim() : "") ||
     (options?.listingId != null ? String(options.listingId) : id);
 
   switch (type) {

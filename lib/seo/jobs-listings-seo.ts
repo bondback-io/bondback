@@ -97,12 +97,17 @@ export async function buildJobListingMetadata(
   let jobRowMeta: JobRow | null = null;
 
   if (!Number.isNaN(numericId)) {
-    const jl = await loadJobByNumericIdForSession(supabase, numericId, uid);
-    if (jl?.listing_id) {
-      listingId = String(jl.listing_id);
-      jobRowMeta = jl;
+    if (options.canonical === "listings") {
+      listingId = routeId;
+      jobRowMeta = null;
     } else {
-      return GENERIC_JOB_LISTING_META;
+      const jl = await loadJobByNumericIdForSession(supabase, numericId, uid);
+      if (jl?.listing_id) {
+        listingId = String(jl.listing_id);
+        jobRowMeta = jl;
+      } else {
+        return GENERIC_JOB_LISTING_META;
+      }
     }
   } else {
     jobRowMeta = await loadJobForListingDetailPage(supabase, routeId, uid);

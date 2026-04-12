@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CountdownTimer } from "@/components/features/countdown-timer";
 import { BuyNowButton } from "@/components/features/buy-now-button";
-import { formatCents, getListingCoverUrl } from "@/lib/listings";
+import { formatCents, getListingCoverUrl, getListingSecondImageUrl } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
@@ -310,6 +310,7 @@ function ListingCardInner({
     listing.buy_now_cents > 0 &&
     (listing.current_lowest_bid_cents ?? 0) >= listing.buy_now_cents;
   const thumb = getListingCoverUrl(listing);
+  const secondaryThumb = getListingSecondImageUrl(listing);
   const status = getStatus(listing);
   const hasBids =
     (typeof bidCount === "number" && bidCount > 0) ||
@@ -334,7 +335,12 @@ function ListingCardInner({
   const hasPhotos = Boolean(thumb);
 
   const currentCents = listing.current_lowest_bid_cents ?? listing.starting_price_cents ?? 0;
+  const startingCents = listing.starting_price_cents ?? 0;
   const buyNowCents = typeof listing.buy_now_cents === "number" ? listing.buy_now_cents : null;
+  const startingBidDisplay =
+    isLive && startingCents > 0 && (typeof bidCount === "number" ? bidCount === 0 : !hasBids)
+      ? formatCents(startingCents)
+      : null;
   const priceRangeLabel = buyNowCents != null && buyNowCents !== currentCents
     ? `${formatCents(currentCents)}–${formatCents(buyNowCents)}`
     : formatCents(currentCents);
@@ -407,6 +413,7 @@ function ListingCardInner({
           title={title}
           thumb={thumb}
           thumbAlt={thumbAlt}
+          secondaryThumb={secondaryThumb}
           priceDisplay={formatCents(listing.current_lowest_bid_cents ?? 0)}
           priceLabel={hasBuyNow && isLive ? "Fixed price" : "Current lowest bid"}
           statusLine={statusLineMarket}
@@ -414,6 +421,9 @@ function ListingCardInner({
           locationLine={locationLineFull}
           beds={listing.bedrooms as number | undefined}
           baths={listing.bathrooms as number | undefined}
+          propertyType={propertyType ?? undefined}
+          bidCount={typeof bidCount === "number" ? bidCount : undefined}
+          startingBidDisplay={startingBidDisplay}
           isHot={isHotJob}
           listerVerificationBadges={effectiveListerBadges}
           showListerTrust={showListerBlock && effectiveListerBadges.length > 0}

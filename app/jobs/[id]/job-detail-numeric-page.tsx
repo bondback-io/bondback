@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { buildJobListingMetadata } from "@/lib/seo/jobs-listings-seo";
 import { logSystemError } from "@/lib/system-error-log";
-import { loadJobByNumericIdForSession } from "@/lib/jobs/load-job-for-detail-route";
+import {
+  loadJobByNumericIdForSession,
+  loadListingFullForSession,
+} from "@/lib/jobs/load-job-for-detail-route";
 import { buildJobRouteDebugSnapshot } from "@/lib/jobs/job-route-debug";
 import { JobDetailPageContent } from "@/app/jobs/job-detail-page-content";
 import { JobRouteDebugPanel } from "@/app/jobs/[id]/job-route-debug-panel";
@@ -88,6 +91,15 @@ export default async function JobDetailPage({
     if (debugMode) {
       const payload = await buildJobRouteDebugSnapshot(supabase, numericId, raw, sessionUserId);
       return <JobRouteDebugPanel payload={payload} />;
+    }
+    const listingRow = await loadListingFullForSession(
+      supabase,
+      raw,
+      sessionUserId ?? undefined,
+      null
+    );
+    if (listingRow) {
+      redirect(`/listings/${encodeURIComponent(raw)}`);
     }
     notFound();
   }

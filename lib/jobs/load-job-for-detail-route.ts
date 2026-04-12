@@ -51,7 +51,7 @@ export function isMarketplaceVisibleListing(row: ListingRow): boolean {
 }
 
 /**
- * Load a job by numeric PK for `/jobs/[id]` and `/listings/[digits]` redirect resolution.
+ * Load a job by numeric PK for `/jobs/[id]`. Listing detail uses `listing_id` in the URL (`/listings/[id]`).
  * User-scoped client first; then service role. Returns the row for lister/winner, or when the
  * linked listing is marketplace-visible (same for anonymous and logged-in non-parties, e.g. cleaners).
  */
@@ -99,6 +99,16 @@ export async function loadJobByNumericIdForSession(
 
   if (sessionUserId?.trim()) {
     if (sameUserId(j.lister_id, sessionUserId) || sameUserId(j.winner_id, sessionUserId)) {
+      return j;
+    }
+    const { data: bidExists } = await admin
+      .from("bids")
+      .select("id")
+      .eq("listing_id", j.listing_id)
+      .eq("cleaner_id", sessionUserId)
+      .limit(1)
+      .maybeSingle();
+    if (bidExists) {
       return j;
     }
   }

@@ -333,7 +333,7 @@ export function JobsList({
         priority={index < PRELOAD_IMAGE_COUNT}
         listerName={listerCard?.listerName ?? null}
         listerVerificationBadges={listerCard?.listerVerificationBadges ?? null}
-        compactMobileMarketplace={isMobile}
+        compactMobileMarketplace={false}
       />
     );
   }
