@@ -13,6 +13,52 @@ type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
+/** Same shape as `createServerSupabaseClient` / admin client for `.from("listings")` updates. */
+type ListingsDbClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
+
+/**
+ * Resolve a listing the current user owns and return a client that can read/update it.
+ * When `SUPABASE_SERVICE_ROLE_KEY` is set, uses the admin client so SELECT/UPDATE succeed even if
+ * RLS does not yet expose the new row to the user-scoped client (same model as createListingForPublish).
+ */
+async function getListerListingWriteClient(
+  listingId: string,
+  userId: string
+): Promise<{ ok: true; client: ListingsDbClient } | { ok: false; error: string }> {
+  const supabase = await createServerSupabaseClient();
+  const admin = createSupabaseAdminClient();
+
+  if (admin) {
+    const { data, error } = await admin
+      .from("listings")
+      .select("id, lister_id")
+      .eq("id", listingId)
+      .maybeSingle();
+    if (error || !data) {
+      return { ok: false, error: "Listing not found." };
+    }
+    const row = data as Pick<ListingRow, "id" | "lister_id">;
+    if (row.lister_id !== userId) {
+      return { ok: false, error: "You are not allowed to edit this listing." };
+    }
+    return { ok: true, client: admin as unknown as ListingsDbClient };
+  }
+
+  const { data, error } = await supabase
+    .from("listings")
+    .select("id, lister_id")
+    .eq("id", listingId)
+    .maybeSingle();
+  if (error || !data) {
+    return { ok: false, error: "Listing not found." };
+  }
+  const row = data as Pick<ListingRow, "id" | "lister_id">;
+  if (row.lister_id !== userId) {
+    return { ok: false, error: "You are not allowed to edit this listing." };
+  }
+  return { ok: true, client: supabase };
+}
+
 export type CreateListingForPublishResult =
   | { ok: true; id: string }
   | { ok: false; error: string };
@@ -77,29 +123,17 @@ export async function updateListingDetails(
   details: { description?: string | null; photo_urls?: string[] | null }
 ): Promise<UpdateListingDetailsResult> {
   const supabase = await createServerSupabaseClient();
-
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
     return { ok: false, error: "You must be logged in." };
   }
 
-  const { data: listing, error: fetchError } = await supabase
-    .from("listings")
-    .select("id, lister_id")
-    .eq("id", listingId)
-    .maybeSingle();
-
-  if (fetchError || !listing) {
-    return { ok: false, error: "Listing not found." };
-  }
-
-  const row = listing as Pick<ListingRow, "id" | "lister_id">;
-
-  if (row.lister_id !== session.user.id) {
-    return { ok: false, error: "You are not allowed to edit this listing." };
+  const access = await getListerListingWriteClient(listingId, user.id);
+  if (!access.ok) {
+    return access;
   }
 
   const patch: ListingUpdate = {};
@@ -118,7 +152,7 @@ export async function updateListingDetails(
     patch.photo_urls = arr.length > 0 ? arr : null;
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await access.client
     .from("listings")
     .update(patch as never)
     .eq("id", listingId);
@@ -146,33 +180,21 @@ export async function updateListingInitialPhotos(
   photoUrls: string[]
 ): Promise<UpdateListingInitialPhotosResult> {
   const supabase = await createServerSupabaseClient();
-
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
     return { ok: false, error: "You must be logged in." };
   }
 
-  const { data: listing, error: fetchError } = await supabase
-    .from("listings")
-    .select("id, lister_id")
-    .eq("id", listingId)
-    .maybeSingle();
-
-  if (fetchError || !listing) {
-    return { ok: false, error: "Listing not found." };
-  }
-
-  const rowInitial = listing as Pick<ListingRow, "id" | "lister_id">;
-
-  if (rowInitial.lister_id !== session.user.id) {
-    return { ok: false, error: "You are not allowed to edit this listing." };
+  const access = await getListerListingWriteClient(listingId, user.id);
+  if (!access.ok) {
+    return access;
   }
 
   const arr = Array.isArray(photoUrls) ? photoUrls.slice(0, PHOTO_LIMITS.LISTING_INITIAL) : [];
-  const { error: updateError } = await supabase
+  const { error: updateError } = await access.client
     .from("listings")
     .update({ initial_photos: arr.length > 0 ? arr : null } as ListingUpdate as never)
     .eq("id", listingId);
@@ -200,32 +222,20 @@ export async function updateListingCoverPhoto(
   coverPhotoUrl: string | null
 ): Promise<UpdateListingCoverPhotoResult> {
   const supabase = await createServerSupabaseClient();
-
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
     return { ok: false, error: "You must be logged in." };
   }
 
-  const { data: listing, error: fetchError } = await supabase
-    .from("listings")
-    .select("id, lister_id")
-    .eq("id", listingId)
-    .maybeSingle();
-
-  if (fetchError || !listing) {
-    return { ok: false, error: "Listing not found." };
+  const access = await getListerListingWriteClient(listingId, user.id);
+  if (!access.ok) {
+    return access;
   }
 
-  const rowCover = listing as Pick<ListingRow, "id" | "lister_id">;
-
-  if (rowCover.lister_id !== session.user.id) {
-    return { ok: false, error: "You are not allowed to edit this listing." };
-  }
-
-  const { error: updateError } = await supabase
+  const { error: updateError } = await access.client
     .from("listings")
     .update({ cover_photo_url: coverPhotoUrl } as ListingUpdate as never)
     .eq("id", listingId);
