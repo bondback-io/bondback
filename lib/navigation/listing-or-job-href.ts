@@ -121,26 +121,38 @@ export function detailUrlForCardItem(item: MarketplaceDetailItem): string {
 }
 
 /**
- * Prefer listing URL while the auction is live; then job vs listing from assignee/status.
+ * Listers/cleaners browse live auctions on `/listings/[uuid]`. Only after a cleaner is assigned
+ * (winner_id / dispute on the job row) is `/jobs/[numericPk]` the primary surface.
+ *
+ * Rule: **default to `/listings/{listing.id}`** unless the linked job row is “assigned” per
+ * {@link isJobAssigned}. This avoids `/jobs/[n]` when no job exists yet or the row has no winner
+ * (still in listings / bidding phase), even if `end_time` or `status` are momentarily wrong.
  */
 export function hrefListingOrJob(
   listing: ListingLinkInput,
   job?: JobLinkInput | null
 ): string {
-  if (isListingLiveAuction(listing)) {
-    return `/listings/${listing.id}`;
+  if (
+    job &&
+    isJobAssigned({
+      id: job.id,
+      job_id: job.id,
+      listing_id: listing.id,
+      status: job.status,
+      winner_id: job.winner_id,
+      cleaner_id: job.cleaner_id,
+    })
+  ) {
+    return detailUrlForCardItem({
+      id: job.id,
+      job_id: job.id,
+      listing_id: listing.id,
+      status: job.status,
+      winner_id: job.winner_id,
+      cleaner_id: job.cleaner_id,
+    });
   }
-  if (!job) {
-    return `/listings/${listing.id}`;
-  }
-  return detailUrlForCardItem({
-    id: job.id,
-    job_id: job.id,
-    listing_id: listing.id,
-    status: job.status,
-    winner_id: job.winner_id,
-    cleaner_id: job.cleaner_id,
-  });
+  return `/listings/${listing.id}`;
 }
 
 export function hrefListingOnly(listingId: string): string {
