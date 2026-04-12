@@ -20,6 +20,9 @@ function routeHint(pathname: string): string | null {
   if (first === "listings" && second && /^\d+$/.test(second)) {
     return "This path looks like /listings/[number]. Listing URLs use a listing UUID; numeric ids are usually jobs → /jobs/[id].";
   }
+  if (first === "jobs" && second && /^\d+$/.test(second)) {
+    return "Numeric job URLs can 404 if the job id does not exist, RLS hides the row from your session, or the server cannot verify rows (e.g. missing SUPABASE_SERVICE_ROLE_KEY). Re-open this path with ?debug=1 for a server diagnostic panel.";
+  }
   return null;
 }
 

@@ -53,6 +53,9 @@ export async function POST(req: Request) {
   } else if (first === "listings" && second && /^\d+$/.test(second)) {
     hint =
       "Path looks like /listings/[number]. Listing routes expect a listing UUID; numeric ids are usually job ids → /jobs/[id].";
+  } else if (first === "jobs" && second && /^\d+$/.test(second)) {
+    hint =
+      "Numeric /jobs/[id] 404: missing job row, RLS blocked SELECT, or service role unavailable for verification. Use ?debug=1 on the job URL for diagnostics.";
   }
 
   const message = [
