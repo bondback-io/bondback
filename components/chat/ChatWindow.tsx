@@ -10,6 +10,11 @@ import { useToast } from "@/components/ui/use-toast";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { cn } from "@/lib/utils";
+import {
+  jobParticipantRole,
+  messageSenderJobRole,
+  normalizeChatUid,
+} from "@/lib/chat-participant-role";
 
 type JobMessageRow = Database["public"]["Tables"]["job_messages"]["Row"];
 
@@ -37,48 +42,13 @@ function isOptimisticId(id: number): boolean {
   return id < 0;
 }
 
-/** Compare auth/job UUIDs from DB vs client (case, hyphen formatting). */
-function normalizeUid(id: string | null | undefined): string {
-  if (id == null) return "";
-  return String(id).trim().toLowerCase().replace(/-/g, "");
-}
-
-/**
- * Bubble colour is lister=blue, cleaner=green. Prefer matching sender to job roles;
- * if IDs fail to match (format drift), fall back to the viewer's role for own messages.
- */
-function resolveSenderRole(
-  senderId: string | null | undefined,
-  listerId: string | null,
-  cleanerId: string | null,
-  currentUserId: string,
-  currentUserRole: "lister" | "cleaner" | null
-): "lister" | "cleaner" {
-  const s = normalizeUid(senderId);
-  const l = normalizeUid(listerId);
-  const c = normalizeUid(cleanerId);
-  const me = normalizeUid(currentUserId);
-
-  const matchesLister = Boolean(l && s === l);
-  const matchesCleaner = Boolean(c && s === c);
-
-  if (matchesLister && matchesCleaner) {
-    if (s === me && currentUserRole) return currentUserRole;
-    return "lister";
-  }
-  if (matchesLister) return "lister";
-  if (matchesCleaner) return "cleaner";
-  if (s === me && currentUserRole) return currentUserRole;
-  return "cleaner";
-}
-
 function mergeIncomingMessage(
   prev: JobMessageRow[],
   incoming: JobMessageRow
 ): JobMessageRow[] {
   const withoutMatchingOptimistic = prev.filter((m) => {
     if (!isOptimisticId(m.id)) return true;
-    if (m.sender_id !== incoming.sender_id) return true;
+    if (normalizeChatUid(m.sender_id) !== normalizeChatUid(incoming.sender_id)) return true;
     const t1 = new Date(m.created_at).getTime();
     const t2 = new Date(incoming.created_at).getTime();
     if (Math.abs(t1 - t2) > 25_000) return true;
@@ -146,11 +116,18 @@ export function ChatWindow({
     typeof supabase.channel
   > | null>(null);
 
+  /** Job participant role (lister vs cleaner on this thread), not app nav “active role”. */
+  const participantRole = useMemo(
+    () => jobParticipantRole(currentUserId, listerId, cleanerId),
+    [currentUserId, listerId, cleanerId]
+  );
+  const shellRole = participantRole ?? currentUserRole;
+
   const otherPartyFirstName = useMemo(() => {
-    const isLister = currentUserId === listerId;
-    const raw = isLister ? cleanerName : listerName;
-    return (raw ?? (isLister ? "Cleaner" : "Owner")).split(" ")[0] ?? "Partner";
-  }, [currentUserId, listerId, cleanerName, listerName]);
+    const isMeLister = shellRole === "lister";
+    const raw = isMeLister ? cleanerName : listerName;
+    return (raw ?? (isMeLister ? "Cleaner" : "Owner")).split(" ")[0] ?? "Partner";
+  }, [shellRole, cleanerName, listerName]);
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -243,7 +220,7 @@ export function ChatWindow({
       if (!custom.detail) return;
       const { jobId: evtJobId, message } = custom.detail;
       if (evtJobId !== jobId) return;
-      if (message.sender_id === currentUserId) return;
+      if (normalizeChatUid(message.sender_id) === normalizeChatUid(currentUserId)) return;
       setMessages((prev) => mergeIncomingMessage(prev, message));
     };
     window.addEventListener("bondback:job-message-sent", handler as EventListener);
@@ -263,7 +240,11 @@ export function ChatWindow({
 
     ch.on("broadcast", { event: "typing" }, ({ payload }) => {
       const p = payload as { userId?: string; label?: string };
-      if (!p?.userId || p.userId === currentUserId) return;
+      if (
+        !p?.userId ||
+        normalizeChatUid(p.userId) === normalizeChatUid(currentUserId)
+      )
+        return;
       setTypingPeerLabel(p.label ?? otherPartyFirstName);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => {
@@ -286,7 +267,7 @@ export function ChatWindow({
     if (now - typingSendCooldownRef.current < 1800) return;
     typingSendCooldownRef.current = now;
     const label =
-      currentUserRole === "cleaner"
+      shellRole === "cleaner"
         ? (cleanerName ?? "Cleaner").split(" ")[0]
         : (listerName ?? "Owner").split(" ")[0];
     void ch.send({
@@ -294,7 +275,7 @@ export function ChatWindow({
       event: "typing",
       payload: { userId: currentUserId, label },
     });
-  }, [currentUserId, currentUserRole, cleanerName, listerName]);
+  }, [currentUserId, shellRole, cleanerName, listerName]);
 
   const handleSend = () => {
     if (readOnly) return;
@@ -430,8 +411,8 @@ export function ChatWindow({
       ? "min-h-[260px] max-h-[52vh] sm:max-h-[58vh]"
       : "min-h-[min(92dvh,720px)] sm:min-h-[520px]";
 
-  const isListerRole = currentUserRole === "lister";
-  const isCleanerRole = currentUserRole === "cleaner";
+  const isListerRole = shellRole === "lister";
+  const isCleanerRole = shellRole === "cleaner";
   const shellBg = isListerRole
     ? "bg-gradient-to-b from-sky-100/90 via-sky-50/50 to-[#e0edff] dark:from-slate-950 dark:via-slate-950 dark:to-slate-900"
     : isCleanerRole
@@ -514,13 +495,12 @@ export function ChatWindow({
           </div>
         ) : (
           messages.map((m, i) => {
-            const isMe = normalizeUid(m.sender_id) === normalizeUid(currentUserId);
-            const senderRole = resolveSenderRole(
+            const isMe =
+              normalizeChatUid(m.sender_id) === normalizeChatUid(currentUserId);
+            const senderRole = messageSenderJobRole(
               m.sender_id,
               listerId,
-              cleanerId,
-              currentUserId,
-              currentUserRole
+              cleanerId
             );
             const isListerSender = senderRole === "lister";
             const senderLabel =
@@ -532,7 +512,8 @@ export function ChatWindow({
             const showAvatar =
               !isMe &&
               (!prev ||
-                normalizeUid(prev.sender_id) !== normalizeUid(m.sender_id) ||
+                normalizeChatUid(prev.sender_id) !==
+                  normalizeChatUid(m.sender_id) ||
                 new Date(m.created_at).getTime() -
                   new Date(prev.created_at).getTime() >
                   5 * 60 * 1000);
@@ -549,15 +530,6 @@ export function ChatWindow({
                 avatarUrl={avatarUrl}
                 senderLabel={senderLabel}
                 senderRole={senderRole}
-                viewerRoleHint={
-                  isMe
-                    ? currentUserRole === "lister"
-                      ? "Lister"
-                      : currentUserRole === "cleaner"
-                        ? "Cleaner"
-                        : null
-                    : null
-                }
                 isDelivered={isDelivered}
                 isRead={isRead}
               />
@@ -578,7 +550,7 @@ export function ChatWindow({
         sending={uploadingImage}
         isOffline={isOffline}
         onPhotoSelected={(files) => void handlePhotoSelected(files)}
-        accentRole={currentUserRole}
+        accentRole={shellRole}
         disabled={readOnly}
         placeholder={readOnly ? "Read-only chat" : "Aa"}
       />

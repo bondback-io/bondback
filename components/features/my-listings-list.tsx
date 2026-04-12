@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ImagePlus, Search, ClipboardList, Inbox, FileEdit, Scale } from "lucide-react";
+import {
+  ImagePlus,
+  Search,
+  ClipboardList,
+  Inbox,
+  FileEdit,
+  Scale,
+  Briefcase,
+} from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +62,7 @@ import {
   passesListFilter,
   listingMatchesCompletedTab,
   isDisputedJobStatus,
+  isListerPaidJobListing,
   type ListFilter,
 } from "@/lib/my-listings/lister-listing-helpers";
 import {
@@ -74,7 +83,13 @@ function preferJobRow<
   return tb >= ta ? b : a;
 }
 
-export type ListerViewTab = "active" | "disputed" | "completed" | "drafts" | "all";
+export type ListerViewTab =
+  | "active"
+  | "paid"
+  | "disputed"
+  | "completed"
+  | "drafts"
+  | "all";
 
 type JobRowState = {
   jobId: number | string;
@@ -116,6 +131,7 @@ export type MyListingsListProps = {
   >;
   tabCounts: {
     active: number;
+    paid: number;
     disputed: number;
     completed: number;
     all: number;
@@ -593,10 +609,14 @@ export function MyListingsList({
     for (const l of liveListingsWithBids) map.set(String(l.id), l);
     for (const l of noBidLiveListings) map.set(String(l.id), l);
     const arr = Array.from(map.values());
-    arr.sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    arr.sort((a, b) => {
+      const ja = activeJobs[String(a.id)];
+      const jb = activeJobs[String(b.id)];
+      const pa = isListerPaidJobListing(ja);
+      const pb = isListerPaidJobListing(jb);
+      if (pa !== pb) return pa ? -1 : 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
     return arr;
   }, [activeNonCompletedListings, liveListingsWithBids, noBidLiveListings, activeJobs]);
 
@@ -628,12 +648,31 @@ export function MyListingsList({
 
   const allSorted = useMemo(() => {
     const arr = [...listingsDeduped];
-    arr.sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    arr.sort((a, b) => {
+      const ja = activeJobs[String(a.id)];
+      const jb = activeJobs[String(b.id)];
+      const pa = isListerPaidJobListing(ja);
+      const pb = isListerPaidJobListing(jb);
+      if (pa !== pb) return pa ? -1 : 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
     return arr;
-  }, [listingsDeduped]);
+  }, [listingsDeduped, activeJobs]);
+
+  const paidTabListings = useMemo(() => {
+    const arr = listingsDeduped.filter((l) =>
+      isListerPaidJobListing(activeJobs[String(l.id)])
+    );
+    arr.sort((a, b) => {
+      const ua = activeJobs[String(a.id)]?.updatedAt;
+      const ub = activeJobs[String(b.id)]?.updatedAt;
+      const ta = ua ? Date.parse(String(ua)) : 0;
+      const tb = ub ? Date.parse(String(ub)) : 0;
+      if (tb !== ta) return tb - ta;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+    return arr;
+  }, [listingsDeduped, activeJobs]);
 
   const searchLower = search.trim().toLowerCase();
   const matchesSearch = (l: ListingRow) => {
@@ -676,6 +715,11 @@ export function MyListingsList({
           const j = activeJobs[String(l.id)];
           return matchesSearch(l) && passesListFilter(listFilter, l, j, nowMs);
         });
+      case "paid":
+        return paidTabListings.filter((l) => {
+          const j = activeJobs[String(l.id)];
+          return matchesSearch(l) && passesListFilter(listFilter, l, j, nowMs);
+        });
       default:
         return [];
     }
@@ -699,7 +743,7 @@ export function MyListingsList({
     href: string,
     active: boolean,
     children: React.ReactNode,
-    tone: "emerald" | "amber" = "emerald"
+    tone: "emerald" | "amber" | "violet" = "emerald"
   ) => (
     <Link
       href={href}
@@ -709,7 +753,9 @@ export function MyListingsList({
         active
           ? tone === "amber"
             ? "bg-amber-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-amber-600 dark:text-white dark:ring-amber-400/25 [&_span]:text-white/85"
-            : "bg-emerald-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-emerald-600 dark:text-white dark:ring-emerald-400/25 [&_span]:text-white/85"
+            : tone === "violet"
+              ? "bg-violet-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-violet-600 dark:text-white dark:ring-violet-400/25 [&_span]:text-white/85"
+              : "bg-emerald-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-emerald-600 dark:text-white dark:ring-emerald-400/25 [&_span]:text-white/85"
           : "border border-transparent bg-muted/90 text-muted-foreground hover:bg-muted dark:border-gray-700/90 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
       )}
     >
@@ -755,6 +801,15 @@ export function MyListingsList({
             <>
               Active <span className="ml-1 tabular-nums opacity-60">({tabCounts.active})</span>
             </>
+          )}
+          {tabPill(
+            `/my-listings?tab=paid`,
+            viewTab === "paid",
+            <>
+              Paid jobs{" "}
+              <span className="ml-1 tabular-nums opacity-60">({tabCounts.paid})</span>
+            </>,
+            "violet"
           )}
           {tabPill(
             `/my-listings?tab=disputed`,
@@ -840,6 +895,21 @@ export function MyListingsList({
                 </div>
               )}
             </>
+          )}
+
+          {viewTab === "paid" && displayRows.length === 0 && (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-violet-200/80 bg-violet-50/40 px-6 py-16 text-center dark:border-violet-900/50 dark:bg-violet-950/20">
+              <Briefcase className="h-12 w-12 text-violet-700 dark:text-violet-400" aria-hidden />
+              <div>
+                <p className="text-lg font-semibold text-foreground dark:text-gray-100">
+                  No paid jobs yet
+                </p>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground dark:text-gray-400">
+                  When an auction closes and you move into escrow with a cleaner, those jobs appear
+                  here — and at the top of Active and All.
+                </p>
+              </div>
+            </div>
           )}
 
           {viewTab === "active" && displayRows.length === 0 && (

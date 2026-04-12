@@ -10,6 +10,7 @@ import { JobChat } from "@/components/features/job-chat";
 import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
 import { formatCents } from "@/lib/listings";
 import { buildChatStatusPill } from "@/lib/chat-messenger-display";
+import { jobParticipantRole } from "@/lib/chat-participant-role";
 
 export function FloatingChatPanel() {
   const {
@@ -35,10 +36,10 @@ export function FloatingChatPanel() {
       ? formatCents(selected.agreedAmountCents)
       : "—";
 
-  const isLister =
-    !!currentUserId && !!selected && currentUserId === selected.listerId;
-  const isCleaner =
-    !!currentUserId && !!selected && currentUserId === selected.cleanerId;
+  const participantRole =
+    !!currentUserId && !!selected
+      ? jobParticipantRole(currentUserId, selected.listerId, selected.cleanerId)
+      : null;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 flex justify-end px-3 pb-3 sm:px-4 sm:pb-4">
@@ -132,9 +133,7 @@ export function FloatingChatPanel() {
                     jobId={selected.jobId}
                     currentUserId={currentUserId}
                     canChat={isChatUnlockedForJobStatus(selected.status)}
-                    currentUserRole={
-                      isLister ? "lister" : isCleaner ? "cleaner" : null
-                    }
+                    currentUserRole={participantRole}
                     listerId={selected.listerId}
                     cleanerId={selected.cleanerId}
                     listerName={selected.listerName}

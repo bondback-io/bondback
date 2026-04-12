@@ -168,6 +168,23 @@ export function listingMatchesCompletedTab(
   return (job?.status ?? "") === "completed";
 }
 
+/**
+ * Listing shows the violet “Paid job — auction closed…” card: job exists, escrow/work pipeline,
+ * not completed, not disputed.
+ */
+export function isListerPaidJobListing(
+  job: JobSnapshot | null | undefined
+): boolean {
+  const s = String(job?.status ?? "");
+  if (!s || s === "cancelled" || s === "completed") return false;
+  if (isDisputedJobStatus(s)) return false;
+  return (
+    s === "accepted" ||
+    s === "in_progress" ||
+    s === "completed_pending_approval"
+  );
+}
+
 export type ListFilter = "all" | "auctions" | "jobs";
 
 export function passesListFilter(

@@ -9,6 +9,7 @@ import { JobChat } from "@/components/features/job-chat";
 import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
 import { formatCents } from "@/lib/listings";
 import { buildChatStatusPill } from "@/lib/chat-messenger-display";
+import { jobParticipantRole } from "@/lib/chat-participant-role";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -346,13 +347,11 @@ export function MessagesPageClient({
             jobId={selected.jobId}
             currentUserId={currentUserId}
             canChat={isChatUnlockedForJobStatus(selected.jobStatus)}
-            currentUserRole={
-              currentUserId === selected.listerId
-                ? "lister"
-                : currentUserId === selected.cleanerId
-                  ? "cleaner"
-                  : null
-            }
+            currentUserRole={jobParticipantRole(
+              currentUserId,
+              selected.listerId,
+              selected.cleanerId
+            )}
             listerId={selected.listerId}
             cleanerId={selected.cleanerId}
             listerName={selected.listerName}

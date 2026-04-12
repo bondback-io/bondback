@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { applyListingAuctionOutcomes, fetchListingsForLister } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
 import { MyListingsList, type ListerViewTab } from "@/components/features/my-listings-list";
+import { isListerPaidJobListing } from "@/lib/my-listings/lister-listing-helpers";
 import { MyListingsNewListingButton } from "@/components/listing/my-listings-new-listing-button";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
@@ -51,6 +52,7 @@ function parseTabParam(raw: string | undefined): ListerViewTab {
   if (t === "drafts") return "drafts";
   if (t === "all" || t === "cancelled_listings") return "all";
   if (t === "disputed" || t === "disputes") return "disputed";
+  if (t === "paid" || t === "paid_jobs" || t === "jobs_paid") return "paid";
   if (t === "active" || t === "active_listings" || t === "pending_payments") {
     return "active";
   }
@@ -133,6 +135,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
   let activeTabCount = 0;
   let completedCount = 0;
   let disputedCount = 0;
+  let paidJobsCount = 0;
 
   if (listingIds.length > 0) {
     const { data: jobsData } = await supabase
@@ -231,6 +234,10 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
     completedCount = new Set(
       jobs.filter((j) => j.status === "completed").map((j) => String(j.listing_id))
     ).size;
+
+    paidJobsCount = initialListings.filter((l) =>
+      isListerPaidJobListing(jobByListing[String(l.id)])
+    ).length;
   }
 
   return (
@@ -282,6 +289,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
           viewTab={tab}
           tabCounts={{
             active: activeTabCount,
+            paid: paidJobsCount,
             disputed: disputedCount,
             completed: completedCount,
             all: initialListings.length,
