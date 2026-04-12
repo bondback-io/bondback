@@ -45,7 +45,10 @@ import {
   Bookmark,
 } from "lucide-react";
 import { VerificationBadges } from "@/components/shared/verification-badges";
-import { JobCardMarketplaceMobile, formatAuctionTimeLeftShort } from "@/components/JobCard";
+import {
+  JobCardMarketplaceMobile,
+  formatAuctionTimeLeftShort,
+} from "@/components/ui/marketplace-job-card-mobile";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { useDistanceUnit } from "@/hooks/use-distance-unit";
 import { formatDistanceKmLabel } from "@/lib/distance-format";

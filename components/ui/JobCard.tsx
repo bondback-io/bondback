@@ -44,4 +44,4 @@ export {
   JobCardMarketplaceMobile,
   type JobCardMarketplaceMobileProps,
   formatAuctionTimeLeftShort,
-} from "@/components/JobCard";
+} from "@/components/ui/marketplace-job-card-mobile";

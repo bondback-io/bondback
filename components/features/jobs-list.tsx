@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { AnimatedListingCard } from "@/components/ui/listing-card";
+import { AnimatedListingCard } from "@/components/ui/ListingCard";
 import {
   clampRadiusKm,
   getStoredRadiusKm,

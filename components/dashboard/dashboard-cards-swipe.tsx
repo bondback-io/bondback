@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { JobCard } from "@/components/ui/job-card";
+import { JobCard } from "@/components/ui/JobCard";
 import type { DashboardJobCardProps } from "@/components/dashboard/dashboard-job-card";
 import { DashboardListingCard } from "@/components/dashboard/dashboard-listing-card";
 import type { DashboardListingCardProps } from "@/components/dashboard/dashboard-listing-card";

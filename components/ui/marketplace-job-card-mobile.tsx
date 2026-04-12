@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Mobile-only (<768px) marketplace job/listing card shell — Airtasker-style hero + bold price + CTAs.
- * Desktop layouts stay in listing-card / dashboard-* with `hidden md:block`.
+ * Mobile-only (<768px) marketplace listing card shell — Airtasker-style hero + bold price + CTAs.
+ * Desktop layouts stay in `features/listing-card` / dashboard-* with `hidden md:block`.
  */
 
 import Link from "next/link";
