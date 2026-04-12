@@ -66,15 +66,17 @@ export function getFriendlyError(
   }
 
   switch (flow) {
-    case "listing":
+    case "listing": {
+      /** Do not scrub DB/RLS messages — users need the real PostgREST error to fix RLS or schema. */
+      const listingMsg =
+        raw.trim().length > 480 ? `${raw.trim().slice(0, 477)}…` : raw.trim();
       return {
         title: "We couldn’t finish your listing",
-        description: detail
-          ? `What happened: ${detail}`
-          : "Saving your listing hit a snag before it went live.",
+        description: listingMsg || "Saving your listing hit a snag before it went live.",
         nextAction:
           "Tap Retry to try again. Your answers stay on this page. If it continues, contact support.",
       };
+    }
     case "photoUpload":
       return {
         title: "A photo didn’t upload",

@@ -90,4 +90,4 @@ The **new listing form** builds rows with `lib/listings.ts` → `buildListingIns
 
 ### Row Level Security (listers must insert/update)
 
-If `ALTER TABLE public.listings ENABLE ROW LEVEL SECURITY` is on and only marketplace **SELECT** policies exist, **INSERT** from the app will fail until listers can write their own rows. Run **`supabase/sql/20260413120000_listings_rls_lister_insert_update.sql`** in the Supabase SQL editor, or ensure **`SUPABASE_SERVICE_ROLE_KEY`** is set on the server (the publish action uses it when available).
+If `ALTER TABLE public.listings ENABLE ROW LEVEL SECURITY` is on and only marketplace **SELECT** policies exist, **INSERT** from the app will fail until listers can write their own rows. You also need **SELECT** for your own rows so `INSERT … RETURNING` can return the new listing id (otherwise PostgREST returns 0 rows). Run **`supabase/sql/20260413120000_listings_rls_lister_insert_update.sql`** in the Supabase SQL editor (re-run safe: uses `DROP POLICY IF EXISTS`), or ensure **`SUPABASE_SERVICE_ROLE_KEY`** is set on the server (the publish action uses it when available).

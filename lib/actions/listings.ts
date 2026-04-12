@@ -27,20 +27,24 @@ export async function createListingForPublish(
 ): Promise<CreateListingForPublishResult> {
   const supabase = await createServerSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
     return { ok: false, error: "You must be logged in." };
   }
-  if (String(row.lister_id) !== String(session.user.id)) {
-    return { ok: false, error: "Invalid lister." };
-  }
+
+  /** Never trust client-supplied lister_id — avoids mismatch when session cookie is the source of truth. */
+  const rowToInsert: ListingInsertPayload = {
+    ...row,
+    lister_id: user.id,
+  };
 
   const admin = createSupabaseAdminClient();
 
   const insertQuery = admin
-    ? await admin.from("listings").insert(row as never).select("id").maybeSingle()
-    : await supabase.from("listings").insert(row as never).select("id").maybeSingle();
+    ? await admin.from("listings").insert(rowToInsert as never).select("id").maybeSingle()
+    : await supabase.from("listings").insert(rowToInsert as never).select("id").maybeSingle();
 
   const { data, error } = insertQuery;
 
@@ -48,7 +52,11 @@ export async function createListingForPublish(
     return { ok: false, error: error.message };
   }
   if (!data?.id) {
-    return { ok: false, error: "Failed to create listing." };
+    return {
+      ok: false,
+      error:
+        "Insert did not return a listing id. Often this means RLS blocks SELECT on the new row after INSERT — run supabase/sql/20260413120000_listings_rls_lister_insert_update.sql (includes listings_select_own_lister) or set SUPABASE_SERVICE_ROLE_KEY on the server.",
+    };
   }
 
   revalidatePath("/my-listings");
