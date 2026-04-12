@@ -432,7 +432,10 @@ export function JobDetail({
     !hasActiveJob &&
     Boolean(
       currentUserId &&
-        bids.some((b) => b.cleaner_id === currentUserId)
+        bids.some(
+          (b) =>
+            b.cleaner_id === currentUserId && b.status === "active"
+        )
     );
 
   const handleRevertLastBid = useCallback(async () => {
@@ -3358,24 +3361,6 @@ function BidHistorySection({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const [reverting, setReverting] = useState(false);
-
-  const handleRevertLastBidClick = async () => {
-    if (!onRevertLastBid) return;
-    if (
-      !window.confirm(
-        "Revert your last bid on this listing? This cannot be undone."
-      )
-    ) {
-      return;
-    }
-    setReverting(true);
-    try {
-      await onRevertLastBid();
-    } finally {
-      setReverting(false);
-    }
-  };
 
   return (
     <details
@@ -3397,21 +3382,10 @@ function BidHistorySection({
             bids={bids}
             onAcceptBid={onAcceptBid}
             hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
+            showRevertLastBid={showRevertLastBid}
+            onRevertLastBid={onRevertLastBid}
+            largeTouch={largeTouch}
           />
-          {showRevertLastBid && onRevertLastBid ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size={largeTouch ? "default" : "sm"}
-                className="w-full border-amber-300 font-semibold text-amber-900 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/40 sm:w-auto"
-                disabled={reverting}
-                onClick={handleRevertLastBidClick}
-              >
-                {reverting ? "Reverting…" : "Revert last bid"}
-              </Button>
-            </div>
-          ) : null}
         </div>
       ) : (
         <p

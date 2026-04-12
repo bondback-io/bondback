@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 export type BidWithBidder = BidRow & {
   bidder_email?: string | null;
@@ -25,15 +26,24 @@ export type BidHistoryTableProps = {
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
   /** True if any bid is still in legacy `pending_confirmation` (blocks a second accept until cleared). */
   hasPendingEarlyAcceptance?: boolean;
+  /** Cleaner + live listing: withdraw most recent active bid by this user (calls server action). */
+  showRevertLastBid?: boolean;
+  onRevertLastBid?: () => Promise<void>;
+  /** Larger button (e.g. job detail on mobile). */
+  largeTouch?: boolean;
 };
 
 export function BidHistoryTable({
   bids,
   onAcceptBid,
   hasPendingEarlyAcceptance = false,
+  showRevertLastBid = false,
+  onRevertLastBid,
+  largeTouch = false,
 }: BidHistoryTableProps) {
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [confirmBid, setConfirmBid] = useState<BidWithBidder | null>(null);
+  const [reverting, setReverting] = useState(false);
   const sorted = [...bids].sort(
     (a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -61,6 +71,23 @@ export function BidHistoryTable({
         setConfirmBid(null);
       }
     })();
+  };
+
+  const handleRevertLastBidClick = async () => {
+    if (!onRevertLastBid) return;
+    if (
+      !window.confirm(
+        "Cancel your last bid on this listing? You can bid again afterwards."
+      )
+    ) {
+      return;
+    }
+    setReverting(true);
+    try {
+      await onRevertLastBid();
+    } finally {
+      setReverting(false);
+    }
   };
 
   const showEarlyButton = (bid: BidWithBidder) => {
@@ -227,6 +254,24 @@ export function BidHistoryTable({
           </tbody>
         </table>
       </div>
+
+      {showRevertLastBid && onRevertLastBid ? (
+        <div className="flex flex-col gap-2 pt-3 sm:flex-row sm:items-center sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size={largeTouch ? "default" : "sm"}
+            className={cn(
+              "w-full border-amber-300 font-semibold text-amber-900 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/40 sm:w-auto",
+              largeTouch && "min-h-12 text-base"
+            )}
+            disabled={reverting}
+            onClick={() => void handleRevertLastBidClick()}
+          >
+            {reverting ? "Cancelling…" : "Cancel last bid"}
+          </Button>
+        </div>
+      ) : null}
 
       <Dialog
         open={confirmBid != null}

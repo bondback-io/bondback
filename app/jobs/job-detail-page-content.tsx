@@ -441,12 +441,12 @@ export async function JobDetailPageContent({
             !!user &&
             !!job &&
             sameUserId(user.id, job.lister_id) &&
-            isListerActive
+            roles.includes("lister")
           }
           isListingOwner={
             !!user &&
             sameUserId(listingRow.lister_id, user.id) &&
-            isListerActive
+            roles.includes("lister")
           }
           isJobCleaner={
             !!user && !!job && user.id === job.winner_id && isCleaner

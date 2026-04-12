@@ -117,7 +117,6 @@ export default async function ListingDetailPage({
   const activeRole =
     (profile?.active_role as string | null) ?? (roles[0] ?? null);
   const isCleaner = roles.includes("cleaner") && activeRole === "cleaner";
-  const isListerActive = roles.includes("lister") && activeRole === "lister";
 
   const listingId = raw;
   const job = await loadJobForListingDetailPage(
@@ -154,7 +153,7 @@ export default async function ListingDetailPage({
   const isListingOwner =
     !!user &&
     String(listingRow.lister_id) === String(user.id) &&
-    isListerActive;
+    roles.includes("lister");
 
   return (
     <section className="space-y-6 py-6">
