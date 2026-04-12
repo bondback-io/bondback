@@ -1,0 +1,11 @@
+-- Optional: if `public.notifications.type` uses a CHECK constraint listing allowed values,
+-- add `listing_cancelled_by_lister` so inserts from `cancelListing` succeed.
+--
+-- Inspect constraints:
+--   SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
+--   WHERE conrelid = 'public.notifications'::regclass;
+--
+-- If you see CHECK (type IN (...)), either extend the IN list or drop the constraint:
+--   ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
+--
+-- Text columns without CHECK do not need this migration.

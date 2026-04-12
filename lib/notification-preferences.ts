@@ -81,6 +81,7 @@ export function notificationTypeToPreferenceKey(
       return "job_accepted";
     case "job_completed":
     case "job_cancelled_by_lister":
+    case "listing_cancelled_by_lister":
       return "job_completed";
     case "dispute_opened":
     case "dispute_resolved":

@@ -76,6 +76,8 @@ function labelForType(type: NotificationRow["type"]): string {
       return "Job approved";
     case "job_cancelled_by_lister":
       return "Job cancelled";
+    case "listing_cancelled_by_lister":
+      return "Listing ended";
     case "funds_ready":
       return "Funds ready";
     case "referral_reward":

@@ -335,7 +335,7 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
 
   const { data: listing, error: fetchError } = await supabase
     .from("listings")
-    .select("id, lister_id, status")
+    .select("id, lister_id, status, title")
     .eq("id", listingId)
     .maybeSingle();
 
@@ -411,6 +411,29 @@ export async function cancelListing(listingId: string): Promise<CancelListingRes
         );
       }
     }
+  }
+
+  /** Cleaners with an active or pending-confirmation bid — auction ended early (no job / not winner). */
+  const listingTitle =
+    (listing as { title?: string | null }).title?.trim() ?? null;
+  const { data: activeBidRows } = await supabase
+    .from("bids")
+    .select("cleaner_id")
+    .eq("listing_id", listingId)
+    .in("status", ["active", "pending_confirmation"]);
+  const bidderIds = new Set<string>();
+  for (const row of activeBidRows ?? []) {
+    const cid = (row as { cleaner_id: string }).cleaner_id;
+    if (cid && cid !== user.id) bidderIds.add(cid);
+  }
+  for (const cleanerId of bidderIds) {
+    const msg = listingTitle
+      ? `The property lister ended this auction early. Your bid on "${listingTitle}" is no longer active.`
+      : "The property lister ended this auction early. Your bid is no longer active.";
+    await createNotification(cleanerId, "listing_cancelled_by_lister", null, msg, {
+      listingUuid: listingId,
+      listingTitle,
+    });
   }
 
   revalidateJobsBrowseCaches();

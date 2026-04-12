@@ -68,6 +68,9 @@ export function buildNotificationPersistFields(
     case "job_cancelled_by_lister":
       title = jobId != null ? `Job cancelled · Job #${jobId}` : "Job cancelled";
       break;
+    case "listing_cancelled_by_lister":
+      title = "Listing ended by owner";
+      break;
     case "funds_ready":
       title = "Funds ready";
       break;

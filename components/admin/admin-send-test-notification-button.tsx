@@ -28,6 +28,7 @@ const TEST_TYPES: { type: NotificationType; label: string }[] = [
   { type: "dispute_resolved", label: "Dispute resolved" },
   { type: "new_job_in_area", label: "New job nearby" },
   { type: "job_cancelled_by_lister", label: "Job cancelled" },
+  { type: "listing_cancelled_by_lister", label: "Listing ended (had bid)" },
   { type: "referral_reward", label: "Referral reward" },
 ];
 

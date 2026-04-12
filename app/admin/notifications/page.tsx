@@ -337,6 +337,7 @@ export default async function AdminNotificationsPage() {
                 "job_accepted",
                 "job_completed",
                 "job_cancelled_by_lister",
+                "listing_cancelled_by_lister",
                 "payment_released",
                 "funds_ready",
                 "dispute_opened",

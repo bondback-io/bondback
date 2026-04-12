@@ -204,6 +204,7 @@ const PUSH_NOTIFICATION_TYPES = new Set([
   "new_job_in_area",
   "job_status_update",
   "funds_ready",
+  "listing_cancelled_by_lister",
 ]);
 
 let loggedMissingServiceRoleForPrefs = false;

@@ -15,6 +15,7 @@ export const EMAIL_TEMPLATE_TYPES = [
   "job_approved_to_start",
   "job_completed",
   "job_cancelled_by_lister",
+  "listing_cancelled_by_lister",
   "payment_released",
   "funds_ready",
   "dispute_opened",
@@ -36,6 +37,7 @@ const LABELS: Record<string, string> = {
   job_approved_to_start: "Cleaner: lister approved — start work",
   job_completed: "Job marked complete — review",
   job_cancelled_by_lister: "Job cancelled by lister",
+  listing_cancelled_by_lister: "Lister ended auction (you had bid)",
   payment_released: "Payment released (cleaner)",
   funds_ready: "Funds ready to release (lister)",
   dispute_opened: "Dispute opened",
@@ -108,6 +110,12 @@ export const SAMPLE_DATA: Record<string, SampleData> = {
     messageText:
       "Lister pulled this listing — you’re unassigned. Plenty more fish (bond cleans) in the feed.",
     jobId: 10042,
+  },
+  listing_cancelled_by_lister: {
+    messageText:
+      "The property lister ended this auction early. Your bid on \"2 Bed Unit\" is no longer active.",
+    jobId: null,
+    listingId: 10042,
   },
   payment_released: {
     messageText: "$280.00 released — cracker of a clean. Ka-ching.",

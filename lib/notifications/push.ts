@@ -212,6 +212,7 @@ export const PUSH_NOTIFICATION_TYPES = new Set<string>([
   "new_job_in_area",
   "job_status_update",
   "funds_ready",
+  "listing_cancelled_by_lister",
 ]);
 
 /**
@@ -331,6 +332,18 @@ export function buildPushPayload(
           jobId: listingIdStr || undefined,
         },
       };
+    case "listing_cancelled_by_lister": {
+      const t = (options?.listingTitle ?? "This listing").toString().trim().slice(0, 56);
+      return {
+        title: "Auction ended early",
+        body: `${t}: the owner cancelled. Your bid is no longer active. Tap to browse jobs.`,
+        data: {
+          type: "listing_cancelled_by_lister",
+          listingId: listingIdStr || undefined,
+          jobId: listingIdStr || undefined,
+        },
+      };
+    }
     case "after_photos_uploaded":
       return {
         title: "After photos ready",

@@ -24,6 +24,7 @@ import { ListerTutorial } from "@/emails/ListerTutorial";
 import { CleanerTutorial } from "@/emails/CleanerTutorial";
 import { GenericNotification } from "@/emails/GenericNotification";
 import {
+  emailBrowseJobsUrl,
   emailDashboardUrl,
   emailJobUrl,
   emailListingUrl,
@@ -101,6 +102,7 @@ export type NotificationType =
   | "job_created"
   | "new_bid"
   | "job_cancelled_by_lister"
+  | "listing_cancelled_by_lister"
   | "listing_live"
   | "after_photos_uploaded"
   | "auto_release_warning"
@@ -399,6 +401,7 @@ export async function buildNotificationEmail(
     dispute_opened: `Dispute opened — Job #${id} — we’ll sort it fairly – Bond Back`,
     dispute_resolved: `Dispute wrapped up — Job #${id} – Bond Back`,
     job_cancelled_by_lister: `Job #${id} cancelled by the lister – Bond Back`,
+    listing_cancelled_by_lister: `Auction ended early — your bid won’t carry – Bond Back`,
     listing_live: `You’re live — cleaners can start bidding – Bond Back`,
     after_photos_uploaded: `After photos are in — Job #${id} – Bond Back`,
     auto_release_warning: `Auto-release heads-up — Job #${id} – Bond Back`,
@@ -469,6 +472,18 @@ export async function buildNotificationEmail(
     case "job_cancelled_by_lister":
       templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobCancelledByLister, { jobId: idStr, messageText });
+      break;
+    case "listing_cancelled_by_lister":
+      templateProps = { headline: "Listing ended by the owner", messageText, hrefForJob: emailBrowseJobsUrl() };
+      element = React.createElement(GenericNotification, {
+        headline: "Listing ended by the owner",
+        messageText:
+          messageText ||
+          "The property lister ended this auction early. Your bid is no longer active — find more jobs on Bond Back.",
+        hrefPath: emailBrowseJobsUrl(),
+        preview: "Listing ended — Bond Back",
+        ctaLabel: "Browse jobs",
+      });
       break;
     case "listing_live":
       templateProps = { headline: "Listing published", messageText, hrefForJob };

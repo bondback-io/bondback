@@ -44,3 +44,21 @@ export function preferredWindowFromMoveOutDate(moveOutDate: Date | null): string
   if (moveOutDate == null) return null;
   return formatDateDdMmYyyy(subDays(moveOutDate, 5));
 }
+
+/**
+ * `listings.description` is for property details and extra notes only; special areas live in
+ * `special_instructions`. Older rows duplicated "Special areas: …" into description — strip for UI.
+ */
+export function listingDescriptionForDisplay(raw: string | null | undefined): string {
+  let s = (raw ?? "").trim();
+  if (!s) return "";
+  for (let i = 0; i < 4; i++) {
+    const next = s
+      .replace(/(^|\n\n)Special areas:\s*.+?\.\s*/is, "$1")
+      .replace(/^\s*Special areas:\s*.+?\.\s*/is, "")
+      .trim();
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}

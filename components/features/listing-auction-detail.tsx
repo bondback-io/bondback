@@ -36,6 +36,7 @@ import {
 } from "@/lib/listings";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
+import { listingDescriptionForDisplay } from "@/lib/listing-detail-presenters";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
 import { BuyNowButton } from "@/components/features/buy-now-button";
@@ -123,6 +124,11 @@ export function ListingAuctionDetail({
 
   const isLive =
     listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
+  const closedAuctionBidStatus = !isLive
+    ? listing.cancelled_early_at
+      ? ("lister_cancelled" as const)
+      : ("auction_ended" as const)
+    : null;
   const isListingCancelled =
     String(listing.status ?? "").toLowerCase() === "cancelled";
   const showCleanerBidUi =
@@ -255,6 +261,12 @@ export function ListingAuctionDetail({
 
   const canManageListingAsLister = isListerOwner && isListerSessionActive;
 
+  /** Ended auction with no job: strong “closed” visuals (banner, muted hero, struck-through amounts). */
+  const showEndedListingVisual = !isLive && !hasActiveJob;
+  const endedListingBannerLabel = listing.cancelled_early_at
+    ? "Listing cancelled"
+    : "Listing ended";
+
   return (
     <div className="page-inner mx-auto max-w-4xl space-y-6 pb-10">
       <Button variant="ghost" asChild className="-ml-2 w-fit">
@@ -298,15 +310,35 @@ export function ListingAuctionDetail({
       ) : null}
 
       {/* Hero + title */}
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm dark:border-gray-800 dark:bg-gray-950">
+      <div
+        className={cn(
+          "overflow-hidden rounded-2xl border bg-card shadow-sm dark:bg-gray-950",
+          showEndedListingVisual
+            ? "border-red-900/50 ring-1 ring-red-500/25 dark:border-red-900/60"
+            : "border-border dark:border-gray-800"
+        )}
+      >
         <div className="relative aspect-[16/10] max-h-[min(52vh,420px)] w-full bg-muted dark:bg-gray-900 md:aspect-[21/9] md:max-h-[380px]">
+          {showEndedListingVisual && (
+            <div
+              className="absolute inset-x-0 top-0 z-20 border-b border-red-900/50 bg-red-600 px-3 py-2.5 text-center shadow-[0_4px_24px_rgba(0,0,0,0.35)] sm:py-3"
+              role="status"
+            >
+              <p className="text-sm font-black uppercase tracking-[0.14em] text-white sm:text-base md:text-lg">
+                {endedListingBannerLabel}
+              </p>
+            </div>
+          )}
           {heroSrc ? (
             <Image
               src={heroSrc}
               alt=""
               fill
               priority
-              className="object-cover"
+              className={cn(
+                "object-cover",
+                showEndedListingVisual && "opacity-[0.72] saturate-[0.65]"
+              )}
               sizes="(max-width: 896px) 100vw, 896px"
               placeholder="blur"
               blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
@@ -315,6 +347,9 @@ export function ListingAuctionDetail({
             <div className="flex h-full min-h-[200px] w-full items-center justify-center text-muted-foreground">
               <Images className="h-16 w-16 opacity-40" aria-hidden />
             </div>
+          )}
+          {showEndedListingVisual && (
+            <div className="absolute inset-0 bg-red-950/25 mix-blend-multiply dark:bg-red-950/35" aria-hidden />
           )}
           {/* Image wash: stronger on small screens where title wraps and bright photo areas hurt contrast */}
           <div
@@ -341,7 +376,14 @@ export function ListingAuctionDetail({
                   Live auction
                 </Badge>
               ) : (
-                <Badge variant="secondary" className="shrink-0 capitalize">
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "shrink-0 capitalize",
+                    showEndedListingVisual &&
+                      "border-0 bg-red-950/90 font-bold uppercase tracking-wide text-white dark:bg-red-950/95"
+                  )}
+                >
                   {String(listing.status ?? "—")}
                 </Badge>
               )}
@@ -379,7 +421,14 @@ export function ListingAuctionDetail({
       </div>
 
       {/* Pricing — full-width strip on desktop; stacked on small screens */}
-      <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+      <Card
+        className={cn(
+          "overflow-hidden shadow-sm dark:border-gray-800",
+          showEndedListingVisual
+            ? "border-red-900/50 ring-1 ring-red-500/20 dark:border-red-900/60"
+            : "border-border/90"
+        )}
+      >
         <CardContent className="p-0">
           <div
             className={cn(
@@ -388,28 +437,68 @@ export function ListingAuctionDetail({
               hasBuyNow ? "md:grid-cols-3" : "md:grid-cols-2"
             )}
           >
-            <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-emerald-500/[0.06] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-emerald-950/30">
+            <div
+              className={cn(
+                "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
+                showEndedListingVisual
+                  ? "bg-red-950/20 dark:bg-red-950/35"
+                  : "bg-emerald-500/[0.06] dark:bg-emerald-950/30"
+              )}
+            >
               <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
                 Current lowest bid
               </p>
-              <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 sm:text-3xl">
+              <p
+                className={cn(
+                  "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
+                  showEndedListingVisual
+                    ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
+                    : "text-emerald-600 dark:text-emerald-400"
+                )}
+              >
                 {formatCents(currentLowCents)}
               </p>
             </div>
-            <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-card px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-gray-950/40">
+            <div
+              className={cn(
+                "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
+                showEndedListingVisual ? "bg-muted/50 dark:bg-red-950/30" : "bg-card dark:bg-gray-950/40"
+              )}
+            >
               <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
                 Starting bid
               </p>
-              <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100 sm:text-3xl">
+              <p
+                className={cn(
+                  "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
+                  showEndedListingVisual
+                    ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
+                    : "text-foreground dark:text-gray-100"
+                )}
+              >
                 {formatCents(startingCents)}
               </p>
             </div>
             {hasBuyNow && (
-              <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-violet-500/[0.07] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-violet-950/35">
+              <div
+                className={cn(
+                  "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
+                  showEndedListingVisual
+                    ? "bg-red-950/15 dark:bg-red-950/40"
+                    : "bg-violet-500/[0.07] dark:bg-violet-950/35"
+                )}
+              >
                 <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
                   Buy now
                 </p>
-                <p className="text-2xl font-bold tabular-nums tracking-tight text-violet-700 dark:text-violet-300 sm:text-3xl">
+                <p
+                  className={cn(
+                    "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
+                    showEndedListingVisual
+                      ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
+                      : "text-violet-700 dark:text-violet-300"
+                  )}
+                >
                   {formatCents(buyNowCents!)}
                 </p>
               </div>
@@ -699,7 +788,7 @@ export function ListingAuctionDetail({
           <div>
             <h3 className="mb-2 text-sm font-semibold">Description</h3>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
-              {listing.description?.trim() ? listing.description : "No description provided."}
+              {listingDescriptionForDisplay(listing.description) || "No description provided."}
             </p>
           </div>
         </CardContent>
@@ -717,8 +806,11 @@ export function ListingAuctionDetail({
             bids={initialBids}
             hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
             onAcceptBid={
-              canManageListingAsLister && !hasActiveJob ? handleAcceptBid : undefined
+              canManageListingAsLister && !hasActiveJob && isLive
+                ? handleAcceptBid
+                : undefined
             }
+            closedAuctionBidStatus={closedAuctionBidStatus}
             showRevertLastBid={showRevertLastBidInHistory}
             onRevertLastBid={
               showRevertLastBidInHistory ? handleRevertLastBid : undefined

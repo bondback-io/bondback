@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useState, useRef, useTransition, useCallback, useMemo, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useState,
+  useRef,
+  useTransition,
+  useCallback,
+  useMemo,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { scheduleRouterAction } from "@/lib/deferred-router";
@@ -12,7 +21,10 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { CountdownTimer } from "@/components/features/countdown-timer";
-import { BidHistoryTable } from "@/components/features/bid-history-table";
+import {
+  BidHistoryTable,
+  type ClosedAuctionBidStatus,
+} from "@/components/features/bid-history-table";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
 import { BuyNowButton } from "@/components/features/buy-now-button";
 import {
@@ -29,6 +41,7 @@ import {
   formatDateDdMmYyyy,
   formatEndDateTime,
   humanizePropertyCondition,
+  listingDescriptionForDisplay,
   preferredWindowFromMoveOutDate,
 } from "@/lib/listing-detail-presenters";
 import { parseUtcTimestamp, cn } from "@/lib/utils";
@@ -121,6 +134,26 @@ function dedupeImageFiles(files: File[]): File[] {
     out.push(f);
   }
   return out;
+}
+
+function JobHistoryCollapsible({
+  enabled,
+  children,
+}: {
+  enabled: boolean;
+  children: ReactNode;
+}) {
+  if (!enabled) return <>{children}</>;
+  return (
+    <details className="rounded-2xl border border-border/80 bg-muted/15 dark:border-gray-700 dark:bg-gray-900/30">
+      <summary className="cursor-pointer select-none list-none px-4 py-3 font-semibold text-foreground outline-none marker:content-none [&::-webkit-details-marker]:hidden dark:text-gray-100">
+        Job history — checklist &amp; after photos
+      </summary>
+      <div className="space-y-4 border-t border-border px-4 pb-4 pt-4 dark:border-gray-800">
+        {children}
+      </div>
+    </details>
+  );
 }
 
 export type JobDetailProps = {
@@ -323,7 +356,7 @@ export function JobDetail({
   const [showCleanerReviewForm, setShowCleanerReviewForm] = useState(false);
   const [showListerReviewForm, setShowListerReviewForm] = useState(false);
   const [showOpenDisputeForm, setShowOpenDisputeForm] = useState(false);
-  const [showRaiseDisputeForm, setShowRaiseDisputeForm] = useState(false);
+  const [showApproveReleaseConfirm, setShowApproveReleaseConfirm] = useState(false);
   const [disputeResponseReason, setDisputeResponseReason] = useState("");
   const [disputeResponseMessage, setDisputeResponseMessage] = useState("");
   const [disputeResponsePhotos, setDisputeResponsePhotos] = useState<File[]>([]);
@@ -444,6 +477,16 @@ export function JobDetail({
 
   const isLive =
     listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
+  /** Ended auction with no job: match listing detail “closed” visuals on boosted layout. */
+  const showEndedListingVisual = !isLive && !hasActiveJob;
+  const endedListingBannerLabel = listing.cancelled_early_at
+    ? "Listing cancelled"
+    : "Listing ended";
+  const closedAuctionBidStatus: ClosedAuctionBidStatus | null = !isLive
+    ? listing.cancelled_early_at
+      ? "lister_cancelled"
+      : "auction_ended"
+    : null;
   const isListingCancelled = String(listing.status).toLowerCase() === "cancelled";
   const isJobCancelled =
     localJobStatus === "cancelled" || jobStatus === "cancelled";
@@ -936,6 +979,7 @@ export function JobDetail({
         new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
       );
       setShowListerFinalizeNotice(true);
+      setShowApproveReleaseConfirm(false);
     });
   };
 
@@ -1040,6 +1084,10 @@ export function JobDetail({
   const listerReleaseFundsStep =
     isJobLister && localJobStatus === "completed_pending_approval";
 
+  /** Lister boosted job page after payment released — compact summary + Job history collapsible. */
+  const listerCompletedBoostTidy =
+    detailUiBoost && isJobLister && hasActiveJob && localJobStatus === "completed";
+
   /** Single “Won for” callout with fee copy — not duplicated with the pricing strip’s agreed column. */
   const showCleanerWonForCallout =
     hasActiveJob &&
@@ -1114,15 +1162,35 @@ export function JobDetail({
             </div>
           )}
 
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm dark:border-gray-800 dark:bg-gray-950">
+          <div
+            className={cn(
+              "overflow-hidden rounded-2xl border bg-card shadow-sm dark:bg-gray-950",
+              showEndedListingVisual
+                ? "border-red-900/50 ring-1 ring-red-500/25 dark:border-red-900/60"
+                : "border-border dark:border-gray-800"
+            )}
+          >
             <div className="relative aspect-[16/10] max-h-[min(52vh,420px)] w-full bg-muted dark:bg-gray-900 md:aspect-[21/9] md:max-h-[380px]">
+              {showEndedListingVisual && (
+                <div
+                  className="absolute inset-x-0 top-0 z-20 border-b border-red-900/50 bg-red-600 px-3 py-2.5 text-center shadow-[0_4px_24px_rgba(0,0,0,0.35)] sm:py-3"
+                  role="status"
+                >
+                  <p className="text-sm font-black uppercase tracking-[0.14em] text-white sm:text-base md:text-lg">
+                    {endedListingBannerLabel}
+                  </p>
+                </div>
+              )}
               {heroSrc ? (
                 <Image
                   src={heroSrc}
                   alt=""
                   fill
                   priority
-                  className="object-cover"
+                  className={cn(
+                    "object-cover",
+                    showEndedListingVisual && "opacity-[0.72] saturate-[0.65]"
+                  )}
                   sizes="(max-width: 896px) 100vw, 896px"
                   placeholder="blur"
                   blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
@@ -1131,6 +1199,9 @@ export function JobDetail({
                 <div className="flex h-full min-h-[200px] w-full items-center justify-center text-muted-foreground">
                   <Images className="h-16 w-16 opacity-40" aria-hidden />
                 </div>
+              )}
+              {showEndedListingVisual && (
+                <div className="absolute inset-0 bg-red-950/25 mix-blend-multiply dark:bg-red-950/35" aria-hidden />
               )}
               <div
                 className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent sm:via-black/40 md:from-black/75 md:via-black/25 md:to-transparent"
@@ -1163,7 +1234,14 @@ export function JobDetail({
                       Job · {jobHeroStatusLabel}
                     </Badge>
                   ) : (
-                    <Badge variant="secondary" className="shrink-0 capitalize">
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "shrink-0 capitalize",
+                        showEndedListingVisual &&
+                          "border-0 bg-red-950/90 font-bold uppercase tracking-wide text-white dark:bg-red-950/95"
+                      )}
+                    >
                       {String(listing.status ?? "—")}
                     </Badge>
                   )}
@@ -1199,7 +1277,294 @@ export function JobDetail({
             )}
           </div>
 
-          {isSold ? (
+          {isSold && listerCompletedBoostTidy ? (
+            <div className="space-y-4">
+              <div className="space-y-2 rounded-2xl border-2 border-emerald-400/60 bg-gradient-to-br from-emerald-50 to-emerald-100/50 px-4 py-4 dark:border-emerald-700 dark:from-emerald-950/40 dark:to-emerald-900/30 sm:px-5">
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-200">
+                  Payment released
+                </p>
+                <p className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 sm:text-3xl">
+                  {formatCents(agreedAmountCents)}
+                </p>
+                <p className="text-sm leading-relaxed text-emerald-900 dark:text-emerald-100">
+                  Paid to{" "}
+                  <span className="font-semibold">
+                    {cleanerName ? cleanerName.split(" ")[0] : "your cleaner"}
+                  </span>
+                  . Thank you for using Bond Back.
+                </p>
+              </div>
+              <JobProgressTimeline
+                detailUiBoost={detailUiBoost}
+                localJobStatus={localJobStatus}
+                hasActiveJob={!!hasActiveJob}
+                hasPaymentHold={!!hasPaymentHold}
+                allCompleted={!!allCompleted}
+                hasAfterPhotos={!!hasAfterPhotos}
+                isJobLister={!!isJobLister}
+                isJobCleaner={!!isJobCleaner}
+              />
+              <details className="rounded-2xl border border-border/90 bg-card shadow-sm dark:border-gray-800">
+                <summary className="cursor-pointer select-none list-none px-4 py-3 font-semibold text-foreground outline-none marker:content-none [&::-webkit-details-marker]:hidden dark:text-gray-100 sm:px-5">
+                  Job history — pricing &amp; listing details
+                </summary>
+                <div className="space-y-4 border-t border-border px-4 pb-4 pt-4 dark:border-gray-800 sm:px-5">
+                  <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+                    <CardContent className="p-0">
+                      <div
+                        className={cn(
+                          "grid grid-cols-1 divide-y divide-border dark:divide-gray-800",
+                          "md:divide-y-0 md:divide-x md:divide-border/80",
+                          showCleanerWonForCallout
+                            ? hasBuyNowJob
+                              ? "md:grid-cols-2"
+                              : "md:grid-cols-1"
+                            : hasBuyNowJob
+                              ? "md:grid-cols-3"
+                              : "md:grid-cols-2"
+                        )}
+                      >
+                        {!showCleanerWonForCallout && (
+                          <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-emerald-500/[0.06] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-emerald-950/30">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                              Job amount (paid)
+                            </p>
+                            <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 sm:text-3xl">
+                              {formatCents(agreedAmountCents)}
+                            </p>
+                          </div>
+                        )}
+                        <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-card px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-gray-950/40">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                            Starting bid
+                          </p>
+                          <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100 sm:text-3xl">
+                            {formatCents(startingCents)}
+                          </p>
+                        </div>
+                        {hasBuyNowJob && (
+                          <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-violet-500/[0.07] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-violet-950/35">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                              Buy now
+                            </p>
+                            <p className="text-2xl font-bold tabular-nums tracking-tight text-violet-700 dark:text-violet-300 sm:text-3xl">
+                              {formatCents(buyNowCentsJob!)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {showCleanerWonForCallout && (
+                    <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
+                      <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
+                      <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
+                        {formatCents(agreedAmountCents)}
+                      </p>
+                      <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
+                        You will receive the full bid amount ({formatCents(agreedAmountCents)}). The lister pays
+                        the platform fee separately.
+                      </p>
+                    </div>
+                  )}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Info className="h-5 w-5 shrink-0" aria-hidden />
+                        Property
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground dark:text-gray-400">
+                        {beds != null && (
+                          <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                            <Bed className="h-4 w-4 shrink-0" aria-hidden />
+                            {beds} bed
+                          </span>
+                        )}
+                        {baths != null && (
+                          <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                            <Bath className="h-4 w-4 shrink-0" aria-hidden />
+                            {baths} bath
+                          </span>
+                        )}
+                        {propertyType && (
+                          <Badge variant="secondary" className="capitalize">
+                            {propertyType.replace(/_/g, " ")}
+                          </Badge>
+                        )}
+                      </div>
+                      {(conditionLabel ||
+                        levelsLabel ||
+                        (typeof listing.duration_days === "number" && listing.duration_days > 0)) && (
+                        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {conditionLabel && (
+                            <div className="min-w-0 space-y-1">
+                              <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                                Condition
+                              </dt>
+                              <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{conditionLabel}</dd>
+                            </div>
+                          )}
+                          {levelsLabel && (
+                            <div className="min-w-0 space-y-1">
+                              <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                                Levels
+                              </dt>
+                              <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{levelsLabel}</dd>
+                            </div>
+                          )}
+                          {typeof listing.duration_days === "number" && listing.duration_days > 0 && (
+                            <div className="min-w-0 space-y-1">
+                              <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                                Auction listing period
+                              </dt>
+                              <dd className="text-sm font-semibold tabular-nums text-foreground dark:text-gray-100">
+                                {listing.duration_days} days
+                              </dd>
+                            </div>
+                          )}
+                        </dl>
+                      )}
+                      {addonsList.length > 0 && (
+                        <div className="border-t border-border pt-4 dark:border-gray-800">
+                          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                            Add-ons
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {addonsList.map((a) => (
+                              <Badge key={a} variant="outline" className="font-normal capitalize">
+                                {String(a).replace(/_/g, " ")}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                  {(moveOutRaw || showPreferredFallbackList) && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <Calendar className="h-5 w-5 shrink-0" aria-hidden />
+                          Dates
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-5 text-sm md:grid-cols-2 md:gap-6 lg:gap-8">
+                          {moveOutRaw && (
+                            <div className="min-w-0 space-y-1">
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                                Move-out
+                              </p>
+                              <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                                {moveOutDisplay}
+                              </p>
+                            </div>
+                          )}
+                          {showPreferredFromMoveOut && (
+                            <div
+                              className={
+                                moveOutRaw
+                                  ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
+                                  : "min-w-0 space-y-2"
+                              }
+                            >
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                                Preferred cleaning window
+                              </p>
+                              <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                                {preferredWindowFromMoveOut}
+                              </p>
+                              <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
+                                Target window starts 5 days before your move-out date.
+                              </p>
+                            </div>
+                          )}
+                          {showPreferredFallbackList && (
+                            <div
+                              className={
+                                moveOutRaw
+                                  ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
+                                  : "min-w-0 space-y-2"
+                              }
+                            >
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                                Preferred cleaning window
+                              </p>
+                              <ul className="space-y-1.5 text-foreground dark:text-gray-200">
+                                {preferredDatesFormatted.map((d, i) => (
+                                  <li key={`${d}-${i}`} className="flex gap-2 text-sm">
+                                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" aria-hidden />
+                                    <span className="tabular-nums">{d}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  <Card>
+                    <CardHeader className="space-y-2">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <CardTitle className="text-xl leading-tight md:text-2xl">About this listing</CardTitle>
+                        <Badge variant="secondary" className="shrink-0">
+                          Job · {jobHeroStatusLabel}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {listing.special_instructions?.trim() && (
+                        <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
+                          <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
+                            Special instructions
+                          </h3>
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
+                            {listing.special_instructions}
+                          </p>
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="mb-2 text-sm font-semibold">Description</h3>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
+                          {listingDescriptionForDisplay(listing.description) || "No description provided."}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Gavel className="h-5 w-5" aria-hidden />
+                        Bids
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <BidHistoryTable
+                        bids={bids}
+                        hasPendingEarlyAcceptance={bids.some(
+                          (b) => b.status === "pending_confirmation"
+                        )}
+                        onAcceptBid={
+                          isListingOwner && !hasActiveJob && isLive
+                            ? handleAcceptBid
+                            : undefined
+                        }
+                        closedAuctionBidStatus={closedAuctionBidStatus}
+                        showRevertLastBid={showRevertLastBidInHistory}
+                        onRevertLastBid={
+                          showRevertLastBidInHistory ? handleRevertLastBid : undefined
+                        }
+                        largeTouch
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+              </details>
+            </div>
+          ) : isSold ? (
             <>
               <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
                 <CardContent className="p-0">
@@ -1261,7 +1626,14 @@ export function JobDetail({
               )}
             </>
           ) : (
-            <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+            <Card
+              className={cn(
+                "overflow-hidden shadow-sm dark:border-gray-800",
+                showEndedListingVisual
+                  ? "border-red-900/50 ring-1 ring-red-500/20 dark:border-red-900/60"
+                  : "border-border/90"
+              )}
+            >
               <CardContent className="p-0">
                 <div
                   className={cn(
@@ -1270,28 +1642,68 @@ export function JobDetail({
                     hasBuyNowJob ? "md:grid-cols-3" : "md:grid-cols-2"
                   )}
                 >
-                  <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-emerald-500/[0.06] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-emerald-950/30">
+                  <div
+                    className={cn(
+                      "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
+                      showEndedListingVisual
+                        ? "bg-red-950/20 dark:bg-red-950/35"
+                        : "bg-emerald-500/[0.06] dark:bg-emerald-950/30"
+                    )}
+                  >
                     <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
                       Current lowest bid
                     </p>
-                    <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 sm:text-3xl">
+                    <p
+                      className={cn(
+                        "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
+                        showEndedListingVisual
+                          ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
+                          : "text-emerald-600 dark:text-emerald-400"
+                      )}
+                    >
                       {formatCents(effectiveCurrentLowestCents)}
                     </p>
                   </div>
-                  <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-card px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-gray-950/40">
+                  <div
+                    className={cn(
+                      "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
+                      showEndedListingVisual ? "bg-muted/50 dark:bg-red-950/30" : "bg-card dark:bg-gray-950/40"
+                    )}
+                  >
                     <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
                       Starting bid
                     </p>
-                    <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100 sm:text-3xl">
+                    <p
+                      className={cn(
+                        "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
+                        showEndedListingVisual
+                          ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
+                          : "text-foreground dark:text-gray-100"
+                      )}
+                    >
                       {formatCents(startingCents)}
                     </p>
                   </div>
                   {hasBuyNowJob && (
-                    <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-violet-500/[0.07] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-violet-950/35">
+                    <div
+                      className={cn(
+                        "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
+                        showEndedListingVisual
+                          ? "bg-red-950/15 dark:bg-red-950/40"
+                          : "bg-violet-500/[0.07] dark:bg-violet-950/35"
+                      )}
+                    >
                       <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
                         Buy now
                       </p>
-                      <p className="text-2xl font-bold tabular-nums tracking-tight text-violet-700 dark:text-violet-300 sm:text-3xl">
+                      <p
+                        className={cn(
+                          "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
+                          showEndedListingVisual
+                            ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
+                            : "text-violet-700 dark:text-violet-300"
+                        )}
+                      >
                         {formatCents(buyNowCentsJob!)}
                       </p>
                     </div>
@@ -1301,181 +1713,185 @@ export function JobDetail({
             </Card>
           )}
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Info className="h-5 w-5 shrink-0" aria-hidden />
-                Property
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground dark:text-gray-400">
-                {beds != null && (
-                  <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
-                    <Bed className="h-4 w-4 shrink-0" aria-hidden />
-                    {beds} bed
-                  </span>
-                )}
-                {baths != null && (
-                  <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
-                    <Bath className="h-4 w-4 shrink-0" aria-hidden />
-                    {baths} bath
-                  </span>
-                )}
-                {propertyType && (
-                  <Badge variant="secondary" className="capitalize">
-                    {propertyType.replace(/_/g, " ")}
-                  </Badge>
-                )}
-              </div>
-              {(conditionLabel ||
-                levelsLabel ||
-                (typeof listing.duration_days === "number" && listing.duration_days > 0)) && (
-                <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {conditionLabel && (
-                    <div className="min-w-0 space-y-1">
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                        Condition
-                      </dt>
-                      <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{conditionLabel}</dd>
-                    </div>
-                  )}
-                  {levelsLabel && (
-                    <div className="min-w-0 space-y-1">
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                        Levels
-                      </dt>
-                      <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{levelsLabel}</dd>
-                    </div>
-                  )}
-                  {typeof listing.duration_days === "number" && listing.duration_days > 0 && (
-                    <div className="min-w-0 space-y-1">
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                        Auction listing period
-                      </dt>
-                      <dd className="text-sm font-semibold tabular-nums text-foreground dark:text-gray-100">
-                        {listing.duration_days} days
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              )}
-              {addonsList.length > 0 && (
-                <div className="border-t border-border pt-4 dark:border-gray-800">
-                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                    Add-ons
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {addonsList.map((a) => (
-                      <Badge key={a} variant="outline" className="font-normal capitalize">
-                        {String(a).replace(/_/g, " ")}
+          {!listerCompletedBoostTidy && (
+            <>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Info className="h-5 w-5 shrink-0" aria-hidden />
+                    Property
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground dark:text-gray-400">
+                    {beds != null && (
+                      <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                        <Bed className="h-4 w-4 shrink-0" aria-hidden />
+                        {beds} bed
+                      </span>
+                    )}
+                    {baths != null && (
+                      <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                        <Bath className="h-4 w-4 shrink-0" aria-hidden />
+                        {baths} bath
+                      </span>
+                    )}
+                    {propertyType && (
+                      <Badge variant="secondary" className="capitalize">
+                        {propertyType.replace(/_/g, " ")}
                       </Badge>
-                    ))}
+                    )}
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {(moveOutRaw || showPreferredFallbackList) && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Calendar className="h-5 w-5 shrink-0" aria-hidden />
-                  Dates
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-5 text-sm md:grid-cols-2 md:gap-6 lg:gap-8">
-                  {moveOutRaw && (
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                        Move-out
-                      </p>
-                      <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
-                        {moveOutDisplay}
-                      </p>
-                    </div>
+                  {(conditionLabel ||
+                    levelsLabel ||
+                    (typeof listing.duration_days === "number" && listing.duration_days > 0)) && (
+                    <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {conditionLabel && (
+                        <div className="min-w-0 space-y-1">
+                          <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                            Condition
+                          </dt>
+                          <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{conditionLabel}</dd>
+                        </div>
+                      )}
+                      {levelsLabel && (
+                        <div className="min-w-0 space-y-1">
+                          <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                            Levels
+                          </dt>
+                          <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{levelsLabel}</dd>
+                        </div>
+                      )}
+                      {typeof listing.duration_days === "number" && listing.duration_days > 0 && (
+                        <div className="min-w-0 space-y-1">
+                          <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                            Auction listing period
+                          </dt>
+                          <dd className="text-sm font-semibold tabular-nums text-foreground dark:text-gray-100">
+                            {listing.duration_days} days
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
                   )}
-                  {showPreferredFromMoveOut && (
-                    <div
-                      className={
-                        moveOutRaw
-                          ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
-                          : "min-w-0 space-y-2"
-                      }
-                    >
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                        Preferred cleaning window
+                  {addonsList.length > 0 && (
+                    <div className="border-t border-border pt-4 dark:border-gray-800">
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                        Add-ons
                       </p>
-                      <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
-                        {preferredWindowFromMoveOut}
-                      </p>
-                      <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
-                        Target window starts 5 days before your move-out date.
-                      </p>
-                    </div>
-                  )}
-                  {showPreferredFallbackList && (
-                    <div
-                      className={
-                        moveOutRaw
-                          ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
-                          : "min-w-0 space-y-2"
-                      }
-                    >
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                        Preferred cleaning window
-                      </p>
-                      <ul className="space-y-1.5 text-foreground dark:text-gray-200">
-                        {preferredDatesFormatted.map((d, i) => (
-                          <li key={`${d}-${i}`} className="flex gap-2 text-sm">
-                            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" aria-hidden />
-                            <span className="tabular-nums">{d}</span>
-                          </li>
+                      <div className="flex flex-wrap gap-2">
+                        {addonsList.map((a) => (
+                          <Badge key={a} variant="outline" className="font-normal capitalize">
+                            {String(a).replace(/_/g, " ")}
+                          </Badge>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="space-y-2">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <CardTitle className="text-xl leading-tight md:text-2xl">About this listing</CardTitle>
-                {isLive && !hideCleanerCancelledAuctionUi ? (
-                  <Badge className="shrink-0">Live</Badge>
-                ) : hasActiveJob ? (
-                  <Badge variant="secondary" className="shrink-0">
-                    Job · {jobHeroStatusLabel}
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">{String(listing.status ?? "—")}</Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {listing.special_instructions?.trim() && (
-                <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
-                  <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
-                    Special instructions
-                  </h3>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
-                    {listing.special_instructions}
-                  </p>
-                </div>
+              {(moveOutRaw || showPreferredFallbackList) && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Calendar className="h-5 w-5 shrink-0" aria-hidden />
+                      Dates
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-5 text-sm md:grid-cols-2 md:gap-6 lg:gap-8">
+                      {moveOutRaw && (
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                            Move-out
+                          </p>
+                          <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                            {moveOutDisplay}
+                          </p>
+                        </div>
+                      )}
+                      {showPreferredFromMoveOut && (
+                        <div
+                          className={
+                            moveOutRaw
+                              ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
+                              : "min-w-0 space-y-2"
+                          }
+                        >
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                            Preferred cleaning window
+                          </p>
+                          <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                            {preferredWindowFromMoveOut}
+                          </p>
+                          <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
+                            Target window starts 5 days before your move-out date.
+                          </p>
+                        </div>
+                      )}
+                      {showPreferredFallbackList && (
+                        <div
+                          className={
+                            moveOutRaw
+                              ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
+                              : "min-w-0 space-y-2"
+                          }
+                        >
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                            Preferred cleaning window
+                          </p>
+                          <ul className="space-y-1.5 text-foreground dark:text-gray-200">
+                            {preferredDatesFormatted.map((d, i) => (
+                              <li key={`${d}-${i}`} className="flex gap-2 text-sm">
+                                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" aria-hidden />
+                                <span className="tabular-nums">{d}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
-              <div>
-                <h3 className="mb-2 text-sm font-semibold">Description</h3>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
-                  {listing.description?.trim() ? listing.description : "No description provided."}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+
+              <Card>
+                <CardHeader className="space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <CardTitle className="text-xl leading-tight md:text-2xl">About this listing</CardTitle>
+                    {isLive && !hideCleanerCancelledAuctionUi ? (
+                      <Badge className="shrink-0">Live</Badge>
+                    ) : hasActiveJob ? (
+                      <Badge variant="secondary" className="shrink-0">
+                        Job · {jobHeroStatusLabel}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">{String(listing.status ?? "—")}</Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {listing.special_instructions?.trim() && (
+                    <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
+                      <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
+                        Special instructions
+                      </h3>
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
+                        {listing.special_instructions}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold">Description</h3>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
+                      {listingDescriptionForDisplay(listing.description) || "No description provided."}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </>
       )}
 
@@ -1689,7 +2105,7 @@ export function JobDetail({
                 </p>
               </div>
             )}
-          {hasActiveJob && (
+          {hasActiveJob && !listerCompletedBoostTidy && (
             <JobProgressTimeline
               detailUiBoost={detailUiBoost}
               localJobStatus={localJobStatus}
@@ -1745,7 +2161,7 @@ export function JobDetail({
             <>
               {localJobStatus === "completed" ? (
                 <>
-                  {isJobLister && (
+                  {isJobLister && !listerCompletedBoostTidy && (
                     <>
                       <div className="space-y-3 rounded-2xl border-2 border-emerald-400/60 bg-gradient-to-br from-emerald-50 to-emerald-100/50 px-4 py-4 dark:border-emerald-700 dark:from-emerald-950/40 dark:to-emerald-900/30 sm:px-5">
                         <p className="text-sm font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-200">
@@ -2221,6 +2637,13 @@ export function JobDetail({
               localJobStatus === "completed" ||
               localJobStatus === "completed_pending_approval") &&
             numericJobId && (
+            <JobHistoryCollapsible
+              enabled={
+                listerCompletedBoostTidy &&
+                isJobLister &&
+                localJobStatus === "completed"
+              }
+            >
             <>
               {localJobStatus === "in_progress" && (
                 <div
@@ -2416,6 +2839,7 @@ export function JobDetail({
                   </details>
                   )}
                   {localJobStatus === "completed" ? (
+                  !listerCompletedBoostTidy && (
                   <p
                     className={cn(
                       "mt-1 rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
@@ -2424,6 +2848,7 @@ export function JobDetail({
                   >
                     Payment has been released. Thanks for completing this bond clean through Bond Back.
                   </p>
+                  )
                   ) : (
                     !(isJobLister && listerReleaseFundsStep) && (
                   <p
@@ -2447,7 +2872,9 @@ export function JobDetail({
                         After photos from your cleaner
                       </p>
                       <p className="mt-2 text-sm leading-relaxed text-emerald-800 dark:text-emerald-200">
-                        Review the after photos before you finalize and release funds.
+                        {localJobStatus === "completed"
+                          ? "Saved from when the job was completed."
+                          : "Review the after photos before you finalize and release funds."}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {afterPhotoEntries.map((entry) => (
@@ -2710,6 +3137,7 @@ export function JobDetail({
                 </div>
               )}
             </>
+            </JobHistoryCollapsible>
           )}
           {hasActiveJob &&
             isJobLister &&
@@ -2789,7 +3217,7 @@ export function JobDetail({
                             type="button"
                             size="lg"
                             disabled={!allCompleted || !hasAfterPhotos || isFinalizing}
-                            onClick={handleFinalizePayment}
+                            onClick={() => setShowApproveReleaseConfirm(true)}
                             className="min-h-[48px] flex-1 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
                           >
                             {isFinalizing ? "Releasing…" : "Approve & Release Funds"}
@@ -2866,6 +3294,45 @@ export function JobDetail({
                 </div>
               </div>
             )}
+
+          <Dialog
+            open={showApproveReleaseConfirm}
+            onOpenChange={(open) => {
+              if (!isFinalizing) setShowApproveReleaseConfirm(open);
+            }}
+          >
+            <DialogContent className="dark:border-gray-700 dark:bg-gray-900 sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Release funds to the cleaner?</DialogTitle>
+                <DialogDescription className="text-left">
+                  This will pay{" "}
+                  <span className="font-semibold text-foreground">
+                    {formatCents(agreedAmountCents)}
+                  </span>{" "}
+                  to the cleaner (you already paid any platform fee when securing the job). The cleaner will
+                  be notified. This action cannot be undone here.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowApproveReleaseConfirm(false)}
+                  disabled={isFinalizing}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                  disabled={isFinalizing}
+                  onClick={handleFinalizePayment}
+                >
+                  {isFinalizing ? "Releasing…" : "Yes, release funds"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Reviews – show after job is completed (payment released) */}
           {hasActiveJob &&
@@ -3263,63 +3730,6 @@ export function JobDetail({
               </div>
             )}
 
-          {/* Raise a dispute – completed jobs only, lister or cleaner (not when already disputed) */}
-          {hasActiveJob &&
-            localJobStatus === "completed" &&
-            numericJobId &&
-            (isJobLister || isJobCleaner) && (
-              <details
-                open={showRaiseDisputeForm}
-                onToggle={(e) =>
-                  setShowRaiseDisputeForm(
-                    (e.currentTarget as HTMLDetailsElement).open
-                  )
-                }
-                className="rounded-md border border-amber-200 bg-amber-50/50 px-4 py-4 dark:border-amber-800/60 dark:bg-amber-950/30"
-              >
-                <summary className="cursor-pointer select-none">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                        Something wrong? Raise a dispute
-                      </p>
-                      <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">
-                        If the outcome wasn’t as agreed, you can open a dispute. We’ll review both sides and your funds stay protected.
-                      </p>
-                    </div>
-                    {!showRaiseDisputeForm && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-200 hover:bg-amber-50"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setShowRaiseDisputeForm(true);
-                        }}
-                      >
-                        Open a dispute
-                      </Button>
-                    )}
-                  </div>
-                </summary>
-
-                {showRaiseDisputeForm && (
-                  <div className="mt-4">
-                    <GuidedDisputeForm
-                      jobId={numericJobId}
-                      jobPageHref={jobId ? `/jobs/${jobId}` : "/jobs"}
-                      jobTitle={listing.title ?? undefined}
-                      isLister={isJobLister}
-                      agreedAmountCents={agreedAmountCents}
-                      onCancel={() => setShowRaiseDisputeForm(false)}
-                    />
-                  </div>
-                )}
-              </details>
-            )}
-
           {!cleanerReviewPendingMinimal && !listerReleaseFundsStep && (
             <>
           {!detailUiBoost && listing.special_instructions && (
@@ -3704,6 +4114,7 @@ export function JobDetail({
           {!(isCleaner && hideCleanerCancelledAuctionUi) &&
             !cleanerReviewPendingMinimal &&
             !listerReleaseFundsStep &&
+            !listerCompletedBoostTidy &&
             (detailUiBoost ? (
               <Card id="bids" className="mt-4 border-border/90 shadow-sm dark:border-gray-800">
                 <CardHeader>
@@ -3719,8 +4130,11 @@ export function JobDetail({
                       (b) => b.status === "pending_confirmation"
                     )}
                     onAcceptBid={
-                      isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
+                      isListingOwner && !hasActiveJob && isLive
+                        ? handleAcceptBid
+                        : undefined
                     }
+                    closedAuctionBidStatus={closedAuctionBidStatus}
                     showRevertLastBid={showRevertLastBidInHistory}
                     onRevertLastBid={
                       showRevertLastBidInHistory ? handleRevertLastBid : undefined
@@ -3752,8 +4166,11 @@ export function JobDetail({
                   (b) => b.status === "pending_confirmation"
                 )}
                 onAcceptBid={
-                  isListingOwner && !hasActiveJob ? handleAcceptBid : undefined
+                  isListingOwner && !hasActiveJob && isLive
+                    ? handleAcceptBid
+                    : undefined
                 }
+                closedAuctionBidStatus={closedAuctionBidStatus}
                 showRevertLastBid={showRevertLastBidInHistory}
                 onRevertLastBid={
                   showRevertLastBidInHistory ? handleRevertLastBid : undefined
@@ -3936,6 +4353,7 @@ function BidHistorySection({
   bids,
   hasPendingEarlyAcceptance = false,
   onAcceptBid,
+  closedAuctionBidStatus = null,
   showRevertLastBid = false,
   onRevertLastBid,
   className,
@@ -3946,6 +4364,7 @@ function BidHistorySection({
   bids: BidWithBidder[];
   hasPendingEarlyAcceptance?: boolean;
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
+  closedAuctionBidStatus?: ClosedAuctionBidStatus | null;
   /** Cleaner + live listing: withdraw most recent bid by this user. */
   showRevertLastBid?: boolean;
   onRevertLastBid?: () => Promise<void>;
@@ -3976,6 +4395,7 @@ function BidHistorySection({
             bids={bids}
             onAcceptBid={onAcceptBid}
             hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
+            closedAuctionBidStatus={closedAuctionBidStatus}
             showRevertLastBid={showRevertLastBid}
             onRevertLastBid={onRevertLastBid}
             largeTouch={largeTouch}

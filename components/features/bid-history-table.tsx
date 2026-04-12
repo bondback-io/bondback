@@ -20,6 +20,9 @@ export type BidWithBidder = BidRow & {
   bidder_email?: string | null;
 };
 
+/** When the auction is no longer live, `active` bids show this in the Status column. */
+export type ClosedAuctionBidStatus = "lister_cancelled" | "auction_ended";
+
 export type BidHistoryTableProps = {
   bids: BidWithBidder[];
   /** When set, show Accept bid button for lister (listing owner, no job yet). */
@@ -31,6 +34,11 @@ export type BidHistoryTableProps = {
   onRevertLastBid?: () => Promise<void>;
   /** Larger button (e.g. job detail on mobile). */
   largeTouch?: boolean;
+  /**
+   * When the listing auction has ended, explains why `active` bids are no longer actionable
+   * (lister cancelled vs natural end).
+   */
+  closedAuctionBidStatus?: ClosedAuctionBidStatus | null;
 };
 
 export function BidHistoryTable({
@@ -40,6 +48,7 @@ export function BidHistoryTable({
   showRevertLastBid = false,
   onRevertLastBid,
   largeTouch = false,
+  closedAuctionBidStatus = null,
 }: BidHistoryTableProps) {
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [confirmBid, setConfirmBid] = useState<BidWithBidder | null>(null);
@@ -118,6 +127,20 @@ export function BidHistoryTable({
       return (
         <Badge variant="outline" className="font-normal text-muted-foreground">
           Declined early offer
+        </Badge>
+      );
+    }
+    if (bid.status === "active" && closedAuctionBidStatus) {
+      if (closedAuctionBidStatus === "lister_cancelled") {
+        return (
+          <Badge variant="secondary" className="font-normal">
+            Bid cancelled by lister
+          </Badge>
+        );
+      }
+      return (
+        <Badge variant="secondary" className="font-normal">
+          Auction ended
         </Badge>
       );
     }

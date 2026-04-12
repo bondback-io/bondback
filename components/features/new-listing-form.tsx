@@ -607,7 +607,7 @@ export function NewListingForm({
       const row = buildListingInsertRow({
         lister_id: listerId,
         title,
-        description: instructions,
+        description: values.instructions?.trim() || null,
         property_address: values.propertyAddress?.trim() || null,
         suburb: values.suburb,
         postcode: values.postcode,

@@ -19,6 +19,7 @@ const CLEANER_ONLY_TYPES = new Set<NotificationRow["type"]>([
   "job_accepted",
   "job_approved_to_start",
   "job_cancelled_by_lister",
+  "listing_cancelled_by_lister",
   "new_job_in_area",
 ]);
 

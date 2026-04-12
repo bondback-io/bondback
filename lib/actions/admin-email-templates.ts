@@ -498,6 +498,7 @@ export async function sendTestEmail(
       "dispute_opened",
       "dispute_resolved",
       "job_cancelled_by_lister",
+      "listing_cancelled_by_lister",
     ];
     const knownType = transactionalTypes.includes(type as EmailNotificationType)
       ? (type as EmailNotificationType)

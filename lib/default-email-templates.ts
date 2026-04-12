@@ -158,6 +158,17 @@ function buildTemplates(): Record<EmailTemplateType, DefaultTemplate> {
         APP_NAME +
         " team",
     },
+    listing_cancelled_by_lister: {
+      subject: "Auction ended early — your bid won’t carry – " + APP_NAME,
+      body:
+        "Hi {name},\n\n" +
+        "The property lister **ended this auction early**. If you had a current bid, it’s **no longer active**.\n\n" +
+        "Plenty more bond cleans on the board — jump back in when you’re ready.\n\n" +
+        "[Browse jobs](" + APP_URL + "/jobs)\n\n" +
+        "– The " +
+        APP_NAME +
+        " team",
+    },
     payment_released: {
       subject: "Ka-ching: [Amount] released — nice one – " + APP_NAME,
       body:

@@ -36,6 +36,7 @@ export type NotificationType =
   | "job_approved_to_start"
   | "new_bid"
   | "job_cancelled_by_lister"
+  | "listing_cancelled_by_lister"
   | "referral_reward"
   | "listing_live"
   | "after_photos_uploaded"
@@ -529,6 +530,15 @@ export async function sendAdminTestNotificationByType(
       jobId: null,
       message: "Sample: the lister cancelled this job.",
       options: { adminTest: true },
+    },
+    listing_cancelled_by_lister: {
+      jobId: null,
+      message: "Sample: the lister ended a live auction you had bid on.",
+      options: {
+        listingUuid: "00000000-0000-0000-0000-000000000001",
+        listingTitle: "2 Bed Unit",
+        adminTest: true,
+      },
     },
     referral_reward: {
       jobId: null,

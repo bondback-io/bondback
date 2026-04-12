@@ -35,6 +35,7 @@ import {
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
 import { cn } from "@/lib/utils";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
+import { listingDescriptionForDisplay } from "@/lib/listing-detail-presenters";
 import {
   Dialog,
   DialogContent,
@@ -329,7 +330,7 @@ export function MyListingsList({
     setEditPhotoUrls(
       Array.isArray(listing.photo_urls) ? (listing.photo_urls as string[]) : []
     );
-    setEditDescription(listing.description ?? "");
+    setEditDescription(listingDescriptionForDisplay(listing.description ?? ""));
     setEditError(null);
   };
 
