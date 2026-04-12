@@ -959,7 +959,11 @@ export function MyListingsList({
                   isLiveBidding={liveBidding}
                   showEndEarly={showEndEarly}
                   href={hrefListingOrJob(
-                    { id: String(listing.id), status: listing.status },
+                    {
+                      id: String(listing.id),
+                      status: listing.status,
+                      end_time: listing.end_time,
+                    },
                     job && job.jobId != null
                       ? {
                           id: Number(job.jobId),

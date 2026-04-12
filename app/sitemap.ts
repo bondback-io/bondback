@@ -123,7 +123,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       const id = row.id as string;
       const updated = row.created_at ? new Date(row.created_at as string) : new Date();
       dynamicEntries.push({
-        url: `${base}/jobs/${id}`,
+        url: `${base}/listings/${id}`,
         lastModified: updated,
         changeFrequency: changeFreq.listing,
         priority: 0.75,

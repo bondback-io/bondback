@@ -6,7 +6,7 @@ import { formatCents } from "@/lib/listings";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { cn } from "@/lib/utils";
 import { DashboardEmptyState } from "@/components/dashboard";
-import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
+import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 export type CleanerLiveBidItem = {
   listingId: string;
@@ -46,7 +46,14 @@ export function CleanerLiveBidsSection({ items }: { items: CleanerLiveBidItem[] 
           }
         })();
 
-        const detailUrl = detailUrlForCardItem({ id: item.listingId });
+        const detailUrl = hrefListingOrJob(
+          {
+            id: item.listingId,
+            status: "live",
+            end_time: item.endTimeIso,
+          },
+          null
+        );
         return (
           <li key={item.listingId}>
             <Link

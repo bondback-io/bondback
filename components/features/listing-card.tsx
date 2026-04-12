@@ -284,7 +284,7 @@ function ListingCardInner({
 }: ListingCardProps) {
   const distanceUnit = useDistanceUnit();
   const jobHref = hrefListingOrJob(
-    { id: listing.id, status: listing.status },
+    { id: listing.id, status: listing.status, end_time: listing.end_time },
     job ?? undefined
   );
 

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
-import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
+import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 export type DashboardListingCardProps = {
   listing: ListingRow;
@@ -45,10 +45,14 @@ function DashboardListingCardInner({
   feePercentage = 12,
   onCancelClick,
 }: DashboardListingCardProps) {
-  const detailUrl = detailUrlForCardItem({
-    id: listing.id,
-    status: listing.status,
-  });
+  const detailUrl = hrefListingOrJob(
+    {
+      id: listing.id,
+      status: listing.status,
+      end_time: listing.end_time,
+    },
+    null
+  );
   const coverUrl = getListingCoverUrl(listing);
   const currentBid = (listing.current_lowest_bid_cents as number | null) ?? 0;
   const buyNow = listing.buy_now_cents;

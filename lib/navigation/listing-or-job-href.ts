@@ -1,15 +1,19 @@
 /**
  * Routing model:
- * - Live/bidding work lives in `listings` → `/listings/[uuid]`
- * - Assigned / in-progress jobs live in `jobs` → `/jobs/[numericId]`
+ * - Live / open auctions: rows live in `listings` → `/listings/[uuid]`
+ * - Assigned work: rows in `jobs` → `/jobs/[numericId]` only when there is a real job PK
  *
  * `jobs` uses `winner_id` for the assigned cleaner. `cleaner_id` is accepted as an alias
- * (e.g. merged shapes) to match call-site naming.
+ * (e.g. bids or merged shapes).
  */
+
+import { parseUtcTimestamp } from "@/lib/utils";
 
 export type ListingLinkInput = {
   id: string;
   status?: string | null;
+  /** When set, open auctions keep `/listings/...` even if a placeholder job row exists. */
+  end_time?: string | null;
 };
 
 export type JobLinkInput = {
@@ -19,9 +23,11 @@ export type JobLinkInput = {
   cleaner_id?: string | null;
 };
 
-/** Card / row shape: either a listing row, a job row, or a merged object with `listing_id` + job fields. */
+/** Card / row shape: listing row, job row, or merged object with `listing_id` + job fields. */
 export type MarketplaceDetailItem = {
   id: string | number;
+  /** When `id` is a listing UUID but job id is known separately */
+  job_id?: number | null;
   listing_id?: string | null;
   status?: string | null;
   winner_id?: string | null;
@@ -29,41 +35,68 @@ export type MarketplaceDetailItem = {
 };
 
 /**
- * True when the row should open the job detail route (assigned work).
- * Uses assignee fields (`winner_id` / `cleaner_id`) plus job lifecycle statuses such as
- * `accepted`, `in_progress`, `completed`, dispute phases, etc.
+ * True when the UI should use the job detail route (`/jobs/[numericId]`).
+ * Matches product rule: assignee fields or post-award job statuses.
  */
 export function isJobAssigned(item: MarketplaceDetailItem | null | undefined): boolean {
   if (!item) return false;
-  const assignee = item.cleaner_id ?? item.winner_id;
-  if (assignee != null && String(assignee).trim() !== "") return true;
+  if (item.cleaner_id != null && String(item.cleaner_id).trim() !== "") return true;
+  if (item.winner_id != null && String(item.winner_id).trim() !== "") return true;
   const st = String(item.status ?? "").toLowerCase();
   return (
-    st === "accepted" ||
     st === "in_progress" ||
     st === "assigned" ||
-    st === "completed" ||
-    st === "completed_pending_approval" ||
-    st === "disputed" ||
-    st === "in_review" ||
-    st === "dispute_negotiating"
+    st === "completed"
   );
 }
 
-/** Alias for {@link isJobAssigned} (newer name in docs). */
+/** @deprecated Prefer {@link isJobAssigned} */
+export const isAssignedJobRoute = (job: JobLinkInput | null | undefined) =>
+  isJobAssigned(job ?? undefined);
+
+/** Alias for {@link isJobAssigned} */
 export const isAssignedJob = isJobAssigned;
 
+/** Listing is still an open auction — always use `/listings/[uuid]`, not `/jobs/[id]`. */
+export function isListingLiveAuction(
+  listing: Pick<ListingLinkInput, "status" | "end_time">
+): boolean {
+  const lst = String(listing.status ?? "").toLowerCase();
+  if (lst !== "live") return false;
+  const raw = listing.end_time;
+  if (raw == null || String(raw).trim() === "") return true;
+  const endMs = parseUtcTimestamp(String(raw));
+  if (Number.isNaN(endMs)) return true;
+  return endMs > Date.now();
+}
+
+function resolveNumericJobId(item: MarketplaceDetailItem): number | null {
+  if (typeof item.job_id === "number" && Number.isFinite(item.job_id)) {
+    return item.job_id;
+  }
+  if (typeof item.id === "number" && Number.isFinite(item.id)) {
+    return item.id;
+  }
+  if (typeof item.id === "string" && /^\d+$/.test(item.id.trim())) {
+    const n = parseInt(item.id, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 /**
- * Single conditional for cards: job route when assigned, else listing URL.
- * For listing-only rows, `id` is the listing UUID and `listing_id` is usually omitted.
+ * Prefer `/listings/...` unless we have a numeric job id and the row is “assigned”.
+ * Never emits `/jobs/[uuid]` (that always 404s).
  */
 export function detailUrlForCardItem(item: MarketplaceDetailItem): string {
   if (isJobAssigned(item)) {
-    return `/jobs/${item.id}`;
+    const jobPk = resolveNumericJobId(item);
+    if (jobPk != null) {
+      return `/jobs/${jobPk}`;
+    }
   }
   const listingKey =
-    item.listing_id ??
-    (typeof item.id === "string" ? item.id : null);
+    item.listing_id ?? (typeof item.id === "string" ? item.id : null);
   if (!listingKey) {
     return "/jobs";
   }
@@ -71,12 +104,15 @@ export function detailUrlForCardItem(item: MarketplaceDetailItem): string {
 }
 
 /**
- * Prefer listing URL until the job is assigned; then use numeric job URL.
+ * Prefer listing URL while the auction is live; then job vs listing from assignee/status.
  */
 export function hrefListingOrJob(
   listing: ListingLinkInput,
   job?: JobLinkInput | null
 ): string {
+  if (isListingLiveAuction(listing)) {
+    return `/listings/${listing.id}`;
+  }
   if (!job) {
     return `/listings/${listing.id}`;
   }
@@ -96,7 +132,3 @@ export function hrefListingOnly(listingId: string): string {
 export function hrefJobOnly(jobId: number): string {
   return `/jobs/${jobId}`;
 }
-
-/** @deprecated Use {@link isJobAssigned} */
-export const isAssignedJobRoute = (job: JobLinkInput | null | undefined) =>
-  isJobAssigned(job ?? undefined);
