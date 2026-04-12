@@ -6,6 +6,16 @@ import type { JobRouteDebugPayload } from "@/lib/jobs/job-route-debug";
 export type { JobRouteDebugPayload };
 
 function interpret(payload: JobRouteDebugPayload): string {
+  if (payload.userQueryError?.code === "42P17") {
+    return (
+      "PostgreSQL reported infinite recursion in Row Level Security on public.jobs (42P17). " +
+      "That is fixed in the database by replacing cross-table EXISTS subqueries with SECURITY DEFINER helpers — " +
+      "see supabase/sql/20260329180000_jobs_listings_rls_break_recursion.sql. " +
+      "Open Supabase Dashboard → SQL, paste that file, and Run for this project (pushing code to GitHub does not apply SQL). " +
+      "Then use supabase/sql/20260329180001_diagnose_jobs_listings_rls.sql to verify policies. " +
+      "If there is still no job row for this id, use /listings/<listing-uuid> for live auctions, not /jobs/<number>."
+    );
+  }
   const { adminClientConfigured, adminSawJobRow, userSawJobRow, listingMarketplaceVisible } =
     payload;
   if (!adminClientConfigured) {

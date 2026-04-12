@@ -4,7 +4,7 @@
 -- **42P17 infinite recursion on `jobs`:** If policies use EXISTS (SELECT … FROM listings) on `jobs`
 -- AND EXISTS (SELECT … FROM jobs) on `listings`, Postgres re-enters policies forever. The helpers +
 -- policy replacements below (or `supabase/sql/20260329180000_jobs_listings_rls_break_recursion.sql`)
--- remove that cycle by scanning `listings` / `jobs` inside SECURITY DEFINER helpers with
+-- remove that cycle by scanning `listings` / `jobs` / `bids` inside SECURITY DEFINER helpers with
 -- row_security disabled for the inner query only.
 --
 -- **Also run** `supabase/migrations/20260430120000_listings_select_marketplace.sql` (or paste below).
@@ -71,10 +71,30 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.job_listing_has_cleaner_bid(p_listing_id text, p_cleaner_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  PERFORM set_config('row_security', 'off', true);
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.bids b
+    WHERE b.listing_id::text = p_listing_id
+      AND b.cleaner_id::text = p_cleaner_id::text
+  );
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.listing_is_marketplace_browseable(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.listing_has_job_party_for_user(text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.job_listing_has_cleaner_bid(text, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.listing_is_marketplace_browseable(text) TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.listing_has_job_party_for_user(text, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.job_listing_has_cleaner_bid(text, uuid) TO authenticated;
 
 -- Marketplace mirror: allow SELECT on jobs when the linked listing is browseable (same idea as
 -- listings_select_marketplace_*). Required so `/jobs/[numericId]` works for cleaners without
@@ -102,18 +122,12 @@ CREATE POLICY "jobs_select_parties"
     OR (winner_id IS NOT NULL AND auth.uid()::text = winner_id::text)
   );
 
+DROP POLICY IF EXISTS "jobs_select_if_bidder" ON public.jobs;
 CREATE POLICY "jobs_select_if_bidder"
   ON public.jobs
   FOR SELECT
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1
-      FROM public.bids b
-      WHERE b.listing_id::text = jobs.listing_id::text
-        AND b.cleaner_id::text = auth.uid()::text
-    )
-  );
+  USING (public.job_listing_has_cleaner_bid(jobs.listing_id::text, auth.uid()));
 
 DROP POLICY IF EXISTS "listings_select_when_job_party" ON public.listings;
 CREATE POLICY "listings_select_when_job_party"
