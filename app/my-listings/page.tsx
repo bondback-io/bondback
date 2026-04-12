@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
+import { applyListingAuctionOutcomes, fetchListingsForLister } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
 import { MyListingsList, type ListerViewTab } from "@/components/features/my-listings-list";
 import { MyListingsNewListingButton } from "@/components/listing/my-listings-new-listing-button";
@@ -66,16 +66,17 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
   const showPublishedBanner = resolved?.published === "1";
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
     redirect("/login");
   }
 
   const { data } = await supabase
     .from("profiles")
     .select("roles, active_role")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .maybeSingle();
 
   const profile = data as {
@@ -106,22 +107,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
 
   await applyListingAuctionOutcomes();
 
-  const { data: listingsData, error: listingsError } = await supabase
-    .from("listings")
-    .select("*")
-    .eq("lister_id", session.user.id)
-    .order("id", { ascending: false });
-
-  let list: unknown[] = listingsData ?? [];
-  if (listingsError) {
-    const { data: fallback } = await supabase
-      .from("listings")
-      .select("*")
-      .eq("lister_id", session.user.id);
-    list = fallback ?? [];
-  }
-
-  const initialListings = list as ListingRow[];
+  const initialListings = await fetchListingsForLister(user.id);
   const listingIds = initialListings.map((l) => l.id);
 
   let initialActiveJobsSnapshot:
@@ -289,7 +275,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
       <div className="mt-6 sm:mt-8">
         <MyListingsList
           initialListings={initialListings}
-          listerId={session.user.id}
+          listerId={user.id}
           initialEditListingId={editId}
           initialOpenCancelListingId={cancelListingIdParam}
           initialActiveJobsSnapshot={initialActiveJobsSnapshot}

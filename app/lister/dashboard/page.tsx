@@ -19,6 +19,7 @@ import { formatCents, isListingLive, listingIdsWithCancelledJobs } from "@/lib/l
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ChevronDown, XCircle } from "lucide-react";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
+import { fetchListingsForLister } from "@/lib/actions/listings";
 import {
   LISTING_FULL_SELECT,
   NOTIFICATION_FEED_SELECT,
@@ -77,12 +78,11 @@ export default async function ListerDashboardPage() {
     redirect("/cleaner/dashboard");
   }
 
-  const [listingsRes, jobsRes, notificationsRes, globalSettings] = await Promise.all([
-    supabase
-      .from("listings")
-      .select(LISTING_FULL_SELECT)
-      .eq("lister_id", user.id)
-      .order("created_at", { ascending: false }),
+  const [listingsFetched, jobsRes, notificationsRes, globalSettings] = await Promise.all([
+    fetchListingsForLister(user.id, {
+      select: LISTING_FULL_SELECT,
+      orderBy: { column: "created_at", ascending: false },
+    }),
     supabase
       .from("jobs")
       .select(
@@ -102,7 +102,7 @@ export default async function ListerDashboardPage() {
     globalSettings?.fee_percentage ??
     12;
 
-  const listings = (listingsRes.data ?? []) as ListingRow[];
+  const listings = listingsFetched as ListingRow[];
   const jobs = (jobsRes.data ?? []) as JobRow[];
   const notifications = (notificationsRes.data ?? []) as NotificationRow[];
 

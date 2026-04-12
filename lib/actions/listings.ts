@@ -110,6 +110,47 @@ export async function createListingForPublish(
   return { ok: true, id: String(data.id) };
 }
 
+export type FetchListingsForListerOptions = {
+  /** PostgREST select list; default `"*"`. */
+  select?: string;
+  /** Default: `id` descending (newest numeric id first). */
+  orderBy?: { column: "id" | "created_at"; ascending?: boolean };
+};
+
+/**
+ * Load all listings for a lister. When `SUPABASE_SERVICE_ROLE_KEY` is set, uses the admin client
+ * so rows appear even if RLS has no SELECT policy for `listings` (insert/publish often uses admin).
+ * Caller must only pass the authenticated user's id.
+ */
+export async function fetchListingsForLister(
+  userId: string,
+  options?: FetchListingsForListerOptions
+): Promise<ListingRow[]> {
+  const select = options?.select ?? "*";
+  const orderColumn = options?.orderBy?.column ?? "id";
+  const ascending = options?.orderBy?.ascending ?? false;
+
+  const supabase = await createServerSupabaseClient();
+  const admin = createSupabaseAdminClient();
+  const run = admin
+    ? await admin
+        .from("listings")
+        .select(select)
+        .eq("lister_id", userId)
+        .order(orderColumn, { ascending })
+    : await supabase
+        .from("listings")
+        .select(select)
+        .eq("lister_id", userId)
+        .order(orderColumn, { ascending });
+  const { data, error } = run;
+  if (error) {
+    console.warn("[fetchListingsForLister]", error.message);
+    return [];
+  }
+  return (data ?? []) as unknown as ListingRow[];
+}
+
 export type UpdateListingDetailsResult =
   | { ok: true }
   | { ok: false; error: string };
