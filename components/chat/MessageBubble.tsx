@@ -18,6 +18,8 @@ export type MessageBubbleProps = {
   senderLabel: string;
   /** Who sent this message — drives bubble colour (lister = blue, cleaner = green). */
   senderRole: "lister" | "cleaner";
+  /** When showing “You (…)", prefer the viewer’s job role (avoids UUID mismatch mislabelling). */
+  viewerRoleHint?: "Lister" | "Cleaner" | null;
   /** Persisted on server (not optimistic). */
   isDelivered: boolean;
   /** Other party read this outgoing message. */
@@ -35,13 +37,18 @@ export function MessageBubble({
   avatarUrl,
   senderLabel,
   senderRole,
+  viewerRoleHint = null,
   isDelivered,
   isRead,
 }: MessageBubbleProps) {
   const imgUrl = message.image_url?.trim() || null;
   const senderIsLister = senderRole === "lister";
   const timeStr = format(new Date(message.created_at), "h:mm a");
-  const roleHint = senderIsLister ? "Lister" : "Cleaner";
+  const roleHint = isMe && viewerRoleHint != null
+    ? viewerRoleHint
+    : senderIsLister
+      ? "Lister"
+      : "Cleaner";
   const bubbleRounded = isMe ? "rounded-br-[6px]" : "rounded-bl-[6px]";
   const bubbleColor = senderIsLister
     ? cn(

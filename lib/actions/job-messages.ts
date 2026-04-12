@@ -1,9 +1,25 @@
 "use server";
 
+import { after } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { createNotification } from "@/lib/actions/notifications";
 import { canSendJobChatMessages } from "@/lib/chat-unlock";
+
+/** Supabase/auth UUIDs may differ by casing; strict `===` caused wrong recipient → self-notify. */
+function normalizeUuid(id: string | null | undefined): string {
+  if (id == null) return "";
+  return String(id).trim().toLowerCase().replace(/-/g, "");
+}
+
+function isSameUser(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const na = normalizeUuid(a);
+  const nb = normalizeUuid(b);
+  return na !== "" && na === nb;
+}
 
 type JobMessageInsert =
   Database["public"]["Tables"]["job_messages"]["Insert"];
@@ -193,7 +209,10 @@ export async function sendJobMessage(
     payment_released_at?: string | null;
   };
 
-  if (![j.lister_id, j.winner_id].includes(session.user.id)) {
+  const uid = session.user.id;
+  const isListerParticipant = isSameUser(uid, j.lister_id);
+  const isCleanerParticipant = j.winner_id != null && isSameUser(uid, j.winner_id);
+  if (!isListerParticipant && !isCleanerParticipant) {
     return {
       ok: false,
       error: "You are not allowed to send messages for this job.",
@@ -236,24 +255,31 @@ export async function sendJobMessage(
     return { ok: false, error: error.message };
   }
 
-  // Fire a notification for the recipient (other party on the job).
-  const recipientId =
-    session.user.id === j.lister_id ? j.winner_id : j.lister_id;
-  if (recipientId) {
+  // Notify only the other party (never the sender). Defer so the client returns immediately after insert.
+  const recipientId = isListerParticipant ? j.winner_id : j.lister_id;
+  if (
+    recipientId &&
+    typeof recipientId === "string" &&
+    !isSameUser(recipientId, uid)
+  ) {
     const preview = text.length > 100 ? `${text.slice(0, 97)}...` : text;
-    const { data: senderProfile } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", session.user.id)
-      .maybeSingle();
-    const senderName = (senderProfile as { full_name?: string | null } | null)?.full_name ?? undefined;
-    await createNotification(
-      recipientId,
-      "new_message",
-      jobId,
-      preview,
-      { senderName: senderName ?? undefined }
-    );
+    after(async () => {
+      const { data: senderProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", uid)
+        .maybeSingle();
+      const senderName =
+        (senderProfile as { full_name?: string | null } | null)?.full_name ??
+        undefined;
+      await createNotification(
+        recipientId,
+        "new_message",
+        jobId,
+        preview,
+        { senderName: senderName ?? undefined }
+      );
+    });
   }
 
   return { ok: true };
@@ -287,7 +313,11 @@ export async function markJobMessagesRead(
   }
 
   const j = job as { lister_id: string; winner_id: string | null };
-  if (![j.lister_id, j.winner_id].includes(session.user.id)) {
+  const uid = session.user.id;
+  const okParticipant =
+    isSameUser(uid, j.lister_id) ||
+    (j.winner_id != null && isSameUser(uid, j.winner_id));
+  if (!okParticipant) {
     return { ok: false, error: "Not a participant." };
   }
 

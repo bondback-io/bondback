@@ -50,21 +50,13 @@ import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
 import { logClientError } from "@/lib/errors/log-client-error";
 import { CountdownTimer } from "@/components/features/countdown-timer";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
-import { format, parse, parseISO, subDays } from "date-fns";
-
-const DISPLAY_DATE_FMT = "dd/MM/yyyy";
-
-/** Parse YYYY-MM-DD (and similar date-only strings) in local calendar time. */
-function parseListingCalendarDate(raw: string | null | undefined): Date | null {
-  if (!raw?.trim()) return null;
-  const t = raw.trim().slice(0, 10);
-  const d = parse(t, "yyyy-MM-dd", new Date());
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function formatDateDdMmYyyy(date: Date): string {
-  return format(date, DISPLAY_DATE_FMT);
-}
+import {
+  parseListingCalendarDate,
+  formatDateDdMmYyyy,
+  formatEndDateTime,
+  humanizePropertyCondition,
+  preferredWindowFromMoveOutDate,
+} from "@/lib/listing-detail-presenters";
 
 export type ListingAuctionDetailProps = {
   listing: ListingRow;
@@ -79,31 +71,6 @@ export type ListingAuctionDetailProps = {
   numericJobId: number | null;
   currentUserId: string | null;
 };
-
-function humanizePropertyCondition(raw: string | null | undefined): string | null {
-  if (!raw?.trim()) return null;
-  const map: Record<string, string> = {
-    excellent_very_good: "Excellent / very good",
-    good: "Good",
-    fair_average: "Fair / average",
-    poor_bad: "Poor / bad",
-  };
-  return map[raw] ?? raw.replace(/_/g, " ");
-}
-
-/** Fixed pattern so SSR and browser match (avoid `toLocaleString(undefined, …)` hydration mismatches). */
-function formatEndDateTime(iso: string): string {
-  try {
-    let d = parseISO(iso);
-    if (Number.isNaN(d.getTime())) {
-      d = new Date(iso);
-    }
-    if (Number.isNaN(d.getTime())) return iso;
-    return format(d, "EEE, d MMM yyyy, h:mm a");
-  } catch {
-    return iso;
-  }
-}
 
 export function ListingAuctionDetail({
   listing,
@@ -270,8 +237,7 @@ export function ListingAuctionDetail({
   const moveOutDate = moveOut ? parseListingCalendarDate(moveOut) : null;
   const moveOutDisplay = moveOutDate ? formatDateDdMmYyyy(moveOutDate) : moveOut;
   /** Listing detail: show preferred window as 5 days before move-out when move-out is known. */
-  const preferredWindowFromMoveOut =
-    moveOutDate != null ? formatDateDdMmYyyy(subDays(moveOutDate, 5)) : null;
+  const preferredWindowFromMoveOut = preferredWindowFromMoveOutDate(moveOutDate);
 
   const preferredRaw = (listing as { preferred_dates?: string[] | null }).preferred_dates;
   const preferredDates =

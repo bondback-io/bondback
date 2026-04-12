@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MapPin, MoreHorizontal, Gavel, Ban, Trash2, RotateCcw } from "lucide-react";
+import { MapPin, MoreHorizontal, Gavel, Ban, Trash2, RotateCcw, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCents } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
@@ -38,6 +38,10 @@ export type ListerListingCardProps = {
   timeLabel: string;
   /** Listing is in an open auction (receives bids until end time). */
   isLiveBidding?: boolean;
+  /**
+   * Visual accent: live auction (emerald), active job (violet), completed job (subtle emerald rail), or default.
+   */
+  cardAccent?: "job" | "job_done" | "none";
   showEndEarly: boolean;
   href: string;
   onEndEarly?: () => void;
@@ -58,6 +62,7 @@ export function ListerListingCard({
   buyNowCents,
   timeLabel,
   isLiveBidding = false,
+  cardAccent = "none",
   showEndEarly,
   href,
   onEndEarly,
@@ -66,15 +71,41 @@ export function ListerListingCard({
   onDiscardDraft,
   isLocalDraft = false,
 }: ListerListingCardProps) {
+  const openCtaLabel =
+    cardAccent === "job" || cardAccent === "job_done" ? "Open job" : "Open listing";
+
   return (
     <article
       className={cn(
         "overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm ring-1 ring-black/[0.03] dark:border-gray-800 dark:bg-gray-950 dark:ring-white/[0.04]",
         "transition-[box-shadow,transform] duration-200 hover:shadow-md active:scale-[0.99]",
         isLiveBidding &&
-          "border-emerald-400/70 bg-emerald-50/40 ring-2 ring-emerald-500/25 dark:border-emerald-700/50 dark:bg-emerald-950/25 dark:ring-emerald-500/20"
+          "border-emerald-400/70 bg-emerald-50/40 ring-2 ring-emerald-500/25 dark:border-emerald-700/50 dark:bg-emerald-950/25 dark:ring-emerald-500/20",
+        !isLiveBidding &&
+          cardAccent === "job" &&
+          "border-violet-400/65 bg-violet-50/35 ring-2 ring-violet-500/20 dark:border-violet-600/45 dark:bg-violet-950/30 dark:ring-violet-500/15",
+        !isLiveBidding &&
+          cardAccent === "job_done" &&
+          "border-emerald-700/35 bg-emerald-950/[0.12] ring-1 ring-emerald-600/15 dark:border-emerald-800/50 dark:bg-emerald-950/20 dark:ring-emerald-500/10"
       )}
     >
+      {!isLocalDraft && (cardAccent === "job" || cardAccent === "job_done") && (
+        <div
+          className={cn(
+            "flex items-center gap-2 border-b px-3 py-2 text-[11px] font-semibold leading-tight sm:px-4 sm:text-xs",
+            cardAccent === "job"
+              ? "border-violet-200/60 bg-violet-100/50 text-violet-950 dark:border-violet-800/50 dark:bg-violet-950/40 dark:text-violet-100"
+              : "border-emerald-800/30 bg-emerald-950/25 text-emerald-100 dark:border-emerald-800/40 dark:bg-emerald-950/50"
+          )}
+        >
+          <Briefcase className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+          <span>
+            {cardAccent === "job"
+              ? "Paid job — auction closed; work is in progress."
+              : "Completed job on Bond Back."}
+          </span>
+        </div>
+      )}
       <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
         <Link
           href={href}
@@ -213,7 +244,7 @@ export function ListerListingCard({
               className="h-11 w-full rounded-xl text-base font-semibold sm:h-10 sm:max-w-xs"
               size="lg"
             >
-              <Link href={href}>Open listing</Link>
+              <Link href={href}>{openCtaLabel}</Link>
             </Button>
           </div>
         </div>

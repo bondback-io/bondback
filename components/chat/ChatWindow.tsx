@@ -136,7 +136,6 @@ export function ChatWindow({
   const isOffline = useIsOffline();
   const [messages, setMessages] = useState<JobMessageRow[]>([]);
   const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typingPeerLabel, setTypingPeerLabel] = useState<string | null>(null);
@@ -297,7 +296,7 @@ export function ChatWindow({
     });
   }, [currentUserId, currentUserRole, cleanerName, listerName]);
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (readOnly) return;
     setError(null);
     if (isOffline) {
@@ -310,16 +309,11 @@ export function ChatWindow({
     }
     const trimmed = text.trim();
     if (!trimmed) return;
-    setSending(true);
-    const res = await sendJobMessage(jobId, trimmed);
-    setSending(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
+
+    const optimisticId = -Math.abs(Date.now());
     const nowIso = new Date().toISOString();
     const optimistic: JobMessageRow = {
-      id: -Math.abs(Date.now()),
+      id: optimisticId,
       job_id: jobId,
       sender_id: currentUserId,
       message_text: trimmed,
@@ -328,6 +322,7 @@ export function ChatWindow({
       read_at: null,
     };
 
+    setText("");
     setMessages((prev) => [...prev, optimistic]);
     if (typeof window !== "undefined") {
       window.dispatchEvent(
@@ -336,8 +331,17 @@ export function ChatWindow({
         })
       );
     }
-    setText("");
-    void markRead();
+
+    void (async () => {
+      const res = await sendJobMessage(jobId, trimmed);
+      if (!res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        setText(trimmed);
+        setError(res.error);
+        return;
+      }
+      void markRead();
+    })();
   };
 
   const handlePhotoSelected = async (files: FileList | null) => {
@@ -383,18 +387,10 @@ export function ChatWindow({
         return;
       }
       const caption = text.trim();
-      setSending(true);
-      const res = await sendJobMessage(jobId, caption || "Photo", {
-        imageUrl: url,
-      });
-      setSending(false);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
+      const optimisticId = -Math.abs(Date.now() + 1);
       const nowIso = new Date().toISOString();
       const optimistic: JobMessageRow = {
-        id: -Math.abs(Date.now() + 1),
+        id: optimisticId,
         job_id: jobId,
         sender_id: currentUserId,
         message_text: caption || "Photo",
@@ -411,7 +407,19 @@ export function ChatWindow({
         );
       }
       setText("");
-      void markRead();
+
+      void (async () => {
+        const res = await sendJobMessage(jobId, caption || "Photo", {
+          imageUrl: url,
+        });
+        if (!res.ok) {
+          setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+          setText(caption);
+          setError(res.error);
+          return;
+        }
+        void markRead();
+      })();
     } finally {
       setUploadingImage(false);
     }
@@ -541,6 +549,15 @@ export function ChatWindow({
                 avatarUrl={avatarUrl}
                 senderLabel={senderLabel}
                 senderRole={senderRole}
+                viewerRoleHint={
+                  isMe
+                    ? currentUserRole === "lister"
+                      ? "Lister"
+                      : currentUserRole === "cleaner"
+                        ? "Cleaner"
+                        : null
+                    : null
+                }
                 isDelivered={isDelivered}
                 isRead={isRead}
               />
@@ -558,7 +575,7 @@ export function ChatWindow({
           if (v.trim().length > 0) broadcastTyping();
         }}
         onSend={() => void handleSend()}
-        sending={sending || uploadingImage}
+        sending={uploadingImage}
         isOffline={isOffline}
         onPhotoSelected={(files) => void handlePhotoSelected(files)}
         accentRole={currentUserRole}

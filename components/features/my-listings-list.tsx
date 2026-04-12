@@ -49,6 +49,8 @@ import {
   classifyListerBadge,
   buildTimeLabel,
   isListerAuctionLiveBidding,
+  isListerJobConverted,
+  isListerJobPipelineActive,
   passesListFilter,
   listingMatchesCompletedTab,
   isDisputedJobStatus,
@@ -940,6 +942,15 @@ export function MyListingsList({
               const highest = listing.current_lowest_bid_cents ?? 0;
               const buyNow = listing.buy_now_cents ?? null;
               const liveBidding = isListerAuctionLiveBidding(listing, job, nowMs);
+              const jobConverted = isListerJobConverted(job);
+              const jobPipeline = isListerJobPipelineActive(job);
+              const cardAccent: "job" | "job_done" | "none" = liveBidding
+                ? "none"
+                : jobPipeline
+                  ? "job"
+                  : jobConverted && String(job?.status ?? "") === "completed"
+                    ? "job_done"
+                    : "none";
               const showEndEarly =
                 liveBidding && !activeIdSet.has(String(listing.id));
               const isExpired =
@@ -957,6 +968,7 @@ export function MyListingsList({
                   buyNowCents={buyNow}
                   timeLabel={timeLabel}
                   isLiveBidding={liveBidding}
+                  cardAccent={cardAccent}
                   showEndEarly={showEndEarly}
                   href={hrefListingOrJob(
                     {

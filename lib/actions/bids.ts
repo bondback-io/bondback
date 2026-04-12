@@ -259,9 +259,10 @@ export async function placeBid(
     amount: legacyAmountWholeDollars,
     status: "active",
   };
+  /** `as never`: @supabase/ssr client can infer `.insert()` as `never` for some tables; matches jobs.ts inserts. */
   const { data: inserted, error: insertError } = await supabase
     .from("bids")
-    .insert(insertRow)
+    .insert(insertRow as never)
     .select("id")
     .single();
 

@@ -49,6 +49,24 @@ export function isListerAuctionLiveBidding(
   return st === "live" && endMs > nowMs;
 }
 
+/** Listing has a real job row (winner / payment / work) — not the same as a live auction. */
+export function isListerJobConverted(
+  job: JobSnapshot | null | undefined
+): boolean {
+  const s = String(job?.status ?? "");
+  if (!s || s === "cancelled") return false;
+  return true;
+}
+
+/** Active job pipeline (not yet fully completed) — use distinct card chrome vs live auctions. */
+export function isListerJobPipelineActive(
+  job: JobSnapshot | null | undefined
+): boolean {
+  const s = String(job?.status ?? "");
+  if (!s || s === "cancelled" || s === "completed") return false;
+  return true;
+}
+
 export function classifyListerBadge(
   listing: ListingRow,
   job: JobSnapshot | null | undefined,
