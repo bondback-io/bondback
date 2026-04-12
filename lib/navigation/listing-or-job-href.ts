@@ -1,10 +1,13 @@
 /**
  * Routing model:
- * - Live / open auctions: rows live in `listings` → `/listings/[uuid]`
- * - Assigned work: rows in `jobs` → `/jobs/[numericId]` only when there is a real job PK
+ * - Live / open auctions: rows live in `listings` → `/listings/[listingId]`
+ * - After a cleaner is assigned (winner_id / etc.): `jobs` row exists → `/jobs/[numericJobPk]`
  *
- * `jobs` uses `winner_id` for the assigned cleaner. `cleaner_id` is accepted as an alias
- * (e.g. bids or merged shapes).
+ * Never treat a listing primary key as a job PK: legacy numeric listing ids must not become
+ * `/jobs/[sameNumber]` when no job row exists. Job PK is only inferred when the item shape
+ * looks like a job row (`listing_id` present and different from `id`).
+ *
+ * `jobs` uses `winner_id` for the assigned cleaner. `cleaner_id` is accepted as an alias.
  */
 
 import { parseUtcTimestamp } from "@/lib/utils";
@@ -27,7 +30,7 @@ export type JobLinkInput = {
 export type MarketplaceDetailItem = {
   id: string | number;
   /** When `id` is a listing UUID but job id is known separately */
-  job_id?: number | null;
+  job_id?: number | string | null;
   listing_id?: string | null;
   status?: string | null;
   winner_id?: string | null;
@@ -36,7 +39,8 @@ export type MarketplaceDetailItem = {
 
 /**
  * True when the UI should use the job detail route (`/jobs/[numericId]`).
- * Matches product rule: assignee fields or post-award job statuses.
+ * Requires a real assignee (or dispute flow on the job row). Status-only checks like
+ * `in_progress` without winner_id caused `/jobs/[listingPk]` when listing ids were numeric.
  */
 export function isJobAssigned(item: MarketplaceDetailItem | null | undefined): boolean {
   if (!item) return false;
@@ -44,9 +48,9 @@ export function isJobAssigned(item: MarketplaceDetailItem | null | undefined): b
   if (item.winner_id != null && String(item.winner_id).trim() !== "") return true;
   const st = String(item.status ?? "").toLowerCase();
   return (
-    st === "in_progress" ||
-    st === "assigned" ||
-    st === "completed"
+    st === "disputed" ||
+    st === "in_review" ||
+    st === "dispute_negotiating"
   );
 }
 
@@ -74,11 +78,24 @@ function resolveNumericJobId(item: MarketplaceDetailItem): number | null {
   if (typeof item.job_id === "number" && Number.isFinite(item.job_id)) {
     return item.job_id;
   }
+  if (typeof item.job_id === "string" && /^\d+$/.test(item.job_id.trim())) {
+    const n = parseInt(item.job_id, 10);
+    return Number.isFinite(n) ? n : null;
+  }
   if (typeof item.id === "number" && Number.isFinite(item.id)) {
     return item.id;
   }
-  if (typeof item.id === "string" && /^\d+$/.test(item.id.trim())) {
-    const n = parseInt(item.id, 10);
+  const idStr = typeof item.id === "string" ? item.id.trim() : "";
+  const listingIdStr =
+    item.listing_id != null ? String(item.listing_id).trim() : "";
+  // Job rows: numeric PK `id` + separate `listing_id` (listing UUID). Do not treat a bare
+  // numeric listing `id` as a job PK (detailUrlForCardItem({ id: listing.id }) only).
+  if (
+    listingIdStr !== "" &&
+    listingIdStr !== idStr &&
+    /^\d+$/.test(idStr)
+  ) {
+    const n = parseInt(idStr, 10);
     return Number.isFinite(n) ? n : null;
   }
   return null;
@@ -118,6 +135,7 @@ export function hrefListingOrJob(
   }
   return detailUrlForCardItem({
     id: job.id,
+    job_id: job.id,
     listing_id: listing.id,
     status: job.status,
     winner_id: job.winner_id,

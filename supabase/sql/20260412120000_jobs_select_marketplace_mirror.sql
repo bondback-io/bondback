@@ -1,3 +1,8 @@
+-- DEPRECATED standalone use: this policy pattern alone can cause 42P17 (infinite recursion)
+-- when combined with `listings_select_when_job_party` (EXISTS on jobs inside listings RLS).
+-- Apply `supabase/sql/20260329180000_jobs_listings_rls_break_recursion.sql` instead, or use
+-- `docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql` which includes the helper functions + both policies.
+--
 -- Mirror public.listings marketplace visibility onto public.jobs SELECT.
 -- Without this, cleaners browsing live auctions often cannot SELECT the job row (only parties +
 -- bidders could), while the app loader uses the service role to read jobs for marketplace listings.

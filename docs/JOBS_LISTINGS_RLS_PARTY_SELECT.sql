@@ -1,6 +1,12 @@
 -- Allow listers and assigned cleaners to read job + listing rows via the user (anon) client.
 -- Without these policies, `/jobs/[numericId]` often returns 404 unless SUPABASE_SERVICE_ROLE_KEY bypasses RLS on the server.
 --
+-- **42P17 infinite recursion on `jobs`:** If policies use EXISTS (SELECT … FROM listings) on `jobs`
+-- AND EXISTS (SELECT … FROM jobs) on `listings`, Postgres re-enters policies forever. The helpers +
+-- policy replacements below (or `supabase/sql/20260329180000_jobs_listings_rls_break_recursion.sql`)
+-- remove that cycle by scanning `listings` / `jobs` inside SECURITY DEFINER helpers with
+-- row_security disabled for the inner query only.
+--
 -- **Also run** `supabase/migrations/20260430120000_listings_select_marketplace.sql` (or paste below).
 -- Party-only listing SELECT blocks **Find Jobs** and **listing detail** for cleaners browsing
 -- other users' live listings — marketplace policies allow `live`/`ended`/`expired` rows (not cancelled early).
@@ -24,6 +30,52 @@ DROP POLICY IF EXISTS "Users can view jobs they own or are assigned" ON public.j
 DROP POLICY IF EXISTS "jobs_select_parties" ON public.jobs;
 DROP POLICY IF EXISTS "jobs_select_if_bidder" ON public.jobs;
 
+-- RLS helpers (avoid jobs ↔ listings policy recursion). Same as 20260329180000_jobs_listings_rls_break_recursion.sql
+CREATE OR REPLACE FUNCTION public.listing_is_marketplace_browseable(p_listing_id text)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  PERFORM set_config('row_security', 'off', true);
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.listings l
+    WHERE l.id::text = p_listing_id
+      AND l.status IN ('live', 'ended', 'expired')
+      AND l.cancelled_early_at IS NULL
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.listing_has_job_party_for_user(p_listing_id text, p_user_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  PERFORM set_config('row_security', 'off', true);
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.jobs j
+    WHERE j.listing_id::text = p_listing_id
+      AND (
+        j.lister_id::text = p_user_id::text
+        OR (j.winner_id IS NOT NULL AND j.winner_id::text = p_user_id::text)
+      )
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.listing_is_marketplace_browseable(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.listing_has_job_party_for_user(text, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.listing_is_marketplace_browseable(text) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.listing_has_job_party_for_user(text, uuid) TO authenticated;
+
 -- Marketplace mirror: allow SELECT on jobs when the linked listing is browseable (same idea as
 -- listings_select_marketplace_*). Required so `/jobs/[numericId]` works for cleaners without
 -- relying only on SUPABASE_SERVICE_ROLE_KEY.
@@ -32,30 +84,14 @@ CREATE POLICY "jobs_select_if_listing_marketplace_authenticated"
   ON public.jobs
   FOR SELECT
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1
-      FROM public.listings l
-      WHERE l.id::text = jobs.listing_id::text
-        AND l.status IN ('live', 'ended', 'expired')
-        AND l.cancelled_early_at IS NULL
-    )
-  );
+  USING (public.listing_is_marketplace_browseable(jobs.listing_id::text));
 
 DROP POLICY IF EXISTS "jobs_select_if_listing_marketplace_anon" ON public.jobs;
 CREATE POLICY "jobs_select_if_listing_marketplace_anon"
   ON public.jobs
   FOR SELECT
   TO anon
-  USING (
-    EXISTS (
-      SELECT 1
-      FROM public.listings l
-      WHERE l.id::text = jobs.listing_id::text
-        AND l.status IN ('live', 'ended', 'expired')
-        AND l.cancelled_early_at IS NULL
-    )
-  );
+  USING (public.listing_is_marketplace_browseable(jobs.listing_id::text));
 
 CREATE POLICY "jobs_select_parties"
   ON public.jobs
@@ -86,15 +122,7 @@ CREATE POLICY "listings_select_when_job_party"
   TO authenticated
   USING (
     auth.uid()::text = lister_id::text
-    OR EXISTS (
-      SELECT 1
-      FROM public.jobs j
-      WHERE j.listing_id::text = listings.id::text
-        AND (
-          j.lister_id::text = auth.uid()::text
-          OR (j.winner_id IS NOT NULL AND j.winner_id::text = auth.uid()::text)
-        )
-    )
+    OR public.listing_has_job_party_for_user(listings.id::text, auth.uid())
   );
 
 -- -----------------------------------------------------------------------------
