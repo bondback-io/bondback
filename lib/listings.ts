@@ -100,8 +100,16 @@ export function formatPreferredCleaningDueLine(daysLeft: number | null): string 
   return `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`;
 }
 
-/** Payload for `createListingForPublish` / `buildListingInsertRow` — matches generated `listings.Insert` (no stray columns). */
-export type ListingInsertPayload = ListingInsert;
+/**
+ * Payload for `createListingForPublish` / `buildListingInsertRow`.
+ * Extends generated `Insert` with columns that exist in production DB but may be missing from regenerated types.
+ */
+export type ListingInsertPayload = ListingInsert & {
+  /** Date part of auction end — required when `listings.end_date` is NOT NULL in Postgres. */
+  end_date?: string;
+  reserve_price?: number;
+  base_price?: number;
+};
 
 /**
  * `duration_days === 0` means a 2-minute test auction (only when global_settings.allow_two_minute_auction_test is on).
@@ -194,6 +202,9 @@ export function buildListingInsertRow(params: {
     duration_days: params.duration_days,
     status: params.status,
     end_time: params.end_time,
+    end_date: params.end_date,
+    reserve_price: params.reserve_price,
+    base_price: params.base_price,
     platform_fee_percentage: params.platform_fee_percentage,
     preferred_dates: params.preferred_dates ?? null,
     property_condition: params.property_condition,

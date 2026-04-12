@@ -86,7 +86,7 @@ ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS cover_photo_url text;
 | end_date               | date        | NOT NULL (date part of end_time) |
 | created_at             | timestamptz | Default now()            |
 
-The **new listing form** builds rows with `lib/listings.ts` → `buildListingInsertRow()` (columns aligned with generated `types/supabase.ts` → `listings.Insert`) and persists them via the server action **`createListingForPublish`** in `lib/actions/listings.ts` (not the browser client), so publishing works with RLS and avoids stray/unknown columns.
+The **new listing form** builds rows with `lib/listings.ts` → `buildListingInsertRow()` (includes `end_date`, `reserve_price`, `base_price` when your database has those NOT NULL columns) and persists them via the server action **`createListingForPublish`** in `lib/actions/listings.ts` (not the browser client). Regenerate `types/supabase.ts` after schema changes so generated types stay in sync.
 
 ### Row Level Security (listers must insert/update)
 
