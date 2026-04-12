@@ -23,7 +23,8 @@ function sameUserId(a: unknown, b: unknown): boolean {
  * ISO strings match DB/PostgREST (plain `new Date()` treats them as local and can wrongly hide
  * live listings, causing 404 on `/jobs/[id]` for new/live rows).
  */
-function isMarketplaceVisibleListing(row: ListingRow): boolean {
+/** Exported for job-route debug + RLS parity checks. */
+export function isMarketplaceVisibleListing(row: ListingRow): boolean {
   const st = String(row.status ?? "").toLowerCase();
   if (st === "ended" || st === "expired") {
     return true;

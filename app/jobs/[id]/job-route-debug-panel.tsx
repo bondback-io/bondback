@@ -1,28 +1,19 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import type { JobRouteDebugPayload } from "@/lib/jobs/job-route-debug";
 
-export type JobRouteDebugPayload = {
-  routeParam: string;
-  numericJobId: number;
-  sessionPresent: boolean;
-  sessionUserIdPrefix: string | null;
-  userSawJobRow: boolean;
-  adminClientConfigured: boolean;
-  adminSawJobRow: boolean;
-  userQueryError: { code?: string; message?: string } | null;
-  adminQueryError: { code?: string; message?: string } | null;
-  listingIdFromAdmin: string | null;
-};
+export type { JobRouteDebugPayload };
 
 function interpret(payload: JobRouteDebugPayload): string {
-  const { adminClientConfigured, adminSawJobRow, userSawJobRow } = payload;
+  const { adminClientConfigured, adminSawJobRow, userSawJobRow, listingMarketplaceVisible } =
+    payload;
   if (!adminClientConfigured) {
     if (!userSawJobRow) {
       return (
         "Service role key is not set on the server (SUPABASE_SERVICE_ROLE_KEY). The app cannot verify whether this job id exists in the database. " +
         "If RLS also blocks your user from SELECT on jobs, you will see this screen. " +
-        "Set the service role env var on Vercel/hosting and redeploy, or fix jobs RLS so your role can read the row."
+        "Set the service role env var on Vercel/hosting and redeploy, or apply the SQL migration that mirrors marketplace listing visibility onto public.jobs SELECT (see docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql)."
       );
     }
     return "Service role not configured, but your user session can read this job row (RLS allows you).";
@@ -31,9 +22,21 @@ function interpret(payload: JobRouteDebugPayload): string {
     return "No row in public.jobs with this id (confirmed via service role). The job was deleted or the id is wrong. Live auctions use /listings/<listing-uuid> until a job row exists.";
   }
   if (!userSawJobRow) {
-    return "Job exists (service role sees it) but your session cannot SELECT it — RLS on public.jobs is blocking. Apply policies for lister_id, winner_id, or bidders (see docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql).";
+    if (listingMarketplaceVisible === false) {
+      return (
+        "Job exists but the linked listing is not marketplace-visible (draft, cancelled early, or status not live/ended/expired). " +
+        "The detail loader refuses to show this job to non-parties. Open the listing UUID if you have it, or use the lister dashboard."
+      );
+    }
+    if (listingMarketplaceVisible === true) {
+      return (
+        "Job and marketplace-visible listing exist, but your session still cannot SELECT public.jobs — RLS is missing the marketplace mirror policy. " +
+        "Run the SQL in docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql (jobs_select_if_listing_marketplace_* policies)."
+      );
+    }
+    return "Job exists (service role sees it) but your session cannot SELECT it — RLS on public.jobs is blocking. Apply policies for lister_id, winner_id, bidders, or marketplace listing mirror (see docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql).";
   }
-  return "Unexpected: both user and admin see the job row; you should not be on this debug screen.";
+  return "Unexpected: your session can read the job row but the detail loader returned null — report this as a bug.";
 }
 
 /**
@@ -52,6 +55,7 @@ export function JobRouteDebugPanel({ payload }: { payload: JobRouteDebugPayload 
       adminClientConfigured: payload.adminClientConfigured,
       adminSawJobRow: payload.adminSawJobRow,
       listingIdFromAdmin: payload.listingIdFromAdmin,
+      listingMarketplaceVisible: payload.listingMarketplaceVisible,
       userQueryError: payload.userQueryError,
       adminQueryError: payload.adminQueryError,
     },

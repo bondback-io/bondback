@@ -24,6 +24,39 @@ DROP POLICY IF EXISTS "Users can view jobs they own or are assigned" ON public.j
 DROP POLICY IF EXISTS "jobs_select_parties" ON public.jobs;
 DROP POLICY IF EXISTS "jobs_select_if_bidder" ON public.jobs;
 
+-- Marketplace mirror: allow SELECT on jobs when the linked listing is browseable (same idea as
+-- listings_select_marketplace_*). Required so `/jobs/[numericId]` works for cleaners without
+-- relying only on SUPABASE_SERVICE_ROLE_KEY.
+DROP POLICY IF EXISTS "jobs_select_if_listing_marketplace_authenticated" ON public.jobs;
+CREATE POLICY "jobs_select_if_listing_marketplace_authenticated"
+  ON public.jobs
+  FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.listings l
+      WHERE l.id::text = jobs.listing_id::text
+        AND l.status IN ('live', 'ended', 'expired')
+        AND l.cancelled_early_at IS NULL
+    )
+  );
+
+DROP POLICY IF EXISTS "jobs_select_if_listing_marketplace_anon" ON public.jobs;
+CREATE POLICY "jobs_select_if_listing_marketplace_anon"
+  ON public.jobs
+  FOR SELECT
+  TO anon
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.listings l
+      WHERE l.id::text = jobs.listing_id::text
+        AND l.status IN ('live', 'ended', 'expired')
+        AND l.cancelled_early_at IS NULL
+    )
+  );
+
 CREATE POLICY "jobs_select_parties"
   ON public.jobs
   FOR SELECT

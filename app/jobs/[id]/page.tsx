@@ -1,13 +1,12 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildJobListingMetadata } from "@/lib/seo/jobs-listings-seo";
-import { fieldsFromPostgrestError, logSystemError } from "@/lib/system-error-log";
+import { logSystemError } from "@/lib/system-error-log";
+import { loadJobByNumericIdForSession } from "@/lib/jobs/load-job-for-detail-route";
+import { buildJobRouteDebugSnapshot } from "@/lib/jobs/job-route-debug";
 import { JobDetailPageContent } from "@/app/jobs/job-detail-page-content";
 import { JobRouteDebugPanel } from "@/app/jobs/[id]/job-route-debug-panel";
-import { Button } from "@/components/ui/button";
 
 function firstSearchParam(v: string | string[] | undefined): string | undefined {
   if (v == null) return undefined;
@@ -18,8 +17,6 @@ export const dynamic = "force-dynamic";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const JOB_RLS_GATE_SELECT = "id, listing_id";
 
 export async function generateMetadata({
   params,
@@ -76,126 +73,23 @@ export default async function JobDetailPage({
   } = await supabase.auth.getUser();
   const sessionUserId = authUser?.id ?? null;
 
-  const admin = createSupabaseAdminClient();
+  /**
+   * Single source of truth: same loader as SEO + `JobDetailPageContent`.
+   * The old RLS-only gate treated “user cannot SELECT jobs” as 404 even when the linked listing
+   * was marketplace-visible (cleaners browsing live auctions).
+   */
+  const job = await loadJobByNumericIdForSession(
+    supabase,
+    numericId,
+    sessionUserId ?? undefined
+  );
 
-  const [userRes, adminRes] = await Promise.all([
-    supabase
-      .from("jobs")
-      .select(JOB_RLS_GATE_SELECT)
-      .eq("id", numericId)
-      .maybeSingle(),
-    admin
-      ? admin
-          .from("jobs")
-          .select(JOB_RLS_GATE_SELECT)
-          .eq("id", numericId)
-          .maybeSingle()
-      : Promise.resolve({
-          data: null as { id: number; listing_id: string } | null,
-          error: null,
-        }),
-  ]);
-
-  if (userRes.error) {
-    console.error("[jobs/[id]] user jobs query error:", userRes.error.message, userRes.error.code);
-    await logSystemError({
-      source: "job_detail:rls_gate",
-      severity: "error",
-      routePath: "/jobs/[id]",
-      jobId: numericId,
-      userId: sessionUserId,
-      context: { phase: "jobs_user_rls_gate", routeParam: raw },
-      ...fieldsFromPostgrestError(userRes.error),
-    });
-  }
-  if (adminRes.error) {
-    console.error("[jobs/[id]] admin jobs query error:", adminRes.error.message);
-  }
-
-  const userSawRow = !!userRes.data;
-  const adminSawRow = !!adminRes.data;
-  const listingIdForHint = adminRes.data?.listing_id ?? null;
-
-  if (!adminSawRow) {
-    if (!admin) {
-      await logSystemError({
-        source: "job_detail:rls_gate",
-        severity: "warning",
-        routePath: "/jobs/[id]",
-        jobId: numericId,
-        userId: sessionUserId,
-        message:
-          "Cannot verify job existence: service role not configured. Set SUPABASE_SERVICE_ROLE_KEY on the server.",
-        context: { routeParam: raw, user_saw_row: userSawRow },
-      });
+  if (!job) {
+    if (debugMode) {
+      const payload = await buildJobRouteDebugSnapshot(supabase, numericId, raw, sessionUserId);
+      return <JobRouteDebugPanel payload={payload} />;
     }
-    if (!userSawRow) {
-      if (debugMode) {
-        return (
-          <JobRouteDebugPanel
-            payload={{
-              routeParam: raw,
-              numericJobId: numericId,
-              sessionPresent: !!sessionUserId,
-              sessionUserIdPrefix: sessionUserId ? `${sessionUserId.slice(0, 8)}…` : null,
-              userSawJobRow: userSawRow,
-              adminClientConfigured: !!admin,
-              adminSawJobRow: adminSawRow,
-              userQueryError: userRes.error
-                ? { code: userRes.error.code, message: userRes.error.message }
-                : null,
-              adminQueryError: adminRes.error
-                ? { code: adminRes.error.code, message: adminRes.error.message }
-                : null,
-              listingIdFromAdmin: listingIdForHint,
-            }}
-          />
-        );
-      }
-      notFound();
-    }
-  }
-
-  if (!userSawRow && adminSawRow) {
-    await logSystemError({
-      source: "job_detail:rls_gate",
-      severity: "warning",
-      routePath: "/jobs/[id]",
-      jobId: numericId,
-      listingId: listingIdForHint,
-      userId: sessionUserId,
-      message:
-        "Job row exists but user session cannot SELECT it (RLS). User may be a bidder/lister/winner not covered by current policies.",
-      context: {
-        routeParam: raw,
-        user_saw_row: userSawRow,
-        admin_saw_row: adminSawRow,
-        supabase_service_role_configured: !!admin,
-      },
-    });
-
-    return (
-      <div className="mx-auto max-w-4xl p-10 text-center">
-        <h1 className="mb-4 text-3xl font-bold text-foreground">Job not visible</h1>
-        <p className="mx-auto max-w-lg text-muted-foreground">
-          This job exists, but your account can&apos;t open it with the current rules (for example
-          you may need to be the lister, the assigned cleaner, or a bidder on this auction). If the
-          listing is still in bidding or live, try the listing page instead.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          {listingIdForHint ? (
-            <Button className="rounded-xl" asChild>
-              <Link href={`/listings/${encodeURIComponent(listingIdForHint)}`}>
-                View listing
-              </Link>
-            </Button>
-          ) : null}
-          <Button variant="outline" className="rounded-xl" asChild>
-            <Link href="/jobs">Browse jobs</Link>
-          </Button>
-        </div>
-      </div>
-    );
+    notFound();
   }
 
   return (

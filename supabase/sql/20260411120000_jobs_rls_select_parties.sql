@@ -1,6 +1,9 @@
 -- Jobs: SELECT for listers, assigned cleaners (winner_id), and cleaners who bid on the listing
 -- (winner_id is still null during bidding). Service role bypasses RLS — no policy required.
 --
+-- For marketplace browse (cleaners opening `/jobs/[id]` for live listings), also run:
+--   supabase/sql/20260412120000_jobs_select_marketplace_mirror.sql
+--
 -- Apply in Supabase SQL Editor or: supabase db push (if added under migrations).
 
 ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
