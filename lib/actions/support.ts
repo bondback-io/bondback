@@ -16,6 +16,21 @@ const MAX_FILES = 5;
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
 
+function humanizeSupportTicketsDbError(message: string): string {
+  const m = message.toLowerCase();
+  if (
+    m.includes("support_tickets") &&
+    (m.includes("schema cache") || m.includes("could not find the table") || m.includes("does not exist"))
+  ) {
+    return (
+      "Support tickets are not set up on this database yet. In Supabase → SQL Editor, run the script " +
+      "`supabase/sql/support_tickets_complete_setup.sql` from the repo (or apply migrations including " +
+      "`20250322000000_support_tickets.sql` and the follow-up support ticket migrations), then try again."
+    );
+  }
+  return message;
+}
+
 type AdminClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
 
 async function ensureSupportAttachmentsBucket(
@@ -226,7 +241,7 @@ export async function submitSupportTicket(
 
   if (error) {
     console.error("submitSupportTicket:", error);
-    return { ok: false, error: error.message };
+    return { ok: false, error: humanizeSupportTicketsDbError(error.message) };
   }
 
   const tid = (data as { id?: string } | null)?.id ?? "";
