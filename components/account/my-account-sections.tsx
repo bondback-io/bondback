@@ -154,6 +154,7 @@ export function MyAccountSections({
         "phone",
         "date_of_birth",
         "full_name",
+        "cleaner_username",
         "email",
         "abn",
         "insurance_policy_number",

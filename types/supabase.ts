@@ -62,6 +62,8 @@ export interface Database {
           theme_preference: string | null;
           /** km | mi — display only; stored distances remain km */
           distance_unit: string | null;
+          /** Unique marketplace handle for cleaners (lowercase); shown on bids when set. */
+          cleaner_username: string | null;
         };
         Insert: {
           id: string;
@@ -109,6 +111,7 @@ export interface Database {
           preferred_payout_schedule?: string;
           theme_preference?: string | null;
           distance_unit?: string | null;
+          cleaner_username?: string | null;
         };
         Update: {
           roles?: string[] | null;
@@ -154,6 +157,7 @@ export interface Database {
           preferred_payout_schedule?: string;
           theme_preference?: string | null;
           distance_unit?: string | null;
+          cleaner_username?: string | null;
         };
         Relationships: [
           {
@@ -179,6 +183,8 @@ export interface Database {
           bedrooms: number;
           bathrooms: number;
           addons: string[] | null;
+          /** Keys from the Special areas step (balcony, garage, laundry, patio); subset of addons for UI. */
+          special_areas: string[] | null;
           special_instructions: string | null;
           move_out_date: string | null;
           /** ISO date strings for lister-preferred cleaning window (optional). */
@@ -216,6 +222,7 @@ export interface Database {
           bedrooms: number;
           bathrooms: number;
           addons?: string[] | null;
+          special_areas?: string[] | null;
           special_instructions?: string | null;
           move_out_date?: string | null;
           preferred_dates?: string[] | null;
@@ -245,6 +252,7 @@ export interface Database {
           bedrooms?: number;
           bathrooms?: number;
           addons?: string[] | null;
+          special_areas?: string[] | null;
           special_instructions?: string | null;
           move_out_date?: string | null;
           preferred_dates?: string[] | null;

@@ -22,6 +22,7 @@ import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewa
 import { logTimerActivity } from "@/lib/admin-activity-log";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
+import { isSpecialAreaForJobChecklist } from "@/lib/listing-special-areas";
 import { sameUuid, trimStr } from "@/lib/utils";
 import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
 
@@ -719,15 +720,17 @@ export async function fulfillJobPaymentFromSession(
     if (!existingItems || existingItems.length === 0) {
       const { data: listingForChecklist } = await supabase
         .from("listings")
-        .select("addons")
+        .select("addons, special_areas")
         .eq("id", checkoutJob.listing_id as never)
         .maybeSingle();
 
-      const addons = ((listingForChecklist as { addons?: string[] | null } | null)?.addons ??
-        []) as string[];
-      const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
+      const listingRow = listingForChecklist as {
+        addons?: string[] | null;
+        special_areas?: string[] | null;
+      } | null;
+      const addons = (listingRow?.addons ?? []) as string[];
       const isSpecialArea = (key: string) =>
-        (specialAreaKeys as readonly string[]).includes(key);
+        isSpecialAreaForJobChecklist(listingRow, key);
       const defaultLabels = [
         "Vacuum Apartment/House",
         "Clean all Bedrooms",
@@ -913,14 +916,16 @@ export async function ensureJobChecklistIfEmpty(
 
   const { data: listingForChecklist } = await supabase
     .from("listings")
-    .select("addons")
+    .select("addons, special_areas")
     .eq("id", checklistJob.listing_id as never)
     .maybeSingle();
-  const addons = ((listingForChecklist as { addons?: string[] | null } | null)?.addons ??
-    []) as string[];
-  const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
+  const listingRow = listingForChecklist as {
+    addons?: string[] | null;
+    special_areas?: string[] | null;
+  } | null;
+  const addons = (listingRow?.addons ?? []) as string[];
   const isSpecialArea = (key: string) =>
-    (specialAreaKeys as readonly string[]).includes(key);
+    isSpecialAreaForJobChecklist(listingRow, key);
   const defaultLabels = [
     "Vacuum Apartment/House",
     "Clean all Bedrooms",
@@ -1019,16 +1024,17 @@ export async function approveJobStart(
   if (!existingItems || existingItems.length === 0) {
     const { data: listingForChecklist } = await supabase
       .from("listings")
-      .select("addons")
+      .select("addons, special_areas")
       .eq("id", approveRow.listing_id as never)
       .maybeSingle();
 
-    const addons = ((listingForChecklist as { addons?: string[] | null } | null)?.addons ??
-      []) as string[];
-
-    const specialAreaKeys = ["balcony", "garage", "laundry", "patio"] as const;
+    const listingRow = listingForChecklist as {
+      addons?: string[] | null;
+      special_areas?: string[] | null;
+    } | null;
+    const addons = (listingRow?.addons ?? []) as string[];
     const isSpecialArea = (key: string) =>
-      (specialAreaKeys as readonly string[]).includes(key);
+      isSpecialAreaForJobChecklist(listingRow, key);
 
     const defaultLabels = [
       "Vacuum Apartment/House",

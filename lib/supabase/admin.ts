@@ -124,6 +124,7 @@ export function syntheticProfileFromAuthUser(u: User): ProfileRow {
     preferred_payout_schedule: "weekly",
     theme_preference: null,
     distance_unit: null,
+    cleaner_username: null,
   };
 }
 

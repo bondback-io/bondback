@@ -316,6 +316,8 @@ export function buildListingInsertRow(params: {
   bedrooms: number;
   bathrooms: number;
   addons: string[];
+  /** Keys chosen under Special areas (stored for add-on badge styling). */
+  special_areas: string[] | null;
   special_instructions: string | null;
   move_out_date: string;
   photo_urls: string[] | null;
@@ -349,6 +351,8 @@ export function buildListingInsertRow(params: {
     bedrooms: params.bedrooms,
     bathrooms: params.bathrooms,
     addons: params.addons.length > 0 ? params.addons : null,
+    special_areas:
+      params.special_areas && params.special_areas.length > 0 ? params.special_areas : null,
     special_instructions: params.special_instructions,
     move_out_date: params.move_out_date,
     photo_urls: params.photo_urls,

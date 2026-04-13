@@ -18,7 +18,7 @@ export function jobsBrowsePageRange(page: number): { from: number; to: number } 
 
 /** Full `public.listings` row — cards, dashboards, job detail. */
 export const LISTING_FULL_SELECT =
-  "id, lister_id, title, description, property_description, suburb, postcode, property_type, bedrooms, bathrooms, addons, special_instructions, move_out_date, preferred_dates, photo_urls, initial_photos, cover_photo_url, reserve_cents, buy_now_cents, starting_price_cents, current_lowest_bid_cents, duration_days, status, end_time, created_at, platform_fee_percentage, cancelled_early_at, property_condition, property_levels";
+  "id, lister_id, title, description, property_description, suburb, postcode, property_type, bedrooms, bathrooms, addons, special_areas, special_instructions, move_out_date, preferred_dates, photo_urls, initial_photos, cover_photo_url, reserve_cents, buy_now_cents, starting_price_cents, current_lowest_bid_cents, duration_days, status, end_time, created_at, platform_fee_percentage, cancelled_early_at, property_condition, property_levels";
 
 /** Cleaner “live bids” section — fields used after fetch + `isListingLive`. */
 export const LISTING_LIVE_BID_CARD_SELECT =
@@ -49,7 +49,7 @@ export const LISTING_ADMIN_TABLE_SELECT =
 
 /** All typed profile columns (matches `profiles.Row`). */
 export const PROFILE_TYPED_FULL_SELECT =
-  "id, roles, active_role, abn, state, suburb, postcode, max_travel_km, full_name, phone, date_of_birth, years_experience, vehicle_type, profile_photo_url, bio, specialties, portfolio_photo_urls, business_name, insurance_policy_number, availability, equipment_notes, notification_preferences, email_force_disabled, email_preferences_locked, is_admin, is_deleted, stripe_connect_id, stripe_payment_method_id, stripe_customer_id, expo_push_token, verification_badges, is_email_verified, created_at, updated_at, referred_by, referral_code, account_credit_cents, high_dispute_opens_30d, last_dispute_abuse_alert_at, preferred_payout_schedule, theme_preference, distance_unit";
+  "id, roles, active_role, abn, state, suburb, postcode, max_travel_km, full_name, first_name, last_name, cleaner_username, phone, date_of_birth, years_experience, vehicle_type, profile_photo_url, bio, specialties, portfolio_photo_urls, business_name, insurance_policy_number, availability, equipment_notes, notification_preferences, email_force_disabled, email_preferences_locked, is_admin, is_deleted, stripe_connect_id, stripe_payment_method_id, stripe_customer_id, expo_push_token, verification_badges, is_email_verified, created_at, updated_at, referred_by, referral_code, account_credit_cents, high_dispute_opens_30d, last_dispute_abuse_alert_at, preferred_payout_schedule, theme_preference, distance_unit";
 
 /** Admin users page — full typed row (regenerate types when adding moderation columns like `is_banned`). */
 export const PROFILE_ADMIN_TABLE_SELECT = PROFILE_TYPED_FULL_SELECT;

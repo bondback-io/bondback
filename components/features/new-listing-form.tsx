@@ -583,10 +583,7 @@ export function NewListingForm({
       const moveOutDateStr = format(values.moveOutDate, "yyyy-MM-dd");
       const endTime = computeListingEndTimeIso({ durationDays });
 
-      const specialParts = values.specialAreas.length
-        ? `Special areas: ${values.specialAreas.join(", ")}. `
-        : "";
-      const instructions = [specialParts, values.instructions ?? ""].filter(Boolean).join("").trim() || null;
+      const instructions = values.instructions?.trim() || null;
 
       const title = `${values.bedrooms} ${values.bedrooms === 1 ? "Bedroom" : "Bedrooms"} + ${values.bathrooms} ${values.bathrooms === 1 ? "Bathroom" : "Bathrooms"} ${values.propertyType.charAt(0).toUpperCase() + values.propertyType.slice(1)} in ${values.suburb}`;
 
@@ -622,6 +619,8 @@ export function NewListingForm({
         bedrooms: values.bedrooms,
         bathrooms: values.bathrooms,
         addons: [...new Set(values.addons)],
+        special_areas:
+          values.specialAreas.length > 0 ? [...new Set(values.specialAreas)] : null,
         special_instructions: instructions,
         move_out_date: moveOutDateStr,
         photo_urls: null,

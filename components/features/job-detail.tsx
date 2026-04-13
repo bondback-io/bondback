@@ -24,6 +24,7 @@ import { CountdownTimer } from "@/components/features/countdown-timer";
 import { ListingEndsAtLocal } from "@/components/features/listing-ends-at-local";
 import {
   BidHistoryTable,
+  type BidWithBidder,
   type ClosedAuctionBidStatus,
 } from "@/components/features/bid-history-table";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
@@ -41,6 +42,7 @@ import {
   humanizePropertyCondition,
   listingPropertyDescriptionBody,
   preferredWindowFromMoveOutDate,
+  specialInstructionsForDisplay,
 } from "@/lib/listing-detail-presenters";
 import { parseUtcTimestamp, cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
@@ -55,6 +57,7 @@ import {
 } from "@/components/ui/dialog";
 import type { ListingRow } from "@/lib/listings";
 import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
+import { isListingAddonSpecialArea } from "@/lib/listing-special-areas";
 import type { BidRow } from "@/lib/listings";
 import { Checkbox } from "@/components/ui/checkbox";
 import Image from "next/image";
@@ -124,7 +127,7 @@ import { JobPaymentTimeline, type JobPaymentTimelineProps } from "@/components/f
 import { JobProgressTimeline } from "@/components/features/job-progress-timeline";
 import { JobPaymentBreakdown } from "@/components/features/job-payment-breakdown";
 import { VerificationBadges } from "@/components/shared/verification-badges";
-export type BidWithBidder = BidRow & { bidder_email?: string | null };
+import { hydrateBidderProfilesForListing } from "@/lib/actions/bidder-profile";
 
 /** Some mobile/gallery pickers repeat files in a multi-select; dedupe by stable identity. */
 function dedupeImageFiles(files: File[]): File[] {
@@ -438,7 +441,12 @@ export function JobDetail({
           filter: `listing_id=eq.${listingId}`
         },
         (payload) => {
-          setBids((prev) => [payload.new as BidWithBidder, ...prev]);
+          const row = payload.new as BidRow;
+          void hydrateBidderProfilesForListing(listingId, [row.cleaner_id]).then((res) => {
+            const profile =
+              res.ok && res.byId[row.cleaner_id] ? res.byId[row.cleaner_id] : null;
+            setBids((prev) => [{ ...row, bidder_profile: profile }, ...prev]);
+          });
         }
       )
       .subscribe();
@@ -447,6 +455,35 @@ export function JobDetail({
       supabase.removeChannel(ch);
     };
   }, [supabase, listingId]);
+
+  const missingBidderProfileKey = useMemo(
+    () =>
+      bids
+        .filter((b) => !b.bidder_profile)
+        .map((b) => b.cleaner_id)
+        .sort()
+        .join(","),
+    [bids]
+  );
+
+  useEffect(() => {
+    if (!missingBidderProfileKey) return;
+    const cleanerIds = missingBidderProfileKey.split(",").filter(Boolean);
+    if (cleanerIds.length === 0) return;
+    let cancelled = false;
+    void hydrateBidderProfilesForListing(listingId, cleanerIds).then((res) => {
+      if (cancelled || !res.ok || Object.keys(res.byId).length === 0) return;
+      setBids((prev) =>
+        prev.map((b) => {
+          const p = res.byId[b.cleaner_id];
+          return p && !b.bidder_profile ? { ...b, bidder_profile: p } : b;
+        })
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [listingId, missingBidderProfileKey]);
 
   // Live countdown timers (e.g. auto-release countdown during review window)
   useEffect(() => {
@@ -934,6 +971,10 @@ export function JobDetail({
         : `${levelsRaw} storey${String(levelsRaw) === "1" ? "" : "s"}`
       : null;
   const addonsList = Array.isArray(listing.addons) ? listing.addons.filter(Boolean) : [];
+  const specialInstructionsBody = useMemo(
+    () => specialInstructionsForDisplay(listing.special_instructions),
+    [listing.special_instructions]
+  );
   const moveOutRaw = listing.move_out_date?.trim() ? listing.move_out_date : null;
   const moveOutDate = moveOutRaw ? parseListingCalendarDate(moveOutRaw) : null;
   const moveOutDisplay = moveOutDate ? formatDateDdMmYyyy(moveOutDate) : moveOutRaw;
@@ -1455,8 +1496,27 @@ export function JobDetail({
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {addonsList.map((a) => (
-                              <Badge key={a} variant="outline" className="font-normal capitalize">
-                                {String(a).replace(/_/g, " ")}
+                              <Badge
+                                key={a}
+                                variant="outline"
+                                title={
+                                  isListingAddonSpecialArea(listing, a)
+                                    ? "Special area (from listing)"
+                                    : "Paid add-on"
+                                }
+                                className={cn(
+                                  "font-normal",
+                                  isListingAddonSpecialArea(listing, a)
+                                    ? "border-amber-500/75 bg-amber-500/[0.14] text-amber-950 shadow-sm dark:border-amber-400/55 dark:bg-amber-950/45 dark:text-amber-50"
+                                    : "capitalize"
+                                )}
+                              >
+                                {isListingAddonSpecialArea(listing, a) ? (
+                                  <span className="font-semibold tracking-wide">Special area · </span>
+                                ) : null}
+                                <span className="capitalize">
+                                  {formatListingAddonDisplayName(a)}
+                                </span>
                               </Badge>
                             ))}
                           </div>
@@ -1538,13 +1598,13 @@ export function JobDetail({
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {listing.special_instructions?.trim() && (
+                      {specialInstructionsBody.trim() && (
                         <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
                           <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
                             Special instructions
                           </h3>
                           <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
-                            {listing.special_instructions}
+                            {specialInstructionsBody}
                           </p>
                         </div>
                       )}
@@ -1575,6 +1635,7 @@ export function JobDetail({
                       </summary>
                       <CardContent className="space-y-3 border-t border-border/80 pt-4 dark:border-gray-800">
                         <BidHistoryTable
+                          listingId={listingId}
                           bids={bids}
                           hasPendingEarlyAcceptance={bids.some(
                             (b) => b.status === "pending_confirmation"
@@ -1814,8 +1875,27 @@ export function JobDetail({
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {addonsList.map((a) => (
-                          <Badge key={a} variant="outline" className="font-normal capitalize">
-                            {String(a).replace(/_/g, " ")}
+                          <Badge
+                            key={a}
+                            variant="outline"
+                            title={
+                              isListingAddonSpecialArea(listing, a)
+                                ? "Special area (from listing)"
+                                : "Paid add-on"
+                            }
+                            className={cn(
+                              "font-normal",
+                              isListingAddonSpecialArea(listing, a)
+                                ? "border-amber-500/75 bg-amber-500/[0.14] text-amber-950 shadow-sm dark:border-amber-400/55 dark:bg-amber-950/45 dark:text-amber-50"
+                                : "capitalize"
+                            )}
+                          >
+                            {isListingAddonSpecialArea(listing, a) ? (
+                              <span className="font-semibold tracking-wide">Special area · </span>
+                            ) : null}
+                            <span className="capitalize">
+                              {formatListingAddonDisplayName(a)}
+                            </span>
                           </Badge>
                         ))}
                       </div>
@@ -1912,13 +1992,13 @@ export function JobDetail({
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {listing.special_instructions?.trim() && (
+                  {specialInstructionsBody.trim() && (
                     <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
                       <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
                         Special instructions
                       </h3>
                       <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
-                        {listing.special_instructions}
+                        {specialInstructionsBody}
                       </p>
                     </div>
                   )}
@@ -3779,7 +3859,7 @@ export function JobDetail({
 
           {!cleanerReviewPendingMinimal && !listerReleaseFundsStep && (
             <>
-          {!detailUiBoost && listing.special_instructions && (
+          {!detailUiBoost && specialInstructionsBody.trim() && (
             <div
               className={cn(
                 detailUiBoost &&
@@ -3800,7 +3880,7 @@ export function JobDetail({
                   detailUiBoost ? "mt-2 text-base leading-relaxed" : "text-sm"
                 )}
               >
-                {listing.special_instructions}
+                {specialInstructionsBody}
               </p>
             </div>
           )}
@@ -3826,9 +3906,17 @@ export function JobDetail({
                 {listing.addons.map((addon) => (
                   <span
                     key={addon}
-                    className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 dark:bg-gray-700/60 dark:text-gray-200"
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-3 py-1 dark:text-gray-200",
+                      isListingAddonSpecialArea(listing, addon)
+                        ? "border border-amber-500/60 bg-amber-500/[0.12] text-amber-950 dark:border-amber-400/50 dark:bg-amber-950/50 dark:text-amber-100"
+                        : "bg-muted dark:bg-gray-700/60"
+                    )}
                   >
                     <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+                    {isListingAddonSpecialArea(listing, addon) ? (
+                      <span className="font-semibold">Special area · </span>
+                    ) : null}
                     <span className="capitalize">
                       {formatListingAddonDisplayName(addon)}
                     </span>
@@ -4214,6 +4302,7 @@ export function JobDetail({
               </summary>
               <CardContent className="space-y-3 border-t border-border/80 px-4 pb-6 pt-4 sm:px-6 dark:border-gray-800">
                 <BidHistoryTable
+                  listingId={listingId}
                   bids={bids}
                   hasPendingEarlyAcceptance={bids.some(
                     (b) => b.status === "pending_confirmation"
@@ -4251,6 +4340,7 @@ export function JobDetail({
           </Card>
         ) : (
           <BidHistorySection
+            listingId={listingId}
             bids={bids}
             hasPendingEarlyAcceptance={bids.some(
               (b) => b.status === "pending_confirmation"
@@ -4340,6 +4430,7 @@ export function JobDetail({
 }
 
 function BidHistorySection({
+  listingId,
   bids,
   hasPendingEarlyAcceptance = false,
   onAcceptBid,
@@ -4351,6 +4442,7 @@ function BidHistorySection({
   /** Collapsed until the user opens the section (job / listing detail). */
   defaultOpen = false,
 }: {
+  listingId: string;
   bids: BidWithBidder[];
   hasPendingEarlyAcceptance?: boolean;
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
@@ -4394,6 +4486,7 @@ function BidHistorySection({
       {bids.length > 0 ? (
         <div className="mt-2 space-y-3">
           <BidHistoryTable
+            listingId={listingId}
             bids={bids}
             onAcceptBid={onAcceptBid}
             hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}

@@ -4,6 +4,9 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { formatCents } from "@/lib/listings";
 import type { BidRow } from "@/lib/listings";
+import type { BidBidderProfileSummary } from "@/lib/bids/bidder-types";
+import { bidderDisplayNameForBid } from "@/lib/bids/bidder-display";
+import { getBidderProfileForListingBid } from "@/lib/actions/bidder-profile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,9 +18,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { BidderProfilePreviewDialog } from "@/components/features/bidder-profile-preview-dialog";
+import { useToast } from "@/components/ui/use-toast";
+
+export type { BidBidderProfileSummary };
 
 export type BidWithBidder = BidRow & {
   bidder_email?: string | null;
+  bidder_profile?: BidBidderProfileSummary | null;
 };
 
 /** When the auction is no longer live, `active` bids show this in the Status column. */
@@ -25,6 +33,8 @@ export type ClosedAuctionBidStatus = "lister_cancelled" | "auction_ended";
 
 export type BidHistoryTableProps = {
   bids: BidWithBidder[];
+  /** Listing UUID — required to load bidder profile in the preview dialog. */
+  listingId: string;
   /** When set, show Accept bid button for lister (listing owner, no job yet). */
   onAcceptBid?: (bid: BidWithBidder) => Promise<void>;
   /** True if any bid is still in legacy `pending_confirmation` (blocks a second accept until cleared). */
@@ -43,6 +53,7 @@ export type BidHistoryTableProps = {
 
 export function BidHistoryTable({
   bids,
+  listingId,
   onAcceptBid,
   hasPendingEarlyAcceptance = false,
   showRevertLastBid = false,
@@ -50,9 +61,36 @@ export function BidHistoryTable({
   largeTouch = false,
   closedAuctionBidStatus = null,
 }: BidHistoryTableProps) {
+  const { toast } = useToast();
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [confirmBid, setConfirmBid] = useState<BidWithBidder | null>(null);
   const [reverting, setReverting] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewProfile, setPreviewProfile] = useState<BidBidderProfileSummary | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const openBidderPreview = async (bid: BidWithBidder) => {
+    setPreviewOpen(true);
+    if (bid.bidder_profile) {
+      setPreviewProfile(bid.bidder_profile);
+      setPreviewLoading(false);
+      return;
+    }
+    setPreviewProfile(null);
+    setPreviewLoading(true);
+    const res = await getBidderProfileForListingBid(listingId, bid.cleaner_id);
+    setPreviewLoading(false);
+    if (res.ok) {
+      setPreviewProfile(res.profile);
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Could not load profile",
+        description: res.error,
+      });
+      setPreviewOpen(false);
+    }
+  };
   const sorted = [...bids].sort(
     (a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -162,9 +200,13 @@ export function BidHistoryTable({
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
                   Bidder
                 </p>
-                <p className="break-words text-sm font-medium text-foreground dark:text-gray-100">
-                  {bid.bidder_email ?? `Cleaner ${bid.cleaner_id.slice(0, 8)}…`}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => void openBidderPreview(bid)}
+                  className="break-words text-left text-sm font-medium text-primary underline-offset-4 hover:underline dark:text-blue-300"
+                >
+                  {bidderDisplayNameForBid(bid)}
+                </button>
               </div>
               <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-border pt-3 dark:border-gray-700">
                 <div>
@@ -239,7 +281,13 @@ export function BidHistoryTable({
                 className="border-b border-border last:border-0 dark:border-gray-700/80"
               >
                 <td className="px-3 py-2 text-foreground dark:text-gray-200">
-                  {bid.bidder_email ?? `Cleaner ${bid.cleaner_id.slice(0, 8)}…`}
+                  <button
+                    type="button"
+                    onClick={() => void openBidderPreview(bid)}
+                    className="text-left font-medium text-primary underline-offset-4 hover:underline dark:text-blue-300"
+                  >
+                    {bidderDisplayNameForBid(bid)}
+                  </button>
                 </td>
                 <td className="px-3 py-2 text-right font-medium tabular-nums text-foreground dark:text-gray-100">
                   {formatCents(bid.amount_cents)}
@@ -295,6 +343,19 @@ export function BidHistoryTable({
           </Button>
         </div>
       ) : null}
+
+      <BidderProfilePreviewDialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          setPreviewOpen(open);
+          if (!open) {
+            setPreviewProfile(null);
+            setPreviewLoading(false);
+          }
+        }}
+        profile={previewProfile}
+        loading={previewLoading}
+      />
 
       <Dialog
         open={confirmBid != null}

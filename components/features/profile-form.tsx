@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { updateProfile, updateMaxTravelKm } from "@/lib/actions/profile";
+import { updateCleanerUsername } from "@/lib/actions/bidder-profile";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 import {
   VEHICLE_TYPES,
@@ -97,6 +98,20 @@ const listerSchema = z.object({
 });
 
 const cleanerSchema = listerSchema.extend({
+  cleaner_username: z
+    .string()
+    .max(24)
+    .optional()
+    .refine(
+      (v) => {
+        const t = (v ?? "").trim();
+        return t === "" || /^[a-zA-Z0-9_]{3,24}$/.test(t);
+      },
+      {
+        message:
+          "Username must be empty or 3–24 characters (letters, numbers, underscores only). Stored in lowercase.",
+      }
+    ),
   abn: z
     .string()
     .max(11)
@@ -181,6 +196,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
     resolver: zodResolver(cleanerSchema),
     defaultValues: {
       full_name: profile.full_name ?? "",
+      cleaner_username: profile.cleaner_username ?? "",
       phone: profile.phone ?? "",
       date_of_birth: (profile as { date_of_birth?: string | null }).date_of_birth ?? "",
       state: (profile as any).state ?? "",
@@ -433,6 +449,17 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
         return;
       }
     }
+    const nextUsernameRaw = (values.cleaner_username ?? "").trim();
+    const nextUsernameNorm = nextUsernameRaw === "" ? null : nextUsernameRaw.toLowerCase();
+    const prevUsernameNorm = (profile.cleaner_username ?? "").trim().toLowerCase() || null;
+    if (nextUsernameNorm !== prevUsernameNorm) {
+      const ures = await updateCleanerUsername(nextUsernameRaw === "" ? null : nextUsernameRaw);
+      if (!ures.ok) {
+        setSubmitError(ures.error);
+        setIsSubmitting(false);
+        return;
+      }
+    }
     const result = await updateProfile({
       full_name: values.full_name.trim(),
       phone: values.phone.trim() || null,
@@ -543,6 +570,26 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
               {cleanerForm.formState.errors.full_name && (
                 <p className="text-base text-destructive md:text-xs">
                   {cleanerForm.formState.errors.full_name.message}
+                </p>
+              )}
+            </div>
+
+            <div id="cleaner_username" className="scroll-mt-28 space-y-2">
+              <Label htmlFor="cleaner_username_input">Username (optional)</Label>
+              <Input
+                id="cleaner_username_input"
+                autoComplete="off"
+                placeholder="e.g. bond_clean_pro"
+                {...cleanerForm.register("cleaner_username")}
+              />
+              <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                Public handle on bid history when set — unique across cleaners. If you add one, it replaces
+                your full name there. Letters, numbers, underscores only; 3–24 characters; saved in
+                lowercase.
+              </p>
+              {cleanerForm.formState.errors.cleaner_username && (
+                <p className="text-base text-destructive md:text-xs">
+                  {cleanerForm.formState.errors.cleaner_username.message}
                 </p>
               )}
             </div>

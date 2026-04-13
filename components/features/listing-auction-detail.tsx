@@ -39,7 +39,6 @@ import {
 } from "@/lib/listings";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
-import { listingPropertyDescriptionBody } from "@/lib/listing-detail-presenters";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
 import { BuyNowButton } from "@/components/features/buy-now-button";
@@ -59,13 +58,17 @@ import { ListingEndsAtLocal } from "@/components/features/listing-ends-at-local"
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { ImageLightboxGallery } from "@/components/ui/image-lightbox-gallery";
 import {
+  listingPropertyDescriptionBody,
   parseListingCalendarDate,
   formatDateDdMmYyyy,
   humanizePropertyCondition,
   preferredWindowFromMoveOutDate,
+  specialInstructionsForDisplay,
 } from "@/lib/listing-detail-presenters";
 import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction-control";
 import { isListerNoBidsRelistListing } from "@/lib/my-listings/lister-listing-helpers";
+import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
+import { isListingAddonSpecialArea } from "@/lib/listing-special-areas";
 
 export type ListingAuctionDetailProps = {
   listing: ListingRow;
@@ -646,8 +649,25 @@ export function ListingAuctionDetail({
               </p>
               <div className="flex flex-wrap gap-2">
                 {addons.map((a) => (
-                  <Badge key={a} variant="outline" className="font-normal capitalize">
-                    {String(a).replace(/_/g, " ")}
+                  <Badge
+                    key={a}
+                    variant="outline"
+                    title={
+                      isListingAddonSpecialArea(listing, a)
+                        ? "Special area (from listing)"
+                        : "Paid add-on"
+                    }
+                    className={cn(
+                      "font-normal",
+                      isListingAddonSpecialArea(listing, a)
+                        ? "border-amber-500/75 bg-amber-500/[0.14] text-amber-950 shadow-sm dark:border-amber-400/55 dark:bg-amber-950/45 dark:text-amber-50"
+                        : "capitalize"
+                    )}
+                  >
+                    {isListingAddonSpecialArea(listing, a) ? (
+                      <span className="font-semibold tracking-wide">Special area · </span>
+                    ) : null}
+                    <span className="capitalize">{formatListingAddonDisplayName(a)}</span>
                   </Badge>
                 ))}
               </div>
@@ -845,13 +865,13 @@ export function ListingAuctionDetail({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {listing.special_instructions?.trim() && (
+          {specialInstructionsForDisplay(listing.special_instructions).trim() && (
             <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
               <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
                 Special instructions
               </h3>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
-                {listing.special_instructions}
+                {specialInstructionsForDisplay(listing.special_instructions)}
               </p>
             </div>
           )}
@@ -909,6 +929,7 @@ export function ListingAuctionDetail({
           </summary>
           <CardContent className="space-y-3 border-t border-border/80 px-6 pb-6 pt-4 dark:border-gray-800">
             <BidHistoryTable
+              listingId={String(listing.id)}
               bids={initialBids}
               hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
               onAcceptBid={

@@ -15,6 +15,7 @@ import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { JobPaymentReturnAck } from "@/components/features/job-payment-return-ack";
 import { ListingAuctionDetail } from "@/components/features/listing-auction-detail";
 import type { BidWithBidder } from "@/components/features/bid-history-table";
+import { enrichBidsWithBidderProfiles } from "@/lib/bids/enrich-bids-with-bidders";
 
 export const dynamic = "force-dynamic";
 
@@ -169,7 +170,7 @@ export default async function ListingDetailPage({
     .eq("listing_id", listingId)
     .order("created_at", { ascending: false });
 
-  const initialBids: BidWithBidder[] = (bids ?? []) as BidWithBidder[];
+  const initialBids: BidWithBidder[] = await enrichBidsWithBidderProfiles(bids ?? []);
 
   const hasActiveJob = !!jobRow && jobRow.status !== "cancelled";
   const numericJobId = jobRow?.id ?? null;

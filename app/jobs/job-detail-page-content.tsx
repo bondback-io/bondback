@@ -9,7 +9,8 @@ import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-re
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { ensureJobChecklistIfEmpty, fulfillStripeCheckoutReturn } from "@/lib/actions/jobs";
 import { JobDetail } from "@/components/features/job-detail";
-import type { BidWithBidder } from "@/components/features/job-detail";
+import type { BidWithBidder } from "@/components/features/bid-history-table";
+import { enrichBidsWithBidderProfiles } from "@/lib/bids/enrich-bids-with-bidders";
 import { ScrollToDispute } from "@/components/features/scroll-to-dispute";
 import { RecordJobView } from "@/components/features/record-job-view";
 import { JobPaymentReturnAck } from "@/components/features/job-payment-return-ack";
@@ -155,7 +156,7 @@ export async function JobDetailPageContent({
     .eq("listing_id", listingId)
     .order("created_at", { ascending: false });
 
-  const initialBids: BidWithBidder[] = (bids ?? []) as BidWithBidder[];
+  const initialBids: BidWithBidder[] = await enrichBidsWithBidderProfiles(bids ?? []);
 
   const settings = await getCachedGlobalSettingsForPages();
   const stripeTestMode =

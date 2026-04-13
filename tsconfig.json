@@ -44,6 +44,7 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "_job_page_legacy.tsx"
   ]
 }

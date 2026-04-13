@@ -29,6 +29,8 @@ export async function updateProfile(
   }
 
   const safeUpdates = { ...updates } as Record<string, unknown>;
+  /** Use {@link updateCleanerUsername} only — avoids bypassing uniqueness rules. */
+  delete safeUpdates.cleaner_username;
   if (typeof safeUpdates.max_travel_km === "number") {
     safeUpdates.max_travel_km = clampMaxTravelKm(safeUpdates.max_travel_km);
   }

@@ -53,6 +53,24 @@ export function preferredWindowFromMoveOutDate(moveOutDate: Date | null): string
  * Legacy `listings.description` sometimes bundled "Property address: …", duplicated "Special areas: …",
  * or free text. Strip machine-prefixed lines for display; prefer `property_description` on new rows.
  */
+/**
+ * Strip legacy prefix where special areas were duplicated into `special_instructions` before
+ * `listings.special_areas` existed.
+ */
+export function specialInstructionsForDisplay(raw: string | null | undefined): string {
+  let s = (raw ?? "").trim();
+  if (!s) return "";
+  for (let i = 0; i < 6; i++) {
+    const next = s
+      .replace(/^\s*Special areas:\s*.+?\.\s*/is, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+
 export function listingDescriptionForDisplay(raw: string | null | undefined): string {
   let s = (raw ?? "").trim();
   if (!s) return "";

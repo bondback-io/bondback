@@ -6,6 +6,7 @@ import {
   BID_FULL_SELECT,
   JOB_MESSAGES_FULL_SELECT,
 } from "@/lib/supabase/queries";
+import { enrichBidsWithBidderProfiles } from "@/lib/bids/enrich-bids-with-bidders";
 import {
   loadJobByNumericIdForSession,
   loadJobForListingDetailPage,
@@ -67,11 +68,13 @@ export async function GET(
 
   const listing = listingLoaded;
 
-  const { data: bids } = await supabase
+  const { data: bidsRaw } = await supabase
     .from("bids")
     .select(BID_FULL_SELECT)
     .eq("listing_id", listingId)
     .order("created_at", { ascending: false });
+
+  const bids = await enrichBidsWithBidderProfiles(bidsRaw ?? []);
 
   let jobMessages: unknown[] = [];
   if (jobRow && (jobRow as { id?: number }).id) {
