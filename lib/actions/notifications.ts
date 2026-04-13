@@ -21,6 +21,11 @@ import { isTwilioSmsAllowedForType } from "@/lib/notifications/sms";
 import { buildNotificationPersistFields } from "@/lib/notifications/notification-display-fields";
 import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
 
+/** Compare auth user id to Postgres uuid columns (avoids strict === misses on formatting). */
+function authUserIdsMatch(a: unknown, b: unknown): boolean {
+  return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+}
+
 type NotificationInsert =
   Database["public"]["Tables"]["notifications"]["Insert"];
 
@@ -425,26 +430,34 @@ export async function notifyChecklistAllComplete(
     status: string;
   };
   if (row.status !== "in_progress") return;
-  const other =
-    completedByUserId === row.lister_id
-      ? row.winner_id
-      : completedByUserId === row.winner_id
-        ? row.lister_id
-        : null;
+  const other = authUserIdsMatch(completedByUserId, row.lister_id)
+    ? row.winner_id
+    : authUserIdsMatch(completedByUserId, row.winner_id)
+      ? row.lister_id
+      : null;
   if (!other) return;
   if (await hasRecentJobNotification(other, "checklist_all_complete", jobId, 24)) return;
-  const role = completedByUserId === row.lister_id ? "Lister" : "Cleaner";
   let jobTitle: string | null = null;
   if (row.listing_id) {
     const { data: l } = await admin.from("listings").select("title").eq("id", row.listing_id).maybeSingle();
     jobTitle = (l as { title?: string | null } | null)?.title ?? null;
   }
   const t = jobTitle ? ` (${jobTitle})` : "";
+  const listerIsWinner =
+    row.winner_id != null &&
+    String(row.winner_id).trim() !== "" &&
+    authUserIdsMatch(row.lister_id, row.winner_id);
+  const completedByLister = authUserIdsMatch(completedByUserId, row.lister_id);
+  const message = listerIsWinner
+    ? `All checklist items are complete${t}.`
+    : completedByLister
+      ? `Lister completed all checklist items${t}.`
+      : `Cleaner completed all checklist items${t}.`;
   await createNotification(
     other,
     "checklist_all_complete",
     jobId,
-    `${role} finished every checklist item${t}.`,
+    message,
     { listingTitle: jobTitle, listingUuid: row.listing_id ?? undefined }
   );
 }
@@ -566,7 +579,7 @@ export async function sendAdminTestNotificationByType(
     },
     checklist_all_complete: {
       jobId: null,
-      message: "Sample: the other party finished every checklist item.",
+      message: "Sample: Cleaner completed all checklist items.",
       options: { adminTest: true },
     },
     new_job_in_area: {

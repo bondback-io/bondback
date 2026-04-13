@@ -449,7 +449,7 @@ export async function JobDetailPageContent({
             isListerActive
           }
           isJobCleaner={
-            !!user && !!job && user.id === job.winner_id && isCleaner
+            !!user && !!job && sameUserId(user.id, job.winner_id) && isCleaner
           }
           hasReviewedCleaner={hasReviewedCleaner}
           hasReviewedLister={hasReviewedLister}

@@ -503,7 +503,7 @@ export async function buildNotificationEmail(
       const headlines: Record<string, string> = {
         after_photos_uploaded: "After photos are in",
         auto_release_warning: "Auto-release reminder",
-        checklist_all_complete: "Every box ticked",
+        checklist_all_complete: "Checklist complete",
         job_status_update: "Something changed on your job",
         early_accept_declined: "Early pick update",
         new_job_in_area: "New job in your area",
