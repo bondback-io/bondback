@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { SUPPORT_EMAIL } from "@/lib/errors/friendly-messages";
+import { useSupportContactDisplayEmail } from "@/components/providers/support-contact-provider";
 import { cn } from "@/lib/utils";
 
 export type AppErrorModalProps = {
@@ -38,8 +38,10 @@ export function AppErrorModal({
   nextAction,
   onRetry,
   onBack,
-  supportEmail = SUPPORT_EMAIL,
+  supportEmail: supportEmailProp,
 }: AppErrorModalProps) {
+  const supportEmailFallback = useSupportContactDisplayEmail();
+  const supportEmail = supportEmailProp ?? supportEmailFallback;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent

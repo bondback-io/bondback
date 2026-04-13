@@ -14,7 +14,10 @@ export {
 } from "./retry-with-backoff";
 export {
   getFriendlyError,
-  SUPPORT_EMAIL,
   type AppErrorFlow,
   type FriendlyErrorParts,
 } from "./friendly-messages";
+export {
+  getPublicSupportContactEmail,
+  getSupportContactEmail,
+} from "@/lib/support-contact-email";

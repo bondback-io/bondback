@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getSupportContactEmail } from "@/lib/support-contact-email";
 
 /** Must be dynamic so the root layout reads auth cookies (logged-in header). */
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPage() {
+  const supportContactEmail = getSupportContactEmail();
   return (
     <section className="page-inner space-y-6">
       <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -33,7 +35,11 @@ export default function PrivacyPage() {
           <p>
             Bond Back stores necessary account and job information to operate the
             marketplace. You can request a copy of your data or account deletion from the
-            Settings page or by emailing support@bondback.io.
+            Settings page or by emailing{" "}
+            <a href={`mailto:${supportContactEmail}`} className="text-primary underline-offset-4 hover:underline">
+              {supportContactEmail}
+            </a>
+            .
           </p>
         </CardContent>
       </Card>

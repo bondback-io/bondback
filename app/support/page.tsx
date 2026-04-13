@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { SupportForm } from "@/components/support/support-form";
+import { getSupportContactEmail } from "@/lib/support-contact-email";
 import { ChevronLeft } from "lucide-react";
 
 type SupportPageProps = {
@@ -18,6 +19,7 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
   const jobId = params?.jobId ?? "";
   const listingId = params?.listingId ?? "";
   const initialEmail = session.user.email ?? "";
+  const supportContactEmail = getSupportContactEmail();
 
   return (
     <section className="page-inner space-y-6">
@@ -35,8 +37,11 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
       />
       <p className="text-center text-xs text-muted-foreground dark:text-gray-500">
         You can also email{" "}
-        <a href="mailto:support@bondback.io" className="text-primary underline-offset-4 hover:underline">
-          support@bondback.io
+        <a
+          href={`mailto:${supportContactEmail}`}
+          className="text-primary underline-offset-4 hover:underline"
+        >
+          {supportContactEmail}
         </a>
         .
       </p>

@@ -6,7 +6,7 @@ import { DialogOverlay } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { SUPPORT_EMAIL } from "@/lib/errors/friendly-messages";
+import { useSupportContactDisplayEmail } from "@/components/providers/support-contact-provider";
 import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 export const LISTING_CREATION_STEPS = [
@@ -51,8 +51,10 @@ export function ListingCreationProgressModal({
   failureHint,
   onRetry,
   onSaveDraft,
-  supportEmail = SUPPORT_EMAIL,
+  supportEmail: supportEmailProp,
 }: ListingCreationProgressModalProps) {
+  const supportEmailFallback = useSupportContactDisplayEmail();
+  const supportEmail = supportEmailProp ?? supportEmailFallback;
   /** Block dismiss while working or during success countdown before redirect */
   const blocking = phase === "running" || phase === "success";
   const clamped = Math.min(100, Math.max(0, progress));

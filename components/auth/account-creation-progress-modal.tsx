@@ -5,7 +5,7 @@ import { DialogOverlay } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { SUPPORT_EMAIL } from "@/lib/errors/friendly-messages";
+import { useSupportContactDisplayEmail } from "@/components/providers/support-contact-provider";
 import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 export const SIGNUP_ACCOUNT_STEPS_SESSION = [
@@ -72,8 +72,10 @@ export function AccountCreationProgressModal({
   errorMessage,
   failureHint,
   onRetry,
-  supportEmail = SUPPORT_EMAIL,
+  supportEmail: supportEmailProp,
 }: AccountCreationProgressModalProps) {
+  const supportEmailFallback = useSupportContactDisplayEmail();
+  const supportEmail = supportEmailProp ?? supportEmailFallback;
   const blocking = phase === "running" || phase === "success";
   const clamped = Math.min(100, Math.max(0, progress));
 

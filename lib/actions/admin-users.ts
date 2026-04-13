@@ -7,6 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendWelcomeEmailAfterEmailVerification } from "@/lib/actions/onboarding-transactional-emails";
 import { createNotification } from "@/lib/actions/notifications";
 import { logAdminActivity } from "@/lib/admin-activity-log";
+import { getSupportContactEmail } from "@/lib/support-contact-email";
 import type {
   AdminNotificationPrefsResult,
   BanResult,
@@ -77,7 +78,7 @@ export async function banUser(
   if (error) return { ok: false, error: error.message };
   await logAdminActivity({ adminId, actionType: "user_banned", targetType: "user", targetId: userId, details: { reason: trimmed } });
 
-  const message = `Your account has been banned for: ${trimmed}. Contact support@bondback.io.`;
+  const message = `Your account has been banned for: ${trimmed}. Contact ${getSupportContactEmail()}.`;
   await createNotification(userId, "new_message", null, message);
 
   revalidatePath("/admin/users");

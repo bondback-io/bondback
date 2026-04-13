@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
@@ -28,6 +28,7 @@ import {
   runPostLoginTransition,
   waitForSupabaseSessionReady,
 } from "@/lib/auth/client-post-login";
+import { useSupportContactDisplayEmail } from "@/components/providers/support-contact-provider";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -54,14 +55,19 @@ export function LoginForm({
 }: LoginFormSearchProps) {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
+  const contactEmail = useSupportContactDisplayEmail();
   const signupHref = queryString ? `/signup?${queryString}` : "/signup";
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [bannedMessage, setBannedMessage] = useState<string | null>(
-    bannedParam === "1"
-      ? `Account banned. ${bannedReason ? `Reason: ${decodeURIComponent(bannedReason)}. ` : ""}Contact support@bondback.io.`
-      : null
+  const urlBannedMessage = useMemo(
+    () =>
+      bannedParam === "1"
+        ? `Account banned. ${bannedReason ? `Reason: ${decodeURIComponent(bannedReason)}. ` : ""}Contact ${contactEmail}.`
+        : null,
+    [bannedParam, bannedReason, contactEmail]
   );
+  const [bannedAfterSubmit, setBannedAfterSubmit] = useState<string | null>(null);
+  const bannedMessage = bannedAfterSubmit ?? urlBannedMessage;
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [redirectStatus, setRedirectStatus] = useState("Signing you in…");
 
@@ -147,8 +153,8 @@ export function LoginForm({
           scheduleRouterAction(() =>
             router.replace(`/login?banned=1${reason ? `&reason=${reason}` : ""}`)
           );
-          setBannedMessage(
-            `Account banned. ${banCheck.reason ? `Reason: ${banCheck.reason}. ` : ""}Contact support@bondback.io.`
+          setBannedAfterSubmit(
+            `Account banned. ${banCheck.reason ? `Reason: ${banCheck.reason}. ` : ""}Contact ${contactEmail}.`
           );
           return;
         }

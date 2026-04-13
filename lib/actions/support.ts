@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { categorizeSupportTicket, type CategorizeResult } from "@/lib/support-categorize";
 import { render } from "@react-email/render";
 import React from "react";
@@ -14,6 +15,37 @@ const BUCKET = "support-attachments";
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
+
+type AdminClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
+
+async function ensureSupportAttachmentsBucket(
+  admin: AdminClient
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: buckets, error: listErr } = await admin.storage.listBuckets();
+  if (listErr) {
+    console.warn("support attachments listBuckets:", listErr.message);
+  }
+  const exists = buckets?.some((b) => b.id === BUCKET) ?? false;
+  if (exists) return { ok: true };
+
+  const { error } = await admin.storage.createBucket(BUCKET, {
+    public: false,
+    fileSizeLimit: MAX_FILE_BYTES,
+    allowedMimeTypes: [...ALLOWED_TYPES],
+  });
+  if (error) {
+    const m = error.message.toLowerCase();
+    if (
+      m.includes("already exists") ||
+      m.includes("resource already exists") ||
+      m.includes("duplicate")
+    ) {
+      return { ok: true };
+    }
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
 
 export type SuggestCategoryResult =
   | { ok: true; suggestion: CategorizeResult }
@@ -64,6 +96,15 @@ export async function uploadSupportAttachments(
   if (files.length === 0) return { ok: true, paths: [] };
   if (files.length > MAX_FILES) return { ok: false, error: `Maximum ${MAX_FILES} files allowed.` };
 
+  const admin = createSupabaseAdminClient();
+  const storageClient = admin ?? supabase;
+  if (admin) {
+    const ensured = await ensureSupportAttachmentsBucket(admin);
+    if (!ensured.ok) {
+      return { ok: false, error: ensured.error };
+    }
+  }
+
   const prefix = `${session.user.id}/${Date.now()}`;
   const paths: string[] = [];
 
@@ -79,13 +120,24 @@ export async function uploadSupportAttachments(
     const ext = file.name?.split(".").pop()?.slice(0, 4) || "bin";
     const safeName = `${i}_${ext}`;
     const path = `${prefix}_${safeName}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    const { error } = await storageClient.storage.from(BUCKET).upload(path, file, {
       contentType: file.type,
       upsert: true,
     });
     if (error) {
       console.error("uploadSupportAttachments:", error);
-      return { ok: false, error: error.message };
+      const msg = error.message;
+      if (
+        !admin &&
+        /bucket not found/i.test(msg)
+      ) {
+        return {
+          ok: false,
+          error:
+            "Attachments are unavailable until the support file bucket is created in Supabase (or the server has no service role key). Try again without files, or contact us by email.",
+        };
+      }
+      return { ok: false, error: msg };
     }
     paths.push(path);
   }

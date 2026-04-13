@@ -26,6 +26,8 @@ import { NotificationsRealtimeSync } from "@/components/notifications/notificati
 import { NotificationAudioUnlock } from "@/components/notifications/notification-audio-unlock";
 import { NavigationRouteProgress } from "@/components/navigation/navigation-route-progress";
 import { SessionSync } from "@/components/auth/session-sync";
+import { SupportContactProvider } from "@/components/providers/support-contact-provider";
+import { getSupportContactEmail } from "@/lib/support-contact-email";
 import { LoggedInRoutePrefetch } from "@/components/performance/logged-in-route-prefetch";
 
 const site = getSiteUrl();
@@ -147,6 +149,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         />
       </head>
       <body>
+        <SupportContactProvider email={getSupportContactEmail()}>
         <QueryClientProviderWrapper>
         {showAnnouncement && settings?.announcement_text?.trim() ? (
           <SiteAnnouncementBanner text={settings.announcement_text} />
@@ -191,6 +194,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         </Toaster>
         <PwaInstallPrompt />
         </QueryClientProviderWrapper>
+        </SupportContactProvider>
       </body>
     </html>
   );

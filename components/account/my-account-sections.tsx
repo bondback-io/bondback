@@ -22,6 +22,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSupportContactDisplayEmail } from "@/components/providers/support-contact-provider";
 import {
   SettingsNotificationsForm,
   SettingsPrivacyForm,
@@ -108,6 +109,7 @@ export function MyAccountSections({
   themePreference,
   distanceUnitPref,
 }: MyAccountSectionsProps) {
+  const supportContactEmail = useSupportContactDisplayEmail();
   const [openSections, setOpenSections] = React.useState<string[]>(() =>
     initialAccordion ? [initialAccordion] : []
   );
@@ -393,7 +395,7 @@ export function MyAccountSections({
                   </Link>
                 </li>
                 <li>
-                  <Link href="mailto:support@bondback.io" className={settingsLinkClass}>
+                  <Link href={`mailto:${supportContactEmail}`} className={settingsLinkClass}>
                     Contact support <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-80" />
                   </Link>
                 </li>

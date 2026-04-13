@@ -1,4 +1,14 @@
-export const SUPPORT_EMAIL = "support@bondback.io";
+import {
+  getPublicSupportContactEmail,
+  getSupportContactEmail,
+} from "@/lib/support-contact-email";
+
+function supportEmailForErrors(): string {
+  if (typeof window === "undefined") {
+    return getSupportContactEmail();
+  }
+  return getPublicSupportContactEmail();
+}
 
 export type AppErrorFlow =
   | "listing"
@@ -126,7 +136,7 @@ export function getFriendlyError(
         description: detail
           ? `What happened: ${detail}`
           : "An unexpected issue occurred.",
-        nextAction: `Try again, or email ${SUPPORT_EMAIL} if you need help.`,
+        nextAction: `Try again, or email ${supportEmailForErrors()} if you need help.`,
       };
   }
 }

@@ -42,6 +42,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSupportContactDisplayEmail } from "@/components/providers/support-contact-provider";
 
 const CATEGORIES = [
   "All",
@@ -194,6 +195,7 @@ const SearchResultCard = memo(function SearchResultCard({
 });
 
 export function HelpPageClient({ initialArticles }: HelpPageClientProps) {
+  const supportContactEmail = useSupportContactDisplayEmail();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [category, setCategory] = useState<string>("All");
@@ -706,10 +708,10 @@ export function HelpPageClient({ initialArticles }: HelpPageClientProps) {
           <p className="mt-4 text-xs text-muted-foreground dark:text-gray-500">
             Email{" "}
             <a
-              href="mailto:support@bondback.io"
+              href={`mailto:${supportContactEmail}`}
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
-              support@bondback.io
+              {supportContactEmail}
             </a>
           </p>
         </CardContent>

@@ -14,6 +14,7 @@ import {
   emailProfileNotificationsUrl,
   emailPublicOrigin,
 } from "@/lib/marketplace/email-links";
+import { getSupportContactEmail } from "@/lib/support-contact-email";
 
 const BRAND_BLUE = "#1d4ed8";
 const BRAND_SKY = "#0ea5e9";
@@ -36,7 +37,7 @@ export function EmailLayout({
 }: EmailLayoutProps) {
   const APP_URL = emailPublicOrigin();
   const unsubscribeUrl = emailProfileNotificationsUrl();
-  const SUPPORT_EMAIL = "support@bondback.io";
+  const SUPPORT_EMAIL = getSupportContactEmail();
 
   return (
     <Html lang="en-AU">
