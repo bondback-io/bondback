@@ -468,8 +468,8 @@ function JobCardMarketplaceMobileInner({
       >
         <h3
           className={cn(
-            "line-clamp-2 font-bold leading-tight tracking-tight text-foreground dark:text-gray-50",
-            cleanerBoost ? "text-xl sm:text-2xl" : "text-lg font-semibold"
+            "line-clamp-2 font-bold leading-snug tracking-tight text-foreground dark:text-gray-50",
+            cleanerBoost ? "text-lg sm:text-xl md:text-2xl" : "text-base font-semibold sm:text-lg"
           )}
         >
           {title}

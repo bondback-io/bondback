@@ -181,7 +181,7 @@ export default async function ListingDetailPage({
     roles.includes("lister");
 
   return (
-    <section className="space-y-6 py-6">
+    <section className="space-y-4 pt-1 pb-6 sm:space-y-6 sm:pt-4">
       <JobPaymentReturnAck
         notice={
           paymentNotice === "success" ||

@@ -780,27 +780,32 @@ export function MyListingsList({
 
   const draftCount = localDraft ? 1 : 0;
 
-  const tabPill = (
+  const tabLink = (
     href: string,
     active: boolean,
-    children: React.ReactNode,
+    shortLabel: string,
+    longLabel: string,
+    count: number,
     tone: "emerald" | "amber" | "violet" = "emerald"
   ) => (
     <Link
       href={href}
       scroll={false}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "inline-flex min-h-[44px] touch-manipulation snap-center items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
+        "flex min-h-[44px] w-full touch-manipulation flex-wrap items-center justify-center gap-x-1 gap-y-0 rounded-xl px-3 py-2 text-center text-sm font-semibold leading-snug transition-colors sm:inline-flex sm:w-auto sm:flex-nowrap sm:px-4 sm:py-2.5",
         active
           ? tone === "amber"
-            ? "bg-amber-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-amber-600 dark:text-white dark:ring-amber-400/25 [&_span]:text-white/85"
+            ? "bg-amber-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-amber-600 dark:text-white dark:ring-amber-400/25 [&_.tab-count]:text-white/85"
             : tone === "violet"
-              ? "bg-violet-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-violet-600 dark:text-white dark:ring-violet-400/25 [&_span]:text-white/85"
-              : "bg-emerald-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-emerald-600 dark:text-white dark:ring-emerald-400/25 [&_span]:text-white/85"
-          : "border border-transparent bg-muted/90 text-muted-foreground hover:bg-muted dark:border-gray-700/90 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+              ? "bg-violet-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-violet-600 dark:text-white dark:ring-violet-400/25 [&_.tab-count]:text-white/85"
+              : "bg-emerald-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-emerald-600 dark:text-white dark:ring-emerald-400/25 [&_.tab-count]:text-white/85"
+          : "border border-border/70 bg-muted/40 text-foreground/90 hover:bg-muted dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-200 dark:hover:bg-gray-800/90"
       )}
     >
-      {children}
+      <span className="sm:hidden">{shortLabel}</span>
+      <span className="hidden sm:inline">{longLabel}</span>
+      <span className="tab-count tabular-nums opacity-60">({count})</span>
     </Link>
   );
 
@@ -835,64 +840,59 @@ export function MyListingsList({
           </div>
         )}
 
-        <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden">
-          {tabPill(
+        <nav
+          className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2"
+          aria-label="Listing categories"
+        >
+          {tabLink(
             `/my-listings?tab=active`,
             viewTab === "active",
-            <>
-              Active <span className="ml-1 tabular-nums opacity-60">({tabCounts.active})</span>
-            </>
+            "Active",
+            "Active",
+            tabCounts.active
           )}
-          {tabPill(
+          {tabLink(
             `/my-listings?tab=no_bids`,
             viewTab === "no_bids",
-            <>
-              Listings (no bids){" "}
-              <span className="ml-1 tabular-nums opacity-60">({tabCounts.no_bids})</span>
-            </>,
+            "No bids",
+            "Listings (no bids)",
+            tabCounts.no_bids,
             "amber"
           )}
-          {tabPill(
+          {tabLink(
             `/my-listings?tab=paid`,
             viewTab === "paid",
-            <>
-              Paid jobs{" "}
-              <span className="ml-1 tabular-nums opacity-60">({tabCounts.paid})</span>
-            </>,
+            "Paid",
+            "Paid jobs",
+            tabCounts.paid,
             "violet"
           )}
-          {tabPill(
+          {tabLink(
             `/my-listings?tab=disputed`,
             viewTab === "disputed",
-            <>
-              Disputed{" "}
-              <span className="ml-1 tabular-nums opacity-60">({tabCounts.disputed})</span>
-            </>,
+            "Disputes",
+            "Disputed",
+            tabCounts.disputed,
             "amber"
           )}
-          {tabPill(
+          {tabLink(
             `/my-listings?tab=completed`,
             viewTab === "completed",
-            <>
-              Completed{" "}
-              <span className="ml-1 tabular-nums opacity-60">({tabCounts.completed})</span>
-            </>
+            "Done",
+            "Completed",
+            tabCounts.completed
           )}
-          {tabPill(
+          {tabLink(
             `/my-listings?tab=drafts`,
             viewTab === "drafts",
-            <>
-              Drafts <span className="ml-1 tabular-nums opacity-60">({draftCount})</span>
-            </>
+            "Drafts",
+            "Drafts",
+            draftCount
           )}
-          {tabPill(
-            `/my-listings?tab=all`,
-            viewTab === "all",
-            <>
-              All <span className="ml-1 tabular-nums opacity-60">({tabCounts.all})</span>
-            </>
-          )}
-        </div>
+          <div className="col-span-2 sm:contents">
+            {tabLink(`/my-listings?tab=all`, viewTab === "all", "All", "All", tabCounts.all)}
+          </div>
+        </nav>
 
         <div className="min-h-[40vh] space-y-3">
           {viewTab === "drafts" && (

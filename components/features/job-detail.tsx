@@ -77,6 +77,7 @@ import {
   Gavel,
   LockOpen,
   Unlock,
+  ChevronDown,
 } from "lucide-react";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { ReviewForm } from "@/components/features/review-form";
@@ -118,6 +119,7 @@ import { NEXT_IMAGE_SIZES_THUMB_GRID } from "@/lib/next-image-sizes";
 import { getStateFromPostcode, formatLocationWithState } from "@/lib/state-from-postcode";
 import { getBondGuidelineForState } from "@/lib/bond-cleaning-guidelines";
 import { canSendJobChatMessages } from "@/lib/chat-unlock";
+import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction-control";
 import { JobPaymentTimeline, type JobPaymentTimelineProps } from "@/components/features/job-payment-timeline";
 import { JobProgressTimeline } from "@/components/features/job-progress-timeline";
 import { JobPaymentBreakdown } from "@/components/features/job-payment-breakdown";
@@ -1152,20 +1154,10 @@ export function JobDetail({
       {detailUiBoost && (
         <>
           {isListingOwner && !hasActiveJob && isLive && (
-            <div className="flex flex-col gap-3 rounded-xl border border-sky-500/30 bg-sky-500/[0.08] px-4 py-4 dark:border-sky-800/50 dark:bg-sky-950/35 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-              <p className="text-sm leading-snug text-foreground dark:text-gray-200">
-                Need to stop the auction? End this listing early — no new bids will be accepted, and
-                cleaners who already bid will see it as ended. The listing stays in your history.
-              </p>
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                className="shrink-0 font-semibold shadow-sm"
-                onClick={() => setShowCancelListingDialog(true)}
-              >
-                Cancel listing
-              </Button>
+            <div className="flex justify-end sm:justify-start">
+              <ListerEndAuctionControl
+                onRequestCancel={() => setShowCancelListingDialog(true)}
+              />
             </div>
           )}
 
@@ -1211,18 +1203,18 @@ export function JobDetail({
                 <div className="absolute inset-0 bg-red-950/25 mix-blend-multiply dark:bg-red-950/35" aria-hidden />
               )}
               <div
-                className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent sm:via-black/40 md:from-black/75 md:via-black/25 md:to-transparent"
+                className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/48 to-transparent sm:via-black/38 md:from-black/75 md:via-black/25 md:to-transparent"
                 aria-hidden
               />
-              <div className="absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-black/65 to-transparent md:hidden" aria-hidden />
-              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 md:p-6">
-                <div className="flex flex-wrap items-end justify-between gap-3 max-md:rounded-2xl max-md:border max-md:border-white/15 max-md:bg-black/45 max-md:p-3 max-md:shadow-[0_12px_40px_rgba(0,0,0,0.55)] max-md:backdrop-blur-md md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
+              <div className="absolute inset-x-0 bottom-0 h-[40%] bg-gradient-to-t from-black/60 to-transparent max-md:h-[36%] md:hidden" aria-hidden />
+              <div className="absolute bottom-0 left-0 right-0 p-2.5 sm:p-4 md:p-6">
+                <div className="flex flex-wrap items-end justify-between gap-2 sm:gap-3 max-md:rounded-xl max-md:border max-md:border-white/12 max-md:bg-black/40 max-md:p-2.5 max-md:shadow-[0_8px_28px_rgba(0,0,0,0.45)] max-md:backdrop-blur-md md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
                   <div className="min-w-0 flex-1">
-                    <h1 className="text-balance text-2xl font-bold tracking-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_4px_24px_rgba(0,0,0,0.65)] md:text-3xl md:[text-shadow:0_2px_12px_rgba(0,0,0,0.55)]">
+                    <h1 className="text-balance text-[1.0625rem] font-bold leading-tight tracking-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_3px_16px_rgba(0,0,0,0.55)] sm:text-xl sm:leading-snug md:text-2xl md:leading-tight lg:text-3xl md:[text-shadow:0_2px_12px_rgba(0,0,0,0.55)]">
                       {listing.title ?? "Bond clean"}
                     </h1>
-                    <p className="mt-1 flex items-start gap-2 text-sm font-medium text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_2px_12px_rgba(0,0,0,0.55)] sm:items-center md:[text-shadow:0_1px_8px_rgba(0,0,0,0.65)]">
-                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" aria-hidden />
+                    <p className="mt-0.5 flex items-start gap-1.5 text-xs font-medium text-white/95 [text-shadow:0_1px_3px_rgba(0,0,0,0.95)] sm:mt-1 sm:items-center sm:gap-2 sm:text-sm md:[text-shadow:0_1px_8px_rgba(0,0,0,0.65)]">
+                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0 sm:h-4 sm:w-4" aria-hidden />
                       <span className="min-w-0 leading-snug">
                         {listerReleaseFundsStep && propertyAddress?.trim()
                           ? `${propertyAddress.trim()} · ${addressLine}`
@@ -1233,11 +1225,11 @@ export function JobDetail({
                     </p>
                   </div>
                   {isLive && !hideCleanerCancelledAuctionUi ? (
-                    <Badge className="shrink-0 border-0 bg-emerald-500/95 px-3 py-1.5 text-sm font-bold uppercase tracking-wide text-white shadow-lg [box-shadow:0_2px_12px_rgba(0,0,0,0.45)]">
+                    <Badge className="shrink-0 border-0 bg-emerald-500/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md [box-shadow:0_2px_10px_rgba(0,0,0,0.4)] sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
                       Live auction
                     </Badge>
                   ) : hasActiveJob ? (
-                    <Badge className="shrink-0 border-0 bg-violet-600/95 px-3 py-1.5 text-sm font-bold uppercase tracking-wide text-white shadow-lg">
+                    <Badge className="shrink-0 border-0 bg-violet-600/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
                       Job · {jobHeroStatusLabel}
                     </Badge>
                   ) : (
@@ -1543,31 +1535,42 @@ export function JobDetail({
                     </CardContent>
                   </Card>
                   <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Gavel className="h-5 w-5" aria-hidden />
-                        Bids
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <BidHistoryTable
-                        bids={bids}
-                        hasPendingEarlyAcceptance={bids.some(
-                          (b) => b.status === "pending_confirmation"
-                        )}
-                        onAcceptBid={
-                          isListingOwner && !hasActiveJob && isLive
-                            ? handleAcceptBid
-                            : undefined
-                        }
-                        closedAuctionBidStatus={closedAuctionBidStatus}
-                        showRevertLastBid={showRevertLastBidInHistory}
-                        onRevertLastBid={
-                          showRevertLastBidInHistory ? handleRevertLastBid : undefined
-                        }
-                        largeTouch
-                      />
-                    </CardContent>
+                    <details className="group">
+                      <summary className="flex cursor-pointer list-none items-center gap-2 px-6 py-4 [&::-webkit-details-marker]:hidden">
+                        <Gavel className="h-5 w-5 shrink-0" aria-hidden />
+                        <CardTitle className="mb-0 flex flex-1 items-center gap-2 text-lg">
+                          Bids
+                          {bids.length > 0 ? (
+                            <Badge variant="secondary" className="font-mono text-xs tabular-nums">
+                              {bids.length}
+                            </Badge>
+                          ) : null}
+                        </CardTitle>
+                        <ChevronDown
+                          className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+                          aria-hidden
+                        />
+                      </summary>
+                      <CardContent className="space-y-3 border-t border-border/80 pt-4 dark:border-gray-800">
+                        <BidHistoryTable
+                          bids={bids}
+                          hasPendingEarlyAcceptance={bids.some(
+                            (b) => b.status === "pending_confirmation"
+                          )}
+                          onAcceptBid={
+                            isListingOwner && !hasActiveJob && isLive
+                              ? handleAcceptBid
+                              : undefined
+                          }
+                          closedAuctionBidStatus={closedAuctionBidStatus}
+                          showRevertLastBid={showRevertLastBidInHistory}
+                          onRevertLastBid={
+                            showRevertLastBidInHistory ? handleRevertLastBid : undefined
+                          }
+                          largeTouch
+                        />
+                      </CardContent>
+                    </details>
                   </Card>
                 </div>
               </details>
@@ -1917,15 +1920,9 @@ export function JobDetail({
         >
           {!detailUiBoost && isListingOwner && !hasActiveJob && isLive && (
             <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0 border-red-300 text-red-800 hover:bg-red-50 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/40"
-                onClick={() => setShowCancelListingDialog(true)}
-              >
-                Cancel listing
-              </Button>
+              <ListerEndAuctionControl
+                onRequestCancel={() => setShowCancelListingDialog(true)}
+              />
             </div>
           )}
           {!detailUiBoost && (
@@ -4125,48 +4122,59 @@ export function JobDetail({
             !listerReleaseFundsStep &&
             !listerCompletedBoostTidy &&
             (detailUiBoost ? (
-              <Card id="bids" className="mt-4 border-border/90 shadow-sm dark:border-gray-800">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Gavel className="h-5 w-5" aria-hidden />
-                    Bids
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <BidHistoryTable
-                    bids={bids}
-                    hasPendingEarlyAcceptance={bids.some(
-                      (b) => b.status === "pending_confirmation"
-                    )}
-                    onAcceptBid={
-                      isListingOwner && !hasActiveJob && isLive
-                        ? handleAcceptBid
-                        : undefined
-                    }
-                    closedAuctionBidStatus={closedAuctionBidStatus}
-                    showRevertLastBid={showRevertLastBidInHistory}
-                    onRevertLastBid={
-                      showRevertLastBidInHistory ? handleRevertLastBid : undefined
-                    }
-                    largeTouch
-                  />
-                  {isListingOwner && !hasActiveJob && isLive && (
-                    <p className="text-sm text-muted-foreground dark:text-gray-400">
-                      {bids.length === 0 ? (
-                        <>
-                          When cleaners start bidding, their offers will appear in the table above. To hire
-                          someone, open their row and tap <strong>Accept bid</strong> — that locks in that
-                          cleaner for this job.
-                        </>
-                      ) : (
-                        <>
-                          To confirm who you want, tap <strong>Accept bid</strong> on that cleaner&apos;s row
-                          in the table above.
-                        </>
+              <Card id="bids" className="mt-4 overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+                    <Gavel className="h-5 w-5 shrink-0" aria-hidden />
+                    <CardTitle className="mb-0 flex flex-1 items-center gap-2 text-lg">
+                      Bids
+                      {bids.length > 0 ? (
+                        <Badge variant="secondary" className="font-mono text-xs tabular-nums">
+                          {bids.length}
+                        </Badge>
+                      ) : null}
+                    </CardTitle>
+                    <ChevronDown
+                      className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+                      aria-hidden
+                    />
+                  </summary>
+                  <CardContent className="space-y-3 border-t border-border/80 px-4 pb-6 pt-4 sm:px-6 dark:border-gray-800">
+                    <BidHistoryTable
+                      bids={bids}
+                      hasPendingEarlyAcceptance={bids.some(
+                        (b) => b.status === "pending_confirmation"
                       )}
-                    </p>
-                  )}
-                </CardContent>
+                      onAcceptBid={
+                        isListingOwner && !hasActiveJob && isLive
+                          ? handleAcceptBid
+                          : undefined
+                      }
+                      closedAuctionBidStatus={closedAuctionBidStatus}
+                      showRevertLastBid={showRevertLastBidInHistory}
+                      onRevertLastBid={
+                        showRevertLastBidInHistory ? handleRevertLastBid : undefined
+                      }
+                      largeTouch
+                    />
+                    {isListingOwner && !hasActiveJob && isLive && (
+                      <p className="text-sm text-muted-foreground dark:text-gray-400">
+                        {bids.length === 0 ? (
+                          <>
+                            When cleaners start bidding, their offers will appear in the table above. To hire
+                            someone, open their row and tap <strong>Accept bid</strong> — that locks in that
+                            cleaner for this job.
+                          </>
+                        ) : (
+                          <>
+                            To confirm who you want, tap <strong>Accept bid</strong> on that cleaner&apos;s row
+                            in the table above.
+                          </>
+                        )}
+                      </p>
+                    )}
+                  </CardContent>
+                </details>
               </Card>
             ) : (
               <BidHistorySection
@@ -4185,7 +4193,7 @@ export function JobDetail({
                   showRevertLastBidInHistory ? handleRevertLastBid : undefined
                 }
                 largeTouch={detailUiBoost}
-                defaultOpen={Boolean(showAuctionActions && isListingOwner && !isCleaner)}
+                defaultOpen={false}
                 className={cn(
                   "mt-4 border-t border-border pt-4 text-muted-foreground dark:border-gray-700 dark:text-gray-500",
                   detailUiBoost ? "text-sm" : "text-[11px]"
@@ -4367,7 +4375,7 @@ function BidHistorySection({
   onRevertLastBid,
   className,
   largeTouch = false,
-  /** Lister live auction: start expanded. After auction/job won, collapsed. */
+  /** Collapsed until the user opens the section (job / listing detail). */
   defaultOpen = false,
 }: {
   bids: BidWithBidder[];
@@ -4386,17 +4394,29 @@ function BidHistorySection({
 
   return (
     <details
-      className={className}
+      className={cn("group", className)}
       open={open}
       onToggle={(e) => setOpen(e.currentTarget.open)}
     >
       <summary
         className={cn(
-          "flex cursor-pointer list-none select-none items-center rounded-xl py-2 font-medium text-foreground hover:bg-muted/50 dark:text-gray-100 dark:hover:bg-gray-800/70 [&::-webkit-details-marker]:hidden",
+          "flex cursor-pointer list-none select-none items-center gap-2 rounded-xl py-2 font-medium text-foreground hover:bg-muted/50 dark:text-gray-100 dark:hover:bg-gray-800/70 [&::-webkit-details-marker]:hidden",
           largeTouch ? "min-h-14 text-base sm:text-lg" : "min-h-11 text-sm"
         )}
       >
-        View bid history
+        <Gavel className="h-4 w-4 shrink-0 opacity-80 sm:h-5 sm:w-5" aria-hidden />
+        <span className="flex flex-1 items-center gap-2">
+          Bids
+          {bids.length > 0 ? (
+            <Badge variant="secondary" className="font-mono text-[10px] tabular-nums sm:text-xs">
+              {bids.length}
+            </Badge>
+          ) : null}
+        </span>
+        <ChevronDown
+          className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180 sm:h-5 sm:w-5"
+          aria-hidden
+        />
       </summary>
       {bids.length > 0 ? (
         <div className="mt-2 space-y-3">

@@ -275,7 +275,7 @@ function DashboardJobCardInner({
           </div>
         </div>
         <div className="space-y-5 border-t border-border bg-card px-4 pb-6 pt-5 dark:border-gray-800 dark:bg-gray-950 sm:px-5">
-          <h3 className="line-clamp-2 text-xl font-bold leading-tight tracking-tight text-foreground dark:text-gray-50">
+          <h3 className="line-clamp-2 text-base font-semibold leading-snug tracking-tight text-foreground dark:text-gray-50 sm:text-xl sm:font-bold sm:leading-tight">
             {title}
           </h3>
 
