@@ -8,7 +8,10 @@ import { AlertTriangle, Briefcase } from "lucide-react";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { ensureJobChecklistIfEmpty, fulfillStripeCheckoutReturn } from "@/lib/actions/jobs";
-import { JobDetail } from "@/components/features/job-detail";
+import {
+  JobDetail,
+  type JobDetailMySubmittedReview,
+} from "@/components/features/job-detail";
 import type { BidWithBidder } from "@/components/features/bid-history-table";
 import { enrichBidsWithBidderProfiles } from "@/lib/bids/enrich-bids-with-bidders";
 import { ScrollToDispute } from "@/components/features/scroll-to-dispute";
@@ -295,17 +298,36 @@ export async function JobDetailPageContent({
 
   let hasReviewedCleaner = false;
   let hasReviewedLister = false;
+  let myReviewOfCleaner: JobDetailMySubmittedReview | null = null;
+  let myReviewOfLister: JobDetailMySubmittedReview | null = null;
   if (user && job?.id && canLeaveReview) {
     const { data: myReviews } = await supabase
       .from("reviews")
-      .select("reviewee_type")
+      .select("reviewee_type, overall_rating, review_text")
       .eq("job_id", job.id)
       .eq("reviewer_id", user.id);
-    const types = (myReviews ?? []).map(
-      (r: { reviewee_type: string }) => r.reviewee_type
-    );
-    hasReviewedCleaner = types.includes("cleaner");
-    hasReviewedLister = types.includes("lister");
+    for (const r of myReviews ?? []) {
+      const row = r as {
+        reviewee_type: string | null;
+        overall_rating: number;
+        review_text: string | null;
+      };
+      const t = String(row.reviewee_type ?? "");
+      if (t === "cleaner") {
+        hasReviewedCleaner = true;
+        myReviewOfCleaner = {
+          overall_rating: row.overall_rating,
+          review_text: row.review_text,
+        };
+      }
+      if (t === "lister") {
+        hasReviewedLister = true;
+        myReviewOfLister = {
+          overall_rating: row.overall_rating,
+          review_text: row.review_text,
+        };
+      }
+    }
   }
 
   const canonicalJobUrl =
@@ -497,6 +519,8 @@ export async function JobDetailPageContent({
           hasReviewedCleaner={hasReviewedCleaner}
           hasReviewedLister={hasReviewedLister}
           canLeaveReview={canLeaveReview}
+          myReviewOfCleaner={myReviewOfCleaner}
+          myReviewOfLister={myReviewOfLister}
         />
       </section>
     </OfflineJobsPrimer>

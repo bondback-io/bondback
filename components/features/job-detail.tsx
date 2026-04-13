@@ -495,6 +495,11 @@ function JobDetailInitialConditionPhotos({
   );
 }
 
+export type JobDetailMySubmittedReview = {
+  overall_rating: number;
+  review_text: string | null;
+};
+
 export type JobDetailProps = {
   listingId: string;
   initialListing: ListingRow;
@@ -551,7 +556,46 @@ export type JobDetailProps = {
   hasReviewedLister?: boolean;
   /** True when review is allowed (completed + escrow released). */
   canLeaveReview?: boolean;
+  /** Signed-in user’s submitted review of the cleaner (when already on file). */
+  myReviewOfCleaner?: JobDetailMySubmittedReview | null;
+  /** Signed-in user’s submitted review of the lister (when already on file). */
+  myReviewOfLister?: JobDetailMySubmittedReview | null;
 };
+
+function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
+  const n = Math.min(5, Math.max(1, Math.round(Number(overall_rating)) || 1));
+  return (
+    <div className="rounded-md border border-border bg-background/60 px-3 py-2 dark:border-gray-700 dark:bg-gray-900/40">
+      <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+        <div
+          className="flex shrink-0 items-center gap-0.5"
+          role="img"
+          aria-label={`${n} out of 5 stars`}
+        >
+          {Array.from({ length: 5 }, (_, i) => (
+            <Star
+              key={i}
+              className={cn(
+                "h-3.5 w-3.5",
+                i < n
+                  ? "fill-amber-400 text-amber-400 dark:fill-amber-500 dark:text-amber-500"
+                  : "text-muted-foreground/35"
+              )}
+              aria-hidden
+            />
+          ))}
+        </div>
+        {review_text != null && review_text.trim() !== "" ? (
+          <p className="line-clamp-4 min-w-0 flex-1 text-[11px] leading-snug text-muted-foreground dark:text-gray-400">
+            {review_text.trim()}
+          </p>
+        ) : (
+          <span className="text-[10px] text-muted-foreground dark:text-gray-500">No written feedback</span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 type ChecklistItem = {
   id: number;
@@ -595,6 +639,8 @@ export function JobDetail({
   hasReviewedCleaner = false,
   hasReviewedLister = false,
   canLeaveReview = false,
+  myReviewOfCleaner = null,
+  myReviewOfLister = null,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -3519,10 +3565,14 @@ export function JobDetail({
                     Your review of the cleaner
                   </p>
                   {(hasReviewedCleaner || submittedCleanerReview) ? (
-                    <p className="flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-3 py-2 text-[11px] text-muted-foreground dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      You&apos;ve left your review. Thanks for your feedback.
-                    </p>
+                    myReviewOfCleaner ? (
+                      <CompactSubmittedJobReview {...myReviewOfCleaner} />
+                    ) : (
+                      <p className="flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-3 py-2 text-[11px] text-muted-foreground dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                        You&apos;ve left your review. Thanks for your feedback.
+                      </p>
+                    )
                   ) : (
                     <>
                       {!showCleanerReviewForm && (
@@ -3551,10 +3601,14 @@ export function JobDetail({
                     Your review of the owner
                   </p>
                   {(hasReviewedLister || submittedListerReview) ? (
-                    <p className="flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-3 py-2 text-[11px] text-muted-foreground dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      You&apos;ve left your review. Thanks for your feedback.
-                    </p>
+                    myReviewOfLister ? (
+                      <CompactSubmittedJobReview {...myReviewOfLister} />
+                    ) : (
+                      <p className="flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-3 py-2 text-[11px] text-muted-foreground dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                        You&apos;ve left your review. Thanks for your feedback.
+                      </p>
+                    )
                   ) : (
                     <>
                       {!showListerReviewForm && (
