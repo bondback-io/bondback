@@ -105,14 +105,23 @@ export function getFriendlyError(
         nextAction:
           "Tap Retry or refresh the page. If you’re a cleaner, confirm your bank account is connected under Settings.",
       };
-    case "earlyAccept":
+    case "earlyAccept": {
+      /**
+       * Do not run {@link scrubTechnical} here: it strips any message containing `uuid`, which removes
+       * common Postgres errors (e.g. invalid UUID syntax) and leaves an empty, useless toast.
+       */
+      const rawTrim = raw.trim();
+      const earlyDetail =
+        rawTrim.length > 320 ? `${rawTrim.slice(0, 317)}…` : rawTrim;
       return {
-        title: "We couldn’t send the acceptance request",
-        description: detail
-          ? `What happened: ${detail}`
-          : "The request to confirm this bid early didn’t send.",
-        nextAction: "Try again in a moment. If it repeats, contact support with the job link.",
+        title: "We couldn’t accept this bid",
+        description: earlyDetail
+          ? `What happened: ${earlyDetail}`
+          : "Something stopped us from creating the job for this bid.",
+        nextAction:
+          "Try again in a moment. If it repeats, contact support with the listing link.",
       };
+    }
     case "payment":
       return {
         title: "Payment step couldn’t complete",

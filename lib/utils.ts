@@ -8,6 +8,11 @@ export function trimStr(v: unknown): string {
   return String(v ?? "").trim();
 }
 
+/** UUIDs from URL, cookies, and Postgres can differ in letter case; `===` is strict. */
+export function sameUuid(a: unknown, b: unknown): boolean {
+  return trimStr(a).toLowerCase() === trimStr(b).toLowerCase();
+}
+
 /** Strip leading/trailing slashes from `[id]` so `/jobs//0` and `//uuid` still resolve. */
 export function normalizeJobRouteIdParam(raw: unknown): string {
   return String(raw ?? "")

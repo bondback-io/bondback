@@ -22,7 +22,7 @@ import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewa
 import { logTimerActivity } from "@/lib/admin-activity-log";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
-import { trimStr } from "@/lib/utils";
+import { sameUuid, trimStr } from "@/lib/utils";
 import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -167,7 +167,7 @@ export async function finalizeBidAcceptanceCore(params: {
     title?: string | null;
   };
 
-  if (listRow.lister_id !== params.listerId) {
+  if (!sameUuid(listRow.lister_id, params.listerId)) {
     return { ok: false, error: "Listing mismatch." };
   }
 
@@ -175,12 +175,17 @@ export async function finalizeBidAcceptanceCore(params: {
     return { ok: false, error: "This listing is no longer accepting bids." };
   }
 
+  const cleanerId = trimStr(params.cleanerId);
+  if (!cleanerId) {
+    return { ok: false, error: "Invalid winning bidder." };
+  }
+
   const settings = await getGlobalSettings();
   if (settings?.require_stripe_connect_before_bidding !== false) {
     const { data: cleanerProfile } = await admin
       .from("profiles")
       .select("stripe_connect_id, stripe_onboarding_complete")
-      .eq("id", params.cleanerId)
+      .eq("id", cleanerId)
       .maybeSingle();
     const cp = cleanerProfile as { stripe_connect_id?: string | null; stripe_onboarding_complete?: boolean } | null;
     const stripeConnectId = cp?.stripe_connect_id;
@@ -189,7 +194,7 @@ export async function finalizeBidAcceptanceCore(params: {
       return {
         ok: false,
         error:
-          "You must connect your bank account in Profile before you can accept this job.",
+          "This cleaner has not finished Stripe Connect in Profile. They must connect their bank account before you can accept their bid.",
       };
     }
   }
@@ -215,7 +220,7 @@ export async function finalizeBidAcceptanceCore(params: {
     .insert({
       listing_id: listRow.id,
       lister_id: listRow.lister_id,
-      winner_id: params.cleanerId,
+      winner_id: cleanerId,
       status: "accepted",
       agreed_amount_cents: amountCents,
       lister_payment_due_at: listerPaymentDueAtFromNowIso(),
@@ -247,24 +252,33 @@ export async function finalizeBidAcceptanceCore(params: {
   await admin.from("listings").update({ status: "ended" } as never).eq("id", params.listingId);
 
   const listingTitle = params.listingTitle ?? listRow.title ?? null;
-  await createNotification(
-    params.listerId,
-    "job_created",
-    numericJobId,
-    "You accepted a bid. Pay & Start Job to hold funds in escrow and start the job."
-  );
-  await createNotification(
-    params.cleanerId,
-    "job_accepted",
-    numericJobId,
-    "You won this job — the lister accepted your bid. They'll pay and start the job to hold funds in escrow; then you can begin.",
-    { listingTitle }
-  );
+  try {
+    await createNotification(
+      params.listerId,
+      "job_created",
+      numericJobId,
+      "You accepted a bid. Pay & Start Job to hold funds in escrow and start the job."
+    );
+  } catch (e) {
+    console.error("[finalizeBidAcceptanceCore] lister notification failed", e);
+  }
+  try {
+    await createNotification(
+      cleanerId,
+      "job_accepted",
+      numericJobId,
+      "You won this job — the lister accepted your bid. They'll pay and start the job to hold funds in escrow; then you can begin.",
+      { listingTitle }
+    );
+  } catch (e) {
+    console.error("[finalizeBidAcceptanceCore] cleaner notification failed", e);
+  }
 
   revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${numericJobId}`);
   revalidatePath(`/jobs/${params.listingId}`);
+  revalidatePath(`/listings/${params.listingId}`);
   revalidatePath("/my-listings");
   revalidatePath("/dashboard");
   revalidatePath("/lister/dashboard");

@@ -8,7 +8,7 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { trimStr } from "@/lib/utils";
+import { sameUuid, trimStr } from "@/lib/utils";
 
 function safeEqualToken(a: string, b: string): boolean {
   try {
@@ -23,11 +23,6 @@ function safeEqualToken(a: string, b: string): boolean {
 
 function formatAud(cents: number): string {
   return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
-}
-
-/** UUIDs from the URL, cookies, and Postgres can differ in letter case; JS `===` is strict. */
-function sameUuid(a: unknown, b: unknown): boolean {
-  return trimStr(a).toLowerCase() === trimStr(b).toLowerCase();
 }
 
 export type EarlyBidRequestResult =
