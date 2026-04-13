@@ -28,10 +28,27 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_created_at ON public.support_tick
 
 ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
 
+-- listings.id is bigint in Bond Back (not uuid). Drop wrong FK/column if a previous run used uuid.
+ALTER TABLE public.support_tickets DROP CONSTRAINT IF EXISTS support_tickets_listing_id_fkey;
+DO $repair$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns c
+    WHERE c.table_schema = 'public'
+      AND c.table_name = 'support_tickets'
+      AND c.column_name = 'listing_id'
+      AND c.data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.support_tickets DROP COLUMN listing_id;
+  END IF;
+END;
+$repair$;
+
 ALTER TABLE public.support_tickets
   ADD COLUMN IF NOT EXISTS email text,
   ADD COLUMN IF NOT EXISTS job_id integer REFERENCES public.jobs(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS listing_id uuid REFERENCES public.listings(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS listing_id bigint REFERENCES public.listings(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS attachment_urls text[] DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS ai_reason text;
 

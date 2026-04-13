@@ -2,7 +2,7 @@
 ALTER TABLE public.support_tickets
   ADD COLUMN IF NOT EXISTS email text,
   ADD COLUMN IF NOT EXISTS job_id integer REFERENCES public.jobs(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS listing_id uuid REFERENCES public.listings(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS listing_id bigint REFERENCES public.listings(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS attachment_urls text[] DEFAULT '{}';
 
 COMMENT ON COLUMN public.support_tickets.email IS 'Contact email for this ticket (pre-filled from profile, editable).';
