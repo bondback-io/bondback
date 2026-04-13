@@ -27,6 +27,7 @@ import {
   Info,
   Sparkles,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import {
   collectListingPhotoUrls,
@@ -133,16 +134,31 @@ export function ListingAuctionDetail({
   }, [listing.id]);
 
   const isLive = isListingLive(listing);
+
+  /**
+   * Countdown hit zero but DB still has `status: live` and no job row yet — `resolveAuctionEndForListing` is
+   * running. Without this, UI briefly shows "Listing ended" / relist copy before refresh shows the job.
+   */
+  const pendingAutoAssignWinner = useMemo(() => {
+    if (hasActiveJob) return false;
+    if (isLive) return false;
+    if (String(listing.status ?? "").toLowerCase() !== "live") return false;
+    return initialBids.some((b) => b.status === "active");
+  }, [hasActiveJob, isLive, listing.status, initialBids]);
+
   /** Expired (no bid rows) or ended (no assignable winner) — same pool as My listings → Listings (no bids). */
-  const isRelistPoolBanner = isListerNoBidsRelistListing(
-    listing,
-    hasActiveJob ? { status: "accepted" } : null
-  );
-  const closedAuctionBidStatus = !isLive
-    ? listing.cancelled_early_at
-      ? ("lister_cancelled" as const)
-      : ("auction_ended" as const)
-    : null;
+  const isRelistPoolBanner =
+    !pendingAutoAssignWinner &&
+    isListerNoBidsRelistListing(
+      listing,
+      hasActiveJob ? { status: "accepted" } : null
+    );
+  const closedAuctionBidStatus =
+    !isLive && !pendingAutoAssignWinner
+      ? listing.cancelled_early_at
+        ? ("lister_cancelled" as const)
+        : ("auction_ended" as const)
+      : null;
   const isListingCancelled =
     String(listing.status ?? "").toLowerCase() === "cancelled";
   const showCleanerBidUi =
@@ -283,7 +299,7 @@ export function ListingAuctionDetail({
   const canManageListingAsLister = isListerOwner && isListerSessionActive;
 
   /** Ended auction with no job: strong “closed” visuals (banner, muted hero, struck-through amounts). */
-  const showEndedListingVisual = !isLive && !hasActiveJob;
+  const showEndedListingVisual = !isLive && !hasActiveJob && !pendingAutoAssignWinner;
   const endedListingBannerLabel = listing.cancelled_early_at
     ? "Listing cancelled"
     : "Listing ended";
@@ -385,6 +401,10 @@ export function ListingAuctionDetail({
                 <Badge className="shrink-0 border-0 bg-emerald-500/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md [box-shadow:0_2px_10px_rgba(0,0,0,0.4)] sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
                   Live auction
                 </Badge>
+              ) : pendingAutoAssignWinner ? (
+                <Badge className="shrink-0 border-0 bg-sky-600/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md sm:px-2.5 sm:py-1.5 sm:text-xs">
+                  Finalising
+                </Badge>
               ) : (
                 <Badge
                   variant="secondary"
@@ -430,6 +450,22 @@ export function ListingAuctionDetail({
           </div>
         )}
       </div>
+
+      {pendingAutoAssignWinner && (
+        <div
+          className="flex gap-3 rounded-xl border border-sky-500/35 bg-sky-500/[0.08] px-4 py-3 text-sm dark:border-sky-800/50 dark:bg-sky-950/35 dark:text-sky-100"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin text-sky-600 dark:text-sky-400" aria-hidden />
+          <div>
+            <p className="font-semibold text-sky-950 dark:text-sky-50">Finalising auction</p>
+            <p className="mt-0.5 text-sky-950/85 dark:text-sky-100/90">
+              Assigning the winning bid and opening the job — this usually takes a moment.
+            </p>
+          </div>
+        </div>
+      )}
 
       {isRelistPoolBanner && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">

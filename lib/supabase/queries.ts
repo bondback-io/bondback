@@ -18,7 +18,7 @@ export function jobsBrowsePageRange(page: number): { from: number; to: number } 
 
 /** Full `public.listings` row — cards, dashboards, job detail. */
 export const LISTING_FULL_SELECT =
-  "id, lister_id, title, description, suburb, postcode, property_type, bedrooms, bathrooms, addons, special_instructions, move_out_date, preferred_dates, photo_urls, initial_photos, cover_photo_url, reserve_cents, buy_now_cents, starting_price_cents, current_lowest_bid_cents, duration_days, status, end_time, created_at, platform_fee_percentage, cancelled_early_at, property_condition, property_levels";
+  "id, lister_id, title, description, property_description, suburb, postcode, property_type, bedrooms, bathrooms, addons, special_instructions, move_out_date, preferred_dates, photo_urls, initial_photos, cover_photo_url, reserve_cents, buy_now_cents, starting_price_cents, current_lowest_bid_cents, duration_days, status, end_time, created_at, platform_fee_percentage, cancelled_early_at, property_condition, property_levels";
 
 /** Cleaner “live bids” section — fields used after fetch + `isListingLive`. */
 export const LISTING_LIVE_BID_CARD_SELECT =

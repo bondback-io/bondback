@@ -76,6 +76,7 @@ import {
   LockOpen,
   Unlock,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { ImageLightboxGallery } from "@/components/ui/image-lightbox-gallery";
@@ -489,16 +490,29 @@ export function JobDetail({
   }, [supabase, numericJobId]);
 
   const isLive = isListingLive(listing);
+
+  /**
+   * Countdown hit zero but listing is still `live` and no job row yet — server is assigning the winner.
+   * Avoid flashing “Listing ended” / struck-through bids before refresh.
+   */
+  const pendingAutoAssignWinner = useMemo(() => {
+    if (hasActiveJob) return false;
+    if (isLive) return false;
+    if (String(listing.status ?? "").toLowerCase() !== "live") return false;
+    return bids.some((b) => b.status === "active");
+  }, [hasActiveJob, isLive, listing.status, bids]);
+
   /** Ended auction with no job: match listing detail “closed” visuals on boosted layout. */
-  const showEndedListingVisual = !isLive && !hasActiveJob;
+  const showEndedListingVisual = !isLive && !hasActiveJob && !pendingAutoAssignWinner;
   const endedListingBannerLabel = listing.cancelled_early_at
     ? "Listing cancelled"
     : "Listing ended";
-  const closedAuctionBidStatus: ClosedAuctionBidStatus | null = !isLive
-    ? listing.cancelled_early_at
-      ? "lister_cancelled"
-      : "auction_ended"
-    : null;
+  const closedAuctionBidStatus: ClosedAuctionBidStatus | null =
+    !isLive && !pendingAutoAssignWinner
+      ? listing.cancelled_early_at
+        ? "lister_cancelled"
+        : "auction_ended"
+      : null;
   const isListingCancelled = String(listing.status).toLowerCase() === "cancelled";
   const isJobCancelled =
     localJobStatus === "cancelled" || jobStatus === "cancelled";
@@ -1220,6 +1234,10 @@ export function JobDetail({
                     <Badge className="shrink-0 border-0 bg-violet-600/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
                       Job · {jobHeroStatusLabel}
                     </Badge>
+                  ) : pendingAutoAssignWinner ? (
+                    <Badge className="shrink-0 border-0 bg-sky-600/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
+                      Finalising
+                    </Badge>
                   ) : (
                     <Badge
                       variant="secondary"
@@ -1235,6 +1253,22 @@ export function JobDetail({
                 </div>
               </div>
             </div>
+
+            {pendingAutoAssignWinner && (
+              <div
+                className="flex gap-3 border-t border-sky-500/30 bg-sky-500/[0.06] px-4 py-3 text-sm dark:border-sky-800/45 dark:bg-sky-950/30 dark:text-sky-100 md:px-6"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="h-5 w-5 shrink-0 animate-spin text-sky-600 dark:text-sky-400" aria-hidden />
+                <div>
+                  <p className="font-semibold text-sky-950 dark:text-sky-50">Finalising auction</p>
+                  <p className="mt-0.5 text-sky-950/85 dark:text-sky-100/90">
+                    Assigning the winning bid and opening the job — this usually takes a moment.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {isLive && !hideCleanerCancelledAuctionUi && (
               <div className="border-t border-border bg-gradient-to-r from-emerald-500/10 via-card to-sky-500/10 px-4 py-4 dark:border-gray-800 dark:from-emerald-950/40 dark:to-sky-950/30 md:px-6">
@@ -1865,6 +1899,8 @@ export function JobDetail({
                       <Badge variant="secondary" className="shrink-0">
                         Job · {jobHeroStatusLabel}
                       </Badge>
+                    ) : pendingAutoAssignWinner ? (
+                      <Badge className="shrink-0 border-0 bg-sky-600 text-white">Finalising</Badge>
                     ) : (
                       <Badge
                         variant="secondary"
