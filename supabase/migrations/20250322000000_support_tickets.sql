@@ -42,7 +42,8 @@ CREATE POLICY "support_tickets_select_admin"
   USING (
     EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_admin = true
+      WHERE profiles.id = auth.uid()
+        AND trim(coalesce(profiles.is_admin::text, '')) IN ('true', 't', 'yes', '1')
     )
   );
 
@@ -52,6 +53,7 @@ CREATE POLICY "support_tickets_update_admin"
   USING (
     EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_admin = true
+      WHERE profiles.id = auth.uid()
+        AND trim(coalesce(profiles.is_admin::text, '')) IN ('true', 't', 'yes', '1')
     )
   );

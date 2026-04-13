@@ -47,6 +47,7 @@ CREATE POLICY "support_attachments_select_admin"
     bucket_id = 'support-attachments'
     AND EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_admin = true
+      WHERE profiles.id = auth.uid()
+        AND trim(coalesce(profiles.is_admin::text, '')) IN ('true', 't', 'yes', '1')
     )
   );

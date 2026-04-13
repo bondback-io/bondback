@@ -6,6 +6,9 @@
 --
 -- Run in: Supabase Dashboard → SQL Editor → New query → Run
 -- Safe to re-run (idempotent policies via DROP IF EXISTS).
+--
+-- Admin checks use is_admin::text IN (...), not is_admin = true, so RLS works when
+-- profiles.is_admin is text OR boolean (same pattern as global_settings_fix.sql).
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.support_tickets (
@@ -82,7 +85,8 @@ CREATE POLICY "support_tickets_select_admin"
   USING (
     EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_admin = true
+      WHERE profiles.id = auth.uid()
+        AND trim(coalesce(profiles.is_admin::text, '')) IN ('true', 't', 'yes', '1')
     )
   );
 
@@ -92,7 +96,8 @@ CREATE POLICY "support_tickets_update_admin"
   USING (
     EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_admin = true
+      WHERE profiles.id = auth.uid()
+        AND trim(coalesce(profiles.is_admin::text, '')) IN ('true', 't', 'yes', '1')
     )
   );
 
@@ -134,7 +139,8 @@ CREATE POLICY "support_attachments_select_admin"
     bucket_id = 'support-attachments'
     AND EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_admin = true
+      WHERE profiles.id = auth.uid()
+        AND trim(coalesce(profiles.is_admin::text, '')) IN ('true', 't', 'yes', '1')
     )
   );
 
