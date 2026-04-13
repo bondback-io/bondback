@@ -62,6 +62,17 @@ const CATEGORY_ICONS: Record<string, typeof Sparkles> = {
   "Account & Profile": User,
 };
 
+/** Short labels on small screens — same pattern as My listings tabs. */
+const CATEGORY_SHORT_LABEL: Record<(typeof CATEGORIES)[number], string> = {
+  All: "All",
+  "Getting Started": "Start",
+  "Lister Guide": "Lister",
+  "Cleaner Guide": "Cleaner",
+  "Payments & Earnings": "Pay",
+  "Disputes & Issues": "Disputes",
+  "Account & Profile": "Account",
+};
+
 const EMPTY_STATE_SUGGESTIONS = [
   "how to bid",
   "upload photos",
@@ -481,34 +492,33 @@ export function HelpPageClient({ initialArticles }: HelpPageClientProps) {
             ) : null}
           </div>
 
-          <div className="relative -mx-1">
-            <div
-              className="flex gap-2 overflow-x-auto pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              role="tablist"
-              aria-label="Help categories"
-            >
-              {CATEGORIES.map((cat) => {
-                const active = category === cat;
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setCategory(cat)}
-                    className={cn(
-                      "shrink-0 snap-start rounded-full border px-3.5 py-2 text-sm font-medium transition-colors min-h-[44px] sm:min-h-0 sm:py-1.5",
-                      active
-                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                        : "border-border/80 bg-muted/40 text-foreground hover:bg-muted dark:border-gray-700 dark:bg-gray-800/60 dark:hover:bg-gray-800"
-                    )}
-                  >
-                    {cat}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <nav
+            className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2"
+            role="tablist"
+            aria-label="Help categories"
+          >
+            {CATEGORIES.map((cat) => {
+              const active = category === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setCategory(cat)}
+                  className={cn(
+                    "flex min-h-[44px] w-full touch-manipulation flex-wrap items-center justify-center gap-x-1 gap-y-0 rounded-xl px-3 py-2 text-center text-sm font-semibold leading-snug transition-colors sm:inline-flex sm:w-auto sm:flex-nowrap sm:px-4 sm:py-2.5",
+                    active
+                      ? "bg-emerald-600 text-white shadow-sm ring-1 ring-black/10 dark:bg-emerald-600 dark:text-white dark:ring-emerald-400/25"
+                      : "border border-border/70 bg-muted/40 text-foreground/90 hover:bg-muted dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-200 dark:hover:bg-gray-800/90"
+                  )}
+                >
+                  <span className="sm:hidden">{CATEGORY_SHORT_LABEL[cat]}</span>
+                  <span className="hidden sm:inline">{cat}</span>
+                </button>
+              );
+            })}
+          </nav>
 
           {isSearching && (
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground dark:text-gray-400">
