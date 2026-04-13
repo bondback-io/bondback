@@ -30,13 +30,10 @@ import { PlaceBidForm } from "@/components/features/place-bid-form";
 import { BuyNowButton } from "@/components/features/buy-now-button";
 import {
   formatCents,
-  getPreferredCleaningDeadlineMs,
-  daysUntilPreferredCleaningDeadline,
   collectListingPhotoUrls,
   mergePhotoUrlLists,
   orderCoverPhotoFirst,
   isListingLive,
-  type ListingWithPreferredDates,
 } from "@/lib/listings";
 import {
   parseListingCalendarDate,
@@ -1079,18 +1076,6 @@ export function JobDetail({
     isJobCleaner &&
     cleanerConfirmed &&
     localJobStatus === "completed_pending_approval";
-
-  /** Preferred cleaning window ended but job still active (checklist / after photos / not marked complete). */
-  const preferredCleaningOverdueForCleaner = useMemo(() => {
-    const st = localJobStatus ?? jobStatus;
-    if (!isCleaner || !isJobCleaner) return false;
-    if (st !== "accepted" && st !== "in_progress") return false;
-    const deadlineMs = getPreferredCleaningDeadlineMs(
-      listing as ListingWithPreferredDates
-    );
-    if (deadlineMs == null) return false;
-    return daysUntilPreferredCleaningDeadline(deadlineMs, new Date()) < 0;
-  }, [isCleaner, isJobCleaner, localJobStatus, jobStatus, listing]);
 
   /** Lister is on Approve & Release Funds (review after cleaner requested payment). */
   const listerReleaseFundsStep =
@@ -3816,50 +3801,6 @@ export function JobDetail({
               </div>
             </div>
           )}
-          {(() => {
-            const rawPreferred =
-              ((listing as any).preferred_dates as string[] | null) ?? null;
-            const dates: Date[] =
-              rawPreferred && rawPreferred.length > 0
-                ? rawPreferred.map((d) => new Date(d))
-                : listing.move_out_date
-                  ? [new Date(listing.move_out_date)]
-                  : [];
-
-            return (
-              <div className="space-y-2">
-                {dates.length > 0 && (
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p
-                        className={cn(
-                          "font-medium text-muted-foreground dark:text-gray-300",
-                          detailUiBoost ? "text-sm font-semibold" : "text-xs"
-                        )}
-                      >
-                        Preferred cleaning dates
-                      </p>
-                      {preferredCleaningOverdueForCleaner && (
-                        <Badge variant="destructive" className="text-[10px] font-semibold">
-                          Overdue
-                        </Badge>
-                      )}
-                    </div>
-                    <ul
-                      className={cn(
-                        "mt-1 space-y-1 dark:text-gray-200",
-                        detailUiBoost ? "text-base font-medium" : "text-sm"
-                      )}
-                    >
-                      {dates.map((d) => (
-                        <li key={d.toISOString()}>
-                          {format(d, "EEEE, MMMM 'the' do yyyy")}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
                 <div
                   className={cn(
                     detailUiBoost
@@ -4137,9 +4078,6 @@ export function JobDetail({
                     </div>
                   )}
                 </div>
-              </div>
-            );
-          })()}
             </>
           )}
 
