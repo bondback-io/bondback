@@ -146,16 +146,19 @@ function dedupeImageFiles(files: File[]): File[] {
 
 function JobHistoryCollapsible({
   enabled,
+  title = "Job history — checklist &amp; after photos",
   children,
 }: {
   enabled: boolean;
+  /** When `enabled`, shown as the outer summary label. */
+  title?: string;
   children: ReactNode;
 }) {
   if (!enabled) return <>{children}</>;
   return (
     <details className="rounded-2xl border border-border/80 bg-muted/15 dark:border-gray-700 dark:bg-gray-900/30">
       <summary className="cursor-pointer select-none list-none px-4 py-3 font-semibold text-foreground outline-none marker:content-none [&::-webkit-details-marker]:hidden dark:text-gray-100">
-        Job history — checklist &amp; after photos
+        {title}
       </summary>
       <div className="space-y-4 border-t border-border px-4 pb-4 pt-4 dark:border-gray-800">
         {children}
@@ -1696,314 +1699,6 @@ export function JobDetail({
                 isJobLister={!!isJobLister}
                 isJobCleaner={!!isJobCleaner}
               />
-              <details className="rounded-2xl border border-border/90 bg-card shadow-sm dark:border-gray-800">
-                <summary className="cursor-pointer select-none list-none px-4 py-3 font-semibold text-foreground outline-none marker:content-none [&::-webkit-details-marker]:hidden dark:text-gray-100 sm:px-5">
-                  Job history — pricing &amp; listing details
-                </summary>
-                <div className="space-y-4 border-t border-border px-4 pb-4 pt-4 dark:border-gray-800 sm:px-5">
-                  <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
-                    <CardContent className="p-0">
-                      <div
-                        className={cn(
-                          "grid grid-cols-1 divide-y divide-border dark:divide-gray-800",
-                          "md:divide-y-0 md:divide-x md:divide-border/80",
-                          showCleanerWonForCallout
-                            ? hasBuyNowJob
-                              ? "md:grid-cols-2"
-                              : "md:grid-cols-1"
-                            : hasBuyNowJob
-                              ? "md:grid-cols-3"
-                              : "md:grid-cols-2"
-                        )}
-                      >
-                        {!showCleanerWonForCallout && (
-                          <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-emerald-500/[0.06] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-emerald-950/30">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                              Job amount (paid)
-                            </p>
-                            <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 sm:text-3xl">
-                              {formatCents(agreedAmountCents)}
-                            </p>
-                          </div>
-                        )}
-                        <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-card px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-gray-950/40">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                            Starting bid
-                          </p>
-                          <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100 sm:text-3xl">
-                            {formatCents(startingCents)}
-                          </p>
-                        </div>
-                        {hasBuyNowJob && (
-                          <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-violet-500/[0.07] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-violet-950/35">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                              Buy now
-                            </p>
-                            <p className="text-2xl font-bold tabular-nums tracking-tight text-violet-700 dark:text-violet-300 sm:text-3xl">
-                              {formatCents(buyNowCentsJob!)}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  {showCleanerWonForCallout && (
-                    <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
-                      <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
-                      <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
-                        {formatCents(agreedAmountCents)}
-                      </p>
-                      <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
-                        You will receive the full bid amount ({formatCents(agreedAmountCents)}). The lister pays
-                        the platform fee separately.
-                      </p>
-                    </div>
-                  )}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Info className="h-5 w-5 shrink-0" aria-hidden />
-                        Property
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-5">
-                      <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground dark:text-gray-400">
-                        {beds != null && (
-                          <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
-                            <Bed className="h-4 w-4 shrink-0" aria-hidden />
-                            {beds} bed
-                          </span>
-                        )}
-                        {baths != null && (
-                          <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
-                            <Bath className="h-4 w-4 shrink-0" aria-hidden />
-                            {baths} bath
-                          </span>
-                        )}
-                        {propertyType && (
-                          <Badge variant="secondary" className="capitalize">
-                            {propertyType.replace(/_/g, " ")}
-                          </Badge>
-                        )}
-                      </div>
-                      {(conditionLabel ||
-                        levelsLabel ||
-                        (typeof listing.duration_days === "number" && listing.duration_days > 0)) && (
-                        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {conditionLabel && (
-                            <div className="min-w-0 space-y-1">
-                              <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                                Condition
-                              </dt>
-                              <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{conditionLabel}</dd>
-                            </div>
-                          )}
-                          {levelsLabel && (
-                            <div className="min-w-0 space-y-1">
-                              <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                                Levels
-                              </dt>
-                              <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{levelsLabel}</dd>
-                            </div>
-                          )}
-                          {typeof listing.duration_days === "number" && listing.duration_days > 0 && (
-                            <div className="min-w-0 space-y-1">
-                              <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                                Auction listing period
-                              </dt>
-                              <dd className="text-sm font-semibold tabular-nums text-foreground dark:text-gray-100">
-                                {listing.duration_days} days
-                              </dd>
-                            </div>
-                          )}
-                        </dl>
-                      )}
-                      {addonsList.length > 0 && (
-                        <div className="border-t border-border pt-4 dark:border-gray-800">
-                          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                            Add-ons
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {addonsList.map((a) => (
-                              <Badge
-                                key={a}
-                                variant="outline"
-                                title={
-                                  isListingAddonSpecialArea(listing, a)
-                                    ? "Special area (from listing)"
-                                    : "Paid add-on"
-                                }
-                                className={cn(
-                                  "font-normal",
-                                  isListingAddonSpecialArea(listing, a)
-                                    ? "border-amber-500/75 bg-amber-500/[0.14] text-amber-950 shadow-sm dark:border-amber-400/55 dark:bg-amber-950/45 dark:text-amber-50"
-                                    : "capitalize"
-                                )}
-                              >
-                                {isListingAddonSpecialArea(listing, a) ? (
-                                  <span className="font-semibold tracking-wide">Special area · </span>
-                                ) : null}
-                                <span className="capitalize">
-                                  {formatListingAddonDisplayName(a)}
-                                </span>
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                  {(moveOutRaw || showPreferredFallbackList) && (
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-2 text-lg">
-                          <Calendar className="h-5 w-5 shrink-0" aria-hidden />
-                          Dates
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid gap-5 text-sm md:grid-cols-2 md:gap-6 lg:gap-8">
-                          {moveOutRaw && (
-                            <div className="min-w-0 space-y-1">
-                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                                Move-out
-                              </p>
-                              <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
-                                {moveOutDisplay}
-                              </p>
-                            </div>
-                          )}
-                          {showPreferredFromMoveOut && (
-                            <div
-                              className={
-                                moveOutRaw
-                                  ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
-                                  : "min-w-0 space-y-2"
-                              }
-                            >
-                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                                Preferred cleaning window
-                              </p>
-                              <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
-                                {preferredWindowFromMoveOut}
-                              </p>
-                              <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
-                                Target window starts 5 days before your move-out date.
-                              </p>
-                            </div>
-                          )}
-                          {showPreferredFallbackList && (
-                            <div
-                              className={
-                                moveOutRaw
-                                  ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
-                                  : "min-w-0 space-y-2"
-                              }
-                            >
-                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                                Preferred cleaning window
-                              </p>
-                              <ul className="space-y-1.5 text-foreground dark:text-gray-200">
-                                {preferredDatesFormatted.map((d, i) => (
-                                  <li key={`${d}-${i}`} className="flex gap-2 text-sm">
-                                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" aria-hidden />
-                                    <span className="tabular-nums">{d}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                  <Card>
-                    <CardHeader className="space-y-2">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <CardTitle className="text-xl leading-tight md:text-2xl">About this listing</CardTitle>
-                        <Badge variant="secondary" className="shrink-0">
-                          Job · {jobHeroStatusLabel}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {specialInstructionsBody.trim() && (
-                        <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
-                          <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
-                            Special instructions
-                          </h3>
-                          <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
-                            {specialInstructionsBody}
-                          </p>
-                        </div>
-                      )}
-                      <div>
-                        <h3 className="mb-2 text-sm font-semibold">Property description</h3>
-                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
-                          {listingPropertyDescriptionBody(listing) || "No property description provided."}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
-                    <details className="group">
-                      <summary className="flex cursor-pointer list-none items-center gap-2 px-6 py-4 [&::-webkit-details-marker]:hidden">
-                        <Gavel className="h-5 w-5 shrink-0" aria-hidden />
-                        <CardTitle className="mb-0 flex flex-1 items-center gap-2 text-lg">
-                          Bids
-                          {bids.length > 0 ? (
-                            <Badge variant="secondary" className="font-mono text-xs tabular-nums">
-                              {bids.length}
-                            </Badge>
-                          ) : null}
-                        </CardTitle>
-                        <ChevronDown
-                          className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
-                          aria-hidden
-                        />
-                      </summary>
-                      <CardContent className="space-y-3 border-t border-border/80 pt-4 dark:border-gray-800">
-                        <BidHistoryTable
-                          listingId={listingId}
-                          bids={bids}
-                          hasPendingEarlyAcceptance={bids.some(
-                            (b) => b.status === "pending_confirmation"
-                          )}
-                          onAcceptBid={
-                            isListingOwner && !hasActiveJob && isLive
-                              ? handleAcceptBid
-                              : undefined
-                          }
-                          closedAuctionBidStatus={closedAuctionBidStatus}
-                          showRevertLastBid={showRevertLastBidInHistory}
-                          onRevertLastBid={
-                            showRevertLastBidInHistory ? handleRevertLastBid : undefined
-                          }
-                          largeTouch
-                        />
-                      </CardContent>
-                    </details>
-                  </Card>
-                </div>
-              </details>
-              {listerCompletedBoostTidy && (
-                <JobDetailInitialConditionPhotos
-                  listing={listing}
-                  listingId={listingId}
-                  detailUiBoost={detailUiBoost}
-                  initialPhotosLoading={initialPhotosLoading}
-                  initialPhotoEntries={initialPhotoEntries}
-                  setInitialPhotoEntries={setInitialPhotoEntries}
-                  setListing={setListing}
-                  setPhotoLightbox={setPhotoLightbox}
-                  supabase={supabase}
-                  isJobLister={isJobLister}
-                  isListingOwner={isListingOwner}
-                  isCleaner={isCleaner}
-                  initialPhotosUploading={initialPhotosUploading}
-                  setInitialPhotosUploading={setInitialPhotosUploading}
-                />
-              )}
             </div>
           ) : isSold ? (
             <>
@@ -4505,7 +4200,303 @@ export function JobDetail({
       )}
 
       {listerCompletedBoostTidy && hasActiveJob && numericJobId && (
-        <JobHistoryCollapsible enabled>
+        <JobHistoryCollapsible enabled title="Job History Details">
+          <div className="space-y-4 rounded-xl border border-border/80 bg-card px-3 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-950/40 sm:px-4 sm:py-4">
+            <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+              <CardContent className="p-0">
+                <div
+                  className={cn(
+                    "grid grid-cols-1 divide-y divide-border dark:divide-gray-800",
+                    "md:divide-y-0 md:divide-x md:divide-border/80",
+                    showCleanerWonForCallout
+                      ? hasBuyNowJob
+                        ? "md:grid-cols-2"
+                        : "md:grid-cols-1"
+                      : hasBuyNowJob
+                        ? "md:grid-cols-3"
+                        : "md:grid-cols-2"
+                  )}
+                >
+                  {!showCleanerWonForCallout && (
+                    <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-emerald-500/[0.06] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-emerald-950/30">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                        Job amount (paid)
+                      </p>
+                      <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 sm:text-3xl">
+                        {formatCents(agreedAmountCents)}
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-card px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-gray-950/40">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                      Starting bid
+                    </p>
+                    <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100 sm:text-3xl">
+                      {formatCents(startingCents)}
+                    </p>
+                  </div>
+                  {hasBuyNowJob && (
+                    <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-violet-500/[0.07] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-violet-950/35">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                        Buy now
+                      </p>
+                      <p className="text-2xl font-bold tabular-nums tracking-tight text-violet-700 dark:text-violet-300 sm:text-3xl">
+                        {formatCents(buyNowCentsJob!)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            {showCleanerWonForCallout && (
+              <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
+                <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
+                <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
+                  {formatCents(agreedAmountCents)}
+                </p>
+                <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
+                  You will receive the full bid amount ({formatCents(agreedAmountCents)}). The lister pays the
+                  platform fee separately.
+                </p>
+              </div>
+            )}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Info className="h-5 w-5 shrink-0" aria-hidden />
+                  Property
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground dark:text-gray-400">
+                  {beds != null && (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                      <Bed className="h-4 w-4 shrink-0" aria-hidden />
+                      {beds} bed
+                    </span>
+                  )}
+                  {baths != null && (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                      <Bath className="h-4 w-4 shrink-0" aria-hidden />
+                      {baths} bath
+                    </span>
+                  )}
+                  {propertyType && (
+                    <Badge variant="secondary" className="capitalize">
+                      {propertyType.replace(/_/g, " ")}
+                    </Badge>
+                  )}
+                </div>
+                {(conditionLabel ||
+                  levelsLabel ||
+                  (typeof listing.duration_days === "number" && listing.duration_days > 0)) && (
+                  <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {conditionLabel && (
+                      <div className="min-w-0 space-y-1">
+                        <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                          Condition
+                        </dt>
+                        <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{conditionLabel}</dd>
+                      </div>
+                    )}
+                    {levelsLabel && (
+                      <div className="min-w-0 space-y-1">
+                        <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                          Levels
+                        </dt>
+                        <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{levelsLabel}</dd>
+                      </div>
+                    )}
+                    {typeof listing.duration_days === "number" && listing.duration_days > 0 && (
+                      <div className="min-w-0 space-y-1">
+                        <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                          Auction listing period
+                        </dt>
+                        <dd className="text-sm font-semibold tabular-nums text-foreground dark:text-gray-100">
+                          {listing.duration_days} days
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+                {addonsList.length > 0 && (
+                  <div className="border-t border-border pt-4 dark:border-gray-800">
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                      Add-ons
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {addonsList.map((a) => (
+                        <Badge
+                          key={a}
+                          variant="outline"
+                          title={
+                            isListingAddonSpecialArea(listing, a)
+                              ? "Special area (from listing)"
+                              : "Paid add-on"
+                          }
+                          className={cn(
+                            "font-normal",
+                            isListingAddonSpecialArea(listing, a)
+                              ? "border-amber-500/75 bg-amber-500/[0.14] text-amber-950 shadow-sm dark:border-amber-400/55 dark:bg-amber-950/45 dark:text-amber-50"
+                              : "capitalize"
+                          )}
+                        >
+                          {isListingAddonSpecialArea(listing, a) ? (
+                            <span className="font-semibold tracking-wide">Special area · </span>
+                          ) : null}
+                          <span className="capitalize">{formatListingAddonDisplayName(a)}</span>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            {(moveOutRaw || showPreferredFallbackList) && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Calendar className="h-5 w-5 shrink-0" aria-hidden />
+                    Dates
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-5 text-sm md:grid-cols-2 md:gap-6 lg:gap-8">
+                    {moveOutRaw && (
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                          Move-out
+                        </p>
+                        <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                          {moveOutDisplay}
+                        </p>
+                      </div>
+                    )}
+                    {showPreferredFromMoveOut && (
+                      <div
+                        className={
+                          moveOutRaw
+                            ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
+                            : "min-w-0 space-y-2"
+                        }
+                      >
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                          Preferred cleaning window
+                        </p>
+                        <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                          {preferredWindowFromMoveOut}
+                        </p>
+                        <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
+                          Target window starts 5 days before your move-out date.
+                        </p>
+                      </div>
+                    )}
+                    {showPreferredFallbackList && (
+                      <div
+                        className={
+                          moveOutRaw
+                            ? "min-w-0 space-y-2 md:border-l md:border-border md:pl-6 dark:md:border-gray-800"
+                            : "min-w-0 space-y-2"
+                        }
+                      >
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                          Preferred cleaning window
+                        </p>
+                        <ul className="space-y-1.5 text-foreground dark:text-gray-200">
+                          {preferredDatesFormatted.map((d, i) => (
+                            <li key={`${d}-${i}`} className="flex gap-2 text-sm">
+                              <span
+                                className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60"
+                                aria-hidden
+                              />
+                              <span className="tabular-nums">{d}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            <Card>
+              <CardHeader className="space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <CardTitle className="text-xl leading-tight md:text-2xl">About this listing</CardTitle>
+                  <Badge variant="secondary" className="shrink-0">
+                    Job · {jobHeroStatusLabel}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {specialInstructionsBody.trim() && (
+                  <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
+                    <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
+                      Special instructions
+                    </h3>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
+                      {specialInstructionsBody}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold">Property description</h3>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
+                    {listingPropertyDescriptionBody(listing) || "No property description provided."}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-6 py-4 [&::-webkit-details-marker]:hidden">
+                  <Gavel className="h-5 w-5 shrink-0" aria-hidden />
+                  <CardTitle className="mb-0 flex flex-1 items-center gap-2 text-lg">
+                    Bids
+                    {bids.length > 0 ? (
+                      <Badge variant="secondary" className="font-mono text-xs tabular-nums">
+                        {bids.length}
+                      </Badge>
+                    ) : null}
+                  </CardTitle>
+                  <ChevronDown
+                    className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+                    aria-hidden
+                  />
+                </summary>
+                <CardContent className="space-y-3 border-t border-border/80 pt-4 dark:border-gray-800">
+                  <BidHistoryTable
+                    listingId={listingId}
+                    bids={bids}
+                    hasPendingEarlyAcceptance={bids.some((b) => b.status === "pending_confirmation")}
+                    onAcceptBid={
+                      isListingOwner && !hasActiveJob && isLive ? handleAcceptBid : undefined
+                    }
+                    closedAuctionBidStatus={closedAuctionBidStatus}
+                    showRevertLastBid={showRevertLastBidInHistory}
+                    onRevertLastBid={showRevertLastBidInHistory ? handleRevertLastBid : undefined}
+                    largeTouch
+                  />
+                </CardContent>
+              </details>
+            </Card>
+            <JobDetailInitialConditionPhotos
+              listing={listing}
+              listingId={listingId}
+              detailUiBoost={detailUiBoost}
+              initialPhotosLoading={initialPhotosLoading}
+              initialPhotoEntries={initialPhotoEntries}
+              setInitialPhotoEntries={setInitialPhotoEntries}
+              setListing={setListing}
+              setPhotoLightbox={setPhotoLightbox}
+              supabase={supabase}
+              isJobLister={isJobLister}
+              isListingOwner={isListingOwner}
+              isCleaner={isCleaner}
+              initialPhotosUploading={initialPhotosUploading}
+              setInitialPhotosUploading={setInitialPhotosUploading}
+            />
+          </div>
           {!(isJobLister && listerReleaseFundsStep) && (
             <details
               className={cn(

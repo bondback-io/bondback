@@ -24,6 +24,7 @@ import {
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
+import { isListerJobPipelineActive } from "@/lib/my-listings/lister-listing-helpers";
 
 export type JobDetailRouteMode = "jobs" | "listings";
 
@@ -324,8 +325,27 @@ export async function JobDetailPageContent({
     jsonLd = {};
   }
 
-  const activeJobBanner =
-    mode === "jobs" && job && String(job.winner_id ?? "").trim() !== "";
+  const jobSnapshotForBanner = job
+    ? {
+        jobId: job.id,
+        winnerId: job.winner_id,
+        winnerName: "",
+        status: job.status,
+      }
+    : null;
+  const hasAssignedCleaner = Boolean(
+    job && String(job.winner_id ?? "").trim() !== ""
+  );
+  const pipelineActive =
+    mode === "jobs" &&
+    hasAssignedCleaner &&
+    jobSnapshotForBanner != null &&
+    isListerJobPipelineActive(jobSnapshotForBanner);
+  const jobStatusNorm = String(job?.status ?? "");
+  const completedJobBanner =
+    mode === "jobs" && hasAssignedCleaner && jobStatusNorm === "completed";
+  const cancelledJobBanner =
+    mode === "jobs" && hasAssignedCleaner && jobStatusNorm === "cancelled";
 
   const rawDisputeOpener = (job as { dispute_opened_by?: string | null })
     ?.dispute_opened_by;
@@ -355,7 +375,7 @@ export async function JobDetailPageContent({
           isStripeTestMode={stripeTestMode}
         />
         {user && jobId && <RecordJobView jobId={jobId} />}
-        {activeJobBanner ? (
+        {pipelineActive ? (
           <Alert className="border-primary/40 bg-primary/5">
             <Briefcase className="h-4 w-4" aria-hidden />
             <AlertDescription className="ml-1">
@@ -369,6 +389,29 @@ export async function JobDetailPageContent({
               ) : (
                 " — cleaner assigned."
               )}
+            </AlertDescription>
+          </Alert>
+        ) : completedJobBanner ? (
+          <Alert className="border-emerald-500/30 bg-emerald-500/[0.06] dark:border-emerald-800/50 dark:bg-emerald-950/25">
+            <Briefcase className="h-4 w-4 text-emerald-700 dark:text-emerald-400" aria-hidden />
+            <AlertDescription className="ml-1 text-emerald-950 dark:text-emerald-100">
+              <span className="font-semibold text-foreground dark:text-emerald-50">
+                This job is completed
+              </span>
+              {cleanerName ? (
+                <>
+                  {" "}
+                  — cleaner: <span className="font-medium">{cleanerName}</span>
+                </>
+              ) : null}
+            </AlertDescription>
+          </Alert>
+        ) : cancelledJobBanner ? (
+          <Alert className="border-border bg-muted/40 dark:border-gray-700 dark:bg-gray-900/40">
+            <Briefcase className="h-4 w-4" aria-hidden />
+            <AlertDescription className="ml-1">
+              <span className="font-semibold text-foreground">This job is no longer active</span>
+              <span className="text-muted-foreground"> — it was cancelled.</span>
             </AlertDescription>
           </Alert>
         ) : null}
