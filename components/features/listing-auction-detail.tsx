@@ -33,6 +33,7 @@ import {
   formatCents,
   mergePhotoUrlLists,
   orderCoverPhotoFirst,
+  isListingLive,
   type ListingRow,
 } from "@/lib/listings";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -126,8 +127,7 @@ export function ListingAuctionDetail({
     };
   }, [listing.id]);
 
-  const isLive =
-    listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
+  const isLive = isListingLive(listing);
   /** Expired (no bid rows) or ended (no assignable winner) — same pool as My listings → Listings (no bids). */
   const isRelistPoolBanner = isListerNoBidsRelistListing(
     listing,
@@ -383,12 +383,12 @@ export function ListingAuctionDetail({
                 <Badge
                   variant="secondary"
                   className={cn(
-                    "shrink-0 capitalize",
+                    "shrink-0 font-bold uppercase tracking-wide",
                     showEndedListingVisual &&
-                      "border-0 bg-red-950/90 font-bold uppercase tracking-wide text-white dark:bg-red-950/95"
+                      "border-0 bg-red-950/90 text-white dark:bg-red-950/95"
                   )}
                 >
-                  {String(listing.status ?? "—")}
+                  Not live
                 </Badge>
               )}
             </div>
@@ -800,7 +800,12 @@ export function ListingAuctionDetail({
             {isLive ? (
               <Badge className="shrink-0">Live</Badge>
             ) : (
-              <Badge variant="secondary">{String(listing.status ?? "—")}</Badge>
+              <Badge
+                variant="secondary"
+                className="shrink-0 font-semibold uppercase tracking-wide"
+              >
+                Not live
+              </Badge>
             )}
           </div>
         </CardHeader>

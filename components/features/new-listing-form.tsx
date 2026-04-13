@@ -11,7 +11,12 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { buildListingInsertRow, computeListingEndTimeIso } from "@/lib/listings";
+import {
+  buildListingInsertRow,
+  computeListingEndTimeIso,
+  formatAuctionDurationChoiceLabel,
+  getAuctionDurationDayChoices,
+} from "@/lib/listings";
 import {
   Card,
   CardContent,
@@ -143,7 +148,7 @@ function reservePriceMinMessage(minAud: number): string {
 }
 
 function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolean) {
-  const allowedDurations = allowTwoMinuteAuction ? [0, 1, 3, 5, 7] : [1, 3, 5, 7];
+  const allowedDurations = getAuctionDurationDayChoices(allowTwoMinuteAuction);
   return z
     .object({
       propertyType: z.enum(propertyTypes),
@@ -316,7 +321,7 @@ export function NewListingForm({
   );
 
   const durationOptions = useMemo(
-    () => (allowTwoMinuteAuctionTest ? ([0, 1, 3, 5, 7] as const) : ([1, 3, 5, 7] as const)),
+    () => getAuctionDurationDayChoices(allowTwoMinuteAuctionTest === true),
     [allowTwoMinuteAuctionTest]
   );
 
@@ -1712,11 +1717,7 @@ export function NewListingForm({
                           >
                             <RadioGroupItem value={String(days)} />
                             <span className="dark:text-gray-200">
-                              {days === 0
-                                ? "2 minutes"
-                                : days === 1
-                                  ? "1 day"
-                                  : `${days} days`}
+                              {formatAuctionDurationChoiceLabel(days)}
                             </span>
                           </label>
                         ))}

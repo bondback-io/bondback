@@ -7,7 +7,13 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PHOTO_LIMITS } from "@/lib/photo-validation";
 import type { Database } from "@/types/supabase";
 import { createNotification, notifyListerListingLive } from "@/lib/actions/notifications";
-import { relistDurationMsFromDurationDays, type ListingInsertPayload } from "@/lib/listings";
+import {
+  relistDurationMsFromDurationDays,
+  clampAuctionDurationDays,
+  type ListingInsertPayload,
+} from "@/lib/listings";
+import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { isListerRelistPoolListingStatus } from "@/lib/my-listings/lister-listing-helpers";
 
 type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -509,7 +515,8 @@ export async function relistExpiredListing(
     return { ok: false, error: "You are not allowed to relist this listing." };
   }
   const listingStatus = String(row.status ?? "").toLowerCase();
-  if (listingStatus !== "expired" && listingStatus !== "ended") {
+  const nowMs = Date.now();
+  if (!isListerRelistPoolListingStatus(row, nowMs)) {
     return {
       ok: false,
       error: "Only expired or closed (ended) auctions without an active job can be relisted.",
@@ -532,11 +539,14 @@ export async function relistExpiredListing(
     };
   }
 
-  const durationDays = Number(
+  const settings = await getGlobalSettings();
+  const allowTwoMin =
+    (settings as { allow_two_minute_auction_test?: boolean } | null)?.allow_two_minute_auction_test === true;
+  const rawDuration =
     options?.durationDays != null && Number.isFinite(Number(options.durationDays))
-      ? options.durationDays
-      : row.duration_days
-  );
+      ? Number(options.durationDays)
+      : Number(row.duration_days);
+  const durationDays = clampAuctionDurationDays(rawDuration, allowTwoMin);
   const endTime = new Date(Date.now() + relistDurationMsFromDurationDays(durationDays)).toISOString();
   const starting =
     options?.startingPriceCents != null && Number.isFinite(Number(options.startingPriceCents))
@@ -575,14 +585,18 @@ export async function relistExpiredListing(
     patch.move_out_date = options.moveOutDate;
   }
 
-  const { data: updatedRow, error: updErr } = await supabase
+  let statusLocked = supabase
     .from("listings")
     .update(patch as never)
     .eq("id", listingId)
-    .eq("lister_id", session.user.id)
-    .in("status", ["expired", "ended"])
-    .select("id")
-    .maybeSingle();
+    .eq("lister_id", session.user.id);
+  if (listingStatus === "live") {
+    const cutoffIso = new Date(nowMs).toISOString();
+    statusLocked = statusLocked.eq("status", "live").lte("end_time", cutoffIso);
+  } else {
+    statusLocked = statusLocked.in("status", ["expired", "ended"]);
+  }
+  const { data: updatedRow, error: updErr } = await statusLocked.select("id").maybeSingle();
 
   if (updErr) {
     return { ok: false, error: updErr.message };

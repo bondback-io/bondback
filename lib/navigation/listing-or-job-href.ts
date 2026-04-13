@@ -21,6 +21,7 @@ export type ListingLinkInput = {
   status?: string | null;
   /** When set, open auctions keep `/listings/...` even if a placeholder job row exists. */
   end_time?: string | null;
+  cancelled_early_at?: string | null;
 };
 
 export type JobLinkInput = {
@@ -119,15 +120,14 @@ export const isAssignedJobRoute = (job: JobLinkInput | null | undefined) =>
 export const isAssignedJob = isJobAssigned;
 
 /** Listing is still an open auction — always use `/listings/[uuid]`, not `/jobs/[id]`. */
-export function isListingLiveAuction(
-  listing: Pick<ListingLinkInput, "status" | "end_time">
-): boolean {
+export function isListingLiveAuction(listing: ListingLinkInput): boolean {
+  if (listing.cancelled_early_at != null) return false;
   const lst = String(listing.status ?? "").toLowerCase();
   if (lst !== "live") return false;
   const raw = listing.end_time;
-  if (raw == null || String(raw).trim() === "") return true;
+  if (raw == null || String(raw).trim() === "") return false;
   const endMs = parseUtcTimestamp(String(raw));
-  if (Number.isNaN(endMs)) return true;
+  if (!Number.isFinite(endMs)) return false;
   return endMs > Date.now();
 }
 

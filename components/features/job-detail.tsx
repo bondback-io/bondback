@@ -34,6 +34,7 @@ import {
   collectListingPhotoUrls,
   mergePhotoUrlLists,
   orderCoverPhotoFirst,
+  isListingLive,
   type ListingWithPreferredDates,
 } from "@/lib/listings";
 import {
@@ -484,8 +485,7 @@ export function JobDetail({
     };
   }, [supabase, numericJobId]);
 
-  const isLive =
-    listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
+  const isLive = isListingLive(listing);
   /** Ended auction with no job: match listing detail “closed” visuals on boosted layout. */
   const showEndedListingVisual = !isLive && !hasActiveJob;
   const endedListingBannerLabel = listing.cancelled_early_at
@@ -556,9 +556,7 @@ export function JobDetail({
   /** Lister menu / card: ?cancel=1 opens “cancel listing early” (auction still live, no job yet). */
   useEffect(() => {
     if (searchParams.get("cancel") !== "1") return;
-    const stillLive =
-      listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
-    if (isListingOwner && !hasActiveJob && stillLive) {
+    if (isListingOwner && !hasActiveJob && isListingLive(listing)) {
       setShowCancelListingDialog(true);
     }
     const params = new URLSearchParams(searchParams.toString());
@@ -573,8 +571,7 @@ export function JobDetail({
     router,
     isListingOwner,
     hasActiveJob,
-    listing.status,
-    listing.end_time,
+    listing,
   ]);
 
   /** Mobile /jobs list swipe “Quick bid” → scroll to bid form; strip query after. */
@@ -1236,12 +1233,12 @@ export function JobDetail({
                     <Badge
                       variant="secondary"
                       className={cn(
-                        "shrink-0 capitalize",
+                        "shrink-0 font-bold uppercase tracking-wide",
                         showEndedListingVisual &&
-                          "border-0 bg-red-950/90 font-bold uppercase tracking-wide text-white dark:bg-red-950/95"
+                          "border-0 bg-red-950/90 text-white dark:bg-red-950/95"
                       )}
                     >
-                      {String(listing.status ?? "—")}
+                      Not live
                     </Badge>
                   )}
                 </div>
@@ -1878,7 +1875,12 @@ export function JobDetail({
                         Job · {jobHeroStatusLabel}
                       </Badge>
                     ) : (
-                      <Badge variant="secondary">{String(listing.status ?? "—")}</Badge>
+                      <Badge
+                        variant="secondary"
+                        className="shrink-0 font-semibold uppercase tracking-wide"
+                      >
+                        Not live
+                      </Badge>
                     )}
                   </div>
                 </CardHeader>

@@ -1,5 +1,6 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import type { ListingRow } from "@/lib/listings";
+import { isListingLiveAt } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
 
 export type JobSnapshot = {
@@ -44,9 +45,7 @@ export function isListerAuctionLiveBidding(
 ): boolean {
   const js = job?.status ?? null;
   if (js && jobSuppressesListerAuctionCountdown(js)) return false;
-  const st = String(listing.status ?? "").toLowerCase();
-  const endMs = parseUtcTimestamp(String(listing.end_time ?? ""));
-  return st === "live" && endMs > nowMs;
+  return isListingLiveAt(listing, nowMs);
 }
 
 /** Listing has a real job row (winner / payment / work) — not the same as a live auction. */
@@ -59,20 +58,43 @@ export function isListerJobConverted(
 }
 
 /**
+ * Listing row is a **closed** auction eligible for the relist pool by status/time alone
+ * (ignores jobs — pair with a job check via {@link isListerNoBidsRelistListing}).
+ *
+ * - `expired` / `ended` from normal resolution.
+ * - `live` but `end_time` is in the past and not ended early: stale row when cron/DB lag
+ *   never flipped status (common cause of “shows in All, not in No bids, no Relist”).
+ */
+export function isListerRelistPoolListingStatus(
+  listing: Pick<ListingRow, "status" | "end_time" | "cancelled_early_at">,
+  nowMs: number = Date.now()
+): boolean {
+  const st = String(listing.status ?? "").toLowerCase();
+  if (st === "expired" || st === "ended") return true;
+  if (st !== "live") return false;
+  if (listing.cancelled_early_at != null) return false;
+  const raw = listing.end_time;
+  if (raw == null || String(raw).trim() === "") return false;
+  const endMs = parseUtcTimestamp(String(raw));
+  if (!Number.isFinite(endMs)) return false;
+  return endMs <= nowMs;
+}
+
+/**
  * My listings → "Listings (no bids)" relist pool: auction finished without a hired cleaner.
  * - `expired` = no bid rows when the auction closed.
  * - `ended` = had bids but none active / auto-assign failed (see auction-resolution).
+ * - `live` with past `end_time` = same pool until status is normalized.
  * Excludes listings with a non-cancelled job (incl. completed).
  */
 export function isListerNoBidsRelistListing(
-  listing: Pick<ListingRow, "status">,
-  job: Pick<JobSnapshot, "status"> | null | undefined
+  listing: Pick<ListingRow, "status" | "end_time" | "cancelled_early_at">,
+  job: Pick<JobSnapshot, "status"> | null | undefined,
+  nowMs: number = Date.now()
 ): boolean {
-  const st = String(listing.status ?? "").toLowerCase();
-  if (st !== "expired" && st !== "ended") return false;
   const js = String(job?.status ?? "");
   if (js && js !== "cancelled") return false;
-  return true;
+  return isListerRelistPoolListingStatus(listing, nowMs);
 }
 
 /** Active job pipeline (not yet fully completed) — use distinct card chrome vs live auctions. */
@@ -115,7 +137,7 @@ export function classifyListerBadge(
 
   const st = String(listing.status ?? "").toLowerCase();
   const endMs = parseUtcTimestamp(String(listing.end_time ?? ""));
-  if (st === "live" && endMs > nowMs) {
+  if (isListingLiveAt(listing, nowMs)) {
     return { key: "live", label: "Active", tone: "emerald" };
   }
   if (st === "expired") {
@@ -214,9 +236,7 @@ export function passesListFilter(
   const js = job?.status ?? null;
   const hasNonCancelledJob = Boolean(js && js !== "cancelled");
   if (filter === "jobs") return hasNonCancelledJob;
-  const endMs = parseUtcTimestamp(String(listing.end_time ?? ""));
-  const st = String(listing.status ?? "").toLowerCase();
-  const auctionLive = st === "live" && endMs > nowMs;
+  const auctionLive = isListingLiveAt(listing, nowMs);
   if (filter === "auctions") return auctionLive && !hasNonCancelledJob;
   return true;
 }

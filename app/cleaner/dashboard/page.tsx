@@ -45,6 +45,7 @@ import {
 } from "@/lib/profile-roles";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
+import { bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -262,8 +263,15 @@ export default async function CleanerDashboardPage() {
 
     const listingsForBidList = (listingsForBids ?? []) as ListingRow[];
 
-    liveBidItems = listingsForBidList
-      .filter((l) => isListingLive(l) && !takenIds.has(String(l.id)))
+    const liveBidCandidates = listingsForBidList.filter(
+      (l) => isListingLive(l) && !takenIds.has(String(l.id))
+    );
+    const bidCountByListingId =
+      liveBidCandidates.length > 0
+        ? await bidCountsForListingIds(liveBidCandidates.map((l) => String(l.id)))
+        : {};
+
+    liveBidItems = liveBidCandidates
       .map((l) => {
         const myBid = bestBidByListing.get(String(l.id)) ?? 0;
         const currentLow = l.current_lowest_bid_cents ?? 0;
@@ -277,6 +285,7 @@ export default async function CleanerDashboardPage() {
           currentLowestCents: currentLow,
           endTimeIso: String(l.end_time ?? ""),
           isLeading: myBid === currentLow,
+          bidCount: bidCountByListingId[String(l.id)] ?? 0,
         };
       })
       .sort(

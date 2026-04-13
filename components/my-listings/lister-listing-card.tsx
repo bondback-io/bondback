@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { MapPin, MoreHorizontal, Gavel, Ban, Trash2, RotateCcw, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatCents } from "@/lib/listings";
+import { formatCents, isListingLive } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
 import { ListingCoverImage } from "@/components/listing/listing-cover-image";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,12 @@ export function ListerListingCard({
 }: ListerListingCardProps) {
   const openCtaLabel =
     cardAccent === "job" || cardAccent === "job_done" ? "Open job" : "Open listing";
+  const auctionOpenOnMarket = isListingLive(listing);
+  const showNotLivePhotoBadge =
+    !isLocalDraft &&
+    !isLiveBidding &&
+    cardAccent === "none" &&
+    !auctionOpenOnMarket;
 
   return (
     <article
@@ -119,6 +125,13 @@ export function ListerListingCard({
             sizes={NEXT_IMAGE_SIZES_LISTER_LISTING_THUMB}
             className="object-cover"
           />
+          {showNotLivePhotoBadge && (
+            <span className="pointer-events-none absolute left-1 right-1 top-1 z-[1] flex justify-center">
+              <span className="rounded-md border border-white/25 bg-black/65 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm backdrop-blur-[2px] sm:text-[10px]">
+                Not live
+              </span>
+            </span>
+          )}
         </Link>
 
         <div className="min-w-0 flex-1 space-y-2">
@@ -132,7 +145,7 @@ export function ListerListingCard({
                 <span className="line-clamp-2">{addressLine}</span>
               </p>
               <p className="mt-1 text-xs text-muted-foreground dark:text-gray-500">
-                {listing.bedrooms} bed · {listing.bathrooms} bath
+                {Number(listing.bedrooms ?? 0)} bed · {Number(listing.bathrooms ?? 0)} bath
               </p>
             </div>
             <DropdownMenu>

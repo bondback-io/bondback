@@ -348,6 +348,8 @@ export interface Database {
           title: string | null;
           agreed_amount_cents: number | null;
           payment_intent_id: string | null;
+          /** When status is accepted without escrow; lister must Pay & Start by this time (UTC). */
+          lister_payment_due_at: string | null;
           payment_released_at: string | null;
           stripe_transfer_id: string | null;
           cleaner_confirmed_complete: boolean | null;
@@ -380,6 +382,7 @@ export interface Database {
           title?: string | null;
           agreed_amount_cents?: number | null;
           payment_intent_id?: string | null;
+          lister_payment_due_at?: string | null;
           payment_released_at?: string | null;
           stripe_transfer_id?: string | null;
           cleaner_confirmed_complete?: boolean | null;
@@ -411,6 +414,7 @@ export interface Database {
           title?: string | null;
           agreed_amount_cents?: number | null;
           payment_intent_id?: string | null;
+          lister_payment_due_at?: string | null;
           payment_released_at?: string | null;
           stripe_transfer_id?: string | null;
           cleaner_confirmed_complete?: boolean | null;

@@ -18,6 +18,8 @@ export type CleanerLiveBidItem = {
   currentLowestCents: number;
   endTimeIso: string;
   isLeading: boolean;
+  /** Total bids on this listing (all cleaners), for context on the auction. */
+  bidCount?: number;
 };
 
 export function CleanerLiveBidsSection({ items }: { items: CleanerLiveBidItem[] }) {
@@ -98,6 +100,22 @@ export function CleanerLiveBidsSection({ items }: { items: CleanerLiveBidItem[] 
                   <p className="text-sm text-muted-foreground dark:text-gray-400">
                     {[item.suburb, item.postcode].filter(Boolean).join(" ")}
                   </p>
+                  {item.bidCount != null && (
+                    <p
+                      className={cn(
+                        "mt-0.5 text-[11px] tabular-nums text-muted-foreground dark:text-gray-500",
+                        item.bidCount > 0 && "font-medium text-foreground/75 dark:text-gray-400"
+                      )}
+                    >
+                      {item.bidCount === 0 ? (
+                        "No bids yet"
+                      ) : (
+                        <>
+                          {item.bidCount} bid{item.bidCount !== 1 ? "s" : ""} on this auction
+                        </>
+                      )}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-2 border-t border-border/60 pt-2 dark:border-gray-800">
                   <div className="min-w-0 space-y-0.5 text-sm">

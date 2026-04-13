@@ -26,7 +26,7 @@ export const LISTING_LIVE_BID_CARD_SELECT =
 
 /** `public.jobs` — all columns from generated `Row` type. */
 export const JOB_TYPED_SELECT =
-  "id, listing_id, lister_id, winner_id, status, title, agreed_amount_cents, payment_intent_id, payment_released_at, stripe_transfer_id, cleaner_confirmed_complete, cleaner_confirmed_at, auto_release_at, auto_release_at_original, review_extension_used_at, completed_at, disputed_at, dispute_reason, dispute_photos, dispute_evidence, dispute_status, dispute_opened_by, proposed_refund_amount, counter_proposal_amount, dispute_resolution, resolution_type, resolution_at, resolution_by, created_at, updated_at";
+  "id, listing_id, lister_id, winner_id, status, title, agreed_amount_cents, payment_intent_id, lister_payment_due_at, payment_released_at, stripe_transfer_id, cleaner_confirmed_complete, cleaner_confirmed_at, auto_release_at, auto_release_at_original, review_extension_used_at, completed_at, disputed_at, dispute_reason, dispute_photos, dispute_evidence, dispute_status, dispute_opened_by, proposed_refund_amount, counter_proposal_amount, dispute_resolution, resolution_type, resolution_at, resolution_by, created_at, updated_at";
 
 /**
  * Job detail + `/api/jobs/[id]` — typed columns for `jobs`.

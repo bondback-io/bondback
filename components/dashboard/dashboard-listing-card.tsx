@@ -21,7 +21,7 @@ import {
   Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ListingRow } from "@/lib/listings";
+import { isListingLive, type ListingRow } from "@/lib/listings";
 import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 export type DashboardListingCardProps = {
@@ -57,6 +57,7 @@ function DashboardListingCardInner({
   const currentPlatformFeeCents = Math.round((currentBid * feePercentage) / 100);
   const bedrooms = (listing as { bedrooms?: number }).bedrooms;
   const bathrooms = (listing as { bathrooms?: number }).bathrooms;
+  const auctionLive = isListingLive(listing);
 
   return (
     <Card
@@ -74,7 +75,18 @@ function DashboardListingCardInner({
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent md:from-black/55 md:via-black/12" aria-hidden />
           </Link>
           <div className="absolute left-3 right-3 top-3 z-10 flex flex-wrap items-center justify-between gap-2">
-            <Badge className="bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow-sm">Live</Badge>
+            {auctionLive ? (
+              <Badge className="bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow-sm">
+                Live
+              </Badge>
+            ) : (
+              <Badge
+                variant="secondary"
+                className="border-border/80 bg-background/90 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-muted-foreground shadow-sm backdrop-blur-sm dark:bg-gray-900/85 dark:text-gray-300"
+              >
+                Not live
+              </Badge>
+            )}
             {isUrgent && (
               <Badge className="gap-1 border border-orange-400/80 bg-orange-500 px-2.5 py-1 text-xs font-bold text-white">
                 <Flame className="h-3.5 w-3.5" aria-hidden />
@@ -117,12 +129,21 @@ function DashboardListingCardInner({
             </p>
           )}
           <p className="line-clamp-2 text-sm font-semibold text-foreground dark:text-gray-100">{listing.title}</p>
-          {bidCount > 0 && (
-            <p className="text-sm font-semibold text-muted-foreground dark:text-gray-400">
-              <Gavel className="mr-1 inline h-4 w-4" />
-              {bidCount} bid{bidCount !== 1 ? "s" : ""}
-            </p>
-          )}
+          <p
+            className={cn(
+              "flex items-center gap-1 text-xs tabular-nums text-muted-foreground dark:text-gray-400",
+              bidCount > 0 && "font-medium text-foreground/80 dark:text-gray-300"
+            )}
+          >
+            <Gavel className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+            {bidCount === 0 ? (
+              <span>No bids yet</span>
+            ) : (
+              <span>
+                {bidCount} bid{bidCount !== 1 ? "s" : ""}
+              </span>
+            )}
+          </p>
           <p className="text-xs text-muted-foreground dark:text-gray-400">
             Platform fee ({feePercentage}%):{" "}
             <span className="font-semibold text-foreground dark:text-gray-100">{formatCents(currentPlatformFeeCents)}</span>
@@ -182,7 +203,18 @@ function DashboardListingCardInner({
           <div className="relative aspect-[16/10] w-full bg-muted dark:bg-gray-800">
             <ListingCoverImage listing={listing} alt="" fill sizes="33vw" className="object-cover" />
             <div className="absolute left-2 top-2 flex flex-wrap gap-1.5">
-              <Badge className="bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow-sm">Live</Badge>
+              {auctionLive ? (
+                <Badge className="bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow-sm">
+                  Live
+                </Badge>
+              ) : (
+                <Badge
+                  variant="secondary"
+                  className="border-border/80 bg-background/90 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-muted-foreground shadow-sm backdrop-blur-sm dark:bg-gray-900/85 dark:text-gray-300"
+                >
+                  Not live
+                </Badge>
+              )}
               {isUrgent && (
                 <Badge className="bg-amber-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm dark:bg-amber-600">
                   Ending soon
@@ -244,12 +276,21 @@ function DashboardListingCardInner({
               <span className="font-semibold text-foreground dark:text-gray-100">{formatCents(currentPlatformFeeCents)}</span>
             </p>
           </div>
-          {bidCount > 0 && (
-            <p className="text-[11px] font-medium text-muted-foreground">
-              <Gavel className="mr-1 inline h-3 w-3" />
-              {bidCount} bid{bidCount !== 1 ? "s" : ""}
-            </p>
-          )}
+          <p
+            className={cn(
+              "flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground",
+              bidCount > 0 && "font-medium text-foreground/85 dark:text-gray-300"
+            )}
+          >
+            <Gavel className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+            {bidCount === 0 ? (
+              <span>No bids yet</span>
+            ) : (
+              <span>
+                {bidCount} bid{bidCount !== 1 ? "s" : ""}
+              </span>
+            )}
+          </p>
           <div className="mt-auto flex flex-wrap gap-2 pt-1">
             <Button asChild size="sm" className="rounded-full" variant="default">
               <Link href={detailUrl}>View Listing</Link>

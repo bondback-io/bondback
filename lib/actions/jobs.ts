@@ -23,6 +23,7 @@ import { logTimerActivity } from "@/lib/admin-activity-log";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
 import { trimStr } from "@/lib/utils";
+import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -110,6 +111,7 @@ export async function createJobPayment(
       .from("jobs")
       .update({
         payment_intent_id: pi.id,
+        lister_payment_due_at: null,
         updated_at: new Date().toISOString(),
       } as never)
       .eq("id", numericJobId);
@@ -216,6 +218,7 @@ export async function finalizeBidAcceptanceCore(params: {
       winner_id: params.cleanerId,
       status: "accepted",
       agreed_amount_cents: amountCents,
+      lister_payment_due_at: listerPaymentDueAtFromNowIso(),
     } as never)
     .select("id")
     .maybeSingle();
@@ -344,6 +347,7 @@ export async function secureJobAtPrice(
     return { ok: false, error: "This job is already taken." };
   }
 
+  const dueAt = listerPaymentDueAtFromNowIso();
   const { data: inserted, error: insertError } = await supabase
     .from("jobs")
     .insert({
@@ -352,6 +356,7 @@ export async function secureJobAtPrice(
       winner_id: session.user.id,
       status: "accepted",
       agreed_amount_cents: listRow.buy_now_cents,
+      lister_payment_due_at: dueAt,
     } as never)
     .select("id")
     .maybeSingle();
@@ -365,6 +370,15 @@ export async function secureJobAtPrice(
 
   const jobId = (inserted as { id: number | string }).id;
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
+
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    await admin
+      .from("listings")
+      .update({ status: "ended" } as never)
+      .eq("id", listRow.id)
+      .eq("status", "live");
+  }
 
   const listingTitle = listRow.title ?? null;
   await createNotification(
@@ -519,6 +533,7 @@ export async function createJobCheckoutSession(
         .update({
           payment_intent_id: resolved.paymentIntentId,
           status: "in_progress",
+          lister_payment_due_at: null,
           updated_at: nowIso,
         } as never)
         .eq("id", numericJobId);
@@ -646,6 +661,7 @@ export async function fulfillJobPaymentFromSession(
       .update({
         payment_intent_id: pi.id,
         status: "in_progress",
+        lister_payment_due_at: null,
         updated_at: nowIso,
       } as never)
       .eq("id", numericJobId)

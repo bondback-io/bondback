@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { applyListingAuctionOutcomes, fetchListingsForLister } from "@/lib/actions/listings";
+import { getGlobalSettings } from "@/lib/actions/global-settings";
 import type { Database } from "@/types/supabase";
 import { MyListingsList, type ListerViewTab } from "@/components/features/my-listings-list";
 import {
@@ -114,6 +115,10 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
           : "/dashboard";
 
   await applyListingAuctionOutcomes();
+
+  const globalSettings = await getGlobalSettings();
+  const allowTwoMinuteAuctionTest =
+    (globalSettings as { allow_two_minute_auction_test?: boolean } | null)?.allow_two_minute_auction_test === true;
 
   const initialListings = await fetchListingsForLister(user.id);
   const listingIds = initialListings.map((l) => l.id);
@@ -298,6 +303,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
           initialOpenCancelListingId={cancelListingIdParam}
           initialActiveJobsSnapshot={initialActiveJobsSnapshot}
           viewTab={tab}
+          allowTwoMinuteAuctionTest={allowTwoMinuteAuctionTest}
           tabCounts={{
             active: activeTabCount,
             paid: paidJobsCount,

@@ -22,8 +22,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CountdownTimer } from "@/components/features/countdown-timer";
 import { BuyNowButton } from "@/components/features/buy-now-button";
-import { formatCents, getListingCoverUrl, getListingSecondImageUrl } from "@/lib/listings";
-import type { ListingRow } from "@/lib/listings";
+import {
+  formatCents,
+  getListingCoverUrl,
+  getListingSecondImageUrl,
+  isListingLive,
+  type ListingRow,
+} from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import {
@@ -92,10 +97,21 @@ export type ListingCardProps = {
 };
 
 function getStatus(listing: ListingRow): "live" | "ending_soon" | "expired" {
-  if (String(listing.status ?? "").toLowerCase() === "expired") {
+  const st = String(listing.status ?? "").toLowerCase();
+  if (st === "expired" || st === "ended" || st === "cancelled") {
     return "expired";
   }
-  const end = parseUtcTimestamp(listing.end_time);
+  if (listing.cancelled_early_at != null) {
+    return "expired";
+  }
+  const raw = listing.end_time;
+  if (raw == null || String(raw).trim() === "") {
+    return "expired";
+  }
+  const end = parseUtcTimestamp(String(raw));
+  if (!Number.isFinite(end)) {
+    return "expired";
+  }
   const now = Date.now();
   if (now >= end) return "expired";
   const hoursLeft = (end - now) / (60 * 60 * 1000);
@@ -300,7 +316,7 @@ function ListingCardInner({
     }
   };
 
-  const isLive = listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
+  const isLive = isListingLive(listing);
   const isListingCancelled = String(listing.status).toLowerCase() === "cancelled";
   const isJobCancelled = String(jobStatus ?? "").toLowerCase() === "cancelled";
   const hideCleanerCancelledAuctionUi =
@@ -372,7 +388,7 @@ function ListingCardInner({
       ? `Live · ${formatAuctionTimeLeftShort(endTime)}`
       : status === "ending_soon"
         ? `Ending Soon · ${formatAuctionTimeLeftShort(endTime)}`
-        : "Ended";
+        : "Not live";
   const isHotJob = isLive && (endingInUnder24h || highDemand);
   const locationLineFull =
     `${formatLocationWithState(listing.suburb, listing.postcode)}` +
@@ -483,7 +499,7 @@ function ListingCardInner({
         <div className="absolute left-3 top-3 right-3 z-10 flex items-start justify-between gap-2">
           <Badge
             variant="secondary"
-            aria-label={status === "live" ? "Live" : status === "ending_soon" ? "Ending soon" : "Expired"}
+            aria-label={status === "live" ? "Live" : status === "ending_soon" ? "Ending soon" : "Not live"}
             className={cn(
               "px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm md:px-2 md:py-0.5 md:text-[10px] md:font-semibold",
               status === "live" &&
@@ -496,7 +512,7 @@ function ListingCardInner({
           >
             {status === "live" && "Live"}
             {status === "ending_soon" && "Ending soon"}
-            {status === "expired" && "Expired"}
+            {status === "expired" && "Not live"}
           </Badge>
           <ListingCardOverflowMenu {...overflowMenuProps} />
         </div>

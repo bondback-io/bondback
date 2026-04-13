@@ -9,8 +9,22 @@ export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
+/**
+ * True only while the row is an open auction: `status === "live"`, not ended early,
+ * valid `end_time`, and now is before end. Anything else (ended, expired, bad dates) → false.
+ */
+export function isListingLiveAt(row: ListingRow, nowMs: number): boolean {
+  if (row.cancelled_early_at != null) return false;
+  if (String(row.status ?? "").toLowerCase() !== "live") return false;
+  const raw = row.end_time;
+  if (raw == null || String(raw).trim() === "") return false;
+  const endMs = parseUtcTimestamp(String(raw));
+  if (!Number.isFinite(endMs)) return false;
+  return endMs > nowMs;
+}
+
 export function isListingLive(row: ListingRow): boolean {
-  return row.status === "live" && parseUtcTimestamp(row.end_time) > Date.now();
+  return isListingLiveAt(row, Date.now());
 }
 
 /**
@@ -217,6 +231,30 @@ export type ListingInsertPayload = ListingInsert & {
  * Otherwise use 1, 3, 5, or 7.
  */
 export const AUCTION_DURATION_TWO_MINUTE_SENTINEL_DAYS = 0;
+
+/** Matches the new listing form: 1 / 3 / 5 / 7 days, plus 2-minute test when admin enables it. */
+export function getAuctionDurationDayChoices(allowTwoMinuteAuctionTest: boolean): number[] {
+  return allowTwoMinuteAuctionTest
+    ? [0, 1, 3, 5, 7]
+    : [1, 3, 5, 7];
+}
+
+export function formatAuctionDurationChoiceLabel(days: number): string {
+  if (days === AUCTION_DURATION_TWO_MINUTE_SENTINEL_DAYS) return "2 minutes";
+  if (days === 1) return "1 day";
+  return `${days} days`;
+}
+
+/** Snap to a valid choice; default 3 days (same as create listing default). */
+export function clampAuctionDurationDays(
+  days: number,
+  allowTwoMinuteAuctionTest: boolean
+): number {
+  const allowed = getAuctionDurationDayChoices(allowTwoMinuteAuctionTest);
+  const n = Number.isFinite(Number(days)) ? Math.round(Number(days)) : NaN;
+  if (allowed.includes(n)) return n;
+  return 3;
+}
 
 export function computeListingEndTimeIso(params: {
   durationDays: number;

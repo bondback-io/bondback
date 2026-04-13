@@ -17,7 +17,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OptimizedImage } from "@/components/ui/optimized-image";
-import { formatCents, getListingCoverUrl } from "@/lib/listings";
+import {
+  clampAuctionDurationDays,
+  formatAuctionDurationChoiceLabel,
+  formatCents,
+  getAuctionDurationDayChoices,
+  getListingCoverUrl,
+} from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
 import {
@@ -141,6 +147,8 @@ export type MyListingsListProps = {
     all: number;
     no_bids: number;
   };
+  /** Admin global setting — when true, relist duration includes 2-minute test option (matches create listing). */
+  allowTwoMinuteAuctionTest?: boolean;
 };
 
 export function MyListingsList({
@@ -151,6 +159,7 @@ export function MyListingsList({
   viewTab,
   initialActiveJobsSnapshot,
   tabCounts,
+  allowTwoMinuteAuctionTest = false,
 }: MyListingsListProps) {
   const [listings, setListings] = useState<ListingRow[]>(initialListings);
   const [activeJobs, setActiveJobs] = useState<Record<string, JobRowState>>(() => {
@@ -185,7 +194,7 @@ export function MyListingsList({
   const [relistDialogListing, setRelistDialogListing] = useState<ListingRow | null>(null);
   const [relistMoveOut, setRelistMoveOut] = useState("");
   const [relistStartingAud, setRelistStartingAud] = useState("");
-  const [relistDurationDays, setRelistDurationDays] = useState(7);
+  const [relistDurationDays, setRelistDurationDays] = useState(3);
   const openedForEditIdRef = useRef<string | null>(null);
   const cancelParamHandledRef = useRef(false);
 
@@ -194,6 +203,11 @@ export function MyListingsList({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+
+  const relistDurationChoices = useMemo(
+    () => getAuctionDurationDayChoices(allowTwoMinuteAuctionTest),
+    [allowTwoMinuteAuctionTest]
+  );
 
   useEffect(() => {
     setLocalDraft(loadListingDraftLocal());
@@ -417,14 +431,12 @@ export function MyListingsList({
       stripCancelParam();
       return;
     }
-    const stillLive =
-      listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
     cancelParamHandledRef.current = true;
-    if (stillLive) {
+    if (isListerAuctionLiveBidding(listing, activeJobs[String(listing.id)] ?? null, Date.now())) {
       setCancelListingTarget(listing);
     }
     stripCancelParam();
-  }, [initialOpenCancelListingId, listingsDeduped, pathname, router, searchParams]);
+  }, [initialOpenCancelListingId, listingsDeduped, activeJobs, pathname, router, searchParams]);
 
   const handleListingPhotosChange = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -553,9 +565,10 @@ export function MyListingsList({
     setRelistDialogListing(listing);
     setRelistMoveOut(listing.move_out_date?.trim() ?? "");
     setRelistStartingAud(((listing.starting_price_cents ?? 0) / 100).toFixed(2));
-    setRelistDurationDays(
-      Number.isFinite(Number(listing.duration_days)) ? Number(listing.duration_days) : 7
-    );
+    const fromListing = Number.isFinite(Number(listing.duration_days))
+      ? Number(listing.duration_days)
+      : 3;
+    setRelistDurationDays(clampAuctionDurationDays(fromListing, allowTwoMinuteAuctionTest));
   };
 
   const submitRelistDialog = async () => {
@@ -1168,19 +1181,22 @@ export function MyListingsList({
             <div className="space-y-1.5">
               <Label>Listing duration</Label>
               <Select
-                value={String(relistDurationDays)}
+                value={String(
+                  relistDurationChoices.includes(relistDurationDays)
+                    ? relistDurationDays
+                    : relistDurationChoices[0] ?? 3
+                )}
                 onValueChange={(v) => setRelistDurationDays(Number(v))}
               >
                 <SelectTrigger className="h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="7">7 days</SelectItem>
-                  <SelectItem value="14">14 days</SelectItem>
-                  <SelectItem value="21">21 days</SelectItem>
-                  <SelectItem value="28">28 days</SelectItem>
-                  <SelectItem value="60">60 days</SelectItem>
-                  <SelectItem value="90">90 days</SelectItem>
+                  {relistDurationChoices.map((days) => (
+                    <SelectItem key={days} value={String(days)}>
+                      {formatAuctionDurationChoiceLabel(days)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
