@@ -64,6 +64,7 @@ import {
   passesListFilter,
   listingMatchesCompletedTab,
   isDisputedJobStatus,
+  isListerNoBidsRelistListing,
   isListerPaidJobListing,
   type ListFilter,
 } from "@/lib/my-listings/lister-listing-helpers";
@@ -703,15 +704,15 @@ export function MyListingsList({
   }, [listingsDeduped, activeJobs]);
 
   const noBidsTabListings = useMemo(() => {
-    const arr = listingsDeduped.filter(
-      (l) => String(l.status ?? "").toLowerCase() === "expired"
+    const arr = listingsDeduped.filter((l) =>
+      isListerNoBidsRelistListing(l, activeJobs[String(l.id)] ?? null)
     );
     arr.sort(
       (a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
     return arr;
-  }, [listingsDeduped]);
+  }, [listingsDeduped, activeJobs]);
 
   const searchLower = search.trim().toLowerCase();
   const matchesSearch = (l: ListingRow) => {
@@ -1088,8 +1089,7 @@ export function MyListingsList({
                     : "none";
               const showEndEarly =
                 liveBidding && !activeIdSet.has(String(listing.id));
-              const isExpired =
-                String(listing.status ?? "").toLowerCase() === "expired";
+              const canRelistFromNoBidsPool = isListerNoBidsRelistListing(listing, job);
 
               return (
                 <ListerListingCard
@@ -1121,7 +1121,7 @@ export function MyListingsList({
                       : null
                   )}
                   onEndEarly={showEndEarly ? () => openCancelListingConfirm(listing) : undefined}
-                  onRelist={isExpired ? () => openRelistDialog(listing) : undefined}
+                  onRelist={canRelistFromNoBidsPool ? () => openRelistDialog(listing) : undefined}
                   relistLoading={relistingId === String(listing.id)}
                 />
               );

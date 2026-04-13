@@ -5,7 +5,10 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { applyListingAuctionOutcomes, fetchListingsForLister } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
 import { MyListingsList, type ListerViewTab } from "@/components/features/my-listings-list";
-import { isListerPaidJobListing } from "@/lib/my-listings/lister-listing-helpers";
+import {
+  isListerNoBidsRelistListing,
+  isListerPaidJobListing,
+} from "@/lib/my-listings/lister-listing-helpers";
 import { MyListingsNewListingButton } from "@/components/listing/my-listings-new-listing-button";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
@@ -243,10 +246,8 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
       isListerPaidJobListing(jobByListing[String(l.id)])
     ).length;
 
-    noBidsCount = initialListings.filter(
-      (l) =>
-        String(l.status ?? "").toLowerCase() === "expired" &&
-        !listingIdsWithActiveJob.has(String(l.id))
+    noBidsCount = initialListings.filter((l) =>
+      isListerNoBidsRelistListing(l, jobByListing[String(l.id)] ?? null)
     ).length;
   }
 

@@ -508,8 +508,28 @@ export async function relistExpiredListing(
   if (row.lister_id !== session.user.id) {
     return { ok: false, error: "You are not allowed to relist this listing." };
   }
-  if (String(row.status ?? "").toLowerCase() !== "expired") {
-    return { ok: false, error: "Only expired listings can be relisted." };
+  const listingStatus = String(row.status ?? "").toLowerCase();
+  if (listingStatus !== "expired" && listingStatus !== "ended") {
+    return {
+      ok: false,
+      error: "Only expired or closed (ended) auctions without an active job can be relisted.",
+    };
+  }
+
+  const { data: blockingJobs, error: blockErr } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("listing_id", listingId)
+    .neq("status", "cancelled")
+    .limit(1);
+  if (blockErr) {
+    return { ok: false, error: blockErr.message };
+  }
+  if (blockingJobs && blockingJobs.length > 0) {
+    return {
+      ok: false,
+      error: "Cannot relist while this listing has an active job.",
+    };
   }
 
   const durationDays = Number(
@@ -560,7 +580,7 @@ export async function relistExpiredListing(
     .update(patch as never)
     .eq("id", listingId)
     .eq("lister_id", session.user.id)
-    .eq("status", "expired")
+    .in("status", ["expired", "ended"])
     .select("id")
     .maybeSingle();
 
@@ -570,7 +590,7 @@ export async function relistExpiredListing(
   if (!updatedRow) {
     return {
       ok: false,
-      error: "Could not relist. The listing may no longer be expired.",
+      error: "Could not relist. The listing may no longer be in the relist pool.",
     };
   }
 

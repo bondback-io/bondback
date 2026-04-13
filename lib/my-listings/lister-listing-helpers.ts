@@ -58,6 +58,23 @@ export function isListerJobConverted(
   return true;
 }
 
+/**
+ * My listings → "Listings (no bids)" relist pool: auction finished without a hired cleaner.
+ * - `expired` = no bid rows when the auction closed.
+ * - `ended` = had bids but none active / auto-assign failed (see auction-resolution).
+ * Excludes listings with a non-cancelled job (incl. completed).
+ */
+export function isListerNoBidsRelistListing(
+  listing: Pick<ListingRow, "status">,
+  job: Pick<JobSnapshot, "status"> | null | undefined
+): boolean {
+  const st = String(listing.status ?? "").toLowerCase();
+  if (st !== "expired" && st !== "ended") return false;
+  const js = String(job?.status ?? "");
+  if (js && js !== "cancelled") return false;
+  return true;
+}
+
 /** Active job pipeline (not yet fully completed) — use distinct card chrome vs live auctions. */
 export function isListerJobPipelineActive(
   job: JobSnapshot | null | undefined

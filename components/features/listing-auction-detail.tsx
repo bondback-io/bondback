@@ -61,6 +61,7 @@ import {
   preferredWindowFromMoveOutDate,
 } from "@/lib/listing-detail-presenters";
 import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction-control";
+import { isListerNoBidsRelistListing } from "@/lib/my-listings/lister-listing-helpers";
 
 export type ListingAuctionDetailProps = {
   listing: ListingRow;
@@ -127,8 +128,11 @@ export function ListingAuctionDetail({
 
   const isLive =
     listing.status === "live" && parseUtcTimestamp(listing.end_time) > Date.now();
-  const isExpiredNoBids =
-    String(listing.status ?? "").toLowerCase() === "expired" && !hasActiveJob;
+  /** Expired (no bid rows) or ended (no assignable winner) — same pool as My listings → Listings (no bids). */
+  const isRelistPoolBanner = isListerNoBidsRelistListing(
+    listing,
+    hasActiveJob ? { status: "accepted" } : null
+  );
   const closedAuctionBidStatus = !isLive
     ? listing.cancelled_early_at
       ? ("lister_cancelled" as const)
@@ -421,15 +425,27 @@ export function ListingAuctionDetail({
         )}
       </div>
 
-      {isExpiredNoBids && (
+      {isRelistPoolBanner && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
-          <p className="font-semibold">Auction ended with no bids</p>
+          <p className="font-semibold">Auction closed — no hired cleaner</p>
           <p className="mt-1 text-amber-950/90 dark:text-amber-100/90">
-            This listing did not receive any bids before the timer ran out. You can relist it from{" "}
-            <Link href="/my-listings?tab=no_bids" className="font-medium underline underline-offset-2">
-              My listings → Listings (no bids)
-            </Link>
-            .
+            {String(listing.status ?? "").toLowerCase() === "expired" ? (
+              <>
+                This listing did not receive any bids before the timer ran out. Relist from{" "}
+                <Link href="/my-listings?tab=no_bids" className="font-medium underline underline-offset-2">
+                  My listings → Listings (no bids)
+                </Link>
+                .
+              </>
+            ) : (
+              <>
+                The auction ended without a confirmed cleaner. Relist from{" "}
+                <Link href="/my-listings?tab=no_bids" className="font-medium underline underline-offset-2">
+                  My listings → Listings (no bids)
+                </Link>
+                .
+              </>
+            )}
           </p>
         </div>
       )}
