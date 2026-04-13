@@ -8,7 +8,9 @@ import {
   useCallback,
   useMemo,
   type ChangeEvent,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -159,6 +161,334 @@ function JobHistoryCollapsible({
         {children}
       </div>
     </details>
+  );
+}
+
+type InitialPhotoEntry = { name: string; url: string };
+
+function JobDetailInitialConditionPhotos({
+  listing,
+  listingId,
+  detailUiBoost,
+  initialPhotosLoading,
+  initialPhotoEntries,
+  setInitialPhotoEntries,
+  setListing,
+  setPhotoLightbox,
+  supabase,
+  isJobLister,
+  isListingOwner,
+  isCleaner,
+  initialPhotosUploading,
+  setInitialPhotosUploading,
+}: {
+  listing: ListingRow;
+  listingId: string;
+  detailUiBoost: boolean;
+  initialPhotosLoading: boolean;
+  initialPhotoEntries: InitialPhotoEntry[];
+  setInitialPhotoEntries: Dispatch<SetStateAction<InitialPhotoEntry[]>>;
+  setListing: Dispatch<SetStateAction<ListingRow>>;
+  setPhotoLightbox: Dispatch<
+    SetStateAction<{
+      urls: string[];
+      index: number;
+      ariaLabel: string;
+    } | null>
+  >;
+  supabase: ReturnType<typeof createBrowserSupabaseClient>;
+  isJobLister: boolean;
+  isListingOwner: boolean;
+  isCleaner: boolean;
+  initialPhotosUploading: boolean;
+  setInitialPhotosUploading: Dispatch<SetStateAction<boolean>>;
+}) {
+  const { toast } = useToast();
+  return (
+    <div
+      className={cn(
+        detailUiBoost
+          ? "rounded-2xl border border-border/90 bg-card px-4 py-4 shadow-sm dark:border-gray-800 dark:bg-gray-950/40 sm:px-6"
+          : "rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50"
+      )}
+    >
+      {detailUiBoost ? (
+        <div className="mb-4 space-y-1">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+            <p className="text-lg font-semibold text-foreground dark:text-gray-100">
+              Initial condition photos
+            </p>
+          </div>
+          <p className="text-sm text-muted-foreground dark:text-gray-400">
+            Photos supplied by the lister before the clean — tap to enlarge.
+          </p>
+        </div>
+      ) : (
+        <p
+          className={cn(
+            "font-semibold text-sky-900 dark:text-gray-100",
+            detailUiBoost ? "text-base" : "text-xs"
+          )}
+        >
+          Initial property photos (condition before bond clean)
+        </p>
+      )}
+      {initialPhotosLoading ? (
+        <p className="mt-2 text-xs text-muted-foreground dark:text-gray-400">Loading photos…</p>
+      ) : (() => {
+        const rawInitial = (listing as ListingRow & { initial_photos?: string[] | null }).initial_photos;
+        const dbInitial = Array.isArray(rawInitial) ? rawInitial : [];
+        const photoUrls = (Array.isArray(listing.photo_urls) ? listing.photo_urls : []) as string[];
+        const fromStorage = initialPhotoEntries.length > 0;
+        const displayEntries = fromStorage
+          ? initialPhotoEntries
+          : (dbInitial.length > 0 ? dbInitial : photoUrls).map((url, i) => ({ name: `fallback-${i}`, url }));
+        const canEditInitialPhotos = (isJobLister || isListingOwner) && !isCleaner;
+        const canRemove = canEditInitialPhotos && fromStorage && initialPhotoEntries.length > 3;
+        return displayEntries.length > 0 ? (
+          <>
+            <div
+              className={cn(
+                "mt-2",
+                detailUiBoost
+                  ? "grid grid-cols-2 gap-2 sm:grid-cols-3 md:gap-3"
+                  : "flex flex-wrap gap-2"
+              )}
+            >
+              {displayEntries.map((entry, idx) => {
+                const isDefault =
+                  (listing as ListingRow & { cover_photo_url?: string | null }).cover_photo_url === entry.url;
+                return (
+                  <div
+                    key={fromStorage ? entry.name : `fallback-${idx}`}
+                    className={cn(
+                      "relative cursor-pointer overflow-hidden border border-border bg-muted/40 group dark:border-gray-700 dark:bg-gray-800/60",
+                      detailUiBoost ? "aspect-[4/3] w-full rounded-xl" : "h-20 w-24 rounded-md"
+                    )}
+                    onClick={() =>
+                      setPhotoLightbox({
+                        urls: displayEntries.map((e) => e.url),
+                        index: idx,
+                        ariaLabel: "Initial condition photos",
+                      })
+                    }
+                  >
+                    <Image
+                      src={entry.url}
+                      alt="Property"
+                      fill
+                      sizes={NEXT_IMAGE_SIZES_THUMB_GRID}
+                      quality={75}
+                      loading="lazy"
+                      placeholder="blur"
+                      blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                      className="object-cover transition-transform duration-200 group-hover:scale-105"
+                    />
+                    {isDefault && (
+                      <span className="absolute left-0.5 top-0.5 z-10 rounded bg-emerald-600 px-1 py-0.5 text-[9px] font-medium text-white">
+                        Default
+                      </span>
+                    )}
+                    {canEditInitialPhotos && !entry.name.startsWith("fallback-") && (
+                      <button
+                        type="button"
+                        aria-label="Set as default photo"
+                        className="absolute bottom-0.5 left-0.5 right-0.5 z-10 flex items-center justify-center gap-0.5 rounded bg-black/70 py-0.5 text-[9px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          import("@/lib/actions/listings").then(({ updateListingCoverPhoto }) => {
+                            updateListingCoverPhoto(listingId, entry.url).then((res) => {
+                              if (res.ok) {
+                                setListing((prev) => ({ ...prev, cover_photo_url: entry.url } as ListingRow));
+                                toast({
+                                  title: "Default photo set",
+                                  description: "This photo will show on listing cards.",
+                                });
+                              } else {
+                                toast({ variant: "destructive", title: "Failed", description: res.error });
+                              }
+                            });
+                          });
+                        }}
+                      >
+                        <ImageIcon className="h-2.5 w-2.5" />
+                        Set as default
+                      </button>
+                    )}
+                    {canRemove && !entry.name.startsWith("fallback-") && (
+                      <button
+                        type="button"
+                        aria-label="Remove photo"
+                        className="absolute right-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const path = `listings/${listingId}/initial/${entry.name}`;
+                          supabase.storage.from("condition-photos").remove([path]).then(({ error }) => {
+                            if (error) {
+                              toast({
+                                variant: "destructive",
+                                title: "Remove failed",
+                                description: error.message,
+                              });
+                            } else {
+                              setInitialPhotoEntries((prev) => prev.filter((p) => p.name !== entry.name));
+                            }
+                          });
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="mt-2 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="h-20 w-24 rounded-md border border-dashed border-sky-200 bg-sky-100/60 dark:border-gray-600 dark:bg-gray-800/50"
+                />
+              ))}
+            </div>
+            <p className="text-[11px] text-sky-800 dark:text-gray-300">
+              No photos uploaded yet. Minimum 3 photos required before starting the job.
+            </p>
+          </div>
+        );
+      })()}
+      {(isJobLister || isListingOwner) && !isCleaner && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="gap-1 text-xs"
+            disabled={initialPhotosUploading || initialPhotoEntries.length >= PHOTO_LIMITS.LISTING_INITIAL}
+            asChild
+          >
+            <label
+              className={
+                initialPhotoEntries.length >= PHOTO_LIMITS.LISTING_INITIAL
+                  ? "pointer-events-none cursor-not-allowed"
+                  : "cursor-pointer"
+              }
+            >
+              <ImagePlus className="mr-1 h-3.5 w-3.5" />
+              <span>{initialPhotosUploading ? "Uploading…" : "Upload / add photos"}</span>
+              <input
+                type="file"
+                accept={PHOTO_VALIDATION.ACCEPT}
+                multiple
+                className="hidden"
+                onChange={async (event: ChangeEvent<HTMLInputElement>) => {
+                  if (!listing.id) return;
+                  const files = event.target.files;
+                  if (!files || files.length === 0) return;
+                  const existingCount = initialPhotoEntries.length;
+                  const { validFiles, errors } = validatePhotoFiles(Array.from(files), {
+                    maxFiles: PHOTO_LIMITS.LISTING_INITIAL,
+                    existingCount,
+                  });
+                  errors.forEach((err) => {
+                    toast({
+                      variant: "destructive",
+                      title: "Photo validation",
+                      description: err,
+                    });
+                  });
+                  if (validFiles.length === 0) {
+                    event.target.value = "";
+                    return;
+                  }
+                  const withHeaderCheck: File[] = [];
+                  for (const f of validFiles) {
+                    try {
+                      const compressed = await compressImage(f);
+                      const header = await checkImageHeader(compressed);
+                      if (!header.valid) {
+                        toast({
+                          variant: "destructive",
+                          title: "Photo validation",
+                          description: `${f.name}: ${header.error}`,
+                        });
+                        continue;
+                      }
+                      withHeaderCheck.push(compressed);
+                    } catch {
+                      toast({
+                        variant: "destructive",
+                        title: "Couldn’t prepare photo",
+                        description: `${f.name}: try another image.`,
+                      });
+                    }
+                  }
+                  if (withHeaderCheck.length === 0) {
+                    event.target.value = "";
+                    return;
+                  }
+                  setInitialPhotosUploading(true);
+                  try {
+                    const fd = new FormData();
+                    withHeaderCheck.forEach((f) => fd.append("files", f));
+                    const pathPrefix = `listings/${listingId}/initial`;
+                    const { results, error: actionError } = await uploadProcessedPhotos(fd, {
+                      bucket: "condition-photos",
+                      pathPrefix,
+                      maxFiles: PHOTO_LIMITS.LISTING_INITIAL,
+                      existingCount,
+                      generateThumb: true,
+                    });
+                    if (actionError) {
+                      toast({ variant: "destructive", title: "Upload failed", description: actionError });
+                    }
+                    results.forEach((r) => {
+                      if (r.error) {
+                        toast({
+                          variant: "destructive",
+                          title: "Upload failed",
+                          description: `${r.fileName}: ${r.error}`,
+                        });
+                      }
+                    });
+                    const added = results.filter((r) => r.url).length;
+                    if (added > 0) {
+                      const { data, error: listError } = await supabase.storage
+                        .from("condition-photos")
+                        .list(`listings/${listingId}/initial`, { limit: 100 });
+                      if (!listError && data) {
+                        const entries: InitialPhotoEntry[] = data
+                          .filter((file) => file.name && !file.name.startsWith("thumb_"))
+                          .map((file) => {
+                            const {
+                              data: { publicUrl },
+                            } = supabase.storage
+                              .from("condition-photos")
+                              .getPublicUrl(`listings/${listingId}/initial/${file.name}`);
+                            return { name: file.name, url: publicUrl };
+                          });
+                        setInitialPhotoEntries(entries);
+                      }
+                      toast({ title: "Photos added", description: `${added} photo(s) added.` });
+                    }
+                  } finally {
+                    setInitialPhotosUploading(false);
+                    event.target.value = "";
+                  }
+                }}
+              />
+            </label>
+          </Button>
+          <span className="text-[11px] text-muted-foreground dark:text-gray-400">
+            {initialPhotoEntries.length}/{PHOTO_LIMITS.LISTING_INITIAL} photos
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -340,7 +670,6 @@ export function JobDetail({
   const [confirmedAt, setConfirmedAt] = useState<string | null>(
     cleanerConfirmedAt
   );
-  type InitialPhotoEntry = { name: string; url: string };
   type AfterPhotoEntry = { name: string; url: string };
   const [afterPhotoEntries, setAfterPhotoEntries] = useState<AfterPhotoEntry[]>([]);
   const [afterPhotosLoading, setAfterPhotosLoading] = useState(false);
@@ -1657,6 +1986,24 @@ export function JobDetail({
                   </Card>
                 </div>
               </details>
+              {listerCompletedBoostTidy && (
+                <JobDetailInitialConditionPhotos
+                  listing={listing}
+                  listingId={listingId}
+                  detailUiBoost={detailUiBoost}
+                  initialPhotosLoading={initialPhotosLoading}
+                  initialPhotoEntries={initialPhotoEntries}
+                  setInitialPhotoEntries={setInitialPhotoEntries}
+                  setListing={setListing}
+                  setPhotoLightbox={setPhotoLightbox}
+                  supabase={supabase}
+                  isJobLister={isJobLister}
+                  isListingOwner={isListingOwner}
+                  isCleaner={isCleaner}
+                  initialPhotosUploading={initialPhotosUploading}
+                  setInitialPhotosUploading={setInitialPhotosUploading}
+                />
+              )}
             </div>
           ) : isSold ? (
             <>
@@ -2093,7 +2440,9 @@ export function JobDetail({
         <CardContent
           className={cn("space-y-4", detailUiBoost && "space-y-5 px-4 sm:px-6")}
         >
-          {hasActiveJob && (listerName || cleanerName) && (
+          {hasActiveJob &&
+            (listerName || cleanerName) &&
+            !listerCompletedBoostTidy && (
             <div
               className={cn(
                 "border-b border-border pb-3 text-muted-foreground dark:border-gray-700 dark:text-gray-400",
@@ -2499,7 +2848,8 @@ export function JobDetail({
 
           {bondGuideline &&
             !cleanerReviewPendingMinimal &&
-            !listerReleaseFundsStep && (
+            !listerReleaseFundsStep &&
+            !listerCompletedBoostTidy && (
             <details
               className={cn(
                 "mt-2 text-muted-foreground dark:text-gray-400",
@@ -2748,17 +3098,12 @@ export function JobDetail({
           )}
 
           {hasActiveJob &&
+            !listerCompletedBoostTidy &&
             (localJobStatus === "in_progress" ||
               localJobStatus === "completed" ||
               localJobStatus === "completed_pending_approval") &&
             numericJobId && (
-            <JobHistoryCollapsible
-              enabled={
-                listerCompletedBoostTidy &&
-                isJobLister &&
-                localJobStatus === "completed"
-              }
-            >
+            <JobHistoryCollapsible enabled={false}>
             <>
               {localJobStatus === "in_progress" && (
                 <div
@@ -3925,283 +4270,24 @@ export function JobDetail({
               </div>
             </div>
           )}
-                <div
-                  className={cn(
-                    detailUiBoost
-                      ? "rounded-2xl border border-border/90 bg-card px-4 py-4 shadow-sm dark:border-gray-800 dark:bg-gray-950/40 sm:px-6"
-                      : "rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50"
-                  )}
-                >
-                  {detailUiBoost ? (
-                    <div className="mb-4 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-                        <p className="text-lg font-semibold text-foreground dark:text-gray-100">
-                          Initial condition photos
-                        </p>
-                      </div>
-                      <p className="text-sm text-muted-foreground dark:text-gray-400">
-                        Photos supplied by the lister before the clean — tap to enlarge.
-                      </p>
-                    </div>
-                  ) : (
-                    <p
-                      className={cn(
-                        "font-semibold text-sky-900 dark:text-gray-100",
-                        detailUiBoost ? "text-base" : "text-xs"
-                      )}
-                    >
-                      Initial property photos (condition before bond clean)
-                    </p>
-                  )}
-                  {initialPhotosLoading ? (
-                    <p className="mt-2 text-xs text-muted-foreground dark:text-gray-400">
-                      Loading photos…
-                    </p>
-                  ) : (() => {
-                    const rawInitial = (listing as ListingRow & { initial_photos?: string[] | null }).initial_photos;
-                    const dbInitial = Array.isArray(rawInitial) ? rawInitial : [];
-                    const photoUrls = (Array.isArray(listing.photo_urls) ? listing.photo_urls : []) as string[];
-                    const fromStorage = initialPhotoEntries.length > 0;
-                    const displayEntries = fromStorage
-                      ? initialPhotoEntries
-                      : (dbInitial.length > 0 ? dbInitial : photoUrls).map((url, i) => ({ name: `fallback-${i}`, url }));
-                    const canEditInitialPhotos = (isJobLister || isListingOwner) && !isCleaner;
-                    const canRemove = canEditInitialPhotos && fromStorage && initialPhotoEntries.length > 3;
-                    return displayEntries.length > 0 ? (
-                    <>
-                      <div
-                        className={cn(
-                          "mt-2",
-                          detailUiBoost
-                            ? "grid grid-cols-2 gap-2 sm:grid-cols-3 md:gap-3"
-                            : "flex flex-wrap gap-2"
-                        )}
-                      >
-                        {displayEntries.map((entry, idx) => {
-                            const isDefault = (listing as ListingRow & { cover_photo_url?: string | null }).cover_photo_url === entry.url;
-                            return (
-                          <div
-                            key={fromStorage ? entry.name : `fallback-${idx}`}
-                            className={cn(
-                              "relative cursor-pointer overflow-hidden border border-border bg-muted/40 group dark:border-gray-700 dark:bg-gray-800/60",
-                              detailUiBoost
-                                ? "aspect-[4/3] w-full rounded-xl"
-                                : "h-20 w-24 rounded-md"
-                            )}
-                            onClick={() =>
-                              setPhotoLightbox({
-                                urls: displayEntries.map((e) => e.url),
-                                index: idx,
-                                ariaLabel: "Initial condition photos",
-                              })
-                            }
-                          >
-                            <Image
-                              src={entry.url}
-                              alt="Property"
-                              fill
-                              sizes={NEXT_IMAGE_SIZES_THUMB_GRID}
-                              quality={75}
-                              loading="lazy"
-                              placeholder="blur"
-                              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
-                              className="object-cover transition-transform duration-200 group-hover:scale-105"
-                            />
-                            {isDefault && (
-                              <span className="absolute left-0.5 top-0.5 z-10 rounded px-1 py-0.5 text-[9px] font-medium bg-emerald-600 text-white">
-                                Default
-                              </span>
-                            )}
-                            {canEditInitialPhotos && !entry.name.startsWith("fallback-") && (
-                              <button
-                                type="button"
-                                aria-label="Set as default photo"
-                                className="absolute bottom-0.5 left-0.5 right-0.5 z-10 flex items-center justify-center gap-0.5 rounded py-0.5 text-[9px] font-medium bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  import("@/lib/actions/listings").then(({ updateListingCoverPhoto }) => {
-                                    updateListingCoverPhoto(listingId, entry.url).then((res) => {
-                                      if (res.ok) {
-                                        setListing((prev) => ({ ...prev, cover_photo_url: entry.url } as ListingRow));
-                                        toast({ title: "Default photo set", description: "This photo will show on listing cards." });
-                                      } else {
-                                        toast({ variant: "destructive", title: "Failed", description: res.error });
-                                      }
-                                    });
-                                  });
-                                }}
-                              >
-                                <ImageIcon className="h-2.5 w-2.5" />
-                                Set as default
-                              </button>
-                            )}
-                            {canRemove && !entry.name.startsWith("fallback-") && (
-                              <button
-                                type="button"
-                                aria-label="Remove photo"
-                                className="absolute right-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const path = `listings/${listingId}/initial/${entry.name}`;
-                                  supabase.storage.from("condition-photos").remove([path]).then(({ error }) => {
-                                    if (error) {
-                                      toast({ variant: "destructive", title: "Remove failed", description: error.message });
-                                    } else {
-                                      setInitialPhotoEntries((prev) => prev.filter((p) => p.name !== entry.name));
-                                    }
-                                  });
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            )}
-                          </div>
-                            );
-                        })}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="mt-2 space-y-2">
-                      <div className="flex flex-wrap gap-2">
-                        {Array.from({ length: 3 }).map((_, idx) => (
-                          <div
-                            key={idx}
-                            className="h-20 w-24 rounded-md border border-dashed border-sky-200 bg-sky-100/60 dark:border-gray-600 dark:bg-gray-800/50"
-                          />
-                        ))}
-                      </div>
-                      <p className="text-[11px] text-sky-800 dark:text-gray-300">
-                        No photos uploaded yet. Minimum 3 photos required before
-                        starting the job.
-                      </p>
-                    </div>
-                  );
-                  })()}
-                  {(isJobLister || isListingOwner) && !isCleaner && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 text-xs"
-                        disabled={initialPhotosUploading || initialPhotoEntries.length >= PHOTO_LIMITS.LISTING_INITIAL}
-                        asChild
-                      >
-                        <label className={initialPhotoEntries.length >= PHOTO_LIMITS.LISTING_INITIAL ? "cursor-not-allowed pointer-events-none" : "cursor-pointer"}>
-                          <ImagePlus className="mr-1 h-3.5 w-3.5" />
-                          <span>
-                            {initialPhotosUploading
-                              ? "Uploading…"
-                              : "Upload / add photos"}
-                          </span>
-                          <input
-                            type="file"
-                            accept={PHOTO_VALIDATION.ACCEPT}
-                            multiple
-                            className="hidden"
-                            onChange={async (event: ChangeEvent<HTMLInputElement>) => {
-                              if (!listing.id) return;
-                              const files = event.target.files;
-                              if (!files || files.length === 0) return;
-                              const existingCount = initialPhotoEntries.length;
-                              const { validFiles, errors } = validatePhotoFiles(Array.from(files), {
-                                maxFiles: PHOTO_LIMITS.LISTING_INITIAL,
-                                existingCount,
-                              });
-                              errors.forEach((err) => {
-                                toast({
-                                  variant: "destructive",
-                                  title: "Photo validation",
-                                  description: err,
-                                });
-                              });
-                              if (validFiles.length === 0) {
-                                event.target.value = "";
-                                return;
-                              }
-                              const withHeaderCheck: File[] = [];
-                              for (const f of validFiles) {
-                                try {
-                                  const compressed = await compressImage(f);
-                                  const header = await checkImageHeader(compressed);
-                                  if (!header.valid) {
-                                    toast({
-                                      variant: "destructive",
-                                      title: "Photo validation",
-                                      description: `${f.name}: ${header.error}`,
-                                    });
-                                    continue;
-                                  }
-                                  withHeaderCheck.push(compressed);
-                                } catch {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Couldn’t prepare photo",
-                                    description: `${f.name}: try another image.`,
-                                  });
-                                }
-                              }
-                              if (withHeaderCheck.length === 0) {
-                                event.target.value = "";
-                                return;
-                              }
-                              setInitialPhotosUploading(true);
-                              try {
-                                const fd = new FormData();
-                                withHeaderCheck.forEach((f) => fd.append("files", f));
-                                const pathPrefix = `listings/${listingId}/initial`;
-                                const { results, error: actionError } = await uploadProcessedPhotos(fd, {
-                                  bucket: "condition-photos",
-                                  pathPrefix,
-                                  maxFiles: PHOTO_LIMITS.LISTING_INITIAL,
-                                  existingCount,
-                                  generateThumb: true,
-                                });
-                                if (actionError) {
-                                  toast({ variant: "destructive", title: "Upload failed", description: actionError });
-                                }
-                                results.forEach((r) => {
-                                  if (r.error) {
-                                    toast({
-                                      variant: "destructive",
-                                      title: "Upload failed",
-                                      description: `${r.fileName}: ${r.error}`,
-                                    });
-                                  }
-                                });
-                                const added = results.filter((r) => r.url).length;
-                                if (added > 0) {
-                                  const { data, error: listError } = await supabase.storage
-                                    .from("condition-photos")
-                                    .list(`listings/${listingId}/initial`, { limit: 100 });
-                                  if (!listError && data) {
-                                    const entries: InitialPhotoEntry[] = data
-                                      .filter((file) => file.name && !file.name.startsWith("thumb_"))
-                                      .map((file) => {
-                                        const { data: { publicUrl } } = supabase.storage
-                                          .from("condition-photos")
-                                          .getPublicUrl(`listings/${listingId}/initial/${file.name}`);
-                                        return { name: file.name, url: publicUrl };
-                                      });
-                                    setInitialPhotoEntries(entries);
-                                  }
-                                  toast({ title: "Photos added", description: `${added} photo(s) added.` });
-                                }
-                              } finally {
-                                setInitialPhotosUploading(false);
-                                event.target.value = "";
-                              }
-                            }}
-                          />
-                        </label>
-                      </Button>
-                      <span className="text-[11px] text-muted-foreground dark:text-gray-400">
-                        {initialPhotoEntries.length}/{PHOTO_LIMITS.LISTING_INITIAL} photos
-                      </span>
-                    </div>
-                  )}
-                </div>
+              {!listerCompletedBoostTidy && (
+                <JobDetailInitialConditionPhotos
+                  listing={listing}
+                  listingId={listingId}
+                  detailUiBoost={detailUiBoost}
+                  initialPhotosLoading={initialPhotosLoading}
+                  initialPhotoEntries={initialPhotoEntries}
+                  setInitialPhotoEntries={setInitialPhotoEntries}
+                  setListing={setListing}
+                  setPhotoLightbox={setPhotoLightbox}
+                  supabase={supabase}
+                  isJobLister={isJobLister}
+                  isListingOwner={isListingOwner}
+                  isCleaner={isCleaner}
+                  initialPhotosUploading={initialPhotosUploading}
+                  setInitialPhotosUploading={setInitialPhotosUploading}
+                />
+              )}
             </>
           )}
 
@@ -4416,6 +4502,185 @@ export function JobDetail({
             </div>
           </div>
         </section>
+      )}
+
+      {listerCompletedBoostTidy && hasActiveJob && numericJobId && (
+        <JobHistoryCollapsible enabled>
+          {!(isJobLister && listerReleaseFundsStep) && (
+            <details
+              className={cn(
+                "rounded-xl border bg-background/60 px-4 py-3 text-muted-foreground dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400",
+                detailUiBoost ? "text-sm" : "text-xs"
+              )}
+            >
+              <summary
+                className={cn(
+                  "cursor-pointer select-none font-medium text-foreground dark:text-gray-100",
+                  detailUiBoost ? "min-h-12 text-base" : "text-sm"
+                )}
+              >
+                Cleaning checklist history{" "}
+                {completedDateLabel ? `(Completed ${completedDateLabel})` : "(Completed)"}
+              </summary>
+              <div className="mt-2 space-y-2">
+                {checklist &&
+                  checklist.map((item) => (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "flex items-start gap-2 dark:text-gray-200",
+                        detailUiBoost ? "text-sm" : "text-xs"
+                      )}
+                    >
+                      <Checkbox
+                        checked={item.is_completed}
+                        className={cn(
+                          "mt-0.5",
+                          detailUiBoost ? "h-4 w-4" : "h-3.5 w-3.5"
+                        )}
+                        disabled
+                      />
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+              </div>
+            </details>
+          )}
+          <p
+            className={cn(
+              "mt-1 rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+              detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
+            )}
+          >
+            Payment has been released. Thanks for completing this bond clean through Bond Back.
+          </p>
+          {isJobLister && afterPhotoEntries.length > 0 && (
+            <div
+              id="job-after-photos"
+              className="mt-3 scroll-mt-24 rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-50/90 to-transparent px-4 py-4 dark:border-emerald-800 dark:from-emerald-950/40 sm:px-5"
+            >
+              <p className="text-base font-bold text-emerald-900 dark:text-emerald-200">
+                After photos from your cleaner
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-emerald-800 dark:text-emerald-200">
+                Saved from when the job was completed.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {afterPhotoEntries.map((entry, idx) => (
+                  <div
+                    key={entry.name}
+                    className="relative h-20 w-24 cursor-pointer overflow-hidden rounded-md border bg-muted/40 group dark:border-gray-700 dark:bg-gray-800/60"
+                    onClick={() =>
+                      setPhotoLightbox({
+                        urls: afterPhotoEntries.map((e) => e.url),
+                        index: idx,
+                        ariaLabel: "After photos",
+                      })
+                    }
+                  >
+                    <Image
+                      src={entry.url}
+                      alt="After clean"
+                      fill
+                      sizes={NEXT_IMAGE_SIZES_THUMB_GRID}
+                      quality={75}
+                      loading="lazy"
+                      placeholder="blur"
+                      blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                      className="object-cover transition-transform duration-200 group-hover:scale-105"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {(listerName || cleanerName) && (
+            <div
+              className={cn(
+                "mt-4 border-t border-border pt-4 text-muted-foreground dark:border-gray-700 dark:text-gray-400",
+                detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
+              )}
+            >
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                {listerName && (
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    <span>Property Lister: {listerName}</span>
+                    <VerificationBadges
+                      badges={listerVerificationBadges}
+                      showLabel={false}
+                      size="sm"
+                    />
+                  </span>
+                )}
+                {listerName && cleanerName && (
+                  <span className="opacity-60" aria-hidden>
+                    ·
+                  </span>
+                )}
+                {cleanerName && (
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    <span>Assigned to: {cleanerName}</span>
+                    <VerificationBadges
+                      badges={cleanerVerificationBadges}
+                      showLabel={false}
+                      size="sm"
+                    />
+                    {jobAcceptedAt && (
+                      <span>
+                        <span className="mx-1.5">·</span>
+                        Accepted on {format(new Date(jobAcceptedAt), "d MMM yyyy")}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          {bondGuideline && (
+            <details
+              className={cn(
+                "mt-2 text-muted-foreground dark:text-gray-400",
+                detailUiBoost ? "text-sm" : "text-xs"
+              )}
+            >
+              <summary
+                className={cn(
+                  "cursor-pointer select-none rounded-lg py-2 font-medium dark:text-gray-300",
+                  detailUiBoost && "min-h-12 text-base"
+                )}
+              >
+                Bond cleaning guideline ({bondGuideline.state})
+              </summary>
+              <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/30 px-3 py-3 dark:border-gray-700 dark:bg-gray-800/30 dark:text-gray-200">
+                <p className={cn(detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]")}>
+                  {bondGuideline.summary}
+                </p>
+                <ul
+                  className={cn(
+                    "list-inside list-disc space-y-1",
+                    detailUiBoost ? "text-sm" : "text-[11px]"
+                  )}
+                >
+                  {bondGuideline.checklist.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+                {bondGuideline.linkUrl && bondGuideline.linkLabel && (
+                  <p className="pt-1">
+                    <a
+                      href={bondGuideline.linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline hover:no-underline dark:text-sky-300"
+                    >
+                      {bondGuideline.linkLabel}
+                    </a>
+                  </p>
+                )}
+              </div>
+            </details>
+          )}
+        </JobHistoryCollapsible>
       )}
 
       <ImageLightboxGallery
