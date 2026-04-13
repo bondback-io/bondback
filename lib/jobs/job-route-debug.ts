@@ -2,7 +2,12 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
 import { LISTING_FULL_SELECT } from "@/lib/supabase/queries";
 import type { ServerSupabaseClient } from "@/lib/jobs/load-job-for-detail-route";
-import { isMarketplaceVisibleListing } from "@/lib/jobs/load-job-for-detail-route";
+import {
+  isMarketplaceVisibleListing,
+  listingIsPublicMarketplaceListing,
+  listingHasAssignedWinnerJob,
+  sessionMayReadJobRow,
+} from "@/lib/jobs/load-job-for-detail-route";
 
 export type JobRouteDebugPayload = {
   routeParam: string;
@@ -15,11 +20,15 @@ export type JobRouteDebugPayload = {
   userQueryError: { code?: string; message?: string } | null;
   adminQueryError: { code?: string; message?: string } | null;
   listingIdFromAdmin: string | null;
-  /** When the job row exists (admin): whether the linked listing passes `isMarketplaceVisibleListing`. */
-  listingMarketplaceVisible: boolean | null;
+  /** Timing-only: `isMarketplaceVisibleListing` (Find Jobs parity; not access control). */
+  listingMarketplaceTimingVisible: boolean | null;
+  /** Access control: non-parties may load `/listings/[uuid]` only when true. */
+  listingPublicMarketplaceVisible: boolean | null;
+  /** When admin sees the job row: whether the session user is lister or assigned cleaner. */
+  sessionIsJobParty: boolean | null;
 };
 
-const JOB_GATE_SELECT = "id, listing_id";
+const JOB_GATE_SELECT = "id, listing_id, lister_id, winner_id";
 
 /**
  * Low-level snapshot for `?debug=1` when `loadJobByNumericIdForSession` returns null.
@@ -46,7 +55,14 @@ export async function buildJobRouteDebugSnapshot(
   const adminSawJobRow = !!adminRes.data;
   const listingIdFromAdmin = adminRes.data?.listing_id ?? null;
 
-  let listingMarketplaceVisible: boolean | null = null;
+  let sessionIsJobParty: boolean | null = null;
+  if (adminRes.data) {
+    const j = adminRes.data as Database["public"]["Tables"]["jobs"]["Row"];
+    sessionIsJobParty = sessionMayReadJobRow(j, sessionUserId ?? undefined);
+  }
+
+  let listingMarketplaceTimingVisible: boolean | null = null;
+  let listingPublicMarketplaceVisible: boolean | null = null;
   if (admin && listingIdFromAdmin) {
     const { data: lr } = await admin
       .from("listings")
@@ -54,9 +70,10 @@ export async function buildJobRouteDebugSnapshot(
       .eq("id", listingIdFromAdmin)
       .maybeSingle();
     if (lr) {
-      listingMarketplaceVisible = isMarketplaceVisibleListing(
-        lr as Database["public"]["Tables"]["listings"]["Row"]
-      );
+      const row = lr as Database["public"]["Tables"]["listings"]["Row"];
+      listingMarketplaceTimingVisible = isMarketplaceVisibleListing(row);
+      const hasAssigned = await listingHasAssignedWinnerJob(admin, listingIdFromAdmin);
+      listingPublicMarketplaceVisible = listingIsPublicMarketplaceListing(row, hasAssigned);
     }
   }
 
@@ -75,6 +92,8 @@ export async function buildJobRouteDebugSnapshot(
       ? { code: adminRes.error.code, message: adminRes.error.message }
       : null,
     listingIdFromAdmin,
-    listingMarketplaceVisible,
+    listingMarketplaceTimingVisible,
+    listingPublicMarketplaceVisible,
+    sessionIsJobParty,
   };
 }

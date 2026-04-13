@@ -16,14 +16,19 @@ function interpret(payload: JobRouteDebugPayload): string {
       "If there is still no job row for this id, use /listings/<listing-uuid> for live auctions, not /jobs/<number>."
     );
   }
-  const { adminClientConfigured, adminSawJobRow, userSawJobRow, listingMarketplaceVisible } =
-    payload;
+  const {
+    adminClientConfigured,
+    adminSawJobRow,
+    userSawJobRow,
+    listingPublicMarketplaceVisible,
+    sessionIsJobParty,
+  } = payload;
   if (!adminClientConfigured) {
     if (!userSawJobRow) {
       return (
         "Service role key is not set on the server (SUPABASE_SERVICE_ROLE_KEY). The app cannot verify whether this job id exists in the database. " +
         "If RLS also blocks your user from SELECT on jobs, you will see this screen. " +
-        "Set the service role env var on Vercel/hosting and redeploy, or apply the SQL migration that mirrors marketplace listing visibility onto public.jobs SELECT (see docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql)."
+        "Set the service role env var on Vercel/hosting and redeploy."
       );
     }
     return "Service role not configured, but your user session can read this job row (RLS allows you).";
@@ -32,19 +37,25 @@ function interpret(payload: JobRouteDebugPayload): string {
     return "No row in public.jobs with this id (confirmed via service role). The job was deleted or the id is wrong. Live auctions use /listings/<listing-uuid> until a job row exists.";
   }
   if (!userSawJobRow) {
-    if (listingMarketplaceVisible === false) {
+    if (sessionIsJobParty === false) {
       return (
-        "Job exists but the linked listing is not marketplace-visible (draft, cancelled early, or status not live/ended/expired). " +
-        "The detail loader refuses to show this job to non-parties. Open the listing UUID if you have it, or use the lister dashboard."
+        "Job exists, but `/jobs/[id]` is only available to the listing owner and the assigned cleaner (winner). " +
+        "Other users and losing bidders should use public listing browse or their own dashboard — not this job id."
       );
     }
-    if (listingMarketplaceVisible === true) {
+    if (sessionIsJobParty === true) {
       return (
-        "Job and marketplace-visible listing exist, but your session still cannot SELECT public.jobs — RLS is missing the marketplace mirror policy. " +
-        "Run the SQL in docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql (jobs_select_if_listing_marketplace_* policies)."
+        "You are the lister or assigned cleaner, but RLS still blocks SELECT on public.jobs. " +
+        "Ensure `jobs_select_parties` is applied (lister_id and winner_id) — see supabase/sql/20260430140000_fix_rls_auth_uid_text_casts.sql."
       );
     }
-    return "Job exists (service role sees it) but your session cannot SELECT it — RLS on public.jobs is blocking. Apply policies for lister_id, winner_id, bidders, or marketplace listing mirror (see docs/JOBS_LISTINGS_RLS_PARTY_SELECT.sql).";
+    if (listingPublicMarketplaceVisible === false) {
+      return (
+        "Job exists; the linked listing is not in the public marketplace slice (draft, cancelled early, or already assigned to a cleaner). " +
+        "Sign in as the lister or assigned cleaner to open this job."
+      );
+    }
+    return "Job exists (service role sees it) but your session cannot SELECT it — check RLS on public.jobs (parties + optional marketplace mirror for unassigned listings).";
   }
   return "Unexpected: your session can read the job row but the detail loader returned null — report this as a bug.";
 }
@@ -65,7 +76,9 @@ export function JobRouteDebugPanel({ payload }: { payload: JobRouteDebugPayload 
       adminClientConfigured: payload.adminClientConfigured,
       adminSawJobRow: payload.adminSawJobRow,
       listingIdFromAdmin: payload.listingIdFromAdmin,
-      listingMarketplaceVisible: payload.listingMarketplaceVisible,
+      listingMarketplaceTimingVisible: payload.listingMarketplaceTimingVisible,
+      listingPublicMarketplaceVisible: payload.listingPublicMarketplaceVisible,
+      sessionIsJobParty: payload.sessionIsJobParty,
       userQueryError: payload.userQueryError,
       adminQueryError: payload.adminQueryError,
     },
