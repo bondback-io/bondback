@@ -47,6 +47,7 @@ import {
   type BidWithBidder,
 } from "@/components/features/bid-history-table";
 import { requestEarlyBidAcceptance } from "@/lib/actions/early-bid-acceptance";
+import { scrollToTopAfterBidAccepted } from "@/lib/deferred-router";
 import { resolveAuctionEndForListing } from "@/lib/actions/auction-resolution";
 import { cancelLastBid } from "@/lib/actions/bids";
 import { useToast } from "@/components/ui/use-toast";
@@ -157,6 +158,7 @@ export function ListingAuctionDetail({
             "The cleaner has been notified. They can proceed when you pay & start the job.",
         });
         router.refresh();
+        scrollToTopAfterBidAccepted();
       } else {
         logClientError("earlyBidAccept", result.error, {
           listingId: listing.id,

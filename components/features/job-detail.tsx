@@ -12,7 +12,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { scheduleRouterAction } from "@/lib/deferred-router";
+import { scheduleRouterAction, scrollToTopAfterBidAccepted } from "@/lib/deferred-router";
 import { format } from "date-fns";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -394,6 +394,7 @@ export function JobDetail({
             "The cleaner has been notified by email and in-app. They can open the job when the lister pays & starts.",
         });
         scheduleRouterAction(() => router.refresh());
+        scrollToTopAfterBidAccepted();
       } else {
         logClientError("earlyBidAccept", result.error, {
           listingId,
