@@ -76,3 +76,7 @@ export function emailAdminDisputesUrl(): string {
 export function emailAdminJobsUrl(): string {
   return emailAbsoluteUrl("/admin/jobs");
 }
+
+export function emailAdminSupportUrl(): string {
+  return emailAbsoluteUrl("/admin/support");
+}

@@ -178,7 +178,7 @@ export function MyListingsCardMobile({
             size="lg"
             className="min-h-[48px] w-full touch-manipulation rounded-xl text-base font-semibold shadow-md active:scale-[0.98]"
           >
-            <Link href={primaryHref} className="flex items-center justify-center gap-2">
+            <Link href={primaryHref} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
               <Eye className="h-5 w-5 shrink-0" aria-hidden />
               {primaryLabel}
             </Link>
@@ -190,7 +190,9 @@ export function MyListingsCardMobile({
               variant="outline"
               className="min-h-[48px] w-full touch-manipulation rounded-xl border-2 text-base font-semibold active:scale-[0.98] dark:border-gray-600 dark:bg-transparent dark:hover:bg-gray-800"
             >
-              <Link href={secondaryHref}>{secondaryLabel}</Link>
+              <Link href={secondaryHref} className="no-underline hover:no-underline">
+                {secondaryLabel}
+              </Link>
             </Button>
           )}
           {showCancel && onCancel && (

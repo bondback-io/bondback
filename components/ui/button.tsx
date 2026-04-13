@@ -11,7 +11,7 @@ const buttonVariants = cva(
         default:
           "bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500",
         success:
-          "bg-emerald-600 !text-white hover:bg-emerald-700 hover:!text-white no-underline hover:no-underline dark:bg-emerald-600 dark:!text-white dark:hover:bg-emerald-500 dark:hover:!text-white",
+          "bg-emerald-600 !text-white hover:bg-emerald-700 hover:!text-white dark:bg-emerald-600 dark:!text-white dark:hover:bg-emerald-500 dark:hover:!text-white",
         outline:
           "border border-input bg-background hover:bg-muted hover:text-foreground dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-100",
         ghost:

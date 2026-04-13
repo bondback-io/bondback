@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { CountdownTimer } from "@/components/features/countdown-timer";
+import { ListingEndsAtLocal } from "@/components/features/listing-ends-at-local";
 import {
   BidHistoryTable,
   type ClosedAuctionBidStatus,
@@ -40,9 +41,8 @@ import {
 import {
   parseListingCalendarDate,
   formatDateDdMmYyyy,
-  formatEndDateTime,
   humanizePropertyCondition,
-  listingDescriptionForDisplay,
+  listingPropertyDescriptionBody,
   preferredWindowFromMoveOutDate,
 } from "@/lib/listing-detail-presenters";
 import { parseUtcTimestamp, cn } from "@/lib/utils";
@@ -81,6 +81,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
+import { ImageLightboxGallery } from "@/components/ui/image-lightbox-gallery";
 import { ReviewForm } from "@/components/features/review-form";
 import { GuidedDisputeForm } from "@/components/features/guided-dispute-form";
 import { useToast } from "@/components/ui/use-toast";
@@ -352,7 +353,11 @@ export function JobDetail({
   const router = useRouter();
   const { toast } = useToast();
   const isOffline = useIsOffline();
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [photoLightbox, setPhotoLightbox] = useState<{
+    urls: string[];
+    index: number;
+    ariaLabel: string;
+  } | null>(null);
   const [showListerFinalizeNotice, setShowListerFinalizeNotice] =
     useState(false);
   const [submittedCleanerReview, setSubmittedCleanerReview] = useState(false);
@@ -1267,7 +1272,7 @@ export function JobDetail({
                   </div>
                   <div className="text-sm text-muted-foreground dark:text-gray-400">
                     <span className="font-medium text-foreground dark:text-gray-200">Ends: </span>
-                    {formatEndDateTime(listing.end_time)}
+                    <ListingEndsAtLocal endTime={listing.end_time} />
                   </div>
                 </div>
               </div>
@@ -1524,9 +1529,9 @@ export function JobDetail({
                         </div>
                       )}
                       <div>
-                        <h3 className="mb-2 text-sm font-semibold">Description</h3>
+                        <h3 className="mb-2 text-sm font-semibold">Property description</h3>
                         <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
-                          {listingDescriptionForDisplay(listing.description) || "No description provided."}
+                          {listingPropertyDescriptionBody(listing) || "No property description provided."}
                         </p>
                       </div>
                     </CardContent>
@@ -1896,9 +1901,9 @@ export function JobDetail({
                     </div>
                   )}
                   <div>
-                    <h3 className="mb-2 text-sm font-semibold">Description</h3>
+                    <h3 className="mb-2 text-sm font-semibold">Property description</h3>
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
-                      {listingDescriptionForDisplay(listing.description) || "No description provided."}
+                      {listingPropertyDescriptionBody(listing) || "No property description provided."}
                     </p>
                   </div>
                 </CardContent>
@@ -2885,11 +2890,17 @@ export function JobDetail({
                           : "Review the after photos before you finalize and release funds."}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {afterPhotoEntries.map((entry) => (
+                        {afterPhotoEntries.map((entry, idx) => (
                           <div
                             key={entry.name}
                             className="relative h-20 w-24 overflow-hidden rounded-md border bg-muted/40 cursor-pointer dark:border-gray-700 dark:bg-gray-800/60 group"
-                            onClick={() => setLightboxUrl(entry.url)}
+                            onClick={() =>
+                              setPhotoLightbox({
+                                urls: afterPhotoEntries.map((e) => e.url),
+                                index: idx,
+                                ariaLabel: "After photos",
+                              })
+                            }
                           >
                             <Image
                               src={entry.url}
@@ -2930,11 +2941,17 @@ export function JobDetail({
                     </p>
                   ) : afterPhotoEntries.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {afterPhotoEntries.map((entry) => (
+                      {afterPhotoEntries.map((entry, idx) => (
                           <div
                             key={entry.name}
                             className="relative h-20 w-24 overflow-hidden rounded-md border border-border bg-muted/40 dark:border-gray-700 dark:bg-gray-800/60 cursor-pointer group"
-                            onClick={() => setLightboxUrl(entry.url)}
+                            onClick={() =>
+                              setPhotoLightbox({
+                                urls: afterPhotoEntries.map((e) => e.url),
+                                index: idx,
+                                ariaLabel: "After photos",
+                              })
+                            }
                           >
                             <Image
                               src={entry.url}
@@ -3906,7 +3923,13 @@ export function JobDetail({
                                 ? "aspect-[4/3] w-full rounded-xl"
                                 : "h-20 w-24 rounded-md"
                             )}
-                            onClick={() => setLightboxUrl(entry.url)}
+                            onClick={() =>
+                              setPhotoLightbox({
+                                urls: displayEntries.map((e) => e.url),
+                                index: idx,
+                                ariaLabel: "Initial condition photos",
+                              })
+                            }
                           >
                             <Image
                               src={entry.url}
@@ -4119,89 +4142,6 @@ export function JobDetail({
             </>
           )}
 
-          {!(isCleaner && hideCleanerCancelledAuctionUi) &&
-            !cleanerReviewPendingMinimal &&
-            !listerReleaseFundsStep &&
-            !listerCompletedBoostTidy &&
-            (detailUiBoost ? (
-              <Card id="bids" className="mt-4 overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
-                <details className="group">
-                  <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
-                    <Gavel className="h-5 w-5 shrink-0" aria-hidden />
-                    <CardTitle className="mb-0 flex flex-1 items-center gap-2 text-lg">
-                      Bids
-                      {bids.length > 0 ? (
-                        <Badge variant="secondary" className="font-mono text-xs tabular-nums">
-                          {bids.length}
-                        </Badge>
-                      ) : null}
-                    </CardTitle>
-                    <ChevronDown
-                      className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
-                      aria-hidden
-                    />
-                  </summary>
-                  <CardContent className="space-y-3 border-t border-border/80 px-4 pb-6 pt-4 sm:px-6 dark:border-gray-800">
-                    <BidHistoryTable
-                      bids={bids}
-                      hasPendingEarlyAcceptance={bids.some(
-                        (b) => b.status === "pending_confirmation"
-                      )}
-                      onAcceptBid={
-                        isListingOwner && !hasActiveJob && isLive
-                          ? handleAcceptBid
-                          : undefined
-                      }
-                      closedAuctionBidStatus={closedAuctionBidStatus}
-                      showRevertLastBid={showRevertLastBidInHistory}
-                      onRevertLastBid={
-                        showRevertLastBidInHistory ? handleRevertLastBid : undefined
-                      }
-                      largeTouch
-                    />
-                    {isListingOwner && !hasActiveJob && isLive && (
-                      <p className="text-sm text-muted-foreground dark:text-gray-400">
-                        {bids.length === 0 ? (
-                          <>
-                            When cleaners start bidding, their offers will appear in the table above. To hire
-                            someone, open their row and tap <strong>Accept bid</strong> — that locks in that
-                            cleaner for this job.
-                          </>
-                        ) : (
-                          <>
-                            To confirm who you want, tap <strong>Accept bid</strong> on that cleaner&apos;s row
-                            in the table above.
-                          </>
-                        )}
-                      </p>
-                    )}
-                  </CardContent>
-                </details>
-              </Card>
-            ) : (
-              <BidHistorySection
-                bids={bids}
-                hasPendingEarlyAcceptance={bids.some(
-                  (b) => b.status === "pending_confirmation"
-                )}
-                onAcceptBid={
-                  isListingOwner && !hasActiveJob && isLive
-                    ? handleAcceptBid
-                    : undefined
-                }
-                closedAuctionBidStatus={closedAuctionBidStatus}
-                showRevertLastBid={showRevertLastBidInHistory}
-                onRevertLastBid={
-                  showRevertLastBidInHistory ? handleRevertLastBid : undefined
-                }
-                largeTouch={detailUiBoost}
-                defaultOpen={false}
-                className={cn(
-                  "mt-4 border-t border-border pt-4 text-muted-foreground dark:border-gray-700 dark:text-gray-500",
-                  detailUiBoost ? "text-sm" : "text-[11px]"
-                )}
-              />
-            ))}
         </CardContent>
       </Card>
 
@@ -4275,6 +4215,90 @@ export function JobDetail({
         </Card>
       )}
 
+      {!(isCleaner && hideCleanerCancelledAuctionUi) &&
+        !cleanerReviewPendingMinimal &&
+        !listerReleaseFundsStep &&
+        !listerCompletedBoostTidy &&
+        (detailUiBoost ? (
+          <Card id="bids" className="mt-4 overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+                <Gavel className="h-5 w-5 shrink-0" aria-hidden />
+                <CardTitle className="mb-0 flex flex-1 items-center gap-2 text-lg">
+                  Bids
+                  {bids.length > 0 ? (
+                    <Badge variant="secondary" className="font-mono text-xs tabular-nums">
+                      {bids.length}
+                    </Badge>
+                  ) : null}
+                </CardTitle>
+                <ChevronDown
+                  className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+                  aria-hidden
+                />
+              </summary>
+              <CardContent className="space-y-3 border-t border-border/80 px-4 pb-6 pt-4 sm:px-6 dark:border-gray-800">
+                <BidHistoryTable
+                  bids={bids}
+                  hasPendingEarlyAcceptance={bids.some(
+                    (b) => b.status === "pending_confirmation"
+                  )}
+                  onAcceptBid={
+                    isListingOwner && !hasActiveJob && isLive
+                      ? handleAcceptBid
+                      : undefined
+                  }
+                  closedAuctionBidStatus={closedAuctionBidStatus}
+                  showRevertLastBid={showRevertLastBidInHistory}
+                  onRevertLastBid={
+                    showRevertLastBidInHistory ? handleRevertLastBid : undefined
+                  }
+                  largeTouch
+                />
+                {isListingOwner && !hasActiveJob && isLive && (
+                  <p className="text-sm text-muted-foreground dark:text-gray-400">
+                    {bids.length === 0 ? (
+                      <>
+                        When cleaners start bidding, their offers will appear in the table above. To hire
+                        someone, open their row and tap <strong>Accept bid</strong> — that locks in that
+                        cleaner for this job.
+                      </>
+                    ) : (
+                      <>
+                        To confirm who you want, tap <strong>Accept bid</strong> on that cleaner&apos;s row
+                        in the table above.
+                      </>
+                    )}
+                  </p>
+                )}
+              </CardContent>
+            </details>
+          </Card>
+        ) : (
+          <BidHistorySection
+            bids={bids}
+            hasPendingEarlyAcceptance={bids.some(
+              (b) => b.status === "pending_confirmation"
+            )}
+            onAcceptBid={
+              isListingOwner && !hasActiveJob && isLive
+                ? handleAcceptBid
+                : undefined
+            }
+            closedAuctionBidStatus={closedAuctionBidStatus}
+            showRevertLastBid={showRevertLastBidInHistory}
+            onRevertLastBid={
+              showRevertLastBidInHistory ? handleRevertLastBid : undefined
+            }
+            largeTouch={detailUiBoost}
+            defaultOpen={false}
+            className={cn(
+              "mt-4 border-t border-border pt-4 text-muted-foreground dark:border-gray-700 dark:text-gray-500",
+              detailUiBoost ? "text-sm" : "text-[11px]"
+            )}
+          />
+        ))}
+
       {showMessengerUnlockedBanner && (
         <section
           aria-label="Messenger chat unlocked"
@@ -4329,41 +4353,13 @@ export function JobDetail({
         </section>
       )}
 
-      {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 animate-in fade-in-0 duration-200"
-          onClick={() => setLightboxUrl(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Enlarged photo"
-        >
-          <div
-            className="relative max-h-[90vh] max-w-[90vw] animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="absolute -right-2 -top-2 rounded-full bg-black/80 px-2 py-1 text-xs text-white hover:bg-black"
-              onClick={() => setLightboxUrl(null)}
-            >
-              Close
-            </button>
-            <Image
-              src={lightboxUrl}
-              alt="Photo full size"
-              width={1600}
-              height={1200}
-              sizes="100vw"
-              quality={75}
-              placeholder="blur"
-              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
-              className="max-h-[90vh] max-w-[90vw] h-auto w-auto rounded-md object-contain shadow-lg"
-              priority
-              fetchPriority="high"
-            />
-          </div>
-        </div>
-      )}
+      <ImageLightboxGallery
+        open={photoLightbox != null}
+        urls={photoLightbox?.urls ?? []}
+        initialIndex={photoLightbox?.index ?? 0}
+        onClose={() => setPhotoLightbox(null)}
+        ariaLabel={photoLightbox?.ariaLabel ?? "Enlarged photos"}
+      />
     </div>
   );
 }

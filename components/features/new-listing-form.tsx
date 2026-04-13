@@ -164,6 +164,7 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
         .regex(/^\d{4}$/, "Postcode must be a 4-digit Australian postcode"),
       propertyAddress: z.string().max(200).optional(),
       addons: z.array(listingAddonZodEnum).default([]),
+      propertyDescription: z.string().max(4000).optional(),
       instructions: z.string().max(2000).optional(),
       moveOutDate: z.date({ required_error: "Select your move-out date" }),
       reservePrice: z.coerce.number().min(minReserveAud, reservePriceMinMessage(minReserveAud)),
@@ -338,6 +339,7 @@ export function NewListingForm({
       postcode: listerPostcode || "",
       propertyAddress: "",
       addons: [],
+      propertyDescription: "",
       instructions: "",
       moveOutDate: undefined as unknown as Date,
       reservePrice: defaultReservePrice,
@@ -612,7 +614,7 @@ export function NewListingForm({
       const row = buildListingInsertRow({
         lister_id: listerId,
         title,
-        description: values.instructions?.trim() || null,
+        property_description: values.propertyDescription?.trim() || null,
         property_address: values.propertyAddress?.trim() || null,
         suburb: values.suburb,
         postcode: values.postcode,
@@ -1449,8 +1451,9 @@ export function NewListingForm({
                 <div className="space-y-2">
                   <Label>Add-ons</Label>
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
-                    Special areas selected in step 1 are included here. Amounts follow platform pricing (admin-configurable).
-                    Use special instructions if something is unusual.
+                    Special areas selected in step 1 are included here. Amounts follow platform pricing
+                    (admin-configurable). Use property description for general context; use special
+                    instructions for access and one-off notes.
                   </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {LISTING_ADDON_KEYS.map((key) => {
@@ -1503,6 +1506,21 @@ export function NewListingForm({
                       );
                     })}
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="propertyDescription">Property description</Label>
+                  <Textarea
+                    id="propertyDescription"
+                    rows={4}
+                    placeholder="e.g. Recently renovated kitchen, small second bathroom, focus on oven and rangehood..."
+                    className="dark:bg-gray-800 dark:border-gray-700"
+                    {...form.register("propertyDescription")}
+                  />
+                  <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+                    Optional — context about the property and clean for bidders. Separate from special
+                    instructions; your street address is not repeated here.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

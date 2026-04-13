@@ -2,7 +2,7 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { Gavel, ArrowRight, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { formatCents } from "@/lib/listings";
+import { formatCents, listingTitleWithoutSuburbSuffix } from "@/lib/listings";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { cn } from "@/lib/utils";
 import { DashboardEmptyState } from "@/components/dashboard";
@@ -62,6 +62,7 @@ export function CleanerLiveBidsSection({ items }: { items: CleanerLiveBidItem[] 
               href={detailUrl}
               className={cn(
                 "flex min-h-[100px] gap-3 rounded-2xl border-2 bg-card p-3 shadow-sm transition-all active:scale-[0.99] sm:min-h-[96px] sm:p-4",
+                "no-underline hover:no-underline",
                 "hover:border-emerald-500/40 hover:shadow-md dark:bg-gray-950/60",
                 item.isLeading
                   ? "border-emerald-200/90 ring-1 ring-emerald-500/15 dark:border-emerald-800/70 dark:ring-emerald-500/10"
@@ -95,7 +96,7 @@ export function CleanerLiveBidsSection({ items }: { items: CleanerLiveBidItem[] 
                     </Badge>
                   </div>
                   <p className="mt-1 line-clamp-2 text-base font-bold leading-snug text-foreground dark:text-gray-50">
-                    {item.title}
+                    {listingTitleWithoutSuburbSuffix(item.title, item.suburb)}
                   </p>
                   <p className="text-sm text-muted-foreground dark:text-gray-400">
                     {[item.suburb, item.postcode].filter(Boolean).join(" ")}

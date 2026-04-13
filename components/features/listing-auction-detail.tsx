@@ -38,7 +38,7 @@ import {
 } from "@/lib/listings";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
-import { listingDescriptionForDisplay } from "@/lib/listing-detail-presenters";
+import { listingPropertyDescriptionBody } from "@/lib/listing-detail-presenters";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
 import { BuyNowButton } from "@/components/features/buy-now-button";
@@ -53,11 +53,12 @@ import { useToast } from "@/components/ui/use-toast";
 import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
 import { logClientError } from "@/lib/errors/log-client-error";
 import { CountdownTimer } from "@/components/features/countdown-timer";
+import { ListingEndsAtLocal } from "@/components/features/listing-ends-at-local";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
+import { ImageLightboxGallery } from "@/components/ui/image-lightbox-gallery";
 import {
   parseListingCalendarDate,
   formatDateDdMmYyyy,
-  formatEndDateTime,
   humanizePropertyCondition,
   preferredWindowFromMoveOutDate,
 } from "@/lib/listing-detail-presenters";
@@ -90,7 +91,10 @@ export function ListingAuctionDetail({
 }: ListingAuctionDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [photoLightbox, setPhotoLightbox] = useState<{
+    urls: string[];
+    index: number;
+  } | null>(null);
   const [showCancelListingDialog, setShowCancelListingDialog] = useState(false);
   const [cancellingListing, setCancellingListing] = useState(false);
   /** Same source as job detail: list storage so we show every file even if DB arrays are incomplete. */
@@ -418,7 +422,7 @@ export function ListingAuctionDetail({
               </div>
               <div className="text-sm text-muted-foreground dark:text-gray-400">
                 <span className="font-medium text-foreground dark:text-gray-200">Ends: </span>
-                {formatEndDateTime(listing.end_time)}
+                <ListingEndsAtLocal endTime={listing.end_time} />
               </div>
             </div>
           </div>
@@ -698,7 +702,9 @@ export function ListingAuctionDetail({
                 <button
                   key={`${url}-${i}`}
                   type="button"
-                  onClick={() => setLightboxUrl(url)}
+                  onClick={() =>
+                    setPhotoLightbox({ urls: [...photoUrls], index: i })
+                  }
                   className="group relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-muted ring-offset-background transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-gray-800"
                 >
                   <Image
@@ -776,22 +782,13 @@ export function ListingAuctionDetail({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={lightboxUrl != null} onOpenChange={(o) => !o && setLightboxUrl(null)}>
-        <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden border-0 bg-black/95 p-2 sm:p-4">
-          <DialogTitle className="sr-only">Enlarged property photo</DialogTitle>
-          {lightboxUrl && (
-            <div className="relative aspect-auto max-h-[85vh] w-full">
-              <Image
-                src={lightboxUrl}
-                alt=""
-                width={1200}
-                height={800}
-                className="mx-auto h-auto max-h-[85vh] w-full rounded-lg object-contain"
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ImageLightboxGallery
+        open={photoLightbox != null}
+        urls={photoLightbox?.urls ?? []}
+        initialIndex={photoLightbox?.index ?? 0}
+        onClose={() => setPhotoLightbox(null)}
+        ariaLabel="Initial condition photos"
+      />
 
       <Card>
         <CardHeader className="space-y-2">
@@ -821,13 +818,39 @@ export function ListingAuctionDetail({
             </div>
           )}
           <div>
-            <h3 className="mb-2 text-sm font-semibold">Description</h3>
+            <h3 className="mb-2 text-sm font-semibold">Property description</h3>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
-              {listingDescriptionForDisplay(listing.description) || "No description provided."}
+              {listingPropertyDescriptionBody(listing) || "No property description provided."}
             </p>
           </div>
         </CardContent>
       </Card>
+
+      {showCleanerBidUi && (
+        <Card id="place-bid">
+          <CardHeader>
+            <CardTitle className="text-lg">Place a bid</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {typeof listing.buy_now_cents === "number" && listing.buy_now_cents > 0 && (
+              <BuyNowButton
+                listingId={listing.id}
+                buyNowCents={listing.buy_now_cents}
+                currentUserId={currentUserId}
+              />
+            )}
+            <div>
+              <h3 className="mb-2 text-sm font-semibold">Your bid</h3>
+              <PlaceBidForm
+                listingId={listing.id}
+                listing={listing}
+                isCleaner={isCleaner}
+                currentUserId={currentUserId}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card id="bids" className="overflow-hidden">
         <details className="group">
@@ -885,32 +908,6 @@ export function ListingAuctionDetail({
           </CardContent>
         </details>
       </Card>
-
-      {showCleanerBidUi && (
-        <Card id="place-bid">
-          <CardHeader>
-            <CardTitle className="text-lg">Place a bid</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {typeof listing.buy_now_cents === "number" && listing.buy_now_cents > 0 && (
-              <BuyNowButton
-                listingId={listing.id}
-                buyNowCents={listing.buy_now_cents}
-                currentUserId={currentUserId}
-              />
-            )}
-            <div>
-              <h3 className="mb-2 text-sm font-semibold">Your bid</h3>
-              <PlaceBidForm
-                listingId={listing.id}
-                listing={listing}
-                isCleaner={isCleaner}
-                currentUserId={currentUserId}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {!isCleaner && !isListerOwner && (
         <p className="text-center text-sm text-muted-foreground">

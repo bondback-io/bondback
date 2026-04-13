@@ -7,7 +7,7 @@ import {
   loadJobForListingDetailPage,
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
-import { listingDescriptionForDisplay } from "@/lib/listing-detail-presenters";
+import { listingNarrativeForSeo } from "@/lib/listing-detail-presenters";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -129,9 +129,6 @@ export async function buildJobListingMetadata(
 
   const title = String(listing.title ?? "").trim() || "Bond clean job";
   const place = [listing.suburb, listing.postcode].filter(Boolean).join(" ");
-  const body = plainTextFromListingDescription(
-    listingDescriptionForDisplay(listing.description ?? "")
-  );
   const priceCents = metaPriceCents(listing, jobForPrice);
   const priceStr = formatAudFromCents(priceCents);
   const metaDesc = truncateMeta(
@@ -199,9 +196,7 @@ export function buildJobPostingJsonLd(opts: {
 }): Record<string, unknown> {
   const { listing, job, canonicalJobUrl } = opts;
   const title = String(listing.title ?? "").trim() || "Bond clean";
-  const body = plainTextFromListingDescription(
-    listingDescriptionForDisplay(listing.description ?? "")
-  );
+  const body = plainTextFromListingDescription(listingNarrativeForSeo(listing));
   const place = [listing.suburb, listing.postcode].filter(Boolean).join(" ");
   const priceCents = metaPriceCents(listing, job);
   const priceLabel = formatAudFromCents(priceCents);

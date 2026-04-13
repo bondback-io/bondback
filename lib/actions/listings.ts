@@ -162,12 +162,16 @@ export type UpdateListingDetailsResult =
   | { ok: false; error: string };
 
 /**
- * Update safe listing details (photos + description) for the current lister.
+ * Update safe listing details (photos + property narrative) for the current lister.
  * Does not touch price, timing, or core scope fields.
  */
 export async function updateListingDetails(
   listingId: string,
-  details: { description?: string | null; photo_urls?: string[] | null }
+  details: {
+    description?: string | null;
+    property_description?: string | null;
+    photo_urls?: string[] | null;
+  }
 ): Promise<UpdateListingDetailsResult> {
   const supabase = await createServerSupabaseClient();
   const {
@@ -186,6 +190,9 @@ export async function updateListingDetails(
   const patch: ListingUpdate = {};
   if ("description" in details) {
     patch.description = details.description ?? null;
+  }
+  if ("property_description" in details) {
+    patch.property_description = details.property_description ?? null;
   }
   if ("photo_urls" in details) {
     const urls = details.photo_urls ?? null;

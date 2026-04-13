@@ -143,7 +143,7 @@ function JobCardMarketplaceMobileInner({
           <Link
             href={jobHref}
             className={cn(
-              "relative shrink-0 overflow-hidden rounded-xl bg-muted dark:bg-gray-800",
+              "relative shrink-0 overflow-hidden rounded-xl bg-muted no-underline hover:no-underline dark:bg-gray-800",
               cleanerBoost ? "h-[100px] w-[100px]" : "h-[88px] w-[88px] rounded-lg"
             )}
             aria-label={`View listing: ${title}`}
@@ -282,7 +282,10 @@ function JobCardMarketplaceMobileInner({
                   cleanerBoost ? "min-h-12 text-sm" : "h-9 min-h-9 rounded-lg text-xs"
                 )}
               >
-                <Link href={jobHref} className="inline-flex items-center justify-center gap-1.5">
+                <Link
+                  href={jobHref}
+                  className="inline-flex items-center justify-center gap-1.5 no-underline hover:no-underline"
+                >
                   <Eye className={cn("shrink-0", cleanerBoost ? "h-5 w-5" : "h-4 w-4")} aria-hidden />
                   View
                 </Link>
@@ -310,7 +313,10 @@ function JobCardMarketplaceMobileInner({
                     cleanerBoost ? "min-h-12 text-sm" : "h-9 min-h-9 rounded-lg text-xs"
                   )}
                 >
-                  <Link href={jobHref} className="inline-flex items-center justify-center gap-1.5">
+                  <Link
+                    href={jobHref}
+                    className="inline-flex items-center justify-center gap-1.5 no-underline hover:no-underline"
+                  >
                     <Gavel className={cn("shrink-0", cleanerBoost ? "h-5 w-5" : "h-4 w-4")} aria-hidden />
                     Bid
                   </Link>
@@ -342,7 +348,10 @@ function JobCardMarketplaceMobileInner({
                     cleanerBoost ? "min-h-11 rounded-xl text-sm" : "h-8 min-h-8 rounded-lg text-xs"
                   )}
                 >
-                  <Link href={`/messages?job=${listingId}`} className="inline-flex items-center justify-center gap-1">
+                  <Link
+                    href={`/messages?job=${listingId}`}
+                    className="inline-flex items-center justify-center gap-1 no-underline hover:no-underline"
+                  >
                     <MessageCircle className={cn("shrink-0", cleanerBoost ? "h-4 w-4" : "h-3.5 w-3.5")} aria-hidden />
                     Msg
                   </Link>
@@ -353,14 +362,17 @@ function JobCardMarketplaceMobileInner({
             {isListerOwner && showListerActions && isLive && (
               <div className="flex flex-wrap gap-2">
                 <Button asChild variant="secondary" size="sm" className="h-8 min-h-8 rounded-lg text-xs">
-                  <Link href={jobHref} className="inline-flex items-center gap-1">
+                  <Link href={jobHref} className="inline-flex items-center gap-1 no-underline hover:no-underline">
                     <Gavel className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Bids
                   </Link>
                 </Button>
                 {hasAssignedCleaner && (
                   <Button asChild variant="outline" size="sm" className="h-8 min-h-8 rounded-lg text-xs">
-                    <Link href={`/messages?job=${listingId}`} className="inline-flex items-center gap-1">
+                    <Link
+                      href={`/messages?job=${listingId}`}
+                      className="inline-flex items-center gap-1 no-underline hover:no-underline"
+                    >
                       <MessageCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       Message
                     </Link>
@@ -391,7 +403,7 @@ function JobCardMarketplaceMobileInner({
         >
           <Link
             href={jobHref}
-            className="relative block min-h-[200px] w-full transition-transform active:scale-[0.99]"
+            className="relative block min-h-[200px] w-full no-underline transition-transform hover:no-underline active:scale-[0.99]"
             aria-label={`View listing: ${title}`}
           >
             {thumb ? (
@@ -420,7 +432,7 @@ function JobCardMarketplaceMobileInner({
           {secondaryThumb ? (
             <Link
               href={jobHref}
-              className="relative block min-h-[200px] w-full transition-transform active:scale-[0.99]"
+              className="relative block min-h-[200px] w-full no-underline transition-transform hover:no-underline active:scale-[0.99]"
               aria-label={`More photos: ${title}`}
             >
               <Image
@@ -555,7 +567,7 @@ function JobCardMarketplaceMobileInner({
               cleanerBoost ? "min-h-14 text-lg" : "min-h-12 text-base"
             )}
           >
-            <Link href={jobHref} className="flex items-center justify-center gap-2">
+            <Link href={jobHref} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
               <Eye className={cn("shrink-0", cleanerBoost ? "h-6 w-6" : "h-5 w-5")} aria-hidden />
               {showCleanerMobileActions && showPlaceBid && isLive && !hideCleanerCancelledAuctionUi
                 ? "View & bid"
@@ -584,7 +596,7 @@ function JobCardMarketplaceMobileInner({
                 cleanerBoost ? "min-h-14 text-lg" : "min-h-12 text-base"
               )}
             >
-              <Link href={jobHref} className="flex items-center justify-center gap-2">
+              <Link href={jobHref} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
                 <Gavel className={cn("shrink-0", cleanerBoost ? "h-6 w-6" : "h-5 w-5")} aria-hidden />
                 Bid Now
               </Link>
@@ -615,7 +627,10 @@ function JobCardMarketplaceMobileInner({
                   cleanerBoost ? "min-h-14 text-base" : "min-h-12 text-base"
                 )}
               >
-                <Link href={`/messages?job=${listingId}`} className="flex items-center justify-center gap-2">
+                <Link
+                  href={`/messages?job=${listingId}`}
+                  className="flex items-center justify-center gap-2 no-underline hover:no-underline"
+                >
                   <MessageCircle className={cn("shrink-0", cleanerBoost ? "h-5 w-5" : "h-5 w-5")} aria-hidden />
                   Message
                 </Link>
@@ -626,14 +641,17 @@ function JobCardMarketplaceMobileInner({
           {isListerOwner && showListerActions && isLive && (
             <div className="flex flex-col gap-3">
               <Button asChild variant="secondary" size="lg" className="min-h-12 w-full rounded-xl text-base font-semibold">
-                <Link href={jobHref} className="flex items-center justify-center gap-2">
+                <Link href={jobHref} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
                   <Gavel className="h-5 w-5 shrink-0" aria-hidden />
                   View Bids
                 </Link>
               </Button>
               {hasAssignedCleaner && (
                 <Button asChild variant="outline" size="lg" className="min-h-12 w-full rounded-xl border-2 text-base font-semibold">
-                  <Link href={`/messages?job=${listingId}`} className="flex items-center justify-center gap-2">
+                  <Link
+                    href={`/messages?job=${listingId}`}
+                    className="flex items-center justify-center gap-2 no-underline hover:no-underline"
+                  >
                     <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
                     Message Cleaner
                   </Link>

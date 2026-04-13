@@ -13,6 +13,7 @@ import {
   formatPreferredCleaningDueLine,
   getListingCoverUrl,
   getListingSecondImageUrl,
+  listingTitleWithoutSuburbSuffix,
 } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import {
@@ -178,7 +179,8 @@ function DashboardJobCardInner({
           0);
   const bedrooms = listing ? (listing as { bedrooms?: number }).bedrooms : null;
   const bathrooms = listing ? (listing as { bathrooms?: number }).bathrooms : null;
-  const title = listing?.title ?? (job as { title?: string | null }).title ?? `Job #${job.id}`;
+  const rawTitle = listing?.title ?? (job as { title?: string | null }).title ?? `Job #${job.id}`;
+  const title = listingTitleWithoutSuburbSuffix(rawTitle, listing?.suburb);
   const cover = listing && getListingCoverUrl(listing) ? getListingCoverUrl(listing)! : null;
   const secondImage = listing ? getListingSecondImageUrl(listing) : null;
 
@@ -218,7 +220,7 @@ function DashboardJobCardInner({
     >
       <Link
         href={detailUrl}
-        className="relative block min-h-[180px] w-full"
+        className="relative block min-h-[180px] w-full no-underline hover:no-underline"
         aria-label={`View job: ${title}`}
       >
         {cover ? (
@@ -233,7 +235,7 @@ function DashboardJobCardInner({
       {secondImage ? (
         <Link
           href={detailUrl}
-          className="relative block min-h-[180px] w-full"
+          className="relative block min-h-[180px] w-full no-underline hover:no-underline"
           aria-label={`More photos: ${title}`}
         >
           <OptimizedImage src={secondImage} alt="" fill sizes="50vw" className="object-cover" />
@@ -325,7 +327,7 @@ function DashboardJobCardInner({
 
           <div className="flex flex-col gap-3.5 pt-1">
             <Button asChild size="lg" variant="default" className="min-h-14 w-full rounded-xl text-lg font-semibold">
-              <Link href={detailUrl} className="flex items-center justify-center gap-2">
+              <Link href={detailUrl} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
                 <Eye className="h-6 w-6" aria-hidden />
                 View Details
               </Link>
@@ -338,7 +340,7 @@ function DashboardJobCardInner({
             >
               <Link
                 href={`/messages?job=${messagesJobParam}`}
-                className="flex items-center justify-center gap-2"
+                className="flex items-center justify-center gap-2 no-underline hover:no-underline"
               >
                 <MessageCircle className="h-6 w-6" aria-hidden />
                 {messagePeerLabel}
@@ -353,7 +355,7 @@ function DashboardJobCardInner({
               >
                 <Link
                   href={`/jobs/${encodeURIComponent(String(job.id))}#job-after-photos`}
-                  className="flex items-center justify-center gap-2"
+                  className="flex items-center justify-center gap-2 no-underline hover:no-underline"
                 >
                   <Camera className="h-6 w-6 shrink-0" aria-hidden />
                   Upload after photos
@@ -366,7 +368,7 @@ function DashboardJobCardInner({
                 size="lg"
                 className="min-h-14 w-full rounded-xl bg-violet-600 text-lg font-semibold text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
               >
-                <Link href={detailUrl} className="flex items-center justify-center gap-2">
+                <Link href={detailUrl} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
                   <Sparkles className="h-6 w-6 shrink-0" aria-hidden />
                   Review &amp; release
                 </Link>
@@ -386,7 +388,11 @@ function DashboardJobCardInner({
 
       {/* Desktop */}
       <div className="hidden md:block">
-        <Link href={detailUrl} className="block" aria-label={`View job: ${title}`}>
+        <Link
+          href={detailUrl}
+          className="block no-underline hover:no-underline"
+          aria-label={`View job: ${title}`}
+        >
           <div
             className={cn(
               "relative w-full bg-muted dark:bg-gray-800",
@@ -482,10 +488,12 @@ function DashboardJobCardInner({
           </div>
           <div className="mt-auto flex flex-wrap gap-2.5 pt-1">
             <Button asChild className="min-h-11 rounded-full px-5 text-sm font-semibold" variant="default">
-              <Link href={detailUrl}>View Job</Link>
+              <Link href={detailUrl} className="no-underline hover:no-underline">
+                View Job
+              </Link>
             </Button>
             <Button asChild variant="outline" className="min-h-11 rounded-full px-5 text-sm font-semibold">
-              <Link href={`/messages?job=${messagesJobParam}`}>
+              <Link href={`/messages?job=${messagesJobParam}`} className="no-underline hover:no-underline">
                 <MessageCircle className="mr-1.5 h-4 w-4" />
                 {viewerRole === "cleaner" ? "Message" : "Chat"}
               </Link>
@@ -496,7 +504,10 @@ function DashboardJobCardInner({
                 variant="secondary"
                 className="min-h-11 rounded-full border border-sky-500/30 bg-sky-500/10 px-5 text-sm font-semibold text-sky-900 dark:border-sky-700/40 dark:bg-sky-950/40 dark:text-sky-100"
               >
-                <Link href={`/jobs/${encodeURIComponent(String(job.id))}#job-after-photos`}>
+                <Link
+                  href={`/jobs/${encodeURIComponent(String(job.id))}#job-after-photos`}
+                  className="no-underline hover:no-underline"
+                >
                   <Camera className="mr-1.5 h-4 w-4" />
                   After photos
                 </Link>
@@ -507,7 +518,7 @@ function DashboardJobCardInner({
                 asChild
                 className="min-h-11 rounded-full bg-violet-600 px-5 text-sm font-semibold hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
               >
-                <Link href={detailUrl}>
+                <Link href={detailUrl} className="no-underline hover:no-underline">
                   <Sparkles className="mr-1.5 h-4 w-4" />
                   Review
                 </Link>

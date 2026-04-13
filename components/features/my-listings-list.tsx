@@ -16,6 +16,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import {
   clampAuctionDurationDays,
@@ -42,7 +43,7 @@ import {
 import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
 import { cn } from "@/lib/utils";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
-import { listingDescriptionForDisplay } from "@/lib/listing-detail-presenters";
+import { listingPropertyDescriptionBody } from "@/lib/listing-detail-presenters";
 import {
   Dialog,
   DialogContent,
@@ -183,7 +184,7 @@ export function MyListingsList({
 
   const [editing, setEditing] = useState<ListingRow | null>(null);
   const [editPhotoUrls, setEditPhotoUrls] = useState<string[]>([]);
-  const [editDescription, setEditDescription] = useState("");
+  const [editPropertyDescription, setEditPropertyDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -352,7 +353,7 @@ export function MyListingsList({
     setEditPhotoUrls(
       Array.isArray(listing.photo_urls) ? (listing.photo_urls as string[]) : []
     );
-    setEditDescription(listingDescriptionForDisplay(listing.description ?? ""));
+    setEditPropertyDescription(listingPropertyDescriptionBody(listing));
     setEditError(null);
   };
 
@@ -371,7 +372,7 @@ export function MyListingsList({
   const closeEditor = () => {
     setEditing(null);
     setEditPhotoUrls([]);
-    setEditDescription("");
+    setEditPropertyDescription("");
     setEditError(null);
     setUploadingPhotos(false);
     setIsSaving(false);
@@ -507,7 +508,8 @@ export function MyListingsList({
       const next = [...editPhotoUrls, ...newUrls].slice(0, PHOTO_LIMITS.LISTING_EDIT);
       setEditPhotoUrls(next);
       const result = await updateListingDetails(editing.id, {
-        description: editDescription.trim() || null,
+        property_description: editPropertyDescription.trim() || null,
+        description: null,
         photo_urls: next.length ? next : null,
       });
       if (!result.ok) {
@@ -518,7 +520,8 @@ export function MyListingsList({
             l.id === editing.id
               ? ({
                   ...l,
-                  description: editDescription.trim() || null,
+                  property_description: editPropertyDescription.trim() || null,
+                  description: null,
                   photo_urls: next.length ? next : null,
                 } as ListingRow)
               : l
@@ -538,7 +541,8 @@ export function MyListingsList({
     setIsSaving(true);
     setEditError(null);
     const result = await updateListingDetails(editing.id, {
-      description: editDescription.trim() || null,
+      property_description: editPropertyDescription.trim() || null,
+      description: null,
       photo_urls: editPhotoUrls.length ? editPhotoUrls : null,
     });
     setIsSaving(false);
@@ -552,7 +556,8 @@ export function MyListingsList({
         l.id === editing.id
           ? ({
               ...l,
-              description: editDescription.trim() || null,
+              property_description: editPropertyDescription.trim() || null,
+              description: null,
               photo_urls: editPhotoUrls.length ? editPhotoUrls : null,
             } as ListingRow)
           : l
@@ -1240,6 +1245,23 @@ export function MyListingsList({
               </Button>
             </div>
             <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs" htmlFor="edit-property-description">
+                  Property description
+                </Label>
+                <Textarea
+                  id="edit-property-description"
+                  rows={4}
+                  value={editPropertyDescription}
+                  onChange={(e) => setEditPropertyDescription(e.target.value)}
+                  placeholder="Context about the property and clean for bidders (separate from special instructions)."
+                  className="min-h-[88px] text-sm dark:border-gray-700 dark:bg-gray-900"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Shown under &quot;About this listing&quot; on the live listing. Special instructions are edited
+                  elsewhere on the listing flow if needed.
+                </p>
+              </div>
               <div className="space-y-1">
                 <Label className="text-xs">
                   Property photos ({editPhotoUrls.length}/{PHOTO_LIMITS.LISTING_EDIT})
@@ -1261,7 +1283,8 @@ export function MyListingsList({
                         next.unshift(url);
                         setEditPhotoUrls(next);
                         const result = await updateListingDetails(editing.id, {
-                          description: editDescription.trim() || null,
+                          property_description: editPropertyDescription.trim() || null,
+                          description: null,
                           photo_urls: next.length ? next : null,
                         });
                         if (!result.ok) {
@@ -1272,7 +1295,8 @@ export function MyListingsList({
                               l.id === editing.id
                                 ? ({
                                     ...l,
-                                    description: editDescription.trim() || null,
+                                    property_description: editPropertyDescription.trim() || null,
+                                    description: null,
                                     photo_urls: next.length ? next : null,
                                   } as ListingRow)
                                 : l
@@ -1295,7 +1319,8 @@ export function MyListingsList({
                           const next = editPhotoUrls.filter((u) => u !== url);
                           setEditPhotoUrls(next);
                           const result = await updateListingDetails(editing.id, {
-                            description: editDescription.trim() || null,
+                            property_description: editPropertyDescription.trim() || null,
+                            description: null,
                             photo_urls: next.length ? next : null,
                           });
                           if (!result.ok) {
@@ -1306,7 +1331,8 @@ export function MyListingsList({
                                 l.id === editing.id
                                   ? ({
                                       ...l,
-                                      description: editDescription.trim() || null,
+                                      property_description: editPropertyDescription.trim() || null,
+                                      description: null,
                                       photo_urls: next.length ? next : null,
                                     } as ListingRow)
                                   : l

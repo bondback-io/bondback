@@ -171,6 +171,8 @@ export interface Database {
           lister_id: string;
           title: string;
           description: string | null;
+          /** Lister narrative for cleaners (public); separate from special_instructions. */
+          property_description: string | null;
           suburb: string;
           postcode: string;
           property_type: string;
@@ -207,6 +209,7 @@ export interface Database {
           lister_id: string;
           title: string;
           description?: string | null;
+          property_description?: string | null;
           suburb: string;
           postcode: string;
           property_type: string;
@@ -235,6 +238,7 @@ export interface Database {
         Update: {
           title?: string;
           description?: string | null;
+          property_description?: string | null;
           suburb?: string;
           postcode?: string;
           property_type?: string;

@@ -115,7 +115,7 @@ export function ListerListingCard({
       <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
         <Link
           href={href}
-          className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted sm:h-28 sm:w-28"
+          className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted no-underline hover:no-underline sm:h-28 sm:w-28"
           aria-label={`Open ${listing.title}`}
         >
           <ListingCoverImage
@@ -137,7 +137,10 @@ export function ListerListingCard({
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <Link href={href} className="line-clamp-2 text-[15px] font-semibold leading-snug text-foreground hover:underline sm:text-base">
+              <Link
+                href={href}
+                className="line-clamp-2 text-[15px] font-semibold leading-snug text-foreground no-underline hover:no-underline sm:text-base"
+              >
                 {listing.title || "Untitled listing"}
               </Link>
               <p className="mt-1 flex items-start gap-1 text-xs text-muted-foreground dark:text-gray-400">

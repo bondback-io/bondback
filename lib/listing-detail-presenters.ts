@@ -1,4 +1,5 @@
-import { format, parse, parseISO, subDays } from "date-fns";
+import { format, parse, subDays } from "date-fns";
+import { parseUtcTimestamp } from "@/lib/utils";
 
 export const DISPLAY_DATE_FMT = "dd/MM/yyyy";
 
@@ -14,17 +15,20 @@ export function formatDateDdMmYyyy(date: Date): string {
   return format(date, DISPLAY_DATE_FMT);
 }
 
-/** Fixed pattern so SSR and browser match (avoid `toLocaleString(undefined, …)` hydration mismatches). */
+/**
+ * Formats listing auction `end_time` in the **current environment's local timezone**
+ * (same instant as `parseUtcTimestamp` / `CountdownTimer`).
+ *
+ * Use inside client components after mount (e.g. `ListingEndsAtLocal`) so the label matches
+ * the viewer's device; avoid calling during SSR if the server TZ differs from the user.
+ */
 export function formatEndDateTime(iso: string): string {
   try {
-    let d = parseISO(iso);
-    if (Number.isNaN(d.getTime())) {
-      d = new Date(iso);
-    }
-    if (Number.isNaN(d.getTime())) return iso;
-    return format(d, "EEE, d MMM yyyy, h:mm a");
+    const ms = parseUtcTimestamp(iso);
+    if (!Number.isFinite(ms)) return String(iso ?? "").trim() || "—";
+    return format(new Date(ms), "EEE, d MMM yyyy, h:mm a");
   } catch {
-    return iso;
+    return String(iso ?? "").trim() || "—";
   }
 }
 
@@ -46,19 +50,39 @@ export function preferredWindowFromMoveOutDate(moveOutDate: Date | null): string
 }
 
 /**
- * `listings.description` is for property details and extra notes only; special areas live in
- * `special_instructions`. Older rows duplicated "Special areas: …" into description — strip for UI.
+ * Legacy `listings.description` sometimes bundled "Property address: …", duplicated "Special areas: …",
+ * or free text. Strip machine-prefixed lines for display; prefer `property_description` on new rows.
  */
 export function listingDescriptionForDisplay(raw: string | null | undefined): string {
   let s = (raw ?? "").trim();
   if (!s) return "";
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     const next = s
       .replace(/(^|\n\n)Special areas:\s*.+?\.\s*/is, "$1")
       .replace(/^\s*Special areas:\s*.+?\.\s*/is, "")
+      .replace(/(^|\n)\s*Property address:\s*[^\n]*/gi, "$1")
+      .replace(/^\s*Property address:\s*[^\n]*/gi, "")
+      .replace(/\n{3,}/g, "\n\n")
       .trim();
     if (next === s) break;
     s = next;
   }
   return s;
+}
+
+export type ListingNarrativeFields = {
+  property_description?: string | null;
+  description?: string | null;
+};
+
+/** Body text for "Property description" in listing/job detail (new column, else cleaned legacy `description`). */
+export function listingPropertyDescriptionBody(listing: ListingNarrativeFields): string {
+  const pd = (listing.property_description ?? "").trim();
+  if (pd) return pd;
+  return listingDescriptionForDisplay(listing.description ?? "");
+}
+
+/** Plain narrative for meta / JSON-LD (same resolution as detail body). */
+export function listingNarrativeForSeo(listing: ListingNarrativeFields): string {
+  return listingPropertyDescriptionBody(listing);
 }

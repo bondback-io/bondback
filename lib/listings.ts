@@ -9,6 +9,26 @@ export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Removes a trailing ` in {suburb}` from auto-generated listing titles when the same
+ * suburb is shown on the next line (dashboard overview cards).
+ */
+export function listingTitleWithoutSuburbSuffix(
+  title: string | null | undefined,
+  suburb: string | null | undefined
+): string {
+  const t = (title ?? "").trim();
+  const sub = (suburb ?? "").trim();
+  if (!t || !sub) return t;
+  const re = new RegExp(`\\s+in\\s+${escapeRegExp(sub)}\\s*$`, "i");
+  const next = t.replace(re, "").trim();
+  return next.length > 0 ? next : t;
+}
+
 /**
  * True only while the row is an open auction: `status === "live"`, not ended early,
  * valid `end_time`, and now is before end. Anything else (ended, expired, bad dates) → false.
@@ -287,7 +307,8 @@ export function relistDurationMsFromDurationDays(durationDays: number | null | u
 export function buildListingInsertRow(params: {
   lister_id: string;
   title: string;
-  description: string | null;
+  /** Public narrative for cleaners; stored in `property_description`. */
+  property_description: string | null;
   property_address: string | null;
   suburb: string;
   postcode: string;
@@ -315,16 +336,13 @@ export function buildListingInsertRow(params: {
   property_condition: string | null;
   property_levels: string | null;
 }): ListingInsertPayload {
-  const addr = params.property_address?.trim();
-  const descParts = [addr ? `Property address: ${addr}` : null, params.description?.trim() || null].filter(
-    Boolean
-  ) as string[];
-  const description = descParts.length > 0 ? descParts.join("\n\n") : null;
+  const propertyDescription = params.property_description?.trim() || null;
 
   return {
     lister_id: params.lister_id,
     title: params.title,
-    description,
+    description: null,
+    property_description: propertyDescription,
     suburb: params.suburb,
     postcode: params.postcode,
     property_type: params.property_type,

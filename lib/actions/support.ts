@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
 import { categorizeSupportTicket, type CategorizeResult } from "@/lib/support-categorize";
 import { render } from "@react-email/render";
 import React from "react";
 import { SupportTicketConfirmation } from "@/emails/SupportTicketConfirmation";
+import { SupportTicketAdminAlert } from "@/emails/SupportTicketAdminAlert";
 import { sendEmail } from "@/lib/notifications/email";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { SUPPORT_CATEGORY_OPTIONS } from "@/lib/support-categorize";
@@ -165,6 +166,84 @@ function ticketDisplayId(uuid: string): string {
   return `TKT-${hex}`;
 }
 
+function supportDescriptionEmailPreview(raw: string, max = 400): string {
+  const oneLine = (raw ?? "").replace(/\s+/g, " ").trim();
+  if (oneLine.length <= max) return oneLine;
+  return `${oneLine.slice(0, max - 1)}…`;
+}
+
+/**
+ * Email every active admin (profiles.is_admin, not soft-deleted) when a ticket is filed.
+ * Best-effort only: failures are logged; ticket submit still succeeds.
+ */
+async function notifyAdminsNewSupportTicket(params: {
+  ticketDisplayId: string;
+  category: string;
+  subject: string;
+  description: string;
+  contactEmail: string | null;
+  jobId: number | null;
+  listingId: string | null;
+}): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    console.warn("[support-ticket-admin-email] skipped: SUPABASE_SERVICE_ROLE_KEY not set");
+    return;
+  }
+
+  const { data: rows, error } = await admin
+    .from("profiles")
+    .select("id, is_deleted")
+    .eq("is_admin", true);
+
+  if (error) {
+    console.error("[support-ticket-admin-email] failed to list admins:", error.message);
+    return;
+  }
+
+  const adminIds = (rows ?? [])
+    .filter((r) => !(r as { is_deleted?: boolean | null }).is_deleted)
+    .map((r) => (r as { id: string }).id)
+    .filter(Boolean);
+
+  if (adminIds.length === 0) return;
+
+  const descriptionPreview = supportDescriptionEmailPreview(params.description);
+  const element = React.createElement(SupportTicketAdminAlert, {
+    ticketDisplayId: params.ticketDisplayId,
+    category: params.category,
+    ticketSubject: params.subject,
+    descriptionPreview,
+    contactEmail: params.contactEmail,
+    jobId: params.jobId,
+    listingId: params.listingId,
+  });
+
+  let html: string | null = null;
+  try {
+    html = await render(element);
+  } catch (e) {
+    console.error("[support-ticket-admin-email] render failed:", e);
+    return;
+  }
+  if (!html) return;
+
+  const subject = `[Bond Back] New support ticket ${params.ticketDisplayId} — ${params.subject.slice(0, 60)}${params.subject.length > 60 ? "…" : ""}`;
+  const seenEmails = new Set<string>();
+
+  for (const userId of adminIds) {
+    const to = await getEmailForUserId(userId);
+    if (!to?.trim()) continue;
+    const key = to.trim().toLowerCase();
+    if (seenEmails.has(key)) continue;
+    seenEmails.add(key);
+
+    await sendEmail(to.trim(), subject, html, {
+      log: { userId, kind: "support_ticket_admin_alert" },
+    });
+  }
+}
+
 export type SubmitSupportTicketResult =
   | { ok: true; ticketId: string; ticketDisplayId: string }
   | { ok: false; error: string };
@@ -283,6 +362,16 @@ export async function submitSupportTicket(
       log: { userId: session.user.id, kind: "support_ticket_confirmation" },
     });
   }
+
+  void notifyAdminsNewSupportTicket({
+    ticketDisplayId: displayId,
+    category: categoryOption,
+    subject: sub,
+    description: desc,
+    contactEmail: email,
+    jobId: jobId != null && Number.isFinite(jobId) ? jobId : null,
+    listingId,
+  });
 
   return { ok: true, ticketId: tid, ticketDisplayId: displayId };
 }

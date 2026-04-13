@@ -16,6 +16,7 @@ import {
   formatCents,
   formatPreferredCleaningDueLine,
   getListingCoverUrl,
+  listingTitleWithoutSuburbSuffix,
 } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
@@ -57,7 +58,10 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
     winner_id: job.winner_id,
     cleaner_id: job.cleaner_id,
   });
-  const title = listing?.title ?? "Bond clean job";
+  const title = listingTitleWithoutSuburbSuffix(
+    listing?.title ?? "Bond clean job",
+    listing?.suburb
+  );
   const thumb = getListingCoverUrl(listing);
   const isDisputed =
     job.status === "disputed" || job.status === "in_review" || job.status === "dispute_negotiating";
@@ -105,13 +109,13 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
         <div className="relative h-[220px] min-h-[200px] max-h-[260px] w-full overflow-hidden bg-muted dark:bg-gray-800">
           <Link
             href={jobHref}
-            className="absolute inset-0 z-0 block"
+            className="absolute inset-0 z-0 block no-underline hover:no-underline"
             aria-label={`View job: ${title}`}
           >
             {thumb ? (
               <Image
                 src={thumb}
-                alt={listing?.title ? `Photo for ${listing.title}` : "Job photo"}
+                alt={title ? `Photo for ${title}` : "Job photo"}
                 fill
                 quality={75}
                 className="object-cover"
@@ -253,7 +257,7 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
       <div className="group relative hidden flex-col overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition-all duration-200 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 md:flex [@media(hover:hover)]:hover:-translate-y-0.5 [@media(hover:hover)]:hover:shadow-xl active:scale-[0.98]">
       <Link
         href={jobHref}
-        className="flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg rounded-b-none"
+        className="flex flex-col rounded-lg rounded-b-none no-underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         aria-label={`View job: ${title}`}
       >
         <div className="relative aspect-[16/10] w-full shrink-0 bg-muted dark:bg-gray-800">

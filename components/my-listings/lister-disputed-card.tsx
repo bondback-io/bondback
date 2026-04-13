@@ -70,7 +70,7 @@ export function ListerDisputedCard({
       <div className="flex gap-3 border-b border-amber-200/60 p-3 dark:border-amber-900/50 sm:gap-4 sm:p-4">
         <Link
           href={jobPageBase}
-          className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted sm:h-28 sm:w-28"
+          className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted no-underline hover:no-underline sm:h-28 sm:w-28"
         >
           <ListingCoverImage listing={listing} alt="" fill sizes="112px" className="object-cover" />
         </Link>
@@ -79,7 +79,7 @@ export function ListerDisputedCard({
             <div className="min-w-0">
               <Link
                 href={jobPageBase}
-                className="line-clamp-2 text-[15px] font-semibold leading-snug text-foreground hover:underline sm:text-base"
+                className="line-clamp-2 text-[15px] font-semibold leading-snug text-foreground no-underline hover:no-underline sm:text-base"
               >
                 {listing.title || "Listing"}
               </Link>

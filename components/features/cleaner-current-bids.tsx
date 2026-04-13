@@ -70,7 +70,7 @@ export function CleanerCurrentBids({ items }: CleanerCurrentBidsProps) {
           >
             <a
               href={detailUrl}
-              className="flex flex-col gap-1"
+              className="flex flex-col gap-1 no-underline hover:no-underline"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="font-medium">{listing.title}</div>

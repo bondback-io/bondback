@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CountdownTimer } from "@/components/features/countdown-timer";
 import { ListingCoverImage } from "@/components/listing/listing-cover-image";
-import { formatCents } from "@/lib/listings";
+import { formatCents, listingTitleWithoutSuburbSuffix } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import {
   MapPin,
@@ -58,6 +58,7 @@ function DashboardListingCardInner({
   const bedrooms = (listing as { bedrooms?: number }).bedrooms;
   const bathrooms = (listing as { bathrooms?: number }).bathrooms;
   const auctionLive = isListingLive(listing);
+  const cardTitle = listingTitleWithoutSuburbSuffix(listing.title, listing.suburb);
 
   return (
     <Card
@@ -70,7 +71,11 @@ function DashboardListingCardInner({
       {/* Mobile */}
       <div className="md:hidden">
         <div className="relative h-[200px] w-full min-h-[180px] max-h-[220px] overflow-hidden bg-muted dark:bg-gray-800">
-          <Link href={detailUrl} className="absolute inset-0 block" aria-label={`View listing: ${listing.title}`}>
+          <Link
+            href={detailUrl}
+            className="absolute inset-0 block no-underline hover:no-underline"
+            aria-label={`View listing: ${cardTitle}`}
+          >
             <ListingCoverImage listing={listing} alt="" fill sizes="100vw" className="object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent md:from-black/55 md:via-black/12" aria-hidden />
           </Link>
@@ -128,7 +133,7 @@ function DashboardListingCardInner({
               {bathrooms != null ? `${bathrooms} bath` : ""}
             </p>
           )}
-          <p className="line-clamp-2 text-sm font-semibold text-foreground dark:text-gray-100">{listing.title}</p>
+          <p className="line-clamp-2 text-sm font-semibold text-foreground dark:text-gray-100">{cardTitle}</p>
           <p
             className={cn(
               "flex items-center gap-1 text-xs tabular-nums text-muted-foreground dark:text-gray-400",
@@ -151,7 +156,7 @@ function DashboardListingCardInner({
 
           <div className="flex flex-col gap-3 pt-1">
             <Button asChild size="lg" variant="default" className="min-h-12 w-full rounded-xl text-base font-semibold">
-              <Link href={detailUrl} className="flex items-center justify-center gap-2">
+              <Link href={detailUrl} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
                 <Eye className="h-5 w-5" aria-hidden />
                 View Listing
               </Link>
@@ -182,7 +187,7 @@ function DashboardListingCardInner({
                   >
                     <Link
                       href={`/my-listings?cancel=${listing.id}`}
-                      className="flex items-center justify-center gap-2"
+                      className="flex items-center justify-center gap-2 no-underline hover:no-underline"
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}
                     >
@@ -199,7 +204,11 @@ function DashboardListingCardInner({
 
       {/* Desktop */}
       <div className="hidden md:block">
-        <Link href={detailUrl} className="block" aria-label={`View listing: ${listing.title}`}>
+        <Link
+          href={detailUrl}
+          className="block no-underline hover:no-underline"
+          aria-label={`View listing: ${cardTitle}`}
+        >
           <div className="relative aspect-[16/10] w-full bg-muted dark:bg-gray-800">
             <ListingCoverImage listing={listing} alt="" fill sizes="33vw" className="object-cover" />
             <div className="absolute left-2 top-2 flex flex-wrap gap-1.5">
@@ -227,7 +236,7 @@ function DashboardListingCardInner({
         <CardContent className="flex flex-1 flex-col gap-3 p-4">
           <div>
             <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-foreground dark:text-gray-100">
-              {listing.title}
+              {cardTitle}
             </h3>
             <p className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3 shrink-0" />
@@ -293,7 +302,9 @@ function DashboardListingCardInner({
           </p>
           <div className="mt-auto flex flex-wrap gap-2 pt-1">
             <Button asChild size="sm" className="rounded-full" variant="default">
-              <Link href={detailUrl}>View Listing</Link>
+              <Link href={detailUrl} className="no-underline hover:no-underline">
+                View Listing
+              </Link>
             </Button>
             {!compact && (
               <>
@@ -321,6 +332,7 @@ function DashboardListingCardInner({
                   >
                     <Link
                       href={`/my-listings?cancel=${listing.id}`}
+                      className="no-underline hover:no-underline"
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}
                     >

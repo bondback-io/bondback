@@ -10,7 +10,7 @@ import {
 } from "@/components/dashboard";
 import { DashboardListingCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 import { XCircle, ChevronDown } from "lucide-react";
-import type { ListingRow } from "@/lib/listings";
+import { listingTitleWithoutSuburbSuffix, type ListingRow } from "@/lib/listings";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 
@@ -165,7 +165,10 @@ export function ListerDashboardContent({
                         className="block rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-muted/50 dark:hover:bg-gray-800/50"
                       >
                         <span className="font-medium text-foreground dark:text-gray-100">
-                          {listing?.title ?? `Job #${job.id}`}
+                          {listingTitleWithoutSuburbSuffix(
+                            listing?.title ?? `Job #${job.id}`,
+                            listing?.suburb
+                          )}
                         </span>
                         <span className="ml-1 text-muted-foreground dark:text-gray-400">· View</span>
                       </Link>
@@ -227,7 +230,10 @@ export function ListerDashboardContent({
                       >
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-foreground dark:text-gray-100">
-                            {listing?.title ?? `Job #${job.id}`}
+                            {listingTitleWithoutSuburbSuffix(
+                              listing?.title ?? `Job #${job.id}`,
+                              listing?.suburb
+                            )}
                           </p>
                           <p className="text-[11px] text-muted-foreground dark:text-gray-400">
                             Job cancelled by you
@@ -255,7 +261,7 @@ export function ListerDashboardContent({
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground dark:text-gray-100">
-                          {listing.title}
+                          {listingTitleWithoutSuburbSuffix(listing.title, listing.suburb)}
                         </p>
                         <p className="text-[11px] text-muted-foreground dark:text-gray-400">
                           Listing ended early (auction cancelled)
