@@ -1134,6 +1134,10 @@ export function NewListingForm({
                       className="pl-10 pr-4 md:pl-10 md:pr-3 dark:bg-gray-800 dark:border-gray-700"
                       placeholder="e.g. LITTLE MOUNTAIN"
                       value={suburbQuery || form.watch("suburb")}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      enterKeyHint="search"
                       onChange={(e) => {
                         const v = e.target.value;
                         setSuburbQuery(v);
@@ -1164,7 +1168,10 @@ export function NewListingForm({
                               key={`${row.suburb}-${row.postcode}`}
                               type="button"
                               className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"
-                              onClick={() => handleSuburbSelect(row)}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSuburbSelect(row);
+                              }}
                             >
                               <span className="font-medium">{row.suburb}</span>
                               <span className="text-xs text-muted-foreground dark:text-gray-400">
