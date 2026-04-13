@@ -12,6 +12,11 @@ type AdminClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
 /** Matches `createServerSupabaseClient()` return type (avoids SupabaseClient generic mismatch). */
 export type ServerSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
+/** Pass `isAdmin: true` when `profiles.is_admin` for the session user (see `profileFieldIsAdmin`). */
+export type JobDetailSessionOptions = {
+  isAdmin?: boolean;
+};
+
 let loggedMissingServiceRoleForJobLoad = false;
 let loggedMissingServiceRoleForListingLoad = false;
 let loggedMissingServiceRoleForListingUuidJob = false;
@@ -35,6 +40,15 @@ export function sessionMayReadJobRow(
     return true;
   }
   return false;
+}
+
+function sessionMayReadJobOrAdmin(
+  job: Pick<JobRow, "lister_id" | "winner_id">,
+  sessionUserId: string | undefined,
+  isAdmin?: boolean
+): boolean {
+  if (isAdmin) return true;
+  return sessionMayReadJobRow(job, sessionUserId);
 }
 
 /** True when a non-cancelled job exists with an assigned cleaner for this listing. */
@@ -104,14 +118,16 @@ export function isMarketplaceVisibleListing(row: ListingRow): boolean {
 }
 
 /**
- * Load a job by numeric PK for `/jobs/[id]`. Only the lister or assigned cleaner may read the row
- * (no anonymous access, no losing bidders, no “marketplace mirror”).
+ * Load a job by numeric PK for `/jobs/[id]`. Lister, assigned cleaner, or admin (`options.isAdmin`).
  */
 export async function loadJobByNumericIdForSession(
   supabase: ServerSupabaseClient,
   jobId: number,
-  sessionUserId: string | undefined
+  sessionUserId: string | undefined,
+  options?: JobDetailSessionOptions
 ): Promise<JobRow | null> {
+  const isAdmin = options?.isAdmin === true;
+
   const { data: fromUser, error } = await supabase
     .from("jobs")
     .select(JOB_DETAIL_PAGE_SELECT)
@@ -124,7 +140,7 @@ export async function loadJobByNumericIdForSession(
 
   if (!error && fromUser) {
     const j = fromUser as JobRow;
-    if (sessionMayReadJobRow(j, sessionUserId)) return j;
+    if (sessionMayReadJobOrAdmin(j, sessionUserId, isAdmin)) return j;
   }
 
   const admin = createSupabaseAdminClient();
@@ -149,7 +165,7 @@ export async function loadJobByNumericIdForSession(
   }
 
   const j = full as JobRow;
-  if (sessionMayReadJobRow(j, sessionUserId)) {
+  if (sessionMayReadJobOrAdmin(j, sessionUserId, isAdmin)) {
     return j;
   }
 
@@ -166,8 +182,39 @@ export async function loadListingFullForSession(
   supabase: ServerSupabaseClient,
   listingId: string,
   sessionUserId: string | undefined,
-  accessJob: JobRow | null
+  accessJob: JobRow | null,
+  options?: JobDetailSessionOptions
 ): Promise<ListingRow | null> {
+  const isAdmin = options?.isAdmin === true;
+
+  if (isAdmin) {
+    const { data: direct, error: adminUserErr } = await supabase
+      .from("listings")
+      .select(LISTING_FULL_SELECT)
+      .eq("id", listingId)
+      .maybeSingle();
+    if (adminUserErr) {
+      console.warn(
+        "[loadListingFullForSession] admin user-scoped listings read error",
+        adminUserErr.code,
+        adminUserErr.message
+      );
+    }
+    if (!adminUserErr && direct) {
+      return direct as ListingRow;
+    }
+    const admin = createSupabaseAdminClient();
+    if (admin) {
+      const { data: full } = await admin
+        .from("listings")
+        .select(LISTING_FULL_SELECT)
+        .eq("id", listingId)
+        .maybeSingle();
+      if (full) return full as ListingRow;
+    }
+    return null;
+  }
+
   const { data: fromUser, error } = await supabase
     .from("listings")
     .select(LISTING_FULL_SELECT)
@@ -208,7 +255,7 @@ export async function loadListingFullForSession(
     if (String(accessJob.listing_id) !== String(listingId)) {
       return null;
     }
-    if (!sessionMayReadJobRow(accessJob, sessionUserId)) {
+    if (!sessionMayReadJobOrAdmin(accessJob, sessionUserId, false)) {
       return null;
     }
     return row;
@@ -232,7 +279,7 @@ export async function loadListingFullForSession(
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (j && sessionMayReadJobRow(j as JobRow, sessionUserId)) {
+    if (j && sessionMayReadJobOrAdmin(j as JobRow, sessionUserId, false)) {
       return row;
     }
     return null;
@@ -263,13 +310,16 @@ export async function loadListingFullForSession(
 }
 
 /**
- * Latest non-cancelled job for a listing UUID route — only returned to lister or assigned cleaner.
+ * Latest non-cancelled job for a listing UUID route — lister, assigned cleaner, or admin.
  */
 export async function loadJobForListingDetailPage(
   supabase: ServerSupabaseClient,
   listingId: string,
-  sessionUserId: string | undefined
+  sessionUserId: string | undefined,
+  options?: JobDetailSessionOptions
 ): Promise<JobRow | null> {
+  const isAdmin = options?.isAdmin === true;
+
   const { data: fromUser, error } = await supabase
     .from("jobs")
     .select(JOB_DETAIL_PAGE_SELECT)
@@ -281,7 +331,7 @@ export async function loadJobForListingDetailPage(
 
   if (!error && fromUser) {
     const j = fromUser as JobRow;
-    if (sessionMayReadJobRow(j, sessionUserId)) return j;
+    if (sessionMayReadJobOrAdmin(j, sessionUserId, isAdmin)) return j;
   }
 
   const admin = createSupabaseAdminClient();
@@ -309,7 +359,7 @@ export async function loadJobForListingDetailPage(
   }
 
   const j = full as JobRow;
-  if (sessionMayReadJobRow(j, sessionUserId)) {
+  if (sessionMayReadJobOrAdmin(j, sessionUserId, isAdmin)) {
     return j;
   }
 

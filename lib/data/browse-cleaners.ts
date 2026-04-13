@@ -93,7 +93,6 @@ function numOrZero(v: unknown): number {
 }
 
 export async function loadBrowseCleaners(params: {
-  viewerUserId: string;
   /** Lister/cleaner “search near me” radius (km) */
   radiusKm: number;
   centerLat: number | null;
@@ -119,7 +118,7 @@ export async function loadBrowseCleaners(params: {
 
   const raw = (profileRows ?? []) as RawProfile[];
   const cleanersOnly = raw.filter((p) => {
-    if (p.is_deleted === true || p.id === params.viewerUserId) return false;
+    if (p.is_deleted === true) return false;
     return normalizeProfileRoles(p.roles).includes("cleaner");
   });
 

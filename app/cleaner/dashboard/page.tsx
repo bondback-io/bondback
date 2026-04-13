@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCachedTakenListingIds } from "@/lib/cached-taken-listing-ids";
 import {
   LISTING_FULL_SELECT,
@@ -45,6 +47,18 @@ import { bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+/** Shown on job cards; prefer legal name, then business name. */
+function listerDisplayNameFromProfile(row: {
+  full_name: string | null;
+  business_name: string | null;
+}): string | null {
+  const full = (row.full_name ?? "").trim();
+  if (full.length > 0) return full;
+  const biz = (row.business_name ?? "").trim();
+  if (biz.length > 0) return biz;
+  return null;
+}
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -136,17 +150,22 @@ export default async function CleanerDashboardPage() {
         .filter((id): id is string => typeof id === "string" && id.length > 0)
     ),
   ];
-  const listerFirstNameById: Record<string, string> = {};
+  /** Service role bypasses RLS so cleaners can read lister names; user client often returns no rows. */
+  const profilesClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+  const listerDisplayNameById = new Map<string, string>();
   if (listerIdsForActiveJobs.length > 0) {
-    const { data: listerProfiles } = await supabase
+    const { data: listerProfiles } = await profilesClient
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, business_name")
       .in("id", listerIdsForActiveJobs);
     for (const row of listerProfiles ?? []) {
-      const r = row as { id: string; full_name: string | null };
-      const raw = (r.full_name ?? "").trim();
-      const first = raw.split(/\s+/)[0] ?? "";
-      listerFirstNameById[r.id] = first || "Lister";
+      const r = row as {
+        id: string;
+        full_name: string | null;
+        business_name: string | null;
+      };
+      const name = listerDisplayNameFromProfile(r);
+      if (name) listerDisplayNameById.set(r.id, name);
     }
   }
 
@@ -427,12 +446,7 @@ export default async function CleanerDashboardPage() {
                   job.status === "in_progress"
                     ? (markCompleteReadyByJobId.get(Number(job.id)) ?? false)
                     : false,
-                counterpartyName:
-                  listerId && listerFirstNameById[listerId]
-                    ? listerFirstNameById[listerId]
-                    : listerId
-                      ? "Lister"
-                      : null,
+                counterpartyName: listerId ? listerDisplayNameById.get(listerId) ?? null : null,
                 counterpartyRole: "lister" as const,
                 viewerRole: "cleaner" as const,
               };

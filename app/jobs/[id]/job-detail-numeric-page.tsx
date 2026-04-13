@@ -7,6 +7,7 @@ import {
   loadJobByNumericIdForSession,
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
+import { profileFieldIsAdmin } from "@/lib/is-admin";
 import { buildJobRouteDebugSnapshot } from "@/lib/jobs/job-route-debug";
 import { JobDetailPageContent } from "@/app/jobs/job-detail-page-content";
 import { JobRouteDebugPanel } from "@/app/jobs/[id]/job-route-debug-panel";
@@ -79,6 +80,17 @@ export default async function JobDetailPage({
   } = await supabase.auth.getUser();
   const sessionUserId = authUser?.id ?? null;
 
+  let sessionIsAdmin = false;
+  if (authUser?.id) {
+    const { data: p } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", authUser.id)
+      .maybeSingle();
+    sessionIsAdmin = profileFieldIsAdmin((p as { is_admin?: unknown } | null)?.is_admin);
+  }
+  const detailLoadOpts = { isAdmin: sessionIsAdmin };
+
   /**
    * Single source of truth: same loader as SEO + `JobDetailPageContent`.
    * The old RLS-only gate treated “user cannot SELECT jobs” as 404 even when the linked listing
@@ -87,7 +99,8 @@ export default async function JobDetailPage({
   const job = await loadJobByNumericIdForSession(
     supabase,
     numericId,
-    sessionUserId ?? undefined
+    sessionUserId ?? undefined,
+    detailLoadOpts
   );
 
   if (!job) {
@@ -99,7 +112,8 @@ export default async function JobDetailPage({
       supabase,
       raw,
       sessionUserId ?? undefined,
-      null
+      null,
+      detailLoadOpts
     );
     if (listingRow) {
       redirect(`/listings/${encodeURIComponent(raw)}`);

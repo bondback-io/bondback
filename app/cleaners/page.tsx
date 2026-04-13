@@ -127,7 +127,6 @@ export default async function BrowseCleanersPage({
     Number.isFinite(centerLon);
 
   const { cleaners, centerResolved } = await loadBrowseCleaners({
-    viewerUserId: session.user.id,
     radiusKm,
     centerLat: hasCenter ? centerLat : null,
     centerLon: hasCenter ? centerLon : null,
@@ -282,7 +281,7 @@ export default async function BrowseCleanersPage({
               <ul className="grid list-none gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-2 xl:grid-cols-3">
                 {cleaners.map((c) => (
                   <li key={c.id}>
-                    <BrowseCleanerCard cleaner={c} />
+                    <BrowseCleanerCard cleaner={c} viewerUserId={session.user.id} />
                   </li>
                 ))}
               </ul>

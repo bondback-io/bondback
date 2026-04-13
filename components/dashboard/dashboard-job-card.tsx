@@ -296,19 +296,26 @@ function DashboardJobCardInner({
               {formatCents(gross)}
             </p>
             {daysLine && (
-              <div
-                className={cn(
-                  "mt-3 inline-flex rounded-xl border-2 px-3 py-2.5 text-lg font-bold",
-                  overdue
-                    ? "border-red-500/80 bg-red-500/15 text-red-950 dark:border-red-500/50 dark:bg-red-950/40 dark:text-red-100"
-                    : dueSoon
-                      ? "border-amber-400/80 bg-amber-500/15 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100"
-                      : "border-border bg-muted/50 text-foreground dark:border-gray-600 dark:bg-gray-900/80 dark:text-gray-100"
-                )}
-              >
-                <Clock className="mr-2 h-6 w-6 shrink-0 opacity-80" aria-hidden />
-                {daysLine}
-              </div>
+              <>
+                <div
+                  className={cn(
+                    "mt-3 inline-flex rounded-xl border-2 px-3 py-2.5 text-lg font-bold",
+                    overdue
+                      ? "border-red-500/80 bg-red-500/15 text-red-950 dark:border-red-500/50 dark:bg-red-950/40 dark:text-red-100"
+                      : dueSoon
+                        ? "border-amber-400/80 bg-amber-500/15 text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100"
+                        : "border-border bg-muted/50 text-foreground dark:border-gray-600 dark:bg-gray-900/80 dark:text-gray-100"
+                  )}
+                  title="Countdown to the latest date the lister chose for this clean (preferred dates, or move-out if none)."
+                >
+                  <Clock className="mr-2 h-6 w-6 shrink-0 opacity-80" aria-hidden />
+                  {daysLine}
+                </div>
+                <p className="mt-2 max-w-prose text-[10px] font-medium leading-snug text-emerald-900/75 dark:text-emerald-300/75">
+                  Uses the listing&apos;s preferred clean dates or move-out date — not payment or auction
+                  timing.
+                </p>
+              </>
             )}
           </div>
 
@@ -479,12 +486,18 @@ function DashboardJobCardInner({
                         ? "text-amber-600 dark:text-amber-400"
                         : "text-muted-foreground"
                   )}
+                  title="Latest date the lister chose for this clean (preferred dates or move-out). Not tied to payment release."
                 >
                   <Clock className="h-4 w-4 shrink-0" />
                   {daysLine}
                 </span>
               )}
             </div>
+            {daysLine != null && (
+              <p className="mt-1.5 text-[10px] font-medium leading-snug text-emerald-800/70 dark:text-emerald-400/75">
+                Preferred clean timing — not payment or auction timing.
+              </p>
+            )}
           </div>
           <div className="mt-auto flex flex-wrap gap-2.5 pt-1">
             <Button asChild className="min-h-11 rounded-full px-5 text-sm font-semibold" variant="default">

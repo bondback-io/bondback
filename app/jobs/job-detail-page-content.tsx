@@ -23,6 +23,7 @@ import {
   loadJobForListingDetailPage,
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
+import { profileFieldIsAdmin } from "@/lib/is-admin";
 
 export type JobDetailRouteMode = "jobs" | "listings";
 
@@ -100,15 +101,18 @@ export async function JobDetailPageContent({
   } = await supabase.auth.getUser();
   const sessionUserId = user?.id;
 
-  let profile: Pick<ProfileRow, "roles" | "active_role"> | null = null;
+  let profile: Pick<ProfileRow, "roles" | "active_role" | "is_admin"> | null = null;
   if (user) {
     const { data } = await supabase
       .from("profiles")
-      .select("roles, active_role")
+      .select("roles, active_role, is_admin")
       .eq("id", user.id)
       .maybeSingle();
-    profile = data as Pick<ProfileRow, "roles" | "active_role"> | null;
+    profile = data as Pick<ProfileRow, "roles" | "active_role" | "is_admin"> | null;
   }
+
+  const sessionIsAdmin = profileFieldIsAdmin(profile?.is_admin);
+  const detailLoadOpts = { isAdmin: sessionIsAdmin };
 
   const roles = (profile?.roles as string[] | null) ?? [];
   const activeRole =
@@ -124,7 +128,8 @@ export async function JobDetailPageContent({
     const jobRow = await loadJobByNumericIdForSession(
       supabase,
       numericPk,
-      sessionUserId
+      sessionUserId,
+      detailLoadOpts
     );
 
     if (!jobRow) {
@@ -134,14 +139,15 @@ export async function JobDetailPageContent({
     listingId = String(job.listing_id);
   } else {
     listingId = raw;
-    job = await loadJobForListingDetailPage(supabase, listingId, sessionUserId);
+    job = await loadJobForListingDetailPage(supabase, listingId, sessionUserId, detailLoadOpts);
   }
 
   const listingLoaded = await loadListingFullForSession(
     supabase,
     listingId,
     sessionUserId,
-    job
+    job,
+    detailLoadOpts
   );
 
   if (!listingLoaded) {

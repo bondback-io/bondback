@@ -12,6 +12,7 @@ import {
   loadJobForListingDetailPage,
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
+import { profileFieldIsAdmin } from "@/lib/is-admin";
 
 type Params = Promise<{ id: string }>;
 
@@ -32,6 +33,15 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: adminProfile } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+  const detailLoadOpts = {
+    isAdmin: profileFieldIsAdmin((adminProfile as { is_admin?: unknown } | null)?.is_admin),
+  };
+
   const raw = String(id).trim();
   const isNumericJobId = /^\d+$/.test(raw);
 
@@ -41,13 +51,14 @@ export async function GET(
     jobRow = await loadJobByNumericIdForSession(
       supabase,
       parseInt(raw, 10),
-      user.id
+      user.id,
+      detailLoadOpts
     );
     if (!jobRow) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
   } else {
-    jobRow = await loadJobForListingDetailPage(supabase, raw, user.id);
+    jobRow = await loadJobForListingDetailPage(supabase, raw, user.id, detailLoadOpts);
   }
 
   let listingId: string = id;
@@ -59,7 +70,8 @@ export async function GET(
     supabase,
     listingId,
     user.id,
-    jobRow
+    jobRow,
+    detailLoadOpts
   );
 
   if (!listingLoaded) {

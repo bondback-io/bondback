@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo } from "react";
 import { Star, Shield, FileCheck, Briefcase, Camera, MapPin } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { VerificationBadges } from "@/components/shared/verification-badges";
@@ -17,7 +18,13 @@ function formatKm(km: number): string {
   return String(Math.round(km));
 }
 
-function BrowseCleanerCardInner({ cleaner }: { cleaner: BrowseCleanerRow }) {
+function BrowseCleanerCardInner({
+  cleaner,
+  viewerUserId,
+}: {
+  cleaner: BrowseCleanerRow;
+  viewerUserId?: string | null;
+}) {
   const router = useRouter();
   const tierMeta = CLEANER_TIER_META[cleaner.tier];
   const name =
@@ -55,6 +62,14 @@ function BrowseCleanerCardInner({ cleaner }: { cleaner: BrowseCleanerRow }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
+              {viewerUserId && cleaner.id === viewerUserId && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] font-semibold uppercase tracking-wide"
+                >
+                  You
+                </Badge>
+              )}
               <span
                 className={cn(
                   "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold tracking-wide",

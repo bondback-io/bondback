@@ -7,6 +7,7 @@ import {
   loadJobForListingDetailPage,
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
+import { profileFieldIsAdmin } from "@/lib/is-admin";
 import { listingNarrativeForSeo } from "@/lib/listing-detail-presenters";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -93,6 +94,17 @@ export async function buildJobListingMetadata(
   } = await supabase.auth.getUser();
   const uid = user?.id;
 
+  let isAdmin = false;
+  if (uid) {
+    const { data: adminRow } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", uid)
+      .maybeSingle();
+    isAdmin = profileFieldIsAdmin((adminRow as { is_admin?: unknown } | null)?.is_admin);
+  }
+  const detailLoadOpts = { isAdmin };
+
   let listingId = routeId;
   const numericId = /^\d+$/.test(routeId) ? Number(routeId) : NaN;
   let jobRowMeta: JobRow | null = null;
@@ -102,7 +114,7 @@ export async function buildJobListingMetadata(
       listingId = routeId;
       jobRowMeta = null;
     } else {
-      const jl = await loadJobByNumericIdForSession(supabase, numericId, uid);
+      const jl = await loadJobByNumericIdForSession(supabase, numericId, uid, detailLoadOpts);
       if (jl?.listing_id) {
         listingId = String(jl.listing_id);
         jobRowMeta = jl;
@@ -111,10 +123,16 @@ export async function buildJobListingMetadata(
       }
     }
   } else {
-    jobRowMeta = await loadJobForListingDetailPage(supabase, routeId, uid);
+    jobRowMeta = await loadJobForListingDetailPage(supabase, routeId, uid, detailLoadOpts);
   }
 
-  const listingRaw = await loadListingFullForSession(supabase, listingId, uid, jobRowMeta);
+  const listingRaw = await loadListingFullForSession(
+    supabase,
+    listingId,
+    uid,
+    jobRowMeta,
+    detailLoadOpts
+  );
 
   if (!listingRaw) {
     return GENERIC_JOB_LISTING_META;
@@ -124,7 +142,7 @@ export async function buildJobListingMetadata(
 
   let jobForPrice: JobRow | null = jobRowMeta;
   if (!jobForPrice) {
-    jobForPrice = await loadJobForListingDetailPage(supabase, listingId, uid);
+    jobForPrice = await loadJobForListingDetailPage(supabase, listingId, uid, detailLoadOpts);
   }
 
   const title = String(listing.title ?? "").trim() || "Bond clean job";

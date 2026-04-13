@@ -21,5 +21,6 @@ export {
   loadJobByNumericIdForSession,
   loadListingFullForSession,
   loadJobForListingDetailPage,
+  type JobDetailSessionOptions,
   type ServerSupabaseClient,
 } from "@/lib/jobs/load-job-for-detail-route";
