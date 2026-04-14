@@ -11,6 +11,7 @@ import {
   type AdminNotificationEmailProps,
   type AdminNotificationEventType,
 } from "@/emails/AdminNotificationEmail";
+import { formatDateTimeForEmail } from "@/lib/email-datetime";
 
 function maskAbn(digits: string): string {
   if (digits.length !== 11) return digits;
@@ -148,9 +149,8 @@ export async function notifyAdminNewUserRegistration(userId: string): Promise<vo
   const fullName = (p?.full_name ?? "").trim() || "—";
   const roleLabel = roleDisplayLabel(roles);
   const signedUpAt = p?.created_at ? new Date(p.created_at) : new Date();
-  const signedUpAtFormatted = signedUpAt.toLocaleString("en-AU", {
-    dateStyle: "medium",
-    timeStyle: "short",
+  const signedUpAtFormatted = formatDateTimeForEmail(signedUpAt, {
+    appendTimeZoneName: true,
   });
 
   const abnLine = p
@@ -232,9 +232,8 @@ export async function notifyAdminNewListing(listingId: string): Promise<void> {
     suburb: row.suburb ?? "—",
     postcode: row.postcode ?? "—",
     status: row.status ?? "—",
-    createdAtFormatted: createdAt.toLocaleString("en-AU", {
-      dateStyle: "medium",
-      timeStyle: "short",
+    createdAtFormatted: formatDateTimeForEmail(createdAt, {
+      appendTimeZoneName: true,
     }),
   };
 
@@ -303,9 +302,8 @@ export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
     listingTitle,
     openedByLabel,
     reasonSnippet,
-    openedAtFormatted: openedAt.toLocaleString("en-AU", {
-      dateStyle: "medium",
-      timeStyle: "short",
+    openedAtFormatted: formatDateTimeForEmail(openedAt, {
+      appendTimeZoneName: true,
     }),
   };
 
@@ -366,9 +364,8 @@ export async function sendTestAdminNotificationEmail(
       fullName: "Sample User",
       email: "sample.user@example.com",
       roleLabel: "Lister",
-      signedUpAtFormatted: new Date().toLocaleString("en-AU", {
-        dateStyle: "medium",
-        timeStyle: "short",
+      signedUpAtFormatted: formatDateTimeForEmail(new Date(), {
+        appendTimeZoneName: true,
       }),
     };
   } else if (eventType === "new_listing") {
@@ -382,9 +379,8 @@ export async function sendTestAdminNotificationEmail(
       suburb: "Brisbane",
       postcode: "4000",
       status: "live",
-      createdAtFormatted: new Date().toLocaleString("en-AU", {
-        dateStyle: "medium",
-        timeStyle: "short",
+      createdAtFormatted: formatDateTimeForEmail(new Date(), {
+        appendTimeZoneName: true,
       }),
     };
   } else {
@@ -396,9 +392,8 @@ export async function sendTestAdminNotificationEmail(
       openedByLabel: "Lister",
       reasonSnippet:
         "Sample dispute reason: condition of kitchen surfaces did not match expectations. (This is test copy.)",
-      openedAtFormatted: new Date().toLocaleString("en-AU", {
-        dateStyle: "medium",
-        timeStyle: "short",
+      openedAtFormatted: formatDateTimeForEmail(new Date(), {
+        appendTimeZoneName: true,
       }),
     };
   }

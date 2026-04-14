@@ -1,10 +1,14 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PHOTO_LIMITS } from "@/lib/photo-validation";
 import type { Database } from "@/types/supabase";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
-import { revieweeTypeOrRoleFilter } from "@/lib/reviews/cleaner-review-filters";
+import {
+  isMissingRevieweeRoleColumnError,
+  revieweeTypeOrRoleFilter,
+} from "@/lib/reviews/cleaner-review-filters";
 
 type ReviewsRow = Database["public"]["Tables"]["reviews"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -251,19 +255,29 @@ async function recomputeProfileAverages(
   userId: string,
   revieweeType: "cleaner" | "lister"
 ) {
+  const admin = createSupabaseAdminClient();
   const supabase = await createServerSupabaseClient();
+  const db = (admin ?? supabase) as typeof supabase;
 
-  const { data: rows, error } = await supabase
+  let rowsRes = await db
     .from("reviews")
     .select("overall_rating")
     .eq("reviewee_id", userId as never)
     .or(revieweeTypeOrRoleFilter(revieweeType));
 
-  if (error) {
-    throw error;
+  if (isMissingRevieweeRoleColumnError(rowsRes.error)) {
+    rowsRes = await db
+      .from("reviews")
+      .select("overall_rating")
+      .eq("reviewee_id", userId as never)
+      .eq("reviewee_type", revieweeType as never);
   }
 
-  const ratings = (rows ?? []).map((r: any) => r.overall_rating as number);
+  if (rowsRes.error) {
+    throw rowsRes.error;
+  }
+
+  const ratings = (rowsRes.data ?? []).map((r: any) => r.overall_rating as number);
   if (ratings.length === 0) {
     return;
   }
@@ -282,9 +296,6 @@ async function recomputeProfileAverages(
     (update as any).review_count = ratings.length;
   }
 
-  await supabase
-    .from("profiles")
-    .update(update as never)
-    .eq("id", userId as never);
+  await db.from("profiles").update(update as never).eq("id", userId as never);
 }
 

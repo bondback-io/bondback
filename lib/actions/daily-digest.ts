@@ -17,6 +17,7 @@ import { shouldSendEmailForType } from "@/lib/notification-preferences";
 import type { Database } from "@/types/supabase";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { emailPublicOrigin } from "@/emails/email-public-url";
+import { formatDigestSubjectDateForEmail } from "@/lib/email-datetime";
 
 const safeTrim = (v: unknown) => String(v ?? "").trim();
 
@@ -280,11 +281,7 @@ export async function runDailyDigestJob(): Promise<{
 
       const element = React.createElement(DailyDigestEmail, digestProps);
       const html = await render(element);
-      const subject = `Your Bond Back snapshot — ${new Date().toLocaleDateString("en-AU", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-      })}`;
+      const subject = `Your Bond Back snapshot — ${formatDigestSubjectDateForEmail(new Date())}`;
 
       const result = await sendEmail(email, subject, html, {
         log: { userId, kind: "daily_digest" },
@@ -406,7 +403,7 @@ export async function sendTestDailyDigestEmail(): Promise<{ ok: boolean; error?:
 
   const element = React.createElement(DailyDigestEmail, digestProps);
   const html = await render(element);
-  const subject = `[Test] Your Bond Back snapshot — ${new Date().toLocaleDateString("en-AU")}`;
+  const subject = `[Test] Your Bond Back snapshot — ${formatDigestSubjectDateForEmail(new Date())}`;
 
   const result = await sendEmail(email, subject, html, {
     log: { userId: session.user.id, kind: "daily_digest_test" },

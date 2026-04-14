@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, startTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -17,7 +17,6 @@ import { notifyActiveRoleChanged } from "@/lib/active-role-events";
 import type { ProfileRole, SessionWithProfile } from "@/lib/types";
 import { Brush, ChevronDown, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { scheduleRouterAction } from "@/lib/deferred-router";
 
 /**
  * Cleaner icon: lucide-react in this project has no `Broom`; `Brush` is used as the
@@ -60,29 +59,65 @@ export function RoleSwitcher({
 }: RoleSwitcherProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<ToastState>({ message: "", visible: false });
+  /** UI shows this role immediately; cleared when server `session.active_role` catches up after refresh. */
+  const [pendingRole, setPendingRole] = useState<ProfileRole | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const switchQueueRef = useRef(Promise.resolve());
 
   const roles = session.roles;
   const activeRole = session.activeRole;
+  const displayRole = pendingRole ?? activeRole;
 
   const hasLister = roles.includes("lister");
   const hasCleaner = roles.includes("cleaner");
 
+  useEffect(() => {
+    if (pendingRole != null && activeRole === pendingRole) {
+      setPendingRole(null);
+    }
+  }, [activeRole, pendingRole]);
+
   const handleSwitch = (role: ProfileRole) => {
-    startTransition(async () => {
-      const result = await setActiveRole(role);
-      if (!result.ok) return;
-      notifyActiveRoleChanged();
-      const label = role === "cleaner" ? "Cleaner" : "Lister";
-      setToast({ message: `Switched to ${label}`, visible: true });
-      const target = role === "lister" ? "/lister/dashboard" : "/cleaner/dashboard";
-      if (pathname && isPathAllowedForRole(pathname, role)) {
-        scheduleRouterAction(() => router.refresh());
-      } else {
-        scheduleRouterAction(() => router.replace(target));
-      }
-    });
+    const current = pendingRole ?? activeRole;
+    if (current === role) return;
+
+    setMenuOpen(false);
+    setPendingRole(role);
+
+    switchQueueRef.current = switchQueueRef.current
+      .then(async () => {
+        try {
+          const result = await setActiveRole(role);
+          if (!result.ok) {
+            setPendingRole((cur) => (cur === role ? null : cur));
+            setToast({
+              message: result.error ?? "Could not switch role. Try again.",
+              visible: true,
+            });
+            return;
+          }
+          notifyActiveRoleChanged();
+          const label = role === "cleaner" ? "Cleaner" : "Lister";
+          setToast({ message: `Switched to ${label}`, visible: true });
+          const target = role === "lister" ? "/lister/dashboard" : "/cleaner/dashboard";
+          queueMicrotask(() => {
+            startTransition(() => {
+              if (pathname && isPathAllowedForRole(pathname, role)) {
+                router.refresh();
+              } else {
+                router.replace(target);
+              }
+            });
+          });
+        } catch {
+          setPendingRole((cur) => (cur === role ? null : cur));
+          setToast({ message: "Could not switch role. Try again.", visible: true });
+        }
+      })
+      .catch(() => {
+        /* keep queue alive if a prior step rejected unexpectedly */
+      });
   };
 
   useEffect(() => {
@@ -95,19 +130,18 @@ export function RoleSwitcher({
     return null;
   }
 
-  const currentLabel = activeRole === "cleaner" ? "Cleaner" : "Lister";
+  const currentLabel = displayRole === "cleaner" ? "Cleaner" : "Lister";
   const isCompact = variant === "compact";
 
   const settingsRolesHref = "/profile?tab=roles#my-roles";
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
             variant="outline"
-            disabled={isPending}
             className={cn(
               "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border-border/80 bg-muted/50 px-3.5 font-semibold shadow-sm ring-1 ring-black/5 transition-colors hover:bg-muted/80 dark:border-gray-700 dark:bg-gray-900/60 dark:ring-white/10 dark:hover:bg-gray-800/80",
               isCompact
@@ -121,12 +155,12 @@ export function RoleSwitcher({
             <span
               className={cn(
                 "inline-flex min-w-0 flex-1 items-center gap-1.5 truncate",
-                activeRole === "lister"
+                displayRole === "lister"
                   ? "text-sky-700 dark:text-sky-300"
                   : "text-emerald-700 dark:text-emerald-300"
               )}
             >
-              {activeRole === "lister" ? (
+              {displayRole === "lister" ? (
                 <Home className="h-4 w-4 shrink-0" aria-hidden />
               ) : (
                 <Brush className="h-4 w-4 shrink-0" aria-hidden />
@@ -160,9 +194,9 @@ export function RoleSwitcher({
           {hasLister ? (
             <DropdownMenuItem
               onSelect={() => {
-                if (activeRole !== "lister") handleSwitch("lister");
+                if (displayRole !== "lister") handleSwitch("lister");
               }}
-              disabled={activeRole === "lister"}
+              disabled={displayRole === "lister"}
               className={cn(
                 "cursor-pointer gap-3 rounded-lg py-3 pl-3 pr-2 data-[disabled]:opacity-100",
                 "text-foreground hover:!scale-100",
@@ -170,7 +204,7 @@ export function RoleSwitcher({
                 "focus:bg-sky-50 focus:text-foreground dark:focus:bg-sky-900/35 dark:focus:text-gray-100",
                 "data-[highlighted]:bg-sky-50 data-[highlighted]:text-foreground",
                 "dark:data-[highlighted]:bg-sky-900/40 dark:data-[highlighted]:text-gray-100",
-                activeRole === "lister" && "bg-sky-50/90 dark:bg-sky-900/35"
+                displayRole === "lister" && "bg-sky-50/90 dark:bg-sky-900/35"
               )}
             >
               <Home className="h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden />
@@ -180,7 +214,7 @@ export function RoleSwitcher({
                   Post listings &amp; hire cleaners
                 </span>
               </div>
-              {activeRole === "lister" ? (
+              {displayRole === "lister" ? (
                 <Badge className="shrink-0 border-sky-300 bg-sky-100 text-[11px] font-semibold text-sky-900 dark:border-sky-600 dark:bg-sky-900/70 dark:text-sky-50">
                   Current
                 </Badge>
@@ -219,9 +253,9 @@ export function RoleSwitcher({
           {hasCleaner ? (
             <DropdownMenuItem
               onSelect={() => {
-                if (activeRole !== "cleaner") handleSwitch("cleaner");
+                if (displayRole !== "cleaner") handleSwitch("cleaner");
               }}
-              disabled={activeRole === "cleaner"}
+              disabled={displayRole === "cleaner"}
               className={cn(
                 "cursor-pointer gap-3 rounded-lg py-3 pl-3 pr-2 data-[disabled]:opacity-100",
                 "text-foreground hover:!scale-100",
@@ -229,7 +263,7 @@ export function RoleSwitcher({
                 "focus:bg-emerald-50 focus:text-foreground dark:focus:bg-emerald-900/35 dark:focus:text-gray-100",
                 "data-[highlighted]:bg-emerald-50 data-[highlighted]:text-foreground",
                 "dark:data-[highlighted]:bg-emerald-900/40 dark:data-[highlighted]:text-gray-100",
-                activeRole === "cleaner" && "bg-emerald-50/90 dark:bg-emerald-900/35"
+                displayRole === "cleaner" && "bg-emerald-50/90 dark:bg-emerald-900/35"
               )}
             >
               <Brush className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
@@ -239,7 +273,7 @@ export function RoleSwitcher({
                   Bid on jobs &amp; get paid
                 </span>
               </div>
-              {activeRole === "cleaner" ? (
+              {displayRole === "cleaner" ? (
                 <Badge className="shrink-0 border-emerald-300 bg-emerald-100 text-[11px] font-semibold text-emerald-950 dark:border-emerald-600 dark:bg-emerald-900/70 dark:text-emerald-50">
                   Current
                 </Badge>

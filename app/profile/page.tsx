@@ -283,7 +283,7 @@ const ProfilePage = async ({
 
           {showCompleteProfileCard && (
             <Card className="max-w-2xl border border-amber-200/70 bg-gradient-to-b from-amber-50/90 to-card shadow-sm dark:border-amber-900/40 dark:from-amber-950/30 dark:to-card">
-              <CardHeader className="space-y-0.5 !p-0 px-3 pb-0 pt-3 sm:px-5 sm:pt-4">
+              <CardHeader className="space-y-0.5 px-5 pb-2 pt-5 sm:px-6 sm:pb-3 sm:pt-6">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <CardTitle className="text-lg font-bold leading-tight tracking-tight sm:text-xl">
@@ -303,7 +303,7 @@ const ProfilePage = async ({
                   </span>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-2.5 px-3 pb-3 pt-0 sm:px-5 sm:pb-3">
+              <CardContent className="space-y-2.5 px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
                 <div className="space-y-1.5">
                   <Progress
                     value={criticalProfile.percent}
@@ -390,13 +390,13 @@ const ProfilePage = async ({
       )}
 
       <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100">
-        <CardHeader className="space-y-1 !p-0 px-4 pt-4 pb-2 sm:px-6 sm:pt-5 sm:pb-2.5">
+        <CardHeader className="space-y-1.5 px-5 pb-3 pt-5 sm:px-6 sm:pb-4 sm:pt-6">
           <CardTitle className="text-xl leading-snug dark:text-gray-100">Account settings</CardTitle>
           <CardDescription className="text-sm leading-snug text-muted-foreground dark:text-gray-400">
             Personal details, roles, notifications, payments, security, and help — all in one place.
           </CardDescription>
         </CardHeader>
-        <CardContent className="px-4 pb-4 pt-0 sm:px-6 sm:pb-4">
+        <CardContent className="px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
           <MyAccountSections
             initialAccordion={initialAccordion}
             profile={profile}

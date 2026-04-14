@@ -2,6 +2,7 @@ import { Section, Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./components/EmailLayout";
 import { emailJobUrl } from "@/lib/marketplace/email-links";
+import { formatDateForEmail } from "@/lib/email-datetime";
 
 export interface PaymentReceiptProps {
   jobId: number | string;
@@ -24,15 +25,6 @@ function formatCents(cents: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(cents / 100);
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
 }
 
 export function PaymentReceipt({
@@ -71,7 +63,7 @@ export function PaymentReceipt({
       <Section>
         <Text style={titleStyle}>{title}</Text>
         <Text style={body}>Job #{jobId}{jobTitle ? ` · ${jobTitle}` : ""}</Text>
-        <Text style={body}>Date: {formatDate(dateIso)}</Text>
+        <Text style={body}>Date: {formatDateForEmail(dateIso)}</Text>
 
         {isRefund ? (
           <Text style={amountStyle}>Refund: {formatCents(refundCents)}</Text>

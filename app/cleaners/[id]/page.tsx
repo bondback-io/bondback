@@ -26,10 +26,7 @@ import type { Database } from "@/types/supabase";
 import { cn } from "@/lib/utils";
 import { CleanerReviewCountPreview } from "@/components/features/cleaner-review-count-preview";
 import { CleanerExperienceBadge } from "@/components/shared/cleaner-experience-badge";
-import {
-  isMissingRevieweeRoleColumnError,
-  REVIEWEE_IS_CLEANER_OR,
-} from "@/lib/reviews/cleaner-review-filters";
+import { fetchCleanerReviewsForPublicProfile } from "@/lib/reviews/fetch-cleaner-reviews-for-profile";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -93,10 +90,13 @@ export default async function CleanerProfilePage({
     profileRow.cleaner_avg_rating != null
       ? Number(profileRow.cleaner_avg_rating)
       : null;
-  const cleanerCount =
+  const cleanerCountRaw =
     profileRow.cleaner_total_reviews != null
       ? Number(profileRow.cleaner_total_reviews)
       : 0;
+  const cleanerCount = Number.isFinite(cleanerCountRaw)
+    ? Math.max(0, Math.round(cleanerCountRaw))
+    : 0;
 
   const { count: completedJobsCount } = await client
     .from("jobs")
@@ -104,39 +104,13 @@ export default async function CleanerProfilePage({
     .eq("winner_id", id)
     .eq("status", "completed");
 
-  const reviewsSelect = `
-      id,
-      job_id,
-      overall_rating,
-      quality_of_work,
-      reliability,
-      communication,
-      punctuality,
-      cleanliness,
-      review_text,
-      review_photos,
-      created_at,
-      reviewer:reviewer_id(full_name, profile_photo_url)
-    `;
-  let reviewsQuery = await client
-    .from("reviews")
-    .select(reviewsSelect)
-    .eq("reviewee_id", id)
-    .or(REVIEWEE_IS_CLEANER_OR)
-    .order("created_at", { ascending: false });
+  const reviewsSafe = (await fetchCleanerReviewsForPublicProfile(
+    client,
+    admin,
+    id
+  )) as any[];
 
-  if (isMissingRevieweeRoleColumnError(reviewsQuery.error)) {
-    // Backward-compatible fallback for DBs that have not added `reviewee_role` yet.
-    reviewsQuery = await client
-      .from("reviews")
-      .select(reviewsSelect)
-      .eq("reviewee_id", id)
-      .eq("reviewee_type", "cleaner")
-      .order("created_at", { ascending: false });
-  }
-  const { data: reviews } = reviewsQuery;
-
-  const reviewsSafe = (reviews ?? []) as any[];
+  const reviewLinkCount = Math.max(cleanerCount, reviewsSafe.length);
 
   const reviewPopoverSnippets = reviewsSafe.slice(0, 10).map((r: any) => ({
     id: String(r.id),
@@ -147,8 +121,8 @@ export default async function CleanerProfilePage({
     jobId: r.job_id != null ? Number(r.job_id) : null,
   }));
   const reviewPopoverHint =
-    cleanerCount > reviewPopoverSnippets.length && reviewPopoverSnippets.length > 0
-      ? `Showing ${reviewPopoverSnippets.length} most recent of ${cleanerCount} reviews.`
+    reviewLinkCount > reviewPopoverSnippets.length && reviewPopoverSnippets.length > 0
+      ? `Showing ${reviewPopoverSnippets.length} most recent of ${reviewLinkCount} reviews.`
       : null;
 
   const latestWrittenReview = reviewsSafe.find(
@@ -317,32 +291,36 @@ export default async function CleanerProfilePage({
               />
             </div>
 
-            {starValue != null && cleanerCount > 0 && (
+            {(starValue != null || reviewLinkCount > 0) && (
               <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-semibold tabular-nums text-foreground dark:text-gray-100">
-                    {starValue.toFixed(1)}
-                  </span>
-                  <div className="flex items-center gap-0.5 text-amber-400">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star
-                        key={s}
-                        className={`h-4 w-4 ${
-                          avg && s <= Math.round(avg)
-                            ? "fill-amber-400"
-                            : "text-muted-foreground/40"
-                        }`}
-                      />
-                    ))}
+                {starValue != null ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-semibold tabular-nums text-foreground dark:text-gray-100">
+                      {starValue.toFixed(1)}
+                    </span>
+                    <div className="flex items-center gap-0.5 text-amber-400">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`h-4 w-4 ${
+                            avg && s <= Math.round(avg)
+                              ? "fill-amber-400"
+                              : "text-muted-foreground/40"
+                          }`}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <span className="text-xs text-muted-foreground dark:text-gray-400">
-                  <CleanerReviewCountPreview
-                    count={cleanerCount}
-                    snippets={reviewPopoverSnippets}
-                    moreCountHint={reviewPopoverHint}
-                  />
-                </span>
+                ) : null}
+                {reviewLinkCount > 0 ? (
+                  <span className="text-xs text-muted-foreground dark:text-gray-400">
+                    <CleanerReviewCountPreview
+                      count={reviewLinkCount}
+                      snippets={reviewPopoverSnippets}
+                      moreCountHint={reviewPopoverHint}
+                    />
+                  </span>
+                ) : null}
               </div>
             )}
 
@@ -561,7 +539,7 @@ export default async function CleanerProfilePage({
             </div>
             <p className="text-xs text-muted-foreground">
               <CleanerReviewCountPreview
-                count={cleanerCount}
+                count={reviewLinkCount}
                 snippets={reviewPopoverSnippets}
                 moreCountHint={reviewPopoverHint}
               />
@@ -735,9 +713,13 @@ export default async function CleanerProfilePage({
                     Job #{r.job_id}
                   </p>
                 </div>
-                {r.review_text && (
-                  <p className="text-[11px] text-foreground">
-                    {r.review_text as string}
+                {String(r.review_text ?? "").trim() ? (
+                  <p className="text-[11px] leading-relaxed text-foreground dark:text-gray-200">
+                    {String(r.review_text).trim()}
+                  </p>
+                ) : (
+                  <p className="text-[11px] italic text-muted-foreground dark:text-gray-500">
+                    No written comment for this review.
                   </p>
                 )}
                 {Array.isArray(r.review_photos) &&

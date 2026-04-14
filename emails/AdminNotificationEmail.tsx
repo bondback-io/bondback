@@ -68,6 +68,11 @@ function internalFooter(): React.ReactNode {
         Internal message for Bond Back administrators. Not sent to customers.
       </Text>
       <Text style={footerMuted}>
+        Dates and times use the Bond Back email timezone (default Australia/Sydney). Set{" "}
+        <span style={monoInline}>BOND_BACK_EMAIL_TIMEZONE</span> on the server to use another IANA zone
+        (e.g. Australia/Perth).
+      </Text>
+      <Text style={footerMuted}>
         <Link href={emailAdminUrl()} style={link}>
           Open admin
         </Link>
@@ -310,4 +315,10 @@ const footerMuted = {
 const link = {
   color: "#6b7280",
   textDecoration: "underline" as const,
+};
+
+const monoInline = {
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  fontSize: "10px",
+  color: "#6b7280",
 };
