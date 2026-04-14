@@ -54,8 +54,12 @@ type QaBanRow = {
   created_at: string;
 };
 
+type SupabaseReadClientLike = {
+  from: (table: string) => any;
+};
+
 async function getListingQaBannedUsersMap(
-  readClient: SupabaseClient<Database>,
+  readClient: SupabaseReadClientLike,
   listingId: string
 ): Promise<Map<string, QaBanRow>> {
   const { data } = await (readClient as any)
@@ -68,7 +72,7 @@ async function getListingQaBannedUsersMap(
 }
 
 async function getRootCommentForThread(
-  readClient: SupabaseClient<Database>,
+  readClient: SupabaseReadClientLike,
   commentId: string
 ): Promise<{
   id: string;
@@ -124,7 +128,7 @@ export async function fetchListingCommentsPublic(
   }
 
   const typedRows = rows as ListingCommentRow[];
-  const banMap = await getListingQaBannedUsersMap(supabase as SupabaseClient<Database>, listingId);
+  const banMap = await getListingQaBannedUsersMap(supabase, listingId);
   const userIds = [...new Set(typedRows.map((r) => r.user_id))];
   const { data: profiles } = await supabase
     .from("profiles")
