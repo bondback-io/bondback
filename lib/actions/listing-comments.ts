@@ -146,16 +146,9 @@ export async function postListingComment(params: {
 
   const { data: posterProfile } = await readClient
     .from("profiles")
-    .select("active_role, roles, full_name")
+    .select("roles, full_name")
     .eq("id", session.user.id)
     .maybeSingle();
-  const activeRoleRaw = (posterProfile as { active_role?: string | null } | null)?.active_role;
-  const activeRole =
-    typeof activeRoleRaw === "string" ? activeRoleRaw.trim().toLowerCase() : "";
-  const rolesArr = (posterProfile as { roles?: string[] | null } | null)?.roles ?? [];
-  const hasCleanerRole = rolesArr.map((r) => String(r).toLowerCase()).includes("cleaner");
-  /** Dual-role: browse/post as cleaner on own listing (same user id as lister_id). */
-  const isActiveCleanerSession = activeRole === "cleaner" && hasCleanerRole;
 
   if (params.parentCommentId) {
     const { data: parent } = await readClient
@@ -183,13 +176,21 @@ export async function postListingComment(params: {
         error: "Replies are only allowed on top-level questions, not nested threads.",
       };
     }
-    // Root author may be lister_id when they posted as cleaner on their own listing — lister may still reply.
+    if (String(session.user.id) === listerId) {
+      if (String(pr?.user_id) === String(listerId)) {
+        return {
+          ok: false,
+          error:
+            "You can only reply to questions from cleaners and other members, not to your own thread.",
+        };
+      }
+    }
   } else {
-    if (String(session.user.id) === listerId && !isActiveCleanerSession) {
+    if (String(session.user.id) === listerId) {
       return {
         ok: false,
         error:
-          "Switch to Cleaner in the header to post a public question on your own listing, or use My listings to manage this job.",
+          "Only cleaners and other members can start a thread. Open a question and use Reply to respond.",
       };
     }
   }
@@ -231,10 +232,7 @@ export async function postListingComment(params: {
     message_text: ins.message_text,
     created_at: ins.created_at,
     author_display_name: displayName(prof?.full_name, "Member"),
-    author_role_label:
-      isActiveCleanerSession && String(session.user.id) === listerId
-        ? "Cleaner"
-        : baseLabel,
+    author_role_label: baseLabel,
   };
 
   revalidatePath(`/listings/${params.listingId}`);

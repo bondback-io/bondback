@@ -95,11 +95,14 @@ function GroupedCommentThreads({
   comments,
   listerId,
   currentUserId,
+  viewerIsLister,
   onReply,
 }: {
   comments: ListingCommentPublic[];
   listerId: string;
   currentUserId: string | null;
+  /** Signed-in user is the listing owner — they cannot start threads, only reply. */
+  viewerIsLister: boolean;
   onReply: (id: string) => void;
 }) {
   const byParent = useMemo(() => {
@@ -117,7 +120,9 @@ function GroupedCommentThreads({
   if (roots.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground dark:text-gray-500">
-        No comments yet. Be the first to ask a question.
+        {viewerIsLister
+          ? "No questions yet. When cleaners ask something here, open a thread and use Reply to respond."
+          : "No comments yet. Be the first to ask a question."}
       </p>
     );
   }
@@ -211,6 +216,10 @@ function CommentsPanelInner({
     ? comments.find((c) => c.id === replyToId)?.author_display_name
     : null;
 
+  const viewerIsLister =
+    Boolean(currentUserId) && String(currentUserId) === String(listerId);
+  const composerDisabledForLister = viewerIsLister && !replyToId;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-border px-1 pb-3 dark:border-gray-800">
@@ -218,8 +227,17 @@ function CommentsPanelInner({
           Public questions &amp; comments
         </h2>
         <p className="mt-1 text-xs leading-snug text-muted-foreground dark:text-gray-500">
-          Ask about the clean, timing, or access. No phone numbers or links — use in-app chat after you&apos;re
-          hired. Only the lister can reply under each question.
+          {viewerIsLister ? (
+            <>
+              You can only reply under questions from cleaners and other members — open a thread and use
+              Reply. You can&apos;t start a new thread here.
+            </>
+          ) : (
+            <>
+              Ask about the clean, timing, or access. No phone numbers or links — use in-app chat after
+              you&apos;re hired. Only the lister can reply under each question.
+            </>
+          )}
         </p>
         {comments.length > 0 ? (
           <p className="mt-2 text-[11px] font-medium text-muted-foreground dark:text-gray-500">
@@ -232,6 +250,7 @@ function CommentsPanelInner({
           comments={comments}
           listerId={listerId}
           currentUserId={currentUserId}
+          viewerIsLister={viewerIsLister}
           onReply={setReplyToId}
         />
       </ScrollArea>
@@ -246,12 +265,19 @@ function CommentsPanelInner({
             </Link>{" "}
             to send a message.
           </p>
+        ) : composerDisabledForLister ? (
+          <p className="text-center text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
+            To respond, expand a question above and tap{" "}
+            <span className="font-medium text-foreground dark:text-gray-200">Reply</span> — you can&apos;t
+            post a new thread as the lister.
+          </p>
         ) : (
           <form
             className="contents"
             onSubmit={(e) => {
               e.preventDefault();
               if (posting || !draft.trim()) return;
+              if (viewerIsLister && !replyToId) return;
               onPost();
             }}
           >
@@ -275,7 +301,7 @@ function CommentsPanelInner({
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Write a message…"
+              placeholder={replyToId ? "Write your reply…" : "Write a message…"}
               className="min-h-[72px] resize-none text-sm dark:border-gray-700 dark:bg-gray-900/80 md:min-h-[88px]"
               maxLength={2000}
               disabled={posting}
@@ -285,13 +311,15 @@ function CommentsPanelInner({
             <Button
               type="submit"
               className="w-full touch-manipulation"
-              disabled={posting || !draft.trim()}
+              disabled={posting || !draft.trim() || (viewerIsLister && !replyToId)}
             >
               {posting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                   Sending…
                 </>
+              ) : replyToId ? (
+                "Send reply"
               ) : (
                 "Send Message"
               )}
@@ -460,6 +488,12 @@ export function ListingPublicCommentsDock({
 
   const handlePost = async (opts?: { closeMobileSheet?: boolean }) => {
     if (!currentUserId || !draft.trim()) return false;
+    if (
+      String(currentUserId) === String(listerId) &&
+      replyToId == null
+    ) {
+      return false;
+    }
     setPosting(true);
     try {
       const res = await postListingComment({
