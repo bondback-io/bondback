@@ -130,10 +130,6 @@ function GroupedCommentThreads({
           Boolean(currentUserId) &&
           String(currentUserId) === String(listerId) &&
           String(root.user_id) !== String(listerId);
-        const preview =
-          root.message_text.length > 140
-            ? `${root.message_text.slice(0, 137)}…`
-            : root.message_text;
         const replyLabel =
           replies.length === 0
             ? "No replies yet"
@@ -148,14 +144,14 @@ function GroupedCommentThreads({
           >
             <summary
               className="cursor-pointer list-none px-3 py-2.5 [&::-webkit-details-marker]:hidden"
-              aria-label={`Thread from ${root.author_display_name}, ${replyLabel}. Expand for full message.`}
+              aria-label={`Thread from ${root.author_display_name}, ${replyLabel}. Expand to read the question and replies.`}
             >
               <div className="flex items-start gap-2">
                 <ChevronDown
                   className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
                   aria-hidden
                 />
-                <div className="min-w-0 flex-1 space-y-1">
+                <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="truncate text-sm font-semibold text-foreground dark:text-gray-100">
                       {root.author_display_name}
@@ -164,7 +160,6 @@ function GroupedCommentThreads({
                       {formatDistanceToNow(new Date(root.created_at), { addSuffix: true })}
                     </span>
                   </div>
-                  <p className="line-clamp-2 text-sm text-foreground/90 dark:text-gray-200">{preview}</p>
                   <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-500">
                     {replyLabel}
                   </p>
@@ -252,7 +247,14 @@ function CommentsPanelInner({
             to send a message.
           </p>
         ) : (
-          <>
+          <form
+            className="contents"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (posting || !draft.trim()) return;
+              onPost();
+            }}
+          >
             {replyToId && (
               <div className="flex items-center gap-2 rounded-md bg-muted/60 px-2 py-1.5 text-xs dark:bg-gray-800/60">
                 <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -277,12 +279,13 @@ function CommentsPanelInner({
               className="min-h-[72px] resize-none text-sm dark:border-gray-700 dark:bg-gray-900/80 md:min-h-[88px]"
               maxLength={2000}
               disabled={posting}
+              name="qa-message"
+              autoComplete="off"
             />
             <Button
-              type="button"
-              className="w-full"
+              type="submit"
+              className="w-full touch-manipulation"
               disabled={posting || !draft.trim()}
-              onClick={onPost}
             >
               {posting ? (
                 <>
@@ -293,7 +296,7 @@ function CommentsPanelInner({
                 "Send Message"
               )}
             </Button>
-          </>
+          </form>
         )}
       </div>
     </div>
@@ -477,6 +480,10 @@ export function ListingPublicCommentsDock({
       toast({ title: "Sent", description: "Your message is visible on this listing." });
       if (opts?.closeMobileSheet) setSheetOpen(false);
       return true;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Something went wrong. Try again.";
+      toast({ variant: "destructive", title: "Could not send", description: msg });
+      return false;
     } finally {
       setPosting(false);
     }
@@ -589,9 +596,10 @@ export function ListingPublicCommentsDock({
           <SheetContent
             side="bottom"
             title="Q&A Chat"
+            scrollableBody={false}
             className="flex h-[min(88dvh,560px)] flex-col rounded-t-2xl p-0 dark:border-gray-800"
           >
-            <div className="flex min-h-0 flex-1 flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+            <div className="flex h-full min-h-0 flex-1 flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
               <div className="mb-2 shrink-0 text-center">
                 <p className="text-sm font-semibold text-foreground dark:text-gray-100">Q&amp;A Chat</p>
                 <p className="text-xs text-muted-foreground dark:text-gray-500">Public questions for this listing</p>

@@ -44,12 +44,17 @@ type SheetContentProps = React.ComponentPropsWithoutRef<
   side?: "top" | "right" | "bottom" | "left";
   /** Accessible title for screen readers (visually hidden). */
   title?: string;
+  /**
+   * When false, the body is `overflow-hidden` with a flex column so children can own scrolling
+   * (avoids nested scroll + lost taps on mobile for bottom sheets with a sticky footer).
+   */
+  scrollableBody?: boolean;
 };
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, title, ...props }, ref) => (
+>(({ side = "right", className, children, title, scrollableBody = true, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
     <SheetPrimitive.Content
@@ -83,7 +88,14 @@ const SheetContent = React.forwardRef<
           </button>
         </SheetClose>
       </div>
-      <div className="flex-1 overflow-y-auto px-3 pb-4">{children}</div>
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col px-3 pb-4",
+          scrollableBody ? "overflow-y-auto" : "overflow-hidden"
+        )}
+      >
+        {children}
+      </div>
     </SheetPrimitive.Content>
   </SheetPortal>
 ));
