@@ -30,6 +30,13 @@ export function BuyNowButton({
   const [connectModalOpen, setConnectModalOpen] = useState(false);
 
   const handleClick = async () => {
+    const confirmed = window.confirm(
+      `Confirm Buy Now at ${formatCents(
+        buyNowCents
+      )}? This will secure the job at this price.`
+    );
+    if (!confirmed) return;
+
     try {
       setError(null);
       setLoading(true);

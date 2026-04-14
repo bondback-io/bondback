@@ -194,25 +194,6 @@ export function PlaceBidForm({
           {isCleaner &&
             typeof listing.buy_now_cents === "number" &&
             listing.buy_now_cents > 0 &&
-            currentLowest >= listing.buy_now_cents && (
-              <div className="border-b border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.14] via-emerald-500/[0.06] to-transparent px-4 py-3.5 dark:border-emerald-900/40 dark:from-emerald-950/45 dark:via-emerald-950/25 dark:to-transparent sm:px-5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
-                  Buy it now
-                </p>
-                <p className="mt-1 text-xs leading-snug text-emerald-900/90 dark:text-emerald-100/80">
-                  Lock in this job at the buy-now price — no need to undercut the current lowest bid.
-                </p>
-                <BuyNowButton
-                  listingId={listingId}
-                  buyNowCents={listing.buy_now_cents}
-                  currentUserId={currentUserId}
-                  className="mt-3 w-full min-h-12 justify-center px-4 text-base font-bold tracking-wide shadow-sm sm:min-h-[3.25rem]"
-                />
-              </div>
-            )}
-          {isCleaner &&
-            typeof listing.buy_now_cents === "number" &&
-            listing.buy_now_cents > 0 &&
             currentLowest < listing.buy_now_cents && (
               <div className="border-b border-sky-500/25 bg-gradient-to-br from-sky-500/[0.12] via-sky-500/[0.05] to-transparent px-4 py-3.5 dark:border-sky-900/40 dark:from-sky-950/40 dark:via-sky-950/25 dark:to-transparent sm:px-5">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-300">
@@ -342,6 +323,26 @@ export function PlaceBidForm({
               {isSubmitting ? "Placing bid…" : "Place lower bid"}
             </Button>
           </div>
+
+          {isCleaner &&
+            typeof listing.buy_now_cents === "number" &&
+            listing.buy_now_cents > 0 &&
+            currentLowest >= listing.buy_now_cents && (
+              <div className="border-t border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.14] via-emerald-500/[0.06] to-transparent px-4 py-3.5 dark:border-emerald-900/40 dark:from-emerald-950/45 dark:via-emerald-950/25 dark:to-transparent sm:px-5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
+                  Buy it now
+                </p>
+                <p className="mt-1 text-xs leading-snug text-emerald-900/90 dark:text-emerald-100/80">
+                  Lock in this job at the buy-now price — no need to undercut the current lowest bid.
+                </p>
+                <BuyNowButton
+                  listingId={listingId}
+                  buyNowCents={listing.buy_now_cents}
+                  currentUserId={currentUserId}
+                  className="mt-3 w-full min-h-12 justify-center px-4 text-base font-bold tracking-wide shadow-sm sm:min-h-[3.25rem]"
+                />
+              </div>
+            )}
         </div>
 
         {error ? (

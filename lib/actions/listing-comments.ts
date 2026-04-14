@@ -62,10 +62,18 @@ async function getListingQaBannedUsersMap(
   readClient: SupabaseReadClientLike,
   listingId: string
 ): Promise<Map<string, QaBanRow>> {
-  const { data } = await (readClient as any)
+  const { data, error } = await (readClient as any)
     .from("listing_comment_bans")
     .select("listing_id, user_id, banned_by_user_id, reason, created_at")
     .eq("listing_id", listingId);
+  if (error) {
+    // Backward-compatible fallback when migration has not been applied yet.
+    if (/relation .*listing_comment_bans.* does not exist/i.test(error.message ?? "")) {
+      return new Map();
+    }
+    console.warn("[getListingQaBannedUsersMap]", error.message);
+    return new Map();
+  }
 
   const rows = (data ?? []) as QaBanRow[];
   return new Map(rows.map((r) => [String(r.user_id), r]));
@@ -181,70 +189,71 @@ export async function postListingComment(params: {
   const mod = moderateListingCommentText(params.message);
   if (!mod.ok) return { ok: false, error: mod.error };
 
-  const admin = createSupabaseAdminClient();
-  const readClient = (admin ?? supabase) as SupabaseClient<Database>;
+  try {
+    const admin = createSupabaseAdminClient();
+    const readClient = (admin ?? supabase) as SupabaseClient<Database>;
 
-  const { data: listing, error: listErr } = await readClient
-    .from("listings")
-    .select("id, lister_id, status, end_time, cancelled_early_at, title")
-    .eq("id", params.listingId)
-    .maybeSingle();
+    const { data: listing, error: listErr } = await readClient
+      .from("listings")
+      .select("id, lister_id, status, end_time, cancelled_early_at, title")
+      .eq("id", params.listingId)
+      .maybeSingle();
 
-  if (listErr || !listing) {
-    return { ok: false, error: "Listing not found." };
-  }
+    if (listErr || !listing) {
+      return { ok: false, error: "Listing not found." };
+    }
 
-  const row = listing as ListingRow;
-  const { data: jobRow } = await readClient
-    .from("jobs")
-    .select("id, status")
-    .eq("listing_id", params.listingId)
-    .maybeSingle();
+    const row = listing as ListingRow;
+    const { data: jobRow } = await readClient
+      .from("jobs")
+      .select("id, status")
+      .eq("listing_id", params.listingId)
+      .maybeSingle();
 
-  const hasActiveJob =
-    !!jobRow && String((jobRow as { status?: string }).status ?? "").toLowerCase() !== "cancelled";
+    const hasActiveJob =
+      !!jobRow && String((jobRow as { status?: string }).status ?? "").toLowerCase() !== "cancelled";
 
-  if (!shouldShowPublicListingComments(row, hasActiveJob)) {
-    return { ok: false, error: "Comments are closed for this listing." };
-  }
+    if (!shouldShowPublicListingComments(row, hasActiveJob)) {
+      return { ok: false, error: "Comments are closed for this listing." };
+    }
 
-  const listerId = String(row.lister_id);
-  const banMap = await getListingQaBannedUsersMap(readClient, params.listingId);
-  if (banMap.has(String(session.user.id))) {
-    return { ok: false, error: "You are banned from posting in this listing Q&A." };
-  }
+    const listerId = String(row.lister_id);
+    const banMap = await getListingQaBannedUsersMap(readClient, params.listingId);
+    if (banMap.has(String(session.user.id))) {
+      return { ok: false, error: "You are banned from posting in this listing Q&A." };
+    }
 
-  const { data: posterProfile } = await readClient
-    .from("profiles")
-    .select("roles, full_name, active_role")
-    .eq("id", session.user.id)
-    .maybeSingle();
+    const { data: posterProfile } = await readClient
+      .from("profiles")
+      .select("roles, full_name, active_role")
+      .eq("id", session.user.id)
+      .maybeSingle();
 
-  const rolesArr = (posterProfile as { roles?: string[] | null } | null)?.roles ?? [];
-  const rolesLower = rolesArr.map((r) => String(r).toLowerCase());
-  const hasCleanerRole = rolesLower.includes("cleaner");
-  const hasListerRole = rolesLower.includes("lister");
-  const activeRoleRaw = (posterProfile as { active_role?: string | null } | null)?.active_role;
-  const activeRoleResolved =
-    (typeof activeRoleRaw === "string" && activeRoleRaw.trim()
-      ? activeRoleRaw.trim().toLowerCase()
-      : null) ?? (rolesLower[0] ?? null);
+    const rolesArr = (posterProfile as { roles?: string[] | null } | null)?.roles ?? [];
+    const rolesLower = rolesArr.map((r) => String(r).toLowerCase());
+    const hasCleanerRole = rolesLower.includes("cleaner");
+    const hasListerRole = rolesLower.includes("lister");
+    const activeRoleRaw = (posterProfile as { active_role?: string | null } | null)?.active_role;
+    const activeRoleResolved =
+      (typeof activeRoleRaw === "string" && activeRoleRaw.trim()
+        ? activeRoleRaw.trim().toLowerCase()
+        : null) ?? (rolesLower[0] ?? null);
   /** Matches listing detail page: browsing as cleaner on own listing can start Q&A threads. */
-  const isActiveCleanerSession = activeRoleResolved === "cleaner" && hasCleanerRole;
+    const isActiveCleanerSession = activeRoleResolved === "cleaner" && hasCleanerRole;
   /** Replying as property owner requires Lister mode when the user has both roles. */
-  const isActiveListerSession = activeRoleResolved === "lister" && hasListerRole;
+    const isActiveListerSession = activeRoleResolved === "lister" && hasListerRole;
 
-  const ownsThisListing = String(session.user.id) === listerId;
-  if (!ownsThisListing && isActiveListerSession) {
-    return {
-      ok: false,
-      error:
-        "Listers can't post in Q&A on other people's listings. Switch to Cleaner in the header to ask a question.",
-    };
-  }
+    const ownsThisListing = String(session.user.id) === listerId;
+    if (!ownsThisListing && isActiveListerSession) {
+      return {
+        ok: false,
+        error:
+          "Listers can't post in Q&A on other people's listings. Switch to Cleaner in the header to ask a question.",
+      };
+    }
 
-  let insertParentId: string | null = params.parentCommentId;
-  if (params.parentCommentId) {
+    let insertParentId: string | null = params.parentCommentId;
+    if (params.parentCommentId) {
     const root = await getRootCommentForThread(readClient, params.parentCommentId);
     if (!root || String(root.listing_id) !== String(params.listingId)) {
       return { ok: false, error: "Invalid reply target." };
@@ -276,7 +285,7 @@ export async function postListingComment(params: {
     }
     // Keep all replies flattened under the root thread for simpler rendering/moderation.
     insertParentId = root.id;
-  } else {
+    } else {
     // Cleaner (or member) can only start one thread per listing.
     if (hasCleanerRole) {
       const { data: existingRoot } = await readClient
@@ -301,9 +310,9 @@ export async function postListingComment(params: {
           "Only cleaners and other members can start a thread. Open a question and use Reply to respond.",
       };
     }
-  }
+    }
 
-  const { data: inserted, error: insErr } = await supabase
+    const { data: inserted, error: insErr } = await supabase
     .from("listing_comments")
     .insert({
       listing_id: params.listingId,
@@ -314,7 +323,7 @@ export async function postListingComment(params: {
     .select("id, listing_id, user_id, parent_comment_id, message_text, created_at")
     .single();
 
-  if (insErr || !inserted) {
+    if (insErr || !inserted) {
     const msg = insErr?.message ?? "Could not post comment.";
     if (/row-level security|RLS|policy/i.test(msg) || /relation.*does not exist/i.test(msg)) {
       return {
@@ -324,15 +333,15 @@ export async function postListingComment(params: {
       };
     }
     return { ok: false, error: msg };
-  }
+    }
 
-  const ins = inserted as ListingCommentRow;
-  const prof = posterProfile as {
+    const ins = inserted as ListingCommentRow;
+    const prof = posterProfile as {
     full_name?: string | null;
     roles?: string[] | null;
   } | null;
-  const baseLabel = roleLabel(session.user.id, listerId, prof?.roles);
-  const comment: ListingCommentPublic = {
+    const baseLabel = roleLabel(session.user.id, listerId, prof?.roles);
+    const comment: ListingCommentPublic = {
     id: ins.id,
     listing_id: ins.listing_id,
     user_id: ins.user_id,
@@ -345,17 +354,17 @@ export async function postListingComment(params: {
         ? "Cleaner"
         : baseLabel,
     author_banned: false,
-  };
+    };
 
-  revalidatePath(`/listings/${params.listingId}`);
+    revalidatePath(`/listings/${params.listingId}`);
 
-  const snippet =
-    mod.text.length > 120 ? `${mod.text.slice(0, 117)}…` : mod.text;
-  const titleHint = (row.title ?? "").trim() || "A listing";
+    const snippet =
+      mod.text.length > 120 ? `${mod.text.slice(0, 117)}…` : mod.text;
+    const titleHint = (row.title ?? "").trim() || "A listing";
 
-  const posterName = comment.author_display_name;
+    const posterName = comment.author_display_name;
 
-  async function qaNotifyAllowed(
+    async function qaNotifyAllowed(
     recipientId: string,
     kind: "in_app_qa_new_question" | "in_app_qa_lister_reply"
   ): Promise<boolean> {
@@ -369,7 +378,7 @@ export async function postListingComment(params: {
     return np?.[kind] !== false;
   }
 
-  if (params.parentCommentId) {
+    if (params.parentCommentId) {
     const root = await getRootCommentForThread(readClient, params.parentCommentId);
     const askerId = String(root?.user_id ?? "");
     if (
@@ -392,7 +401,7 @@ export async function postListingComment(params: {
         }
       );
     }
-  } else if (listerId !== session.user.id && (await qaNotifyAllowed(listerId, "in_app_qa_new_question"))) {
+    } else if (listerId !== session.user.id && (await qaNotifyAllowed(listerId, "in_app_qa_new_question"))) {
     void createNotification(
       listerId,
       "listing_public_comment",
@@ -407,9 +416,17 @@ export async function postListingComment(params: {
         qaSubkind: "question",
       }
     );
-  }
+    }
 
-  return { ok: true, comment };
+    return { ok: true, comment };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not post comment.";
+    console.error("[postListingComment]", msg);
+    if (/relation .*listing_comment_bans.* does not exist/i.test(msg)) {
+      return { ok: false, error: "Q&A moderation setup is still rolling out. Please try again shortly." };
+    }
+    return { ok: false, error: "Could not send message right now. Please try again." };
+  }
 }
 
 export type RemoveListingCommentResult =
