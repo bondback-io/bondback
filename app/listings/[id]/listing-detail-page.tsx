@@ -224,11 +224,13 @@ export default async function ListingDetailPage({
       <div className="page-inner mx-auto w-full max-w-6xl px-3 sm:px-4">
         <div
           className={cn(
-            "xl:grid xl:items-start xl:gap-6",
-            showPublicComments && "xl:grid-cols-[minmax(0,1fr)_min(300px,32%)] xl:gap-8"
+            "xl:grid xl:gap-6",
+            showPublicComments
+              ? "xl:grid-cols-[minmax(0,1fr)_min(300px,32%)] xl:items-stretch xl:gap-8"
+              : "xl:items-start"
           )}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 xl:min-h-0">
             <ListingAuctionDetail
               listing={listingRow}
               initialBids={initialBids}

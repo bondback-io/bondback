@@ -23,6 +23,7 @@ import {
   type ListingCommentPublic,
 } from "@/lib/actions/listing-comments";
 import { markListingQaNotificationsRead } from "@/lib/actions/notifications";
+import { MOBILE_BOTTOM_NAV_FAB_OFFSET } from "@/lib/mobile-bottom-nav-layout";
 import { useToast } from "@/components/ui/use-toast";
 import Link from "next/link";
 
@@ -495,15 +496,25 @@ export function ListingPublicCommentsDock({
       </span>
     ) : null;
 
+  /** Below sticky site header + small gap; matches listing column start in viewport. */
+  const qaStickyTop =
+    "top-[calc(3.75rem+env(safe-area-inset-top,0px)+1rem)]";
+
   return (
     <>
-      {/* Desktop: sticky sidebar */}
-      <aside className="hidden xl:block xl:w-full xl:max-w-[min(100%,320px)] xl:justify-self-end">
+      {/* Desktop: column stretches with grid row so sticky can ride full listing scroll */}
+      <aside className="hidden xl:flex xl:h-full xl:min-h-0 xl:w-full xl:max-w-[min(100%,320px)] xl:items-start xl:justify-end xl:justify-self-end">
+        <div
+          className={cn(
+            "xl:sticky xl:z-10 xl:w-full xl:max-w-[min(100%,320px)] xl:self-start",
+            qaStickyTop
+          )}
+        >
         {desktopCollapsed ? (
           <button
             type="button"
             onClick={() => setDesktopCollapsed(false)}
-            className="sticky top-[calc(5rem+env(safe-area-inset-top,0px))] flex w-full max-w-[52px] flex-col items-center gap-2 rounded-2xl border border-border bg-card py-4 shadow-sm transition hover:bg-muted/40 dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900/80"
+            className="flex w-full max-w-[52px] flex-col items-center gap-2 rounded-2xl border border-border bg-card py-4 shadow-sm transition hover:bg-muted/40 dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900/80"
             aria-expanded={false}
             aria-label="Expand Q&A Chat"
           >
@@ -515,7 +526,7 @@ export function ListingPublicCommentsDock({
             <ChevronLeft className="h-4 w-4 text-muted-foreground" aria-hidden />
           </button>
         ) : (
-          <Card className="sticky top-[calc(5rem+env(safe-area-inset-top,0px))] flex max-h-[min(520px,calc(100dvh-6rem))] flex-col overflow-hidden border-border shadow-sm dark:border-gray-800 dark:bg-gray-950">
+          <Card className="flex max-h-[min(560px,calc(100dvh-5rem-env(safe-area-inset-top,0px)))] flex-col overflow-hidden border-border shadow-sm dark:border-gray-800 dark:bg-gray-950">
             <CardHeader className="flex shrink-0 flex-row items-center justify-between space-y-0 border-b border-border py-3 dark:border-gray-800">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                 <span className="relative inline-flex">
@@ -552,11 +563,15 @@ export function ListingPublicCommentsDock({
             </CardContent>
           </Card>
         )}
+        </div>
       </aside>
 
       {/* Mobile: floating action + sheet */}
       <div className="xl:hidden">
-        <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-4 z-[45]">
+        <div
+          className="pointer-events-none fixed right-4 z-[35] xl:hidden"
+          style={{ bottom: MOBILE_BOTTOM_NAV_FAB_OFFSET }}
+        >
           <div className="pointer-events-auto relative">
             <Button
               type="button"
