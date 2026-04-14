@@ -362,8 +362,9 @@ function ListingCardInner({
     : formatCents(currentCents);
 
   const showCleanerBlock = cleanerName != null && (cleanerName !== "" || cleanerRating != null);
+  // Lister-owner hides this on "my listings" style views; cleaner session still shows it (dual-role on Find Jobs).
   const showListerBlock =
-    !isListerOwner &&
+    (!isListerOwner || isCleaner) &&
     typeof listerName === "string" &&
     listerName.trim() !== "";
   const effectiveCleanerBadges =
@@ -619,7 +620,7 @@ function ListingCardInner({
           )}
         </p>
 
-        {/* Lister trust row (non-owner): name + verification badges — desktop */}
+        {/* Lister trust row: name + verification badges — desktop (shown to cleaners even on own listings) */}
         {showListerBlock && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted-foreground dark:text-gray-400">Property lister:</span>
