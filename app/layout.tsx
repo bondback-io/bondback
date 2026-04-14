@@ -29,6 +29,7 @@ import { SessionSync } from "@/components/auth/session-sync";
 import { SupportContactProvider } from "@/components/providers/support-contact-provider";
 import { getSupportContactEmail } from "@/lib/support-contact-email";
 import { LoggedInRoutePrefetch } from "@/components/performance/logged-in-route-prefetch";
+import { ProductTour } from "@/components/onboarding/ProductTour";
 
 const site = getSiteUrl();
 
@@ -166,6 +167,13 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
           <>
             <LoggedInRoutePrefetch />
             <NotificationsRealtimeSync userId={session.user.id} />
+            {session.profile ? (
+              <ProductTour
+                activeRole={session.activeRole}
+                isEmailVerified={session.profile.is_email_verified === true}
+                hasSeenOnboardingTour={session.profile.hasSeenOnboardingTour === true}
+              />
+            ) : null}
           </>
         ) : null}
         <RegisterExpoPushToken userId={session?.user.id ?? null} />

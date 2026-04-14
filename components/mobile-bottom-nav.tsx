@@ -102,6 +102,7 @@ function MessagesTabLink({
 
   return (
     <Link
+      id="tour-bottom-messages"
       href="/messages"
       prefetch
       onPointerDown={() => router.prefetch("/messages")}
@@ -405,6 +406,7 @@ export function MobileBottomNav({
           </Link>
 
           <Link
+            id={effectiveRole === "lister" ? "tour-bottom-listings" : undefined}
             href={secondaryTabHref}
             prefetch
             onPointerDown={() => router.prefetch(secondaryTabHref)}

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { format } from "date-fns";
 import { Star, Briefcase, ExternalLink, MessageSquare } from "lucide-react";
 import {
   Dialog,
@@ -80,7 +81,7 @@ export function BidderProfilePreviewDialog({
   }));
   const reviewPopoverHint =
     reviewCount > recent.length && recent.length > 0
-      ? `Showing ${recent.length} most recent — open full profile for all ${reviewCount}.`
+      ? `Showing ${recent.length} most recent of ${reviewCount} reviews.`
       : null;
 
   return (
@@ -196,6 +197,59 @@ export function BidderProfilePreviewDialog({
                   </div>
                 </div>
               </div>
+
+              {recent.length > 0 ? (
+                <div className="space-y-3 rounded-xl border border-border/90 bg-muted/25 px-3 py-3 dark:border-gray-800 dark:bg-gray-900/50">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-500">
+                    Latest feedback
+                  </p>
+                  <ul className="space-y-3">
+                    {recent.map((r) => (
+                      <li
+                        key={r.id}
+                        className="space-y-2 rounded-lg border border-border/80 bg-background/80 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-900/40"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                              {r.reviewer_display_name?.trim() || "Lister"}
+                            </p>
+                            <div className="mt-0.5">
+                              <StarRow rating={r.overall_rating} size="xs" />
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
+                            <time
+                              className="text-[10px] tabular-nums text-muted-foreground dark:text-gray-500"
+                              dateTime={r.created_at}
+                            >
+                              {(() => {
+                                try {
+                                  return format(new Date(r.created_at), "d MMM yyyy");
+                                } catch {
+                                  return "";
+                                }
+                              })()}
+                            </time>
+                            <span className="text-[10px] text-muted-foreground dark:text-gray-500">
+                              {r.job_id != null ? `Job #${r.job_id}` : "Job review"}
+                            </span>
+                          </div>
+                        </div>
+                        {r.review_text?.trim() ? (
+                          <p className="text-sm leading-relaxed text-muted-foreground dark:text-gray-300">
+                            {r.review_text.trim()}
+                          </p>
+                        ) : (
+                          <p className="text-xs italic text-muted-foreground dark:text-gray-500">
+                            No written comment for this review.
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               {profile.bio?.trim() ? (
                 <div>

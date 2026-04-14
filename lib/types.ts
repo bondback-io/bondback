@@ -21,6 +21,10 @@ export type SessionWithProfile = {
         distance_unit: DistanceUnitPref;
         /** For push banner / prefs; optional when profile row missing fields. */
         notification_preferences?: NotificationPreferences | null;
+        /** From profiles.is_email_verified — required before auto product tour. */
+        is_email_verified?: boolean;
+        /** From profiles.has_seen_onboarding_tour — Joyride tour completion. */
+        hasSeenOnboardingTour?: boolean;
       }
     | null;
   roles: ProfileRole[];

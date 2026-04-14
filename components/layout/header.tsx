@@ -88,6 +88,7 @@ export const Header = async ({
             </div>
 
             <nav
+              id="tour-account-tools-nav"
               className="flex min-w-0 shrink-0 flex-nowrap items-center justify-end gap-x-1 sm:gap-x-1.5 lg:gap-x-2"
               aria-label="Account and tools"
             >

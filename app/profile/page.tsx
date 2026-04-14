@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getCriticalProfileTasks } from "@/lib/profile-critical-tasks";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -31,6 +29,7 @@ import { getAppBaseUrl } from "@/lib/site";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 import { REVIEWEE_IS_CLEANER_OR } from "@/lib/reviews/cleaner-review-filters";
+import { CleanerExperienceBadge } from "@/components/shared/cleaner-experience-badge";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -103,6 +102,16 @@ const ProfilePage = async ({
   const showPaymentsTab = isLister || isCleaner;
   const isListerActive = activeRole === "lister";
   const isCleanerActive = activeRole === "cleaner";
+
+  let cleanerCompletedJobsForHeader = 0;
+  if (isCleanerActive) {
+    const { count } = await supabase
+      .from("jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("winner_id", session.user.id)
+      .eq("status", "completed");
+    cleanerCompletedJobsForHeader = count ?? 0;
+  }
 
   const criticalProfile = getCriticalProfileTasks(profile, {
     activeRole,
@@ -271,13 +280,14 @@ const ProfilePage = async ({
                   )}
                 </div>
               </div>
-              <Button
-                asChild
-                size="lg"
-                className="h-12 min-h-[48px] w-full shrink-0 rounded-full px-5 text-base font-semibold sm:w-auto sm:min-w-[10rem]"
-              >
-                <Link href="#section-personal">Edit profile</Link>
-              </Button>
+              {isCleanerActive ? (
+                <div className="flex w-full shrink-0 justify-end sm:w-auto sm:self-center">
+                  <CleanerExperienceBadge
+                    jobs={cleanerCompletedJobsForHeader}
+                    className="px-3 py-1.5 text-[11px] sm:text-xs"
+                  />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

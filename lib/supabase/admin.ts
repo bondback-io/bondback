@@ -116,6 +116,7 @@ export function syntheticProfileFromAuthUser(u: User): ProfileRow {
     expo_push_token: null,
     verification_badges: [],
     is_email_verified: !!u.email_confirmed_at,
+    has_seen_onboarding_tour: false,
     referred_by: null,
     referral_code: null,
     account_credit_cents: 0,

@@ -50,6 +50,8 @@ export interface Database {
           expo_push_token: string | null;
           verification_badges: string[];
           is_email_verified: boolean;
+          /** Product tour (React Joyride) dismissed or completed. */
+          has_seen_onboarding_tour: boolean;
           created_at: string;
           updated_at: string;
           referred_by: string | null;
@@ -104,6 +106,7 @@ export interface Database {
           expo_push_token?: string | null;
           verification_badges?: string[];
           is_email_verified?: boolean;
+          has_seen_onboarding_tour?: boolean;
           created_at?: string;
           updated_at?: string;
           referred_by?: string | null;
@@ -153,6 +156,7 @@ export interface Database {
           expo_push_token?: string | null;
           verification_badges?: string[];
           is_email_verified?: boolean;
+          has_seen_onboarding_tour?: boolean;
           updated_at?: string;
           referred_by?: string | null;
           referral_code?: string | null;

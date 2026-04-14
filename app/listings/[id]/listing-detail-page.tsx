@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -22,6 +23,7 @@ import { shouldShowPublicListingComments } from "@/lib/listing-public-comments-v
 import { fetchListingCommentsPublic } from "@/lib/actions/listing-comments";
 import { countUnreadListingQaNotifications } from "@/lib/actions/notifications";
 import { ListingPublicCommentsDock } from "@/components/features/listing-public-comments-dock";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +94,7 @@ export default async function ListingDetailPage({
   const paymentParam = firstSearchParam(sp.payment);
   const checkoutSessionId = firstSearchParam(sp.session_id);
   const paymentNotice = firstSearchParam(sp.payment_notice);
+  const justPublished = firstSearchParam(sp.published) === "1";
   const paymentSuccessReturn = isStripePaymentSuccessReturn(sp);
 
   const paymentRedirectBase = `/listings/${encodeURIComponent(raw)}`;
@@ -194,6 +197,7 @@ export default async function ListingDetailPage({
 
   const ownsThisListing =
     !!sessionUserId && String(listingRow.lister_id) === String(sessionUserId);
+  const showPublishedBanner = justPublished && ownsThisListing;
   /** Browsing as Lister on someone else's listing — no Q&A posting (switch to Cleaner to participate). */
   const listerActiveViewingOthersListing =
     !!sessionUserId && !ownsThisListing && isListerActive;
@@ -227,6 +231,26 @@ export default async function ListingDetailPage({
         feePercentage={feePercentage}
         isStripeTestMode={stripeTestModeForPayment}
       />
+      {showPublishedBanner ? (
+        <div className="page-inner mx-auto w-full max-w-6xl px-3 pt-2 sm:px-4">
+          <Alert
+            variant="success"
+            className="border-emerald-200 bg-emerald-50/90 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-50"
+          >
+            <AlertDescription className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                Your listing is live — cleaners can bid now. You&apos;ll get notifications as bids come in.
+              </span>
+              <Link
+                href={`/listings/${encodeURIComponent(listingId)}`}
+                className="shrink-0 font-semibold text-emerald-900 underline-offset-4 hover:underline dark:text-emerald-100"
+              >
+                Dismiss
+              </Link>
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
       <div className="page-inner mx-auto w-full max-w-6xl px-3 sm:px-4">
         <div
           className={cn(

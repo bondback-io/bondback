@@ -74,6 +74,7 @@ function DesktopNavLinks({
         <>
           {isCleaner && (
             <Link
+              id="tour-find-jobs-desktop"
               href="/jobs"
               prefetch
               className={linkClass("/jobs")}
@@ -88,6 +89,7 @@ function DesktopNavLinks({
           {isLister &&
             (onRequestCreateListing ? (
               <Button
+                id="tour-create-listing-desktop"
                 type="button"
                 size="sm"
                 className="ml-0 shrink-0 gap-2 rounded-full bg-emerald-600 px-2.5 py-1.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-900/25 md:px-3 md:py-2 lg:px-4 dark:bg-emerald-600 dark:shadow-none dark:hover:bg-emerald-500 dark:hover:shadow-md dark:hover:shadow-emerald-950/50"
@@ -105,6 +107,7 @@ function DesktopNavLinks({
                 className="ml-0 shrink-0 rounded-full bg-emerald-600 px-2.5 py-1.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-900/25 md:px-3 md:py-2 lg:px-4 dark:bg-emerald-600 dark:shadow-none dark:hover:bg-emerald-500 dark:hover:shadow-md dark:hover:shadow-emerald-950/50"
               >
                 <Link
+                  id="tour-create-listing-desktop"
                   href="/listings/new"
                   prefetch
                   className="inline-flex items-center gap-2 whitespace-nowrap"
@@ -222,6 +225,7 @@ function MobileNavContent({
         {isCleaner && (
           <SheetClose asChild>
             <Link
+              id="tour-find-jobs-mobile"
               href="/jobs"
               prefetch
               className={linkClass("/jobs")}
@@ -372,6 +376,7 @@ export function MainNav({
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <Button
+            id="tour-mobile-main-menu"
             variant="ghost"
             size="icon"
             className="inline-flex min-h-[44px] min-w-[44px] touch-manipulation transition-transform active:scale-95 md:hidden"

@@ -93,6 +93,9 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
           ),
           notification_preferences:
             (row as { notification_preferences?: NotificationPreferences | null }).notification_preferences ?? null,
+          is_email_verified: row.is_email_verified === true,
+          hasSeenOnboardingTour:
+            (row as { has_seen_onboarding_tour?: boolean | null }).has_seen_onboarding_tour === true,
         }
       : null,
     roles,

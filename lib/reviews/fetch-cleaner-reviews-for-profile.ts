@@ -68,17 +68,31 @@ async function enrichReviewerProfiles(
  * back to a flat select and merges reviewer display names (service role can read lister names
  * where the anon key cannot).
  */
+export type FetchCleanerReviewsOptions = {
+  /** When set, only the N most recent reviews are loaded (e.g. bidder preview). */
+  limit?: number;
+};
+
 export async function fetchCleanerReviewsForPublicProfile(
   primary: SupabaseClient<Database>,
   admin: SupabaseClient<Database> | null,
-  cleanerId: string
+  cleanerId: string,
+  options?: FetchCleanerReviewsOptions
 ): Promise<CleanerProfileReviewRow[]> {
   const order = { ascending: false as const };
+  const cap =
+    options?.limit != null && Number.isFinite(options.limit) && options.limit > 0
+      ? Math.min(100, Math.floor(options.limit))
+      : null;
 
   const queryWithFilter = async (select: string, useRoleOr: boolean) => {
     let q = primary.from("reviews").select(select).eq("reviewee_id", cleanerId);
     q = useRoleOr ? q.or(REVIEWEE_IS_CLEANER_OR) : q.eq("reviewee_type", "cleaner");
-    return q.order("created_at", order);
+    q = q.order("created_at", order);
+    if (cap != null) {
+      q = q.limit(cap);
+    }
+    return q;
   };
 
   let res = await queryWithFilter(REVIEW_SELECT_WITH_REVIEWER, true);

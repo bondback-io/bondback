@@ -22,6 +22,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PRODUCT_TOUR_RESTART_EVENT } from "@/lib/product-tour-constants";
 import { useSupportContactDisplayEmail } from "@/components/providers/support-contact-provider";
 import {
   SettingsNotificationsForm,
@@ -412,6 +413,23 @@ export function MyAccountSections({
                   </Link>
                 </li>
               </ul>
+              <div className="mt-4 rounded-lg border border-border/80 bg-muted/25 px-3 py-3 dark:border-gray-700 dark:bg-gray-900/40">
+                <p className="text-xs font-semibold text-foreground dark:text-gray-100">Product tour</p>
+                <p className="mt-1 text-xs leading-snug text-muted-foreground dark:text-gray-400">
+                  Replay the short guided walkthrough for your current role (Lister or Cleaner).
+                </p>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  className={cn("mt-3 min-h-12 w-full sm:w-auto", settingsOutlineBtn)}
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent(PRODUCT_TOUR_RESTART_EVENT));
+                  }}
+                >
+                  Restart tour
+                </Button>
+              </div>
             </div>
           </AccordionContent>
         </AccordionItem>

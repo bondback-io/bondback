@@ -221,6 +221,7 @@ export function UserMenu({ session }: UserMenuProps) {
 
   const triggerButton = (
     <Button
+      id="tour-user-menu"
       variant="ghost"
       className={cn(
         "gap-2 rounded-full pl-1 pr-2 transition-colors active:scale-[0.98]",

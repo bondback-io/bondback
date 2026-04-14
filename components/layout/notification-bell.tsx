@@ -291,6 +291,7 @@ export function NotificationBell({
     >
       <DropdownMenuTrigger asChild>
         <Button
+          id={variant !== "row" ? "tour-notifications" : undefined}
           type="button"
           variant="ghost"
           size={variant === "row" ? "default" : "icon"}

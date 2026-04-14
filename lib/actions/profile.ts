@@ -132,6 +132,33 @@ export async function setActiveRole(role: ProfileRole): Promise<{ ok: boolean; e
   return { ok: true };
 }
 
+/** Mark the role-specific product tour as seen (auto after complete/skip, or optional after restart). */
+export async function markOnboardingTourSeen(): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return { ok: false, error: "You must be signed in." };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const db = (admin ?? supabase) as typeof supabase;
+  const { error } = await db
+    .from("profiles")
+    .update({ has_seen_onboarding_tour: true } as ProfileUpdate as never)
+    .eq("id", session.user.id);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/profile");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 export type UpdateMaxTravelKmResult = { ok: true } | { ok: false; error: string };
 
 /**

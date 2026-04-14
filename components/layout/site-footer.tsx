@@ -17,8 +17,18 @@ export const SiteFooter = () => {
           <div className="flex w-full max-w-sm flex-col items-center gap-3 sm:max-w-none sm:items-end sm:gap-2">
             <nav
               className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs sm:justify-end sm:text-sm"
-              aria-label="Legal"
+              aria-label="Legal and help"
             >
+              <Link
+                id="tour-footer-help"
+                href="/help"
+                className="whitespace-nowrap font-medium text-foreground underline-offset-4 hover:text-primary hover:underline dark:text-gray-200"
+              >
+                Help
+              </Link>
+              <span className="hidden text-muted-foreground/80 sm:inline" aria-hidden>
+                ·
+              </span>
               <Link
                 href="/privacy"
                 className="whitespace-nowrap font-medium text-foreground underline-offset-4 hover:text-primary hover:underline dark:text-gray-200"
