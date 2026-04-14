@@ -296,6 +296,7 @@ export interface Database {
           parent_comment_id: string | null;
           message_text: string;
           created_at: string;
+          posted_as_role: string | null;
         };
         Insert: {
           id?: string;
@@ -304,6 +305,7 @@ export interface Database {
           parent_comment_id?: string | null;
           message_text: string;
           created_at?: string;
+          posted_as_role?: string | null;
         };
         Update: {
           id?: string;
@@ -312,6 +314,7 @@ export interface Database {
           parent_comment_id?: string | null;
           message_text?: string;
           created_at?: string;
+          posted_as_role?: string | null;
         };
         Relationships: [
           {

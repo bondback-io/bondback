@@ -25,6 +25,12 @@ import {
   type ListingCommentPublic,
 } from "@/lib/actions/listing-comments";
 import { markListingQaNotificationsRead } from "@/lib/actions/notifications";
+import { qaAuthorDisplayName } from "@/lib/listing-qa-display-name";
+import {
+  listingCommentAuthorRoleLabel,
+  parsePostedAsRole,
+  rootThreadAllowsListerReply,
+} from "@/lib/listing-comment-author-role";
 import { MOBILE_BOTTOM_NAV_FAB_OFFSET } from "@/lib/mobile-bottom-nav-layout";
 import { useToast } from "@/components/ui/use-toast";
 import Link from "next/link";
@@ -208,7 +214,13 @@ function GroupedCommentThreads({
     <div className="space-y-2">
       {roots.map((root) => {
         const replies = byParent.get(root.id) ?? [];
-        const canListerReply = ownerListerSession && String(root.user_id) !== String(listerId);
+        const canListerReply =
+          ownerListerSession &&
+          rootThreadAllowsListerReply({
+            rootUserId: root.user_id,
+            listerId,
+            posted_as_role: root.posted_as_role,
+          });
         const replyLabel =
           replies.length === 0
             ? "No replies yet"
@@ -324,8 +336,18 @@ function CommentsPanelInner({
     comments.some(
       (c) => String(c.user_id) === String(currentUserId) && c.author_banned
     );
+  const cleanerAlreadyStartedThread =
+    Boolean(currentUserId) &&
+    !ownerListerSession &&
+    comments.some(
+      (c) =>
+        c.parent_comment_id == null &&
+        String(c.user_id) === String(currentUserId)
+    );
 
   const composerDisabledForListerOwner = ownerListerSession && !replyToId;
+  const composerDisabledForCleanerExistingThread =
+    cleanerAlreadyStartedThread && !replyToId;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -404,6 +426,7 @@ function CommentsPanelInner({
               e.preventDefault();
               if (posting || !draft.trim()) return;
               if (ownerListerSession && !replyToId) return;
+              if (cleanerAlreadyStartedThread && !replyToId) return;
               onPost();
             }}
           >
@@ -434,10 +457,20 @@ function CommentsPanelInner({
               name="qa-message"
               autoComplete="off"
             />
+            {composerDisabledForCleanerExistingThread ? (
+              <p className="text-xs font-medium text-muted-foreground dark:text-gray-400">
+                You&apos;ve started a message already, please use the reply.
+              </p>
+            ) : null}
             <Button
               type="submit"
               className="w-full touch-manipulation"
-              disabled={posting || !draft.trim() || (ownerListerSession && !replyToId)}
+              disabled={
+                posting ||
+                !draft.trim() ||
+                (ownerListerSession && !replyToId) ||
+                composerDisabledForCleanerExistingThread
+              }
             >
               {posting ? (
                 <>
@@ -545,38 +578,32 @@ export function ListingPublicCommentsDock({
       parent_comment_id: string | null;
       message_text: string;
       created_at: string;
+      posted_as_role?: string | null;
     }): Promise<ListingCommentPublic> => {
       const supabase = createBrowserSupabaseClient();
       const { data: p } = await supabase
         .from("profiles")
-        .select("full_name, roles, active_role")
+        .select("full_name, roles, active_role, cleaner_username")
         .eq("id", row.user_id)
         .maybeSingle();
       const fullName = (p as { full_name?: string | null } | null)?.full_name;
+      const cleanerUsername = (p as { cleaner_username?: string | null } | null)?.cleaner_username;
       const roles = (p as { roles?: string[] | null } | null)?.roles;
-      const activeRoleRaw = (p as { active_role?: string | null } | null)?.active_role;
-      const rolesArr = Array.isArray(roles) ? roles.map((x) => String(x).toLowerCase()) : [];
-      const activeResolved =
-        (typeof activeRoleRaw === "string" && activeRoleRaw.trim()
-          ? activeRoleRaw.trim().toLowerCase()
-          : null) ?? rolesArr[0] ?? null;
-      const hasCleaner = rolesArr.includes("cleaner");
-      const name =
-        (fullName ?? "").trim().length > 0
-          ? (fullName as string).length > 48
-            ? `${(fullName as string).slice(0, 47)}…`
-            : (fullName as string)
-          : "Member";
-      const sameAsLister = String(row.user_id) === String(listerId);
-      const showAsCleanerOnOwnListing =
-        sameAsLister && activeResolved === "cleaner" && hasCleaner;
-      const roleLabel = showAsCleanerOnOwnListing
-        ? ("Cleaner" as const)
-        : sameAsLister
-          ? ("Lister" as const)
-          : hasCleaner
-            ? ("Cleaner" as const)
-            : ("Member" as const);
+      const name = qaAuthorDisplayName({
+        userId: String(row.user_id),
+        listerId,
+        fullName,
+        cleanerUsername,
+        roles,
+        fallback: "Member",
+      });
+      const posted = parsePostedAsRole(row.posted_as_role);
+      const roleLabel = listingCommentAuthorRoleLabel({
+        userId: String(row.user_id),
+        listerId,
+        roles,
+        posted_as_role: posted,
+      });
       return {
         id: row.id,
         listing_id: row.listing_id,
@@ -586,6 +613,7 @@ export function ListingPublicCommentsDock({
         created_at: row.created_at,
         author_display_name: name,
         author_role_label: roleLabel,
+        posted_as_role: posted,
       };
     },
     [listerId]
@@ -611,6 +639,7 @@ export function ListingPublicCommentsDock({
             parent_comment_id: string | null;
             message_text: string;
             created_at: string;
+            posted_as_role?: string | null;
           };
           if (!row?.id) return;
           const enriched = await enrichInsert(row);

@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 export type CleanerReviewSnippet = {
   id: string;
+  jobId?: number | null;
   /** Empty string => show “no written comment” for that review in the popover. */
   text: string;
   author?: string | null;
@@ -129,9 +130,17 @@ export function CleanerReviewCountPreview({
             {snippets.map((s) => (
               <li key={s.id} className="border-b border-border/60 pb-3 last:border-0 last:pb-0 dark:border-gray-800">
                 <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
-                  <p className="text-xs font-semibold text-foreground dark:text-gray-100">
-                    {s.author?.trim() || "Lister"}
-                  </p>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground dark:text-gray-100">
+                      {s.author?.trim() || "Lister"}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-muted-foreground dark:text-gray-500">
+                      {s.jobId != null ? `Job #${s.jobId}` : "Job review"}
+                      {typeof s.rating === "number" && !Number.isNaN(s.rating)
+                        ? ` · ${Number(s.rating).toFixed(1)}`
+                        : ""}
+                    </p>
+                  </div>
                   {s.createdAt ? (
                     <time
                       className="shrink-0 text-[10px] tabular-nums text-muted-foreground dark:text-gray-500"

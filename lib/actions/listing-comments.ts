@@ -8,12 +8,18 @@ import type { Database } from "@/types/supabase";
 import { moderateListingCommentText } from "@/lib/listing-comment-moderation";
 import { shouldShowPublicListingComments } from "@/lib/listing-public-comments-visibility";
 import { createNotification } from "@/lib/actions/notifications";
+import { qaAuthorDisplayName } from "@/lib/listing-qa-display-name";
+import {
+  listingCommentAuthorRoleLabel,
+  parsePostedAsRole,
+  type ListingCommentPostedAsRole,
+} from "@/lib/listing-comment-author-role";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type ListingCommentRow = Database["public"]["Tables"]["listing_comments"]["Row"];
 type ProfileMiniRow = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
-  "id" | "full_name" | "roles"
+  "id" | "full_name" | "roles" | "cleaner_username"
 >;
 
 export type ListingCommentPublic = {
@@ -25,26 +31,11 @@ export type ListingCommentPublic = {
   created_at: string;
   author_display_name: string;
   author_role_label: "Lister" | "Cleaner" | "Member";
+  /** Role context at post time; drives labels when user_id equals lister_id (dual role). */
+  posted_as_role?: ListingCommentPostedAsRole | null;
   /** True when this author is banned from further Q&A participation on this listing. */
   author_banned?: boolean;
 };
-
-function roleLabel(
-  userId: string,
-  listerId: string,
-  roles: string[] | null | undefined
-): "Lister" | "Cleaner" | "Member" {
-  if (String(userId) === String(listerId)) return "Lister";
-  const r = Array.isArray(roles) ? roles.map((x) => String(x).toLowerCase()) : [];
-  if (r.includes("cleaner")) return "Cleaner";
-  return "Member";
-}
-
-function displayName(fullName: string | null | undefined, fallback: string): string {
-  const t = (fullName ?? "").trim();
-  if (t.length > 0) return t.length > 48 ? `${t.slice(0, 47)}…` : t;
-  return fallback;
-}
 
 function normalizeRoles(raw: unknown): string[] {
   if (Array.isArray(raw)) {
@@ -105,41 +96,49 @@ async function getListingQaBannedUsersMap(
   return new Map(rows.map((r) => [String(r.user_id), r]));
 }
 
-async function getRootCommentForThread(
-  readClient: SupabaseReadClientLike,
-  commentId: string
-): Promise<{
+type CommentRowWithRole = {
   id: string;
   listing_id: string;
   user_id: string;
   parent_comment_id: string | null;
-} | null> {
-  const { data: start } = await readClient
+  posted_as_role: string | null;
+};
+
+async function fetchCommentRowWithRole(
+  readClient: SupabaseReadClientLike,
+  id: string
+): Promise<CommentRowWithRole | null> {
+  const { data, error } = await readClient
     .from("listing_comments")
-    .select("id, listing_id, user_id, parent_comment_id")
-    .eq("id", commentId)
+    .select("id, listing_id, user_id, parent_comment_id, posted_as_role")
+    .eq("id", id)
     .maybeSingle();
+
+  if (error && /posted_as_role|column/i.test(error.message ?? "")) {
+    const { data: legacy } = await readClient
+      .from("listing_comments")
+      .select("id, listing_id, user_id, parent_comment_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (!legacy) return null;
+    const l = legacy as Omit<CommentRowWithRole, "posted_as_role">;
+    return { ...l, posted_as_role: null };
+  }
+
+  if (!data) return null;
+  return data as CommentRowWithRole;
+}
+
+async function getRootCommentForThread(
+  readClient: SupabaseReadClientLike,
+  commentId: string
+): Promise<CommentRowWithRole | null> {
+  const start = await fetchCommentRowWithRole(readClient, commentId);
   if (!start) return null;
+  if (!start.parent_comment_id) return start;
 
-  const first = start as {
-    id: string;
-    listing_id: string;
-    user_id: string;
-    parent_comment_id: string | null;
-  };
-  if (!first.parent_comment_id) return first;
-
-  const { data: root } = await readClient
-    .from("listing_comments")
-    .select("id, listing_id, user_id, parent_comment_id")
-    .eq("id", first.parent_comment_id)
-    .maybeSingle();
-  return (root ?? first) as {
-    id: string;
-    listing_id: string;
-    user_id: string;
-    parent_comment_id: string | null;
-  };
+  const root = await fetchCommentRowWithRole(readClient, start.parent_comment_id);
+  return root ?? start;
 }
 
 /** Server load for listing page — works with anon session for public read. */
@@ -148,25 +147,42 @@ export async function fetchListingCommentsPublic(
   listerId: string
 ): Promise<ListingCommentPublic[]> {
   const supabase = await createServerSupabaseClient();
-  const { data: rows, error } = await supabase
+  type RowWithOptionalRole = ListingCommentRow & { posted_as_role?: string | null };
+  let rows: RowWithOptionalRole[] | null = null;
+  let error: { message?: string } | null = null;
+
+  const selWithRole = await supabase
     .from("listing_comments")
-    .select("id, listing_id, user_id, parent_comment_id, message_text, created_at")
+    .select("id, listing_id, user_id, parent_comment_id, message_text, created_at, posted_as_role")
     .eq("listing_id", listingId)
     .order("created_at", { ascending: true });
 
+  if (selWithRole.error && /posted_as_role|column/i.test(selWithRole.error.message ?? "")) {
+    const legacy = await supabase
+      .from("listing_comments")
+      .select("id, listing_id, user_id, parent_comment_id, message_text, created_at")
+      .eq("listing_id", listingId)
+      .order("created_at", { ascending: true });
+    rows = (legacy.data ?? null) as RowWithOptionalRole[] | null;
+    error = legacy.error;
+  } else {
+    rows = (selWithRole.data ?? null) as RowWithOptionalRole[] | null;
+    error = selWithRole.error;
+  }
+
   if (error || !rows?.length) {
-    if (error && !/listing_comments/.test(error.message)) {
+    if (error && !/listing_comments/.test(error.message ?? "")) {
       console.warn("[fetchListingCommentsPublic]", error.message);
     }
     return [];
   }
 
-  const typedRows = rows as ListingCommentRow[];
+  const typedRows = rows;
   const banMap = await getListingQaBannedUsersMap(supabase, listingId);
   const userIds = [...new Set(typedRows.map((r) => r.user_id))];
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, full_name, roles")
+    .select("id, full_name, roles, cleaner_username")
     .in("id", userIds);
 
   const byUser = new Map(
@@ -175,12 +191,14 @@ export async function fetchListingCommentsPublic(
       {
         full_name: p.full_name as string | null,
         roles: p.roles as string[] | null,
+        cleaner_username: p.cleaner_username as string | null,
       },
     ])
   );
 
   return typedRows.map((r) => {
     const p = byUser.get(r.user_id);
+    const postedAs = parsePostedAsRole(r.posted_as_role);
     return {
       id: r.id,
       listing_id: r.listing_id,
@@ -188,8 +206,21 @@ export async function fetchListingCommentsPublic(
       parent_comment_id: r.parent_comment_id,
       message_text: r.message_text,
       created_at: r.created_at,
-      author_display_name: displayName(p?.full_name, "Member"),
-      author_role_label: roleLabel(r.user_id, listerId, p?.roles),
+      author_display_name: qaAuthorDisplayName({
+        userId: String(r.user_id),
+        listerId,
+        fullName: p?.full_name,
+        cleanerUsername: p?.cleaner_username,
+        roles: p?.roles,
+        fallback: "Member",
+      }),
+      author_role_label: listingCommentAuthorRoleLabel({
+        userId: String(r.user_id),
+        listerId,
+        roles: p?.roles,
+        posted_as_role: postedAs,
+      }),
+      posted_as_role: postedAs,
       author_banned: banMap.has(String(r.user_id)),
     };
   });
@@ -251,7 +282,7 @@ export async function postListingComment(params: {
 
     const { data: posterProfile } = await readClient
       .from("profiles")
-      .select("roles, full_name, active_role")
+      .select("roles, full_name, active_role, cleaner_username")
       .eq("id", session.user.id)
       .maybeSingle();
 
@@ -280,107 +311,142 @@ export async function postListingComment(params: {
     }
 
     let insertParentId: string | null = params.parentCommentId;
+    let postedAsRoleForInsert: ListingCommentPostedAsRole;
+
     if (params.parentCommentId) {
-    const root = await getRootCommentForThread(readClient, params.parentCommentId);
-    if (!root || String(root.listing_id) !== String(params.listingId)) {
-      return { ok: false, error: "Invalid reply target." };
-    }
+      const root = await getRootCommentForThread(readClient, params.parentCommentId);
+      if (!root || String(root.listing_id) !== String(params.listingId)) {
+        return { ok: false, error: "Invalid reply target." };
+      }
 
-    const rootAuthorId = String(root.user_id);
-    const isRootAuthor = String(session.user.id) === rootAuthorId;
-    const rootAuthorIsLister = rootAuthorId === listerId;
-    if (rootAuthorIsLister) {
-      return { ok: false, error: "Replies are only allowed on cleaner-started threads." };
-    }
+      const rootAuthorId = String(root.user_id);
+      const isRootAuthor = String(session.user.id) === rootAuthorId;
+      const rootPosted = parsePostedAsRole(root.posted_as_role);
+      const rootThreadIsListerOnly =
+        rootPosted === "lister" ||
+        (rootPosted == null && rootAuthorId === listerId);
+      if (rootThreadIsListerOnly) {
+        return { ok: false, error: "Replies are only allowed on cleaner-started threads." };
+      }
 
-    const canReplyAsLister = String(session.user.id) === listerId && isActiveListerSession;
-    const canReplyAsThreadOwner = isRootAuthor;
-    if (!canReplyAsLister && !canReplyAsThreadOwner) {
-      return { ok: false, error: "Only the lister or the thread owner can reply here." };
-    }
-    if (String(session.user.id) === listerId && !isActiveListerSession) {
-      return {
-        ok: false,
-        error: "Switch to Lister in the header to reply to public questions on your listing.",
-      };
-    }
-    if (canReplyAsThreadOwner && String(session.user.id) !== rootAuthorId) {
-      return { ok: false, error: "You can only reply within your own thread." };
-    }
-    if (banMap.has(rootAuthorId)) {
-      return { ok: false, error: "This thread owner is banned; replying is locked." };
-    }
-    // Keep all replies flattened under the root thread for simpler rendering/moderation.
-    insertParentId = root.id;
-    } else {
-    // Cleaner (or member) can only start one thread per listing.
-    if (hasCleanerRole) {
-      const { data: existingRoot } = await readClient
-        .from("listing_comments")
-        .select("id")
-        .eq("listing_id", params.listingId)
-        .eq("user_id", session.user.id)
-        .is("parent_comment_id", null)
-        .limit(1)
-        .maybeSingle();
-      if (existingRoot?.id) {
+      const canReplyAsLister = String(session.user.id) === listerId && isActiveListerSession;
+      const canReplyAsThreadOwner = isRootAuthor;
+      if (!canReplyAsLister && !canReplyAsThreadOwner) {
+        return { ok: false, error: "Only the lister or the thread owner can reply here." };
+      }
+      if (String(session.user.id) === listerId && !isActiveListerSession) {
         return {
           ok: false,
-          error: "You can only start one thread per listing. Reply in your existing thread instead.",
+          error: "Switch to Lister in the header to reply to public questions on your listing.",
+        };
+      }
+      if (canReplyAsThreadOwner && String(session.user.id) !== rootAuthorId) {
+        return { ok: false, error: "You can only reply within your own thread." };
+      }
+      if (banMap.has(rootAuthorId)) {
+        return { ok: false, error: "This thread owner is banned; replying is locked." };
+      }
+      postedAsRoleForInsert = canReplyAsLister
+        ? "lister"
+        : hasCleanerRole && isActiveCleanerSession
+          ? "cleaner"
+          : "member";
+      // Keep all replies flattened under the root thread for simpler rendering/moderation.
+      insertParentId = root.id;
+    } else {
+      postedAsRoleForInsert =
+        String(session.user.id) === listerId
+          ? "cleaner"
+          : hasCleanerRole
+            ? "cleaner"
+            : "member";
+      // Cleaner (or member) can only start one thread per listing.
+      if (hasCleanerRole) {
+        const { data: existingRoot } = await readClient
+          .from("listing_comments")
+          .select("id")
+          .eq("listing_id", params.listingId)
+          .eq("user_id", session.user.id)
+          .is("parent_comment_id", null)
+          .limit(1)
+          .maybeSingle();
+        if (existingRoot?.id) {
+          return {
+            ok: false,
+            error: "You can only start one thread per listing. Reply in your existing thread instead.",
+          };
+        }
+      }
+      if (String(session.user.id) === listerId && !isActiveCleanerSession) {
+        return {
+          ok: false,
+          error:
+            "Only cleaners and other members can start a thread. Open a question and use Reply to respond.",
         };
       }
     }
-    if (String(session.user.id) === listerId && !isActiveCleanerSession) {
-      return {
-        ok: false,
-        error:
-          "Only cleaners and other members can start a thread. Open a question and use Reply to respond.",
-      };
-    }
-    }
 
     const { data: inserted, error: insErr } = await supabase
-    .from("listing_comments")
-    .insert({
-      listing_id: params.listingId,
-      user_id: session.user.id,
-      parent_comment_id: insertParentId,
-      message_text: mod.text,
-    } as never)
-    .select("id, listing_id, user_id, parent_comment_id, message_text, created_at")
-    .single();
+      .from("listing_comments")
+      .insert({
+        listing_id: params.listingId,
+        user_id: session.user.id,
+        parent_comment_id: insertParentId,
+        message_text: mod.text,
+        posted_as_role: postedAsRoleForInsert,
+      } as never)
+      .select("id, listing_id, user_id, parent_comment_id, message_text, created_at, posted_as_role")
+      .single();
 
     if (insErr || !inserted) {
-    const msg = insErr?.message ?? "Could not post comment.";
-    if (/row-level security|RLS|policy/i.test(msg) || /relation.*does not exist/i.test(msg)) {
-      return {
-        ok: false,
-        error:
-          "Comments are not available yet. Ask your admin to run the listing_comments SQL migration.",
-      };
-    }
-    return { ok: false, error: msg };
+      const msg = insErr?.message ?? "Could not post comment.";
+      if (/row-level security|RLS|policy/i.test(msg) || /relation.*does not exist/i.test(msg)) {
+        return {
+          ok: false,
+          error:
+            "Comments are not available yet. Ask your admin to run the listing_comments SQL migration.",
+        };
+      }
+      if (/posted_as_role|column/i.test(msg)) {
+        return {
+          ok: false,
+          error:
+            "Q&A needs a quick database update. Ask your admin to apply the latest Supabase migration (listing_comments.posted_as_role).",
+        };
+      }
+      return { ok: false, error: msg };
     }
 
-    const ins = inserted as ListingCommentRow;
+    const ins = inserted as ListingCommentRow & { posted_as_role?: string | null };
     const prof = posterProfile as {
-    full_name?: string | null;
-    roles?: string[] | null;
-  } | null;
-    const baseLabel = roleLabel(session.user.id, listerId, prof?.roles);
+      full_name?: string | null;
+      roles?: string[] | null;
+      cleaner_username?: string | null;
+    } | null;
+    const postedPersisted = parsePostedAsRole(ins.posted_as_role) ?? postedAsRoleForInsert;
     const comment: ListingCommentPublic = {
-    id: ins.id,
-    listing_id: ins.listing_id,
-    user_id: ins.user_id,
-    parent_comment_id: ins.parent_comment_id,
-    message_text: ins.message_text,
-    created_at: ins.created_at,
-    author_display_name: displayName(prof?.full_name, "Member"),
-    author_role_label:
-      isActiveCleanerSession && String(session.user.id) === listerId
-        ? "Cleaner"
-        : baseLabel,
-    author_banned: false,
+      id: ins.id,
+      listing_id: ins.listing_id,
+      user_id: ins.user_id,
+      parent_comment_id: ins.parent_comment_id,
+      message_text: ins.message_text,
+      created_at: ins.created_at,
+      author_display_name: qaAuthorDisplayName({
+        userId: String(session.user.id),
+        listerId,
+        fullName: prof?.full_name,
+        cleanerUsername: prof?.cleaner_username,
+        roles: prof?.roles,
+        fallback: "Member",
+      }),
+      author_role_label: listingCommentAuthorRoleLabel({
+        userId: String(session.user.id),
+        listerId,
+        roles: prof?.roles,
+        posted_as_role: postedPersisted,
+      }),
+      posted_as_role: postedPersisted,
+      author_banned: false,
     };
 
     revalidatePath(`/listings/${params.listingId}`);

@@ -25,7 +25,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { cn } from "@/lib/utils";
 import { CleanerReviewCountPreview } from "@/components/features/cleaner-review-count-preview";
-import { REVIEWEE_IS_CLEANER_OR } from "@/lib/reviews/cleaner-review-filters";
+import {
+  isMissingRevieweeRoleColumnError,
+  REVIEWEE_IS_CLEANER_OR,
+} from "@/lib/reviews/cleaner-review-filters";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -100,10 +103,7 @@ export default async function CleanerProfilePage({
     .eq("winner_id", id)
     .eq("status", "completed");
 
-  const { data: reviews } = await client
-    .from("reviews")
-    .select(
-      `
+  const reviewsSelect = `
       id,
       job_id,
       overall_rating,
@@ -116,11 +116,24 @@ export default async function CleanerProfilePage({
       review_photos,
       created_at,
       reviewer:reviewer_id(full_name, profile_photo_url)
-    `
-    )
+    `;
+  let reviewsQuery = await client
+    .from("reviews")
+    .select(reviewsSelect)
     .eq("reviewee_id", id)
     .or(REVIEWEE_IS_CLEANER_OR)
     .order("created_at", { ascending: false });
+
+  if (isMissingRevieweeRoleColumnError(reviewsQuery.error)) {
+    // Backward-compatible fallback for DBs that have not added `reviewee_role` yet.
+    reviewsQuery = await client
+      .from("reviews")
+      .select(reviewsSelect)
+      .eq("reviewee_id", id)
+      .eq("reviewee_type", "cleaner")
+      .order("created_at", { ascending: false });
+  }
+  const { data: reviews } = reviewsQuery;
 
   const reviewsSafe = (reviews ?? []) as any[];
 
@@ -130,6 +143,7 @@ export default async function CleanerProfilePage({
     author: r.reviewer?.full_name ?? null,
     createdAt: r.created_at as string,
     rating: Number(r.overall_rating),
+    jobId: r.job_id != null ? Number(r.job_id) : null,
   }));
   const reviewPopoverHint =
     cleanerCount > reviewPopoverSnippets.length && reviewPopoverSnippets.length > 0

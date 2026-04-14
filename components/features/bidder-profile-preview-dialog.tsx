@@ -75,6 +75,7 @@ export function BidderProfilePreviewDialog({
     author: r.reviewer_display_name,
     createdAt: r.created_at,
     rating: r.overall_rating,
+    jobId: r.job_id ?? null,
   }));
   const reviewPopoverHint =
     reviewCount > recent.length && recent.length > 0

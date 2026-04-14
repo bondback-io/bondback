@@ -7,7 +7,10 @@ import { countCompletedJobsByWinnerIds } from "@/lib/bids/completed-job-counts";
 import type { Database } from "@/types/supabase";
 import type { BidBidderProfileSummary } from "@/lib/bids/bidder-types";
 import { BIDDER_PROFILE_SUMMARY_SELECT } from "@/lib/bids/enrich-bids-with-bidders";
-import { REVIEWEE_IS_CLEANER_OR } from "@/lib/reviews/cleaner-review-filters";
+import {
+  isMissingRevieweeRoleColumnError,
+  REVIEWEE_IS_CLEANER_OR,
+} from "@/lib/reviews/cleaner-review-filters";
 
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
@@ -139,7 +142,7 @@ export async function getBidderProfileForListingBid(
 
   const base = row as BidBidderProfileSummary;
 
-  const [jobsRes, reviewsRes] = await Promise.all([
+  const [jobsRes, reviewsQuery] = await Promise.all([
     admin
       .from("jobs")
       .select("id", { count: "exact", head: true })
@@ -148,18 +151,31 @@ export async function getBidderProfileForListingBid(
     admin
       .from("reviews")
       .select(
-        "id, overall_rating, review_text, created_at, reviewer:reviewer_id(full_name)"
+        "id, job_id, overall_rating, review_text, created_at, reviewer:reviewer_id(full_name)"
       )
       .eq("reviewee_id", cleanerId)
       .or(REVIEWEE_IS_CLEANER_OR)
       .order("created_at", { ascending: false })
       .limit(4),
   ]);
+  let reviewsRes = reviewsQuery;
+  if (isMissingRevieweeRoleColumnError(reviewsQuery.error)) {
+    reviewsRes = await admin
+      .from("reviews")
+      .select(
+        "id, job_id, overall_rating, review_text, created_at, reviewer:reviewer_id(full_name)"
+      )
+      .eq("reviewee_id", cleanerId)
+      .eq("reviewee_type", "cleaner")
+      .order("created_at", { ascending: false })
+      .limit(4);
+  }
 
   const completed_jobs_count = jobsRes.count ?? 0;
 
   type ReviewRow = {
     id: number;
+    job_id: number | null;
     overall_rating: number;
     review_text: string | null;
     created_at: string;
@@ -175,6 +191,7 @@ export async function getBidderProfileForListingBid(
         : (rev?.full_name ?? null);
       return {
         id: r.id,
+        job_id: r.job_id,
         overall_rating: Number(r.overall_rating),
         review_text: r.review_text,
         created_at: r.created_at,

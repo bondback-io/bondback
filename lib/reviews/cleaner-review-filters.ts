@@ -8,3 +8,12 @@ export function revieweeTypeOrRoleFilter(reviewee: "cleaner" | "lister"): string
 
 /** PostgREST `.or(...)` value for “this review targets a cleaner”. */
 export const REVIEWEE_IS_CLEANER_OR = revieweeTypeOrRoleFilter("cleaner");
+
+/**
+ * Some environments may still be missing `reviews.reviewee_role`.
+ * Use this to retry queries with `reviewee_type` only.
+ */
+export function isMissingRevieweeRoleColumnError(error: { message?: string } | null): boolean {
+  const msg = String(error?.message ?? "");
+  return /column .*reviewee_role.* does not exist|reviewee_role/i.test(msg);
+}

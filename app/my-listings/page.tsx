@@ -10,7 +10,6 @@ import {
   isListerNoBidsRelistListing,
   isListerPaidJobListing,
 } from "@/lib/my-listings/lister-listing-helpers";
-import { MyListingsNewListingButton } from "@/components/listing/my-listings-new-listing-button";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -276,13 +275,6 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
               Auctions and jobs in one calm list — optimised for your phone.
             </p>
           </div>
-          <MyListingsNewListingButton
-            variant="success"
-            size="lg"
-            className="h-12 min-h-[48px] w-full shrink-0 rounded-2xl text-base font-semibold shadow-sm sm:h-11 sm:w-auto sm:min-w-[220px]"
-          >
-            Create new listing
-          </MyListingsNewListingButton>
         </div>
       </div>
 

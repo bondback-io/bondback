@@ -4,6 +4,7 @@
  */
 export type BidderProfileRecentReview = {
   id: number;
+  job_id?: number | null;
   overall_rating: number;
   review_text: string | null;
   created_at: string;
