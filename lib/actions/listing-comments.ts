@@ -10,6 +10,7 @@ import { shouldShowPublicListingComments } from "@/lib/listing-public-comments-v
 import { createNotification } from "@/lib/actions/notifications";
 import { qaAuthorDisplayName } from "@/lib/listing-qa-display-name";
 import {
+  inferLegacyPostedAsRole,
   listingCommentAuthorRoleLabel,
   parsePostedAsRole,
   type ListingCommentPostedAsRole,
@@ -198,7 +199,13 @@ export async function fetchListingCommentsPublic(
 
   return typedRows.map((r) => {
     const p = byUser.get(r.user_id);
-    const postedAs = parsePostedAsRole(r.posted_as_role);
+    const postedAs =
+      parsePostedAsRole(r.posted_as_role) ??
+      inferLegacyPostedAsRole({
+        userId: String(r.user_id),
+        listerId,
+        parentCommentId: r.parent_comment_id,
+      });
     return {
       id: r.id,
       listing_id: r.listing_id,
@@ -321,10 +328,15 @@ export async function postListingComment(params: {
 
       const rootAuthorId = String(root.user_id);
       const isRootAuthor = String(session.user.id) === rootAuthorId;
-      const rootPosted = parsePostedAsRole(root.posted_as_role);
+      const rootPosted =
+        parsePostedAsRole(root.posted_as_role) ??
+        inferLegacyPostedAsRole({
+          userId: rootAuthorId,
+          listerId,
+          parentCommentId: root.parent_comment_id,
+        });
       const rootThreadIsListerOnly =
-        rootPosted === "lister" ||
-        (rootPosted == null && rootAuthorId === listerId);
+        rootPosted === "lister" || (rootPosted == null && rootAuthorId === listerId);
       if (rootThreadIsListerOnly) {
         return { ok: false, error: "Replies are only allowed on cleaner-started threads." };
       }

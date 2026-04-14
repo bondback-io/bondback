@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   MessageSquare,
@@ -27,6 +27,7 @@ import {
 import { markListingQaNotificationsRead } from "@/lib/actions/notifications";
 import { qaAuthorDisplayName } from "@/lib/listing-qa-display-name";
 import {
+  inferLegacyPostedAsRole,
   listingCommentAuthorRoleLabel,
   parsePostedAsRole,
   rootThreadAllowsListerReply,
@@ -51,7 +52,9 @@ export type ListingPublicCommentsDockProps = {
   initialQaUnreadCount?: number;
 };
 
-function sortByCreated(a: ListingCommentPublic, b: ListingCommentPublic) {
+type UiComment = ListingCommentPublic & { optimistic?: boolean };
+
+function sortByCreated(a: UiComment, b: UiComment) {
   return a.created_at.localeCompare(b.created_at);
 }
 
@@ -66,8 +69,8 @@ function CommentBlock({
   onRemoveComment,
   onRemoveThread,
 }: {
-  c: ListingCommentPublic;
-  root: ListingCommentPublic;
+  c: UiComment;
+  root: UiComment;
   currentUserId: string | null;
   ownerListerSession: boolean;
   showReplyButton: boolean;
@@ -115,6 +118,11 @@ function CommentBlock({
       <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/95 dark:text-gray-200">
         {c.message_text}
       </p>
+      {c.optimistic ? (
+        <p className="mt-1 text-[11px] font-medium text-muted-foreground dark:text-gray-500">
+          Sending...
+        </p>
+      ) : null}
       {canReply || canModerate ? (
         <div className="mt-2 flex flex-wrap justify-end gap-1.5">
           {canReply ? (
@@ -178,7 +186,7 @@ function GroupedCommentThreads({
   onRemoveComment,
   onRemoveThread,
 }: {
-  comments: ListingCommentPublic[];
+  comments: UiComment[];
   listerId: string;
   /** Owner viewing in Lister mode: reply-only; Cleaner mode uses full composer. */
   ownerListerSession: boolean;
@@ -189,7 +197,7 @@ function GroupedCommentThreads({
   onRemoveThread: (rootId: string) => void;
 }) {
   const byParent = useMemo(() => {
-    const m = new Map<string | null, ListingCommentPublic[]>();
+    const m = new Map<string | null, UiComment[]>();
     for (const c of comments) {
       const p = c.parent_comment_id;
       if (!m.has(p)) m.set(p, []);
@@ -314,7 +322,7 @@ function CommentsPanelInner({
 }: {
   listingId: string;
   listerId: string;
-  comments: ListingCommentPublic[];
+  comments: UiComment[];
   currentUserId: string | null;
   ownerListerSession: boolean;
   listerActiveViewingOthersListing: boolean;
@@ -323,7 +331,7 @@ function CommentsPanelInner({
   draft: string;
   setDraft: (s: string) => void;
   posting: boolean;
-  onPost: () => void;
+  onPost: () => Promise<boolean>;
   onBan: (userId: string) => void;
   onRemoveComment: (commentId: string) => void;
   onRemoveThread: (rootId: string) => void;
@@ -422,12 +430,12 @@ function CommentsPanelInner({
         ) : (
           <form
             className="contents"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (posting || !draft.trim()) return;
               if (ownerListerSession && !replyToId) return;
               if (cleanerAlreadyStartedThread && !replyToId) return;
-              onPost();
+              await onPost();
             }}
           >
             {replyToId && (
@@ -450,6 +458,14 @@ function CommentsPanelInner({
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={async (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+                if (e.key !== "Enter" || e.shiftKey) return;
+                e.preventDefault();
+                if (posting || !draft.trim()) return;
+                if (ownerListerSession && !replyToId) return;
+                if (cleanerAlreadyStartedThread && !replyToId) return;
+                await onPost();
+              }}
               placeholder={replyToId ? "Write your reply…" : "Write a message…"}
               className="min-h-[72px] resize-none text-base dark:border-gray-700 dark:bg-gray-900/80 md:min-h-[88px] md:text-sm"
               maxLength={2000}
@@ -500,7 +516,7 @@ export function ListingPublicCommentsDock({
   initialQaUnreadCount = 0,
 }: ListingPublicCommentsDockProps) {
   const { toast } = useToast();
-  const [comments, setComments] = useState<ListingCommentPublic[]>(initialComments);
+  const [comments, setComments] = useState<UiComment[]>(initialComments);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -597,7 +613,13 @@ export function ListingPublicCommentsDock({
         roles,
         fallback: "Member",
       });
-      const posted = parsePostedAsRole(row.posted_as_role);
+      const posted =
+        parsePostedAsRole(row.posted_as_role) ??
+        inferLegacyPostedAsRole({
+          userId: String(row.user_id),
+          listerId,
+          parentCommentId: row.parent_comment_id,
+        });
       const roleLabel = listingCommentAuthorRoleLabel({
         userId: String(row.user_id),
         listerId,
@@ -645,6 +667,18 @@ export function ListingPublicCommentsDock({
           const enriched = await enrichInsert(row);
           setComments((prev) => {
             if (prev.some((c) => c.id === row.id)) return prev;
+            const optimisticIdx = prev.findIndex(
+              (c) =>
+                c.optimistic &&
+                String(c.user_id) === String(row.user_id) &&
+                String(c.parent_comment_id ?? "") === String(row.parent_comment_id ?? "") &&
+                c.message_text === row.message_text
+            );
+            if (optimisticIdx >= 0) {
+              const next = [...prev];
+              next[optimisticIdx] = enriched;
+              return next.sort(sortByCreated);
+            }
             return [...prev, enriched].sort(sortByCreated);
           });
         }
@@ -661,27 +695,75 @@ export function ListingPublicCommentsDock({
     if (ownerListerSession && replyToId == null) {
       return false;
     }
+    if (!ownerListerSession && comments.some(
+      (c) =>
+        c.parent_comment_id == null &&
+        String(c.user_id) === String(currentUserId)
+    ) && replyToId == null) {
+      return false;
+    }
+    const message = draft.trim();
+    const replyingTo = replyToId;
+    const previousDraft = draft;
+    const previousReplyTo = replyToId;
+    const existingSelf = [...comments]
+      .reverse()
+      .find((c) => String(c.user_id) === String(currentUserId));
+    const optimisticRoleLabel =
+      existingSelf?.author_role_label ??
+      (String(currentUserId) === String(listerId)
+        ? ownerListerSession
+          ? "Lister"
+          : "Cleaner"
+        : "Cleaner");
+    const optimisticPostedRole =
+      optimisticRoleLabel === "Lister"
+        ? "lister"
+        : optimisticRoleLabel === "Cleaner"
+          ? "cleaner"
+          : "member";
+    const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticComment: UiComment = {
+      id: optimisticId,
+      listing_id: listingId,
+      user_id: currentUserId,
+      parent_comment_id: replyingTo,
+      message_text: message,
+      created_at: new Date().toISOString(),
+      author_display_name: existingSelf?.author_display_name ?? "You",
+      author_role_label: optimisticRoleLabel,
+      posted_as_role: optimisticPostedRole,
+      author_banned: false,
+      optimistic: true,
+    };
+    setComments((prev) => [...prev, optimisticComment].sort(sortByCreated));
+    setDraft("");
+    setReplyToId(null);
     setPosting(true);
     try {
       const res = await postListingComment({
         listingId,
-        message: draft,
-        parentCommentId: replyToId,
+        message,
+        parentCommentId: replyingTo,
       });
       if (!res.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== optimisticId));
+        setDraft(previousDraft);
+        setReplyToId(previousReplyTo);
         toast({ variant: "destructive", title: "Could not send", description: res.error });
         return false;
       }
       setComments((prev) => {
-        if (prev.some((c) => c.id === res.comment.id)) return prev;
-        return [...prev, res.comment].sort(sortByCreated);
+        const withoutOptimistic = prev.filter((c) => c.id !== optimisticId);
+        if (withoutOptimistic.some((c) => c.id === res.comment.id)) return withoutOptimistic;
+        return [...withoutOptimistic, res.comment].sort(sortByCreated);
       });
-      setDraft("");
-      setReplyToId(null);
-      toast({ title: "Sent", description: "Your message is visible on this listing." });
       if (opts?.closeMobileSheet) setSheetOpen(false);
       return true;
     } catch (e: unknown) {
+      setComments((prev) => prev.filter((c) => c.id !== optimisticId));
+      setDraft(previousDraft);
+      setReplyToId(previousReplyTo);
       const msg = e instanceof Error ? e.message : "Something went wrong. Try again.";
       toast({ variant: "destructive", title: "Could not send", description: msg });
       return false;
@@ -822,7 +904,7 @@ export function ListingPublicCommentsDock({
                 draft={draft}
                 setDraft={setDraft}
                 posting={posting || moderating}
-                onPost={() => void handlePost()}
+                onPost={() => handlePost()}
                 onBan={(userId) => void handleBan(userId)}
                 onRemoveComment={(id) => void handleRemove(id, "comment")}
                 onRemoveThread={(id) => void handleRemove(id, "thread")}
@@ -876,7 +958,7 @@ export function ListingPublicCommentsDock({
                 draft={draft}
                 setDraft={setDraft}
                 posting={posting || moderating}
-                onPost={() => void handlePost()}
+                onPost={() => handlePost()}
                 onBan={(userId) => void handleBan(userId)}
                 onRemoveComment={(id) => void handleRemove(id, "comment")}
                 onRemoveThread={(id) => void handleRemove(id, "thread")}

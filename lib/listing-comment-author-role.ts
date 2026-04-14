@@ -8,6 +8,20 @@ export function parsePostedAsRole(
   return null;
 }
 
+/**
+ * Legacy fallback for old rows before posted_as_role existed.
+ * On own listings, lister UUID roots in public Q&A were effectively cleaner-started.
+ */
+export function inferLegacyPostedAsRole(params: {
+  userId: string;
+  listerId: string;
+  parentCommentId: string | null;
+}): ListingCommentPostedAsRole | null {
+  const { userId, listerId, parentCommentId } = params;
+  if (String(userId) !== String(listerId)) return null;
+  return parentCommentId == null ? "cleaner" : "lister";
+}
+
 export function listingCommentAuthorRoleLabel(params: {
   userId: string;
   listerId: string;

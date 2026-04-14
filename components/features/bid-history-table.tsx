@@ -32,43 +32,64 @@ export type BidWithBidder = BidRow & {
 /** When the auction is no longer live, `active` bids show this in the Status column. */
 export type ClosedAuctionBidStatus = "lister_cancelled" | "auction_ended";
 
-function BidderCellContents({ bid }: { bid: BidWithBidder }) {
+function bidderListingLineStats(bid: BidWithBidder) {
   const p = bid.bidder_profile;
   const ratingRaw = p?.cleaner_avg_rating;
   const rating =
-    ratingRaw != null && !Number.isNaN(Number(ratingRaw)) ? Number(ratingRaw) : null;
+    ratingRaw != null && !Number.isNaN(Number(ratingRaw))
+      ? Number(ratingRaw)
+      : 0;
   const jobsRaw = p?.completed_jobs_count;
   const jobs =
-    jobsRaw != null && !Number.isNaN(Number(jobsRaw))
-      ? Math.max(0, Math.round(Number(jobsRaw)))
-      : null;
+    p == null
+      ? 0
+      : jobsRaw != null && !Number.isNaN(Number(jobsRaw))
+        ? Math.max(0, Math.round(Number(jobsRaw)))
+        : 0;
+  const isNewCleaner = jobs === 0;
+  return { rating, jobs, isNewCleaner };
+}
+
+function BidderCellContents({
+  bid,
+  hideNewCleanerBadge = false,
+}: {
+  bid: BidWithBidder;
+  /** Mobile cards show the badge in the &quot;Bidder&quot; header — omit inline badge. */
+  hideNewCleanerBadge?: boolean;
+}) {
+  const { rating, jobs, isNewCleaner } = bidderListingLineStats(bid);
   const name = bidderDisplayNameForBid(bid);
 
   return (
-    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left">
-      {rating != null && (
-        <span
-          className="inline-flex shrink-0 items-center gap-0.5"
-          title={`Average rating ${rating.toFixed(1)}`}
-        >
-          <Star
-            className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
-            aria-hidden
-          />
-          <span className="tabular-nums font-semibold text-foreground dark:text-gray-100">
-            {rating.toFixed(1)}
-          </span>
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-left">
+      <span
+        className="inline-flex shrink-0 items-center gap-0.5"
+        title={`Average rating ${rating.toFixed(1)}`}
+      >
+        <Star
+          className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+          aria-hidden
+        />
+        <span className="tabular-nums font-semibold text-foreground dark:text-gray-100">
+          {rating.toFixed(1)}
         </span>
-      )}
-      {jobs != null && jobs > 0 && (
-        <span
-          className="shrink-0 tabular-nums text-muted-foreground dark:text-gray-400"
-          title="Completed jobs on Bond Back"
-        >
-          ({jobs})
-        </span>
-      )}
+      </span>
+      <span
+        className="shrink-0 tabular-nums text-muted-foreground dark:text-gray-400"
+        title="Completed jobs on Bond Back"
+      >
+        ({jobs})
+      </span>
       <span className="min-w-0 break-words font-medium text-primary dark:text-blue-300">{name}</span>
+      {isNewCleaner && !hideNewCleanerBadge ? (
+        <Badge
+          variant="secondary"
+          className="shrink-0 border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-950/50 dark:text-emerald-300"
+        >
+          New Cleaner
+        </Badge>
+      ) : null}
     </span>
   );
 }
@@ -228,21 +249,32 @@ export function BidHistoryTable({
       <ul className="space-y-3 md:hidden">
         {sorted.map((bid) => {
           const statusEl = statusLabel(bid);
+          const { isNewCleaner } = bidderListingLineStats(bid);
           return (
             <li
               key={bid.id}
               className="rounded-xl border border-border bg-card p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/70"
             >
               <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-                  Bidder
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+                    Bidder
+                  </p>
+                  {isNewCleaner ? (
+                    <Badge
+                      variant="secondary"
+                      className="shrink-0 border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-950/50 dark:text-emerald-300"
+                    >
+                      New Cleaner
+                    </Badge>
+                  ) : null}
+                </div>
                 <button
                   type="button"
                   onClick={() => void openBidderPreview(bid)}
                   className="break-words text-left text-sm underline-offset-4 hover:underline"
                 >
-                  <BidderCellContents bid={bid} />
+                  <BidderCellContents bid={bid} hideNewCleanerBadge />
                 </button>
               </div>
               <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-border pt-3 dark:border-gray-700">
