@@ -99,7 +99,7 @@ function labelForType(type: NotificationRow["type"]): string {
     case "daily_digest":
       return "Daily digest";
     case "listing_public_comment":
-      return "Listing comment";
+      return "Q&A Chat";
     default:
       return "Update";
   }

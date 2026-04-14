@@ -58,7 +58,7 @@ function labelForType(type: NotificationRow["type"]): string {
     case "dispute_resolved": return "Dispute resolved";
     case "job_created": return "Job created";
     case "new_bid": return "New bid";
-    case "listing_public_comment": return "Listing comment";
+    case "listing_public_comment": return "Q&A Chat";
     default: return "Update";
   }
 }

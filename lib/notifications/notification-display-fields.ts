@@ -12,6 +12,8 @@ export type NotificationPersistOptions = {
   persistBody?: string;
   /** Marks row as an admin test; used for deep links and filtering. */
   adminTest?: boolean;
+  /** Public listing Q&A: who should be notified / filter copy. */
+  qaSubkind?: "question" | "reply";
 };
 
 /**
@@ -33,6 +35,7 @@ export function buildNotificationPersistFields(
   if (options?.amountCents != null) data.amount_cents = options.amountCents;
   if (options?.senderName != null) data.sender_name = options.senderName;
   if (options?.adminTest) data.admin_test = true;
+  if (options?.qaSubkind != null) data.qa_subkind = options.qaSubkind;
 
   let body = messageText ?? "";
 
@@ -102,7 +105,12 @@ export function buildNotificationPersistFields(
       title = "Daily digest";
       break;
     case "listing_public_comment":
-      title = "Public comment";
+      title =
+        options?.qaSubkind === "reply"
+          ? "Q&A: lister reply"
+          : options?.qaSubkind === "question"
+            ? "Q&A: new question"
+            : "Q&A Chat";
       break;
     default:
       title = "Update";

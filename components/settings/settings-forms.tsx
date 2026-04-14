@@ -241,13 +241,21 @@ const ALL_PREF_KEYS: NotificationPreferenceKey[] = [
   "push_new_job",
   "in_app_sound",
   "in_app_vibrate",
+  "in_app_qa_new_question",
+  "in_app_qa_lister_reply",
 ];
 
 /** Cleaners only: new-job radius alerts (SMS + push). */
 const CLEANER_NEW_JOB_KEYS = new Set<NotificationPreferenceKey>(["sms_job_alerts", "push_new_job"]);
 
-/** In-app bell chime + vibration (both roles); rendered in a separate subsection. */
-const IN_APP_PREF_KEYS: NotificationPreferenceKey[] = ["in_app_sound", "in_app_vibrate"];
+/** In-app bell chime + vibration (both roles). */
+const IN_APP_FEEDBACK_KEYS = new Set<NotificationPreferenceKey>(["in_app_sound", "in_app_vibrate"]);
+
+/** Q&A Chat in-app toggles; shown by role in Notifications form. */
+const QA_IN_APP_KEYS = new Set<NotificationPreferenceKey>([
+  "in_app_qa_new_question",
+  "in_app_qa_lister_reply",
+]);
 
 function buildNotificationFormData(values: Record<string, boolean>): FormData {
   const fd = new FormData();
@@ -336,27 +344,41 @@ export function SettingsNotificationsForm({
   prefs,
   locked = false,
   isCleaner = false,
+  isLister = false,
 }: {
   prefs: NotificationPrefs;
   locked?: boolean;
   /** When false, hides SMS/Push toggles for new job radius alerts (cleaner-only). */
   isCleaner?: boolean;
+  /** When false, hides Q&A “new question on my listing” in-app toggle. */
+  isLister?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   const prefKeys = useMemo(() => {
-    if (isCleaner) {
-      return ALL_PREF_KEYS.filter((k) => !LISTER_ONLY_EMAIL_KEYS.has(k));
-    }
-    return ALL_PREF_KEYS.filter((k) => !CLEANER_NEW_JOB_KEYS.has(k));
-  }, [isCleaner]);
+    const base = isCleaner
+      ? ALL_PREF_KEYS.filter((k) => !LISTER_ONLY_EMAIL_KEYS.has(k))
+      : ALL_PREF_KEYS.filter((k) => !CLEANER_NEW_JOB_KEYS.has(k));
+    const withoutQa = base.filter((k) => !QA_IN_APP_KEYS.has(k));
+    const qa: NotificationPreferenceKey[] = [];
+    if (isLister) qa.push("in_app_qa_new_question");
+    if (isCleaner) qa.push("in_app_qa_lister_reply");
+    return [...withoutQa, ...qa];
+  }, [isCleaner, isLister]);
   const emailPrefKeys = useMemo(
-    () => prefKeys.filter((k) => !IN_APP_PREF_KEYS.includes(k)),
+    () =>
+      prefKeys.filter(
+        (k) => !IN_APP_FEEDBACK_KEYS.has(k) && !QA_IN_APP_KEYS.has(k)
+      ),
     [prefKeys]
   );
-  const inAppPrefKeys = useMemo(
-    () => prefKeys.filter((k) => IN_APP_PREF_KEYS.includes(k)),
+  const inAppFeedbackPrefKeys = useMemo(
+    () => prefKeys.filter((k) => IN_APP_FEEDBACK_KEYS.has(k)),
+    [prefKeys]
+  );
+  const inAppQaPrefKeys = useMemo(
+    () => prefKeys.filter((k) => QA_IN_APP_KEYS.has(k)),
     [prefKeys]
   );
   const initialValues = useMemo(() => {
@@ -396,7 +418,11 @@ export function SettingsNotificationsForm({
     startTransition(async () => {
       const result = await saveNotificationSettings(buildNotificationFormData(next));
       if (result.ok) {
-        if (key === "in_app_sound" || key === "in_app_vibrate") {
+        if (
+          key === "in_app_sound" ||
+          key === "in_app_vibrate" ||
+          QA_IN_APP_KEYS.has(key)
+        ) {
           router.refresh();
         }
         if (key === "push_enabled" && checked) {
@@ -475,7 +501,7 @@ export function SettingsNotificationsForm({
           When a new notification arrives in the bell, Bond Back can play a soft sound and vibrate (if your device supports it).
         </p>
         <div className="space-y-1 rounded-xl border border-border/70 bg-muted/20 p-3 dark:border-gray-800 dark:bg-gray-900/40">
-          {inAppPrefKeys.map((key) => (
+          {inAppFeedbackPrefKeys.map((key) => (
             <div
               key={key}
               className="flex min-h-[52px] items-center justify-between gap-4 border-b border-border/50 py-2 last:border-b-0 dark:border-gray-800/80 md:min-h-0 md:py-2.5"
@@ -510,6 +536,42 @@ export function SettingsNotificationsForm({
           </div>
         </div>
       </div>
+
+      {inAppQaPrefKeys.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+            Q&amp;A Chat (in-app)
+          </p>
+          <p className="text-base text-muted-foreground dark:text-gray-400 md:text-sm">
+            Bell alerts on listing pages. Email is not sent for these.
+          </p>
+          <div className="space-y-1 rounded-xl border border-border/70 bg-muted/20 p-3 dark:border-gray-800 dark:bg-gray-900/40">
+            {inAppQaPrefKeys.map((key) => (
+              <div
+                key={key}
+                className="flex min-h-[52px] items-center justify-between gap-4 border-b border-border/50 py-2 last:border-b-0 dark:border-gray-800/80 md:min-h-0 md:py-2.5"
+              >
+                <Label htmlFor={key} className="flex-1 cursor-pointer text-base dark:text-gray-200 md:text-sm">
+                  {NOTIFICATION_LABELS[key]}
+                </Label>
+                <input
+                  type="hidden"
+                  name={key}
+                  value={values[key] ? "on" : ""}
+                  readOnly
+                  aria-hidden
+                />
+                <Switch
+                  id={key}
+                  checked={values[key]}
+                  onCheckedChange={(checked) => persistNotificationToggle(key, checked)}
+                  disabled={locked || isPending}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {/* Preserve cleaner-only prefs when lister saves (fields not shown) */}
       {ALL_PREF_KEYS.filter((k) => !prefKeys.includes(k)).map((key) => (
         <input

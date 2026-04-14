@@ -72,6 +72,8 @@ export type CreateNotificationOptions = {
   persistBody?: string;
   /** When true, only persist in-app row (no email/SMS/push). */
   adminTest?: boolean;
+  /** Public listing Q&A notification subtype. */
+  qaSubkind?: "question" | "reply";
 };
 
 export async function createNotification(
@@ -94,6 +96,7 @@ export async function createNotification(
     persistTitle: options?.persistTitle,
     persistBody: options?.persistBody,
     adminTest: options?.adminTest,
+    qaSubkind: options?.qaSubkind,
   });
   const row = {
     user_id: userId,
@@ -739,6 +742,64 @@ export async function markNotificationRead(
   revalidatePath("/dashboard");
   revalidatePath("/notifications");
   return { ok: true };
+}
+
+/** Marks unread in-app Q&A Chat notifications scoped to one listing (bell + FAB badge). */
+export async function markListingQaNotificationsRead(
+  listingId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "You must be logged in." };
+
+  const lid = String(listingId).trim();
+  if (!lid) return { ok: false, error: "Invalid listing." };
+
+  const { error } = await supabase
+    .from("notifications")
+    .update({ is_read: true } as Database["public"]["Tables"]["notifications"]["Update"] as never)
+    .eq("user_id", session.user.id)
+    .eq("type", "listing_public_comment")
+    .eq("is_read", false)
+    .filter("data->>listing_uuid", "eq", lid);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/notifications");
+  revalidatePath(`/listings/${encodeURIComponent(lid)}`);
+  return { ok: true };
+}
+
+/** Unread Q&A Chat rows for the current user on one listing (FAB badge). */
+export async function countUnreadListingQaNotifications(
+  listingId: string
+): Promise<number> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return 0;
+  const lid = String(listingId).trim();
+  if (!lid) return 0;
+
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", session.user.id)
+    .eq("type", "listing_public_comment")
+    .eq("is_read", false)
+    .filter("data->>listing_uuid", "eq", lid);
+
+  if (error) {
+    console.warn("[countUnreadListingQaNotifications]", error.message);
+    return 0;
+  }
+  return count ?? 0;
 }
 
 export async function markAllNotificationsRead(): Promise<{

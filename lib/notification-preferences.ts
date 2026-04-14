@@ -30,7 +30,11 @@ export type NotificationPreferenceKey =
   /** In-app bell: short chime when a new notification row arrives (Web Audio). */
   | "in_app_sound"
   /** In-app bell: short vibration on supported devices. */
-  | "in_app_vibrate";
+  | "in_app_vibrate"
+  /** In-app: new public question on my listing (Q&A Chat). */
+  | "in_app_qa_new_question"
+  /** In-app: lister replied to my Q&A Chat question. */
+  | "in_app_qa_lister_reply";
 
 export type NotificationPreferences = Partial<Record<NotificationPreferenceKey, boolean>>;
 
@@ -62,6 +66,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: Record<
   daily_digest: true,
   in_app_sound: true,
   in_app_vibrate: true,
+  in_app_qa_new_question: true,
+  in_app_qa_lister_reply: true,
 };
 
 /** Map in-app notification type to preference key for email */
@@ -191,4 +197,8 @@ export const NOTIFICATION_LABELS: Record<NotificationPreferenceKey, string> = {
   daily_digest: "Receive daily digest email (summary of the last 24 hours)",
   in_app_sound: "Play sound on new notifications",
   in_app_vibrate: "Vibrate on new notifications",
+  in_app_qa_new_question:
+    "Q&A Chat: in-app alert when someone asks a public question on my listing",
+  in_app_qa_lister_reply:
+    "Q&A Chat: in-app alert when the lister replies to my question",
 };

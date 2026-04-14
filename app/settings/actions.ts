@@ -210,6 +210,8 @@ const NOTIFICATION_PREF_KEYS = [
   "push_new_job",
   "in_app_sound",
   "in_app_vibrate",
+  "in_app_qa_new_question",
+  "in_app_qa_lister_reply",
 ] as const;
 
 export async function saveNotificationSettings(formData: FormData) {

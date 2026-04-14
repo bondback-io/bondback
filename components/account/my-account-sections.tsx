@@ -251,6 +251,7 @@ export function MyAccountSections({
                 prefs={notificationPrefs}
                 locked={emailPreferencesLocked}
                 isCleaner={isCleaner}
+                isLister={isLister}
               />
             </div>
             <div className={sectionClass}>

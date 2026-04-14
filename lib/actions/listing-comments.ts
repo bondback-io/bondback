@@ -142,15 +142,47 @@ export async function postListingComment(params: {
     return { ok: false, error: "Comments are closed for this listing." };
   }
 
+  const listerId = String(row.lister_id);
+
   if (params.parentCommentId) {
     const { data: parent } = await readClient
       .from("listing_comments")
-      .select("id, listing_id")
+      .select("id, listing_id, user_id, parent_comment_id")
       .eq("id", params.parentCommentId)
       .maybeSingle();
-    const pr = parent as { listing_id?: string } | null;
+    const pr = parent as {
+      listing_id?: string;
+      user_id?: string;
+      parent_comment_id?: string | null;
+    } | null;
     if (!parent || String(pr?.listing_id) !== String(params.listingId)) {
       return { ok: false, error: "Invalid reply target." };
+    }
+    if (String(session.user.id) !== listerId) {
+      return {
+        ok: false,
+        error: "Only the property lister can reply to public questions.",
+      };
+    }
+    if (pr?.parent_comment_id != null) {
+      return {
+        ok: false,
+        error: "Replies are only allowed on top-level questions, not nested threads.",
+      };
+    }
+    if (String(pr?.user_id) === listerId) {
+      return {
+        ok: false,
+        error: "You can only reply to questions from cleaners and other visitors.",
+      };
+    }
+  } else {
+    if (String(session.user.id) === listerId) {
+      return {
+        ok: false,
+        error:
+          "The lister cannot post public questions here. Use My listings to manage this job.",
+      };
     }
   }
 
@@ -183,7 +215,6 @@ export async function postListingComment(params: {
     .eq("id", session.user.id)
     .maybeSingle();
 
-  const listerId = String(row.lister_id);
   const ins = inserted as ListingCommentRow;
   const comment: ListingCommentPublic = {
     id: ins.id,
@@ -209,37 +240,62 @@ export async function postListingComment(params: {
     mod.text.length > 120 ? `${mod.text.slice(0, 117)}…` : mod.text;
   const titleHint = (row.title ?? "").trim() || "A listing";
 
-  const notifyUserIds = new Set<string>();
-  if (listerId !== session.user.id) notifyUserIds.add(listerId);
+  const posterName = comment.author_display_name;
 
-  const { data: bidRows } = await readClient
-    .from("bids")
-    .select("cleaner_id, bidder_id, status")
-    .eq("listing_id", params.listingId)
-    .eq("status", "active");
-
-  for (const b of bidRows ?? []) {
-    const cid = String((b as { cleaner_id?: string }).cleaner_id ?? "");
-    if (cid && cid !== session.user.id) notifyUserIds.add(cid);
-    const bid = b as { bidder_id?: string };
-    if (bid.bidder_id && String(bid.bidder_id) !== session.user.id) {
-      notifyUserIds.add(String(bid.bidder_id));
-    }
+  async function qaNotifyAllowed(
+    recipientId: string,
+    kind: "in_app_qa_new_question" | "in_app_qa_lister_reply"
+  ): Promise<boolean> {
+    const { data: prof } = await readClient
+      .from("profiles")
+      .select("notification_preferences")
+      .eq("id", recipientId)
+      .maybeSingle();
+    const np = (prof as { notification_preferences?: Record<string, boolean> | null } | null)
+      ?.notification_preferences;
+    return np?.[kind] !== false;
   }
 
-  const posterName = comment.author_display_name;
-  for (const uid of notifyUserIds) {
+  if (params.parentCommentId) {
+    const { data: parentRow } = await readClient
+      .from("listing_comments")
+      .select("user_id")
+      .eq("id", params.parentCommentId)
+      .maybeSingle();
+    const askerId = String((parentRow as { user_id?: string } | null)?.user_id ?? "");
+    if (
+      askerId &&
+      askerId !== session.user.id &&
+      (await qaNotifyAllowed(askerId, "in_app_qa_lister_reply"))
+    ) {
+      void createNotification(
+        askerId,
+        "listing_public_comment",
+        null,
+        `${posterName} replied on “${titleHint.slice(0, 52)}${titleHint.length > 52 ? "…" : ""}”: ${snippet}`,
+        {
+          senderName: posterName,
+          listingUuid: params.listingId,
+          listingTitle: titleHint,
+          persistTitle: "Lister replied in Q&A Chat",
+          persistBody: `${posterName}: ${snippet}`,
+          qaSubkind: "reply",
+        }
+      );
+    }
+  } else if (listerId !== session.user.id && (await qaNotifyAllowed(listerId, "in_app_qa_new_question"))) {
     void createNotification(
-      uid,
+      listerId,
       "listing_public_comment",
       null,
-      `${posterName} on “${titleHint.slice(0, 60)}${titleHint.length > 60 ? "…" : ""}”: ${snippet}`,
+      `${posterName} on “${titleHint.slice(0, 52)}${titleHint.length > 52 ? "…" : ""}”: ${snippet}`,
       {
         senderName: posterName,
         listingUuid: params.listingId,
         listingTitle: titleHint,
-        persistTitle: "New public comment",
+        persistTitle: "New Q&A Chat question",
         persistBody: `${posterName}: ${snippet}`,
+        qaSubkind: "question",
       }
     );
   }

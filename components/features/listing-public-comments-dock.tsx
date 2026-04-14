@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { MessageSquare, ChevronLeft, ChevronRight, Loader2, CornerDownRight } from "lucide-react";
+import {
+  MessageSquare,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  CornerDownRight,
+  ChevronDown,
+} from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +22,7 @@ import {
   postListingComment,
   type ListingCommentPublic,
 } from "@/lib/actions/listing-comments";
+import { markListingQaNotificationsRead } from "@/lib/actions/notifications";
 import { useToast } from "@/components/ui/use-toast";
 import Link from "next/link";
 
@@ -23,6 +31,8 @@ export type ListingPublicCommentsDockProps = {
   listerId: string;
   initialComments: ListingCommentPublic[];
   currentUserId: string | null;
+  /** Unread in-app Q&A notifications for this listing (server count). */
+  initialQaUnreadCount?: number;
 };
 
 function sortByCreated(a: ListingCommentPublic, b: ListingCommentPublic) {
@@ -31,9 +41,11 @@ function sortByCreated(a: ListingCommentPublic, b: ListingCommentPublic) {
 
 function CommentBlock({
   c,
+  showReplyButton,
   onReply,
 }: {
   c: ListingCommentPublic;
+  showReplyButton: boolean;
   onReply: (id: string) => void;
 }) {
   const rel = formatDistanceToNow(new Date(c.created_at), { addSuffix: true });
@@ -61,27 +73,32 @@ function CommentBlock({
       <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/95 dark:text-gray-200">
         {c.message_text}
       </p>
-      <div className="mt-2 flex justify-end">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => onReply(c.id)}
-        >
-          Reply
-        </Button>
-      </div>
+      {showReplyButton ? (
+        <div className="mt-2 flex justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => onReply(c.id)}
+          >
+            Reply
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function CommentsThreadTree({
+function GroupedCommentThreads({
   comments,
+  listerId,
+  currentUserId,
   onReply,
 }: {
   comments: ListingCommentPublic[];
   listerId: string;
+  currentUserId: string | null;
   onReply: (id: string) => void;
 }) {
   const byParent = useMemo(() => {
@@ -95,16 +112,6 @@ function CommentsThreadTree({
     return m;
   }, [comments]);
 
-  const renderBranch = (parentId: string | null, depth: number): React.ReactNode => {
-    const items = byParent.get(parentId) ?? [];
-    return items.map((c) => (
-      <div key={c.id} className={cn(depth > 0 && "mt-2 space-y-2 border-l-2 border-primary/30 pl-3")}>
-        <CommentBlock c={c} onReply={onReply} />
-        {renderBranch(c.id, depth + 1)}
-      </div>
-    ));
-  };
-
   const roots = byParent.get(null) ?? [];
   if (roots.length === 0) {
     return (
@@ -114,7 +121,71 @@ function CommentsThreadTree({
     );
   }
 
-  return <div className="space-y-2">{renderBranch(null, 0)}</div>;
+  return (
+    <div className="space-y-2">
+      {roots.map((root) => {
+        const replies = byParent.get(root.id) ?? [];
+        const canListerReply =
+          Boolean(currentUserId) &&
+          String(currentUserId) === String(listerId) &&
+          String(root.user_id) !== String(listerId);
+        const preview =
+          root.message_text.length > 140
+            ? `${root.message_text.slice(0, 137)}…`
+            : root.message_text;
+        const replyLabel =
+          replies.length === 0
+            ? "No replies yet"
+            : replies.length === 1
+              ? "1 lister reply"
+              : `${replies.length} replies`;
+
+        return (
+          <details
+            key={root.id}
+            className="group rounded-lg border border-border/80 bg-card/30 dark:border-gray-800 dark:bg-gray-950/40"
+          >
+            <summary
+              className="cursor-pointer list-none px-3 py-2.5 [&::-webkit-details-marker]:hidden"
+              aria-label={`Thread from ${root.author_display_name}, ${replyLabel}. Expand for full message.`}
+            >
+              <div className="flex items-start gap-2">
+                <ChevronDown
+                  className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                  aria-hidden
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="truncate text-sm font-semibold text-foreground dark:text-gray-100">
+                      {root.author_display_name}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground dark:text-gray-500">
+                      {formatDistanceToNow(new Date(root.created_at), { addSuffix: true })}
+                    </span>
+                  </div>
+                  <p className="line-clamp-2 text-sm text-foreground/90 dark:text-gray-200">{preview}</p>
+                  <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-500">
+                    {replyLabel}
+                  </p>
+                </div>
+              </div>
+            </summary>
+            <div className="space-y-2 border-t border-border/60 px-3 py-3 dark:border-gray-800">
+              <CommentBlock c={root} showReplyButton={canListerReply} onReply={onReply} />
+              {replies.map((r) => (
+                <div
+                  key={r.id}
+                  className="border-l-2 border-primary/25 pl-3 dark:border-primary/35"
+                >
+                  <CommentBlock c={r} showReplyButton={false} onReply={onReply} />
+                </div>
+              ))}
+            </div>
+          </details>
+        );
+      })}
+    </div>
+  );
 }
 
 function CommentsPanelInner({
@@ -152,28 +223,32 @@ function CommentsPanelInner({
         </h2>
         <p className="mt-1 text-xs leading-snug text-muted-foreground dark:text-gray-500">
           Ask about the clean, timing, or access. No phone numbers or links — use in-app chat after you&apos;re
-          hired.
+          hired. Only the lister can reply under each question.
         </p>
         {comments.length > 0 ? (
           <p className="mt-2 text-[11px] font-medium text-muted-foreground dark:text-gray-500">
-            {comments.length} {comments.length === 1 ? "comment" : "comments"}
+            {comments.length} {comments.length === 1 ? "message" : "messages"}
           </p>
         ) : null}
       </div>
       <ScrollArea className="min-h-0 flex-1 py-3 pr-2">
-        <CommentsThreadTree
+        <GroupedCommentThreads
           comments={comments}
           listerId={listerId}
+          currentUserId={currentUserId}
           onReply={setReplyToId}
         />
       </ScrollArea>
       <div className="shrink-0 space-y-2 border-t border-border pt-3 dark:border-gray-800">
         {!currentUserId ? (
           <p className="text-center text-sm text-muted-foreground dark:text-gray-400">
-            <Link href={`/login?next=/listings/${encodeURIComponent(listingId)}`} className="font-medium text-primary underline-offset-4 hover:underline">
+            <Link
+              href={`/login?next=/listings/${encodeURIComponent(listingId)}`}
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
               Sign in
             </Link>{" "}
-            to post a comment.
+            to send a message.
           </p>
         ) : (
           <>
@@ -197,8 +272,8 @@ function CommentsPanelInner({
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Write a comment…"
-              className="min-h-[88px] resize-none text-sm dark:border-gray-700 dark:bg-gray-900/80"
+              placeholder="Write a message…"
+              className="min-h-[72px] resize-none text-sm dark:border-gray-700 dark:bg-gray-900/80 md:min-h-[88px]"
               maxLength={2000}
               disabled={posting}
             />
@@ -211,10 +286,10 @@ function CommentsPanelInner({
               {posting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  Posting…
+                  Sending…
                 </>
               ) : (
-                "Post comment"
+                "Send Message"
               )}
             </Button>
           </>
@@ -229,6 +304,7 @@ export function ListingPublicCommentsDock({
   listerId,
   initialComments,
   currentUserId,
+  initialQaUnreadCount = 0,
 }: ListingPublicCommentsDockProps) {
   const { toast } = useToast();
   const [comments, setComments] = useState<ListingCommentPublic[]>(initialComments);
@@ -237,10 +313,68 @@ export function ListingPublicCommentsDock({
   const [draft, setDraft] = useState("");
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
+  const [qaUnread, setQaUnread] = useState(initialQaUnreadCount);
+
+  const sheetOpenRef = useRef(sheetOpen);
+  const desktopCollapsedRef = useRef(desktopCollapsed);
+  const prevViewingRef = useRef(false);
+
+  useEffect(() => {
+    sheetOpenRef.current = sheetOpen;
+  }, [sheetOpen]);
+  useEffect(() => {
+    desktopCollapsedRef.current = desktopCollapsed;
+  }, [desktopCollapsed]);
 
   useEffect(() => {
     setComments(initialComments);
   }, [initialComments, listingId]);
+
+  useEffect(() => {
+    setQaUnread(initialQaUnreadCount);
+  }, [initialQaUnreadCount, listingId]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    const viewing = sheetOpen || !desktopCollapsed;
+    if (viewing && !prevViewingRef.current) {
+      void markListingQaNotificationsRead(listingId).then((res) => {
+        if (res.ok) setQaUnread(0);
+      });
+    }
+    prevViewingRef.current = viewing;
+  }, [sheetOpen, desktopCollapsed, listingId, currentUserId]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    const supabase = createBrowserSupabaseClient();
+    const channel = supabase
+      .channel(`qa-unread:${listingId}:${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const row = payload.new as {
+            type?: string;
+            is_read?: boolean;
+            data?: Record<string, unknown> | null;
+          };
+          if (row.type !== "listing_public_comment" || row.is_read) return;
+          if (String(row.data?.listing_uuid ?? "") !== String(listingId)) return;
+          const viewing = sheetOpenRef.current || !desktopCollapsedRef.current;
+          if (!viewing) setQaUnread((n) => n + 1);
+        }
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [listingId, currentUserId]);
 
   const enrichInsert = useCallback(
     async (row: {
@@ -330,7 +464,7 @@ export function ListingPublicCommentsDock({
         parentCommentId: replyToId,
       });
       if (!res.ok) {
-        toast({ variant: "destructive", title: "Could not post", description: res.error });
+        toast({ variant: "destructive", title: "Could not send", description: res.error });
         return false;
       }
       setComments((prev) => {
@@ -339,7 +473,7 @@ export function ListingPublicCommentsDock({
       });
       setDraft("");
       setReplyToId(null);
-      toast({ title: "Posted", description: "Your comment is visible on this listing." });
+      toast({ title: "Sent", description: "Your message is visible on this listing." });
       if (opts?.closeMobileSheet) setSheetOpen(false);
       return true;
     } finally {
@@ -347,36 +481,49 @@ export function ListingPublicCommentsDock({
     }
   };
 
-  const badge =
+  const commentCountBadge =
     comments.length > 0 ? (
       <Badge variant="secondary" className="tabular-nums">
         {comments.length}
       </Badge>
     ) : null;
 
+  const unreadBadge =
+    qaUnread > 0 ? (
+      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground shadow-sm">
+        {qaUnread > 99 ? "99+" : qaUnread}
+      </span>
+    ) : null;
+
   return (
     <>
-      {/* Desktop: sticky sidebar or collapsed rail */}
-      <aside className="hidden xl:block">
+      {/* Desktop: sticky sidebar */}
+      <aside className="hidden xl:block xl:w-full xl:max-w-[min(100%,320px)] xl:justify-self-end">
         {desktopCollapsed ? (
           <button
             type="button"
             onClick={() => setDesktopCollapsed(false)}
-            className="sticky top-24 flex w-full max-w-[52px] flex-col items-center gap-2 rounded-2xl border border-border bg-card py-4 shadow-sm transition hover:bg-muted/40 dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900/80"
+            className="sticky top-[calc(5rem+env(safe-area-inset-top,0px))] flex w-full max-w-[52px] flex-col items-center gap-2 rounded-2xl border border-border bg-card py-4 shadow-sm transition hover:bg-muted/40 dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900/80"
             aria-expanded={false}
-            aria-label="Expand public comments"
+            aria-label="Expand Q&A Chat"
           >
-            <MessageSquare className="h-5 w-5 text-muted-foreground" aria-hidden />
-            {badge}
+            <span className="relative inline-flex">
+              <MessageSquare className="h-5 w-5 text-muted-foreground" aria-hidden />
+              {unreadBadge}
+            </span>
+            {commentCountBadge}
             <ChevronLeft className="h-4 w-4 text-muted-foreground" aria-hidden />
           </button>
         ) : (
-          <Card className="sticky top-24 flex max-h-[min(720px,calc(100vh-5.5rem))] flex-col overflow-hidden border-border shadow-sm dark:border-gray-800 dark:bg-gray-950">
+          <Card className="sticky top-[calc(5rem+env(safe-area-inset-top,0px))] flex max-h-[min(520px,calc(100dvh-6rem))] flex-col overflow-hidden border-border shadow-sm dark:border-gray-800 dark:bg-gray-950">
             <CardHeader className="flex shrink-0 flex-row items-center justify-between space-y-0 border-b border-border py-3 dark:border-gray-800">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <MessageSquare className="h-4 w-4" aria-hidden />
-                Q&amp;A
-                {badge}
+                <span className="relative inline-flex">
+                  <MessageSquare className="h-4 w-4" aria-hidden />
+                  {unreadBadge}
+                </span>
+                Q&amp;A Chat
+                {commentCountBadge}
               </CardTitle>
               <Button
                 type="button"
@@ -384,7 +531,7 @@ export function ListingPublicCommentsDock({
                 size="icon"
                 className="h-8 w-8 shrink-0"
                 onClick={() => setDesktopCollapsed(true)}
-                aria-label="Collapse public comments"
+                aria-label="Collapse Q&A Chat"
               >
                 <ChevronRight className="h-4 w-4" aria-hidden />
               </Button>
@@ -407,29 +554,33 @@ export function ListingPublicCommentsDock({
         )}
       </aside>
 
-      {/* Mobile trigger + sheet */}
+      {/* Mobile: floating action + sheet */}
       <div className="xl:hidden">
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="pointer-events-auto w-full max-w-md">
+        <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-4 z-[45]">
+          <div className="pointer-events-auto relative">
             <Button
               type="button"
-              variant="secondary"
-              className="h-12 w-full rounded-2xl border border-border/80 bg-background/95 shadow-lg backdrop-blur dark:border-gray-700 dark:bg-gray-950/95"
+              size="icon"
+              className="h-14 w-14 rounded-full border border-border/80 bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 dark:border-gray-700"
               onClick={() => setSheetOpen(true)}
+              aria-label="Open Q&A Chat"
             >
-              <MessageSquare className="mr-2 h-4 w-4 shrink-0" aria-hidden />
-              <span className="font-medium">Ask a question</span>
-              {badge ? <span className="ml-2">{badge}</span> : null}
+              <MessageSquare className="h-6 w-6" aria-hidden />
             </Button>
+            {unreadBadge}
           </div>
         </div>
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetContent
             side="bottom"
-            title="Public questions and comments"
-            className="flex h-[min(88dvh,640px)] flex-col rounded-t-2xl dark:border-gray-800"
+            title="Q&A Chat"
+            className="flex h-[min(88dvh,560px)] flex-col rounded-t-2xl p-0 dark:border-gray-800"
           >
-            <div className="flex min-h-0 flex-1 flex-col px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <div className="flex min-h-0 flex-1 flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+              <div className="mb-2 shrink-0 text-center">
+                <p className="text-sm font-semibold text-foreground dark:text-gray-100">Q&amp;A Chat</p>
+                <p className="text-xs text-muted-foreground dark:text-gray-500">Public questions for this listing</p>
+              </div>
               <CommentsPanelInner
                 listingId={listingId}
                 listerId={listerId}

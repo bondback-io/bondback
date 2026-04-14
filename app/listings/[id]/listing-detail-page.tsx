@@ -20,6 +20,7 @@ import { enrichBidsWithBidderProfiles } from "@/lib/bids/enrich-bids-with-bidder
 import { cn } from "@/lib/utils";
 import { shouldShowPublicListingComments } from "@/lib/listing-public-comments-visibility";
 import { fetchListingCommentsPublic } from "@/lib/actions/listing-comments";
+import { countUnreadListingQaNotifications } from "@/lib/actions/notifications";
 import { ListingPublicCommentsDock } from "@/components/features/listing-public-comments-dock";
 
 export const dynamic = "force-dynamic";
@@ -196,11 +197,16 @@ export default async function ListingDetailPage({
     ? await fetchListingCommentsPublic(listingId, String(listingRow.lister_id))
     : [];
 
+  const initialQaUnreadCount =
+    showPublicComments && sessionUserId
+      ? await countUnreadListingQaNotifications(listingId)
+      : 0;
+
   return (
     <section
       className={cn(
         "space-y-4 pt-1 pb-6 sm:space-y-6 sm:pt-4",
-        showPublicComments && "pb-24 xl:pb-6"
+        showPublicComments && "pb-20 xl:pb-6"
       )}
     >
       <JobPaymentReturnAck
@@ -219,7 +225,7 @@ export default async function ListingDetailPage({
         <div
           className={cn(
             "xl:grid xl:items-start xl:gap-6",
-            showPublicComments && "xl:grid-cols-[minmax(0,1fr)_280px]"
+            showPublicComments && "xl:grid-cols-[minmax(0,1fr)_min(300px,32%)] xl:gap-8"
           )}
         >
           <div className="min-w-0">
@@ -240,6 +246,7 @@ export default async function ListingDetailPage({
               listerId={String(listingRow.lister_id)}
               initialComments={initialPublicComments}
               currentUserId={sessionUserId ?? null}
+              initialQaUnreadCount={initialQaUnreadCount}
             />
           ) : null}
         </div>
