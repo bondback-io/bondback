@@ -22,6 +22,7 @@ const MIN_REFRESH_GAP_MS = 2800;
  * still hold a JWT until the next navigation — `visibilitychange` / polling catches that.
  */
 const SESSION_REVALIDATE_POLL_MS = 180_000;
+const AUTH_PAGES_PREFIXES = ["/login", "/signup", "/auth/", "/forgot-password", "/reset-password"];
 
 const SESSION_DEBUG =
   typeof process !== "undefined" && process.env.NODE_ENV !== "production";
@@ -59,6 +60,8 @@ export function SessionSync() {
   const pathname = usePathname();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRefreshAtRef = useRef(0);
+  const offlineRef = useRef(false);
+  const validatingRef = useRef(false);
 
   useEffect(() => {
     /** Before auth events fire: avoid SIGNED_IN vs RoleChoiceClient mount race on iOS (SessionSync runs first in tree). */
@@ -68,20 +71,48 @@ export function SessionSync() {
 
     const supabase = createBrowserSupabaseClient();
     let cancelled = false;
+    const syncOfflineFlag = () => {
+      offlineRef.current =
+        typeof navigator !== "undefined" ? navigator.onLine === false : false;
+    };
+    syncOfflineFlag();
 
     async function validateBrowserSession() {
+      if (offlineRef.current) {
+        sessionDebug("validate skipped while offline");
+        return;
+      }
+      if (validatingRef.current) {
+        sessionDebug("validate skipped (already running)");
+        return;
+      }
+      validatingRef.current = true;
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (cancelled || !session?.user?.id) return;
-      const { data, error } = await supabase.auth.getUser();
-      if (cancelled) return;
-      if (error || !data?.user) {
-        sessionDebug("session cleared — auth user missing or JWT invalid", {
-          message: error?.message ?? null,
-        });
-        await supabase.auth.signOut();
-        window.location.assign("/login?message=session_ended");
+      try {
+        if (cancelled || !session?.user?.id) return;
+        const { data, error } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (error || !data?.user) {
+          const msg = (error?.message ?? "").toLowerCase();
+          const isNetworkLikeError =
+            msg.includes("fetch") ||
+            msg.includes("network") ||
+            msg.includes("timeout") ||
+            msg.includes("offline");
+          if (offlineRef.current || isNetworkLikeError) {
+            sessionDebug("validate deferred due to network/offline", { message: error?.message ?? null });
+            return;
+          }
+          sessionDebug("session cleared — auth user missing or JWT invalid", {
+            message: error?.message ?? null,
+          });
+          await supabase.auth.signOut();
+          window.location.assign("/login?message=session_ended");
+        }
+      } finally {
+        validatingRef.current = false;
       }
     }
 
@@ -95,6 +126,15 @@ export function SessionSync() {
       if (e.persisted) void validateBrowserSession();
     };
     window.addEventListener("pageshow", onPageShow);
+    const onOnline = () => {
+      syncOfflineFlag();
+      void validateBrowserSession();
+    };
+    const onOffline = () => {
+      syncOfflineFlag();
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
     const pollId = window.setInterval(() => void validateBrowserSession(), SESSION_REVALIDATE_POLL_MS);
 
     const runRefresh = (reason: string) => {
@@ -130,6 +170,10 @@ export function SessionSync() {
     } = supabase.auth.onAuthStateChange((event) => {
       /** First hydration with existing session — RSC already matched; skip to avoid extra refresh. */
       if (event === "INITIAL_SESSION") return;
+      if (AUTH_PAGES_PREFIXES.some((p) => pathname === p || pathname.startsWith(p))) {
+        sessionDebug("auth event ignored on auth route", { event, pathname });
+        return;
+      }
 
       sessionDebug("onAuthStateChange", { event, pathname });
 
@@ -185,6 +229,8 @@ export function SessionSync() {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
       window.clearInterval(pollId);
       subscription.unsubscribe();
       if (debounceRef.current != null) clearTimeout(debounceRef.current);

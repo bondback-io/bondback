@@ -247,9 +247,35 @@ export async function sendJobMessage(
     ...(imageUrl ? { image_url: imageUrl } : {}),
   };
 
-  const { error } = await supabase
+  // Persist sender role for dual-role/self jobs so historical messages keep correct role labeling.
+  let senderRole: "lister" | "cleaner" = isListerParticipant ? "lister" : "cleaner";
+  if (isListerParticipant && isCleanerParticipant) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("active_role")
+      .eq("id", uid)
+      .maybeSingle();
+    const ar = String((profile as { active_role?: string | null } | null)?.active_role ?? "")
+      .trim()
+      .toLowerCase();
+    senderRole = ar === "cleaner" ? "cleaner" : "lister";
+  }
+
+  const rowWithRole = {
+    ...row,
+    sender_role: senderRole,
+  } as Record<string, unknown>;
+
+  let { error } = await supabase
     .from("job_messages")
-    .insert(row as never);
+    .insert(rowWithRole as never);
+  if (
+    error &&
+    /column .*sender_role.* does not exist|schema cache/i.test(error.message ?? "")
+  ) {
+    // Backward-compatible during migration rollout.
+    ({ error } = await supabase.from("job_messages").insert(row as never));
+  }
 
   if (error) {
     return { ok: false, error: error.message };

@@ -11,13 +11,13 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { cn } from "@/lib/utils";
 import {
-  isDualListerCleaner,
   jobParticipantRole,
   messageSenderJobRole,
   normalizeChatUid,
 } from "@/lib/chat-participant-role";
 
 type JobMessageRow = Database["public"]["Tables"]["job_messages"]["Row"];
+type JobMessageUiRow = JobMessageRow & { sender_role?: "lister" | "cleaner" | null };
 
 export type ChatWindowProps = {
   jobId: number;
@@ -45,9 +45,9 @@ function isOptimisticId(id: number): boolean {
 }
 
 function mergeIncomingMessage(
-  prev: JobMessageRow[],
-  incoming: JobMessageRow
-): JobMessageRow[] {
+  prev: JobMessageUiRow[],
+  incoming: JobMessageUiRow
+): JobMessageUiRow[] {
   const withoutMatchingOptimistic = prev.filter((m) => {
     if (!isOptimisticId(m.id)) return true;
     if (normalizeChatUid(m.sender_id) !== normalizeChatUid(incoming.sender_id)) return true;
@@ -106,7 +106,7 @@ export function ChatWindow({
   const supabase = createBrowserSupabaseClient();
   const { toast } = useToast();
   const isOffline = useIsOffline();
-  const [messages, setMessages] = useState<JobMessageRow[]>([]);
+  const [messages, setMessages] = useState<JobMessageUiRow[]>([]);
   const [text, setText] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,11 +117,6 @@ export function ChatWindow({
   const typingChannelRef = useRef<ReturnType<
     typeof supabase.channel
   > | null>(null);
-
-  const dualListerCleanerJob = useMemo(
-    () => isDualListerCleaner(listerId, cleanerId),
-    [listerId, cleanerId]
-  );
 
   /** Job participant role (lister vs cleaner on this thread); `activeAppRole` disambiguates dual-hat jobs. */
   const participantRole = useMemo(
@@ -153,7 +148,7 @@ export function ChatWindow({
         .eq("job_id", jobId)
         .order("created_at", { ascending: true });
       if (!cancelled && data) {
-        setMessages(data as JobMessageRow[]);
+        setMessages(data as JobMessageUiRow[]);
       }
     };
 
@@ -170,7 +165,7 @@ export function ChatWindow({
           filter: `job_id=eq.${jobId}`,
         },
         (payload) => {
-          const row = payload.new as JobMessageRow;
+          const row = payload.new as JobMessageUiRow;
           setMessages((prev) => mergeIncomingMessage(prev, row));
         }
       )
@@ -183,7 +178,7 @@ export function ChatWindow({
           filter: `job_id=eq.${jobId}`,
         },
         (payload) => {
-          const row = payload.new as JobMessageRow;
+          const row = payload.new as JobMessageUiRow;
           setMessages((prev) =>
             prev.map((m) => (m.id === row.id ? row : m))
           );
@@ -222,7 +217,7 @@ export function ChatWindow({
     const handler = (event: Event) => {
       const custom = event as CustomEvent<{
         jobId: number;
-        message: JobMessageRow;
+        message: JobMessageUiRow;
       }>;
       if (!custom.detail) return;
       const { jobId: evtJobId, message } = custom.detail;
@@ -300,7 +295,7 @@ export function ChatWindow({
 
     const optimisticId = -Math.abs(Date.now());
     const nowIso = new Date().toISOString();
-    const optimistic: JobMessageRow = {
+    const optimistic: JobMessageUiRow = {
       id: optimisticId,
       job_id: jobId,
       sender_id: currentUserId,
@@ -308,6 +303,7 @@ export function ChatWindow({
       created_at: nowIso,
       image_url: null,
       read_at: null,
+      sender_role: shellRole ?? "lister",
     };
 
     setText("");
@@ -377,7 +373,7 @@ export function ChatWindow({
       const caption = text.trim();
       const optimisticId = -Math.abs(Date.now() + 1);
       const nowIso = new Date().toISOString();
-      const optimistic: JobMessageRow = {
+      const optimistic: JobMessageUiRow = {
         id: optimisticId,
         job_id: jobId,
         sender_id: currentUserId,
@@ -385,6 +381,7 @@ export function ChatWindow({
         created_at: nowIso,
         image_url: url,
         read_at: null,
+        sender_role: shellRole ?? "lister",
       };
       setMessages((prev) => [...prev, optimistic]);
       if (typeof window !== "undefined") {
@@ -504,10 +501,11 @@ export function ChatWindow({
           messages.map((m, i) => {
             const isMe =
               normalizeChatUid(m.sender_id) === normalizeChatUid(currentUserId);
-            const senderRole =
-              dualListerCleanerJob && isMe
-                ? (shellRole ?? "lister")
-                : messageSenderJobRole(m.sender_id, listerId, cleanerId);
+            const persistedRole =
+              m.sender_role === "lister" || m.sender_role === "cleaner"
+                ? m.sender_role
+                : null;
+            const senderRole = persistedRole ?? messageSenderJobRole(m.sender_id, listerId, cleanerId);
             const isListerSender = senderRole === "lister";
             const senderLabel =
               (isListerSender

@@ -182,62 +182,72 @@ export function MobileBottomNav({
   const currentPath = pathname ?? "";
   const [activeRole, setActiveRole] = useState<Role>(null);
   const [storedRoleFallback, setStoredRoleFallback] = useState<Role>(null);
+  const roleFetchInFlightRef = useRef(false);
 
   useEffect(() => {
     setStoredRoleFallback(readStoredMobileNavRole());
   }, []);
 
   const refreshActiveRole = useCallback(async () => {
+    if (roleFetchInFlightRef.current) return;
+    roleFetchInFlightRef.current = true;
     const supabase = createBrowserSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setActiveRole(null);
-      try {
-        sessionStorage.removeItem(MOBILE_NAV_ROLE_STORAGE_KEY);
-      } catch {
-        /* ignore */
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setActiveRole(null);
+        try {
+          sessionStorage.removeItem(MOBILE_NAV_ROLE_STORAGE_KEY);
+        } catch {
+          /* ignore */
+        }
+        setStoredRoleFallback(null);
+        return;
       }
-      setStoredRoleFallback(null);
-      return;
-    }
-    const { data: row } = await supabase
-      .from("profiles")
-      .select("active_role, roles")
-      .eq("id", user.id)
-      .maybeSingle();
-    const pr = row as { active_role?: string | null; roles?: string[] | null } | null;
-    const arRaw = pr?.active_role;
-    const ar =
-      typeof arRaw === "string"
-        ? arRaw.trim().toLowerCase() === "lister"
-          ? "lister"
-          : arRaw.trim().toLowerCase() === "cleaner"
-            ? "cleaner"
-            : null
-        : null;
-    const raw = Array.isArray(pr?.roles) ? pr.roles : [];
-    const roles: Role[] = [];
-    for (const x of raw) {
-      if (x === "lister" || x === "cleaner") roles.push(x);
-    }
-    let next: Role = null;
-    if (roles.length === 0) {
-      next = null;
-    } else if (ar === "lister" || ar === "cleaner") {
-      next = ar;
-    } else {
-      next = roles[0]!;
-    }
-    setActiveRole(next);
-    if (next !== null) {
-      try {
-        sessionStorage.setItem(MOBILE_NAV_ROLE_STORAGE_KEY, next);
-      } catch {
-        /* ignore */
+
+      const { data: row } = await supabase
+        .from("profiles")
+        .select("active_role, roles")
+        .eq("id", user.id)
+        .maybeSingle();
+      const pr = row as { active_role?: string | null; roles?: string[] | null } | null;
+      const arRaw = pr?.active_role;
+      const ar =
+        typeof arRaw === "string"
+          ? arRaw.trim().toLowerCase() === "lister"
+            ? "lister"
+            : arRaw.trim().toLowerCase() === "cleaner"
+              ? "cleaner"
+              : null
+          : null;
+      const raw = Array.isArray(pr?.roles) ? pr.roles : [];
+      const roles: Role[] = [];
+      for (const x of raw) {
+        if (x === "lister" || x === "cleaner") roles.push(x);
       }
-      setStoredRoleFallback(next);
+      let next: Role = null;
+      if (roles.length === 0) {
+        next = null;
+      } else if (ar === "lister" || ar === "cleaner") {
+        next = ar;
+      } else {
+        next = roles[0]!;
+      }
+      setActiveRole(next);
+      if (next !== null) {
+        try {
+          sessionStorage.setItem(MOBILE_NAV_ROLE_STORAGE_KEY, next);
+        } catch {
+          /* ignore */
+        }
+        setStoredRoleFallback(next);
+      }
+    } catch {
+      // Ignore transient auth/network errors; next event/path change will retry.
+    } finally {
+      roleFetchInFlightRef.current = false;
     }
   }, []);
 
@@ -251,7 +261,10 @@ export function MobileBottomNav({
     const supabase = createBrowserSupabaseClient();
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") {
+        return;
+      }
       if (authRoleDebounceRef.current != null) {
         clearTimeout(authRoleDebounceRef.current);
       }
