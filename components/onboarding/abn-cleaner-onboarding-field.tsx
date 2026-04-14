@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAbnLiveValidation } from "@/hooks/use-abn-live-validation";
+import { AbnLiveValidationMessages } from "@/components/features/abn-validation-ui";
 
 export type AbnCleanerOnboardingFieldProps = {
   /** e.g. `p2-abn` or `g-abn` — hint/feedback ids are `${id}-hint` / `${id}-feedback` */
@@ -83,21 +83,12 @@ export function AbnCleanerOnboardingField({
         {!primaryError && abnLive.validating && abnDigits.length === 11 && (
           <p className="text-xs text-muted-foreground">Checking ABN…</p>
         )}
-        {!primaryError && abnLive.status === "valid" && abnDigits.length === 11 && (
-          <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            {abnLive.entityName ? `Verified — ${abnLive.entityName}` : "ABN verified."}
-          </p>
+        {!primaryError && (
+          <AbnLiveValidationMessages
+            validation={abnLive}
+            detailsId={`${id}-validated-abn-details`}
+          />
         )}
-        {!primaryError &&
-          abnLive.status === "invalid" &&
-          abnDigits.length === 11 &&
-          !abnLive.validating &&
-          abnLive.error && (
-            <Alert variant="destructive" className="py-2 text-sm">
-              <AlertDescription>{abnLive.error}</AlertDescription>
-            </Alert>
-          )}
       </div>
     </div>
   );

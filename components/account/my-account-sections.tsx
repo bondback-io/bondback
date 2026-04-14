@@ -196,12 +196,12 @@ export function MyAccountSections({
   const p = profile;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Accordion
         type="multiple"
         value={openSections}
         onValueChange={setOpenSections}
-        className="w-full space-y-2"
+        className="w-full space-y-1.5"
       >
         {/* 1. Personal info */}
         <AccordionItem value="personal" id="section-personal" className="scroll-mt-24 rounded-xl border border-border bg-card/40 dark:border-gray-800 dark:bg-gray-950/40">
@@ -417,7 +417,7 @@ export function MyAccountSections({
         </AccordionItem>
       </Accordion>
 
-      <div className="flex flex-col gap-3 border-t border-border pt-4 dark:border-gray-700 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="flex flex-col gap-3 border-t border-border pt-3 dark:border-gray-700 sm:flex-row sm:flex-wrap sm:items-center">
         <LogoutButton />
         <Button
           variant="destructive"

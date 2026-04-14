@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
+import type { AbnValidationDetails } from "@/lib/actions/validate-abn";
 
 export type AbnLiveValidationState = {
   status: "idle" | "valid" | "invalid";
   /** Business / entity name from ABR when lookup ran successfully */
   entityName?: string;
+  details?: AbnValidationDetails;
   error?: string;
   validating: boolean;
 };
@@ -41,12 +43,14 @@ export function useAbnLiveValidation(abnRaw: string): AbnLiveValidationState {
         setState({
           status: "valid",
           entityName: result.entityName,
+          details: result.details,
           validating: false,
         });
       } else {
         setState({
           status: "invalid",
           error: result.error,
+          details: result.details,
           validating: false,
         });
       }

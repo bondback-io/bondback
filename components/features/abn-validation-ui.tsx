@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { AbnLiveValidationState } from "@/hooks/use-abn-live-validation";
@@ -28,9 +28,7 @@ export const AbnValidationInputRow = React.forwardRef<
           className
         )}
         aria-invalid={validation.status === "invalid"}
-        aria-describedby={
-          validation.entityName?.trim() ? detailsId : undefined
-        }
+        aria-describedby={detailsId}
         {...rest}
       />
       <div
@@ -54,24 +52,82 @@ AbnValidationInputRow.displayName = "AbnValidationInputRow";
 /** Shown when ABR returned an entity / business name */
 export function ValidatedAbnDetails({
   id,
-  entityName,
+  details,
 }: {
   id?: string;
-  entityName: string;
+  details: {
+    entityName?: string;
+    businessName?: string;
+    suburb?: string;
+    state?: string;
+    abnStatus?: string;
+    isActive?: boolean;
+  };
 }) {
-  const name = entityName.trim();
-  if (!name) return null;
+  const name = details.entityName?.trim() ?? "";
+  const businessName = details.businessName?.trim() ?? "—";
+  const locationParts = [details.suburb?.trim(), details.state?.trim()].filter(Boolean);
+  const location = locationParts.length ? locationParts.join(", ") : "—";
+  const isActive = details.isActive === true;
+  const statusLabel = details.abnStatus?.trim() || (isActive ? "Active" : "Inactive");
+
+  if (!name && businessName === "—" && location === "—" && !details.abnStatus) return null;
 
   return (
     <div
       id={id}
-      className="rounded-md border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-left dark:border-emerald-800 dark:bg-emerald-950/50"
+      className={cn(
+        "rounded-md border px-3 py-2 text-left",
+        isActive
+          ? "border-emerald-200 bg-emerald-50/90 dark:border-emerald-800 dark:bg-emerald-950/50"
+          : "border-red-200 bg-red-50/90 dark:border-red-900/60 dark:bg-red-950/30"
+      )}
     >
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
+      <p
+        className={cn(
+          "text-[11px] font-semibold uppercase tracking-wide",
+          isActive ? "text-emerald-800 dark:text-emerald-200" : "text-red-800 dark:text-red-200"
+        )}
+      >
         Validated ABN details
       </p>
-      <p className="mt-1 text-sm font-medium leading-snug text-emerald-950 dark:text-emerald-100">
-        {name}
+      <p
+        className={cn(
+          "mt-1 text-sm font-medium leading-snug",
+          isActive ? "text-emerald-950 dark:text-emerald-100" : "text-red-950 dark:text-red-100"
+        )}
+      >
+        ABN Name: {name || "—"}
+      </p>
+      <p
+        className={cn(
+          "mt-0.5 text-sm leading-snug",
+          isActive ? "text-emerald-950 dark:text-emerald-100" : "text-red-950 dark:text-red-100"
+        )}
+      >
+        Business Name: {businessName}
+      </p>
+      <p
+        className={cn(
+          "mt-0.5 text-sm leading-snug",
+          isActive ? "text-emerald-950 dark:text-emerald-100" : "text-red-950 dark:text-red-100"
+        )}
+      >
+        Suburb & State: {location}
+      </p>
+      <p
+        className={cn(
+          "mt-0.5 flex items-center gap-1 text-sm leading-snug",
+          isActive ? "text-emerald-950 dark:text-emerald-100" : "text-red-950 dark:text-red-100"
+        )}
+      >
+        ABN Active Status:
+        {isActive ? (
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        ) : (
+          <XCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+        )}
+        <span>{statusLabel}</span>
       </p>
     </div>
   );
@@ -90,10 +146,10 @@ export function AbnLiveValidationMessages({
       {validation.status === "invalid" && validation.error && (
         <p className="text-xs text-destructive md:text-[13px]">{validation.error}</p>
       )}
-      {validation.status === "valid" && validation.entityName?.trim() && (
+      {validation.details && (
         <ValidatedAbnDetails
           id={detailsId}
-          entityName={validation.entityName.trim()}
+          details={validation.details}
         />
       )}
     </>
