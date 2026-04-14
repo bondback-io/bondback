@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validateImageBuffer } from "@/lib/photo-magic-bytes";
 import { processImage } from "@/lib/photo-process";
 import { PHOTO_VALIDATION } from "@/lib/photo-validation";
@@ -65,6 +66,21 @@ export async function uploadProcessedPhotos(
     };
   }
 
+  const uid = session.user.id;
+  const isProfilePhotosBucket = bucket === "profile-photos";
+  if (isProfilePhotosBucket) {
+    if (pathPrefix !== uid && !pathPrefix.startsWith(`${uid}/`)) {
+      return {
+        ok: false,
+        results: files.map((f) => ({ fileName: f.name, error: "Invalid upload path" })),
+        error: "Invalid upload path.",
+      };
+    }
+  }
+
+  const admin = createSupabaseAdminClient();
+  const storageClient = isProfilePhotosBucket && admin ? admin : supabase;
+
   const results: UploadPhotoResult[] = [];
 
   for (const file of files) {
@@ -100,7 +116,7 @@ export async function uploadProcessedPhotos(
       const mainPath = `${pathPrefix}/${baseName}.${ext}`;
       const thumbPath = `${pathPrefix}/thumb_${baseName}.${ext}`;
 
-      const { error: mainError } = await supabase.storage
+      const { error: mainError } = await storageClient.storage
         .from(bucket)
         .upload(mainPath, main, { contentType, upsert: true });
 
@@ -113,17 +129,25 @@ export async function uploadProcessedPhotos(
       }
 
       if (generateThumb) {
-        await supabase.storage
+        const { error: thumbErr } = await storageClient.storage
           .from(bucket)
           .upload(thumbPath, thumb, { contentType, upsert: true });
+        if (thumbErr) {
+          results.push({
+            fileName,
+            error: `rejected — thumbnail upload failed (${thumbErr.message ?? "unknown"})`,
+          });
+          await storageClient.storage.from(bucket).remove([mainPath]);
+          continue;
+        }
       }
 
       const {
         data: { publicUrl: mainUrl },
-      } = supabase.storage.from(bucket).getPublicUrl(mainPath);
+      } = storageClient.storage.from(bucket).getPublicUrl(mainPath);
       let thumbnailUrl: string | undefined;
       if (generateThumb) {
-        const { data: thumbData } = supabase.storage
+        const { data: thumbData } = storageClient.storage
           .from(bucket)
           .getPublicUrl(thumbPath);
         thumbnailUrl = thumbData.publicUrl;

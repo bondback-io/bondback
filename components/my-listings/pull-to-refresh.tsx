@@ -70,7 +70,7 @@ export function PullToRefresh({ children, onRefresh }: PullToRefreshProps) {
     <div className="relative">
       <div
         className={cn(
-          "pointer-events-none fixed left-0 right-0 top-0 z-[35] flex justify-center pt-[max(0.5rem,env(safe-area-inset-top))]",
+          "pointer-events-none fixed left-0 right-0 top-0 z-20 flex justify-center pt-[max(0.5rem,env(safe-area-inset-top))]",
           (pull > 0 || busy) && "opacity-100"
         )}
         style={{

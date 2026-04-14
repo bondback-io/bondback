@@ -9,6 +9,23 @@ import type { Database } from "@/types/supabase";
 
 type JobMessageRow = Database["public"]["Tables"]["job_messages"]["Row"];
 
+function formatChatMessageTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const datePart = format(d, "MMM d, yyyy");
+  const timePart = format(d, "h:mm:ss a");
+  let tz = "";
+  try {
+    tz =
+      Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+        .formatToParts(d)
+        .find((p) => p.type === "timeZoneName")?.value?.trim() ?? "";
+  } catch {
+    tz = "";
+  }
+  return tz ? `${datePart}, ${timePart} ${tz}` : `${datePart}, ${timePart}`;
+}
+
 export type MessageBubbleProps = {
   message: JobMessageRow;
   isMe: boolean;
@@ -40,7 +57,7 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const imgUrl = message.image_url?.trim() || null;
   const senderIsLister = senderRole === "lister";
-  const timeStr = format(new Date(message.created_at), "h:mm a");
+  const timeStr = formatChatMessageTime(message.created_at);
   const roleHint = senderIsLister ? "Lister" : "Cleaner";
   const bubbleRounded = isMe ? "rounded-br-[6px]" : "rounded-bl-[6px]";
   const bubbleColor = senderIsLister
@@ -62,7 +79,7 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "flex max-w-[min(92%,20rem)] gap-2 sm:max-w-[min(88%,22rem)]",
+          "flex min-w-0 max-w-[min(94vw,22rem)] shrink gap-2 sm:max-w-[min(90vw,24rem)]",
           isMe ? "flex-row-reverse" : "flex-row"
         )}
       >
@@ -88,17 +105,17 @@ export function MessageBubble({
 
         <div
           className={cn(
-            "flex min-w-0 max-w-[88%] flex-col gap-1 sm:gap-1.5",
+            "flex min-w-0 max-w-full flex-col gap-1 sm:gap-1.5",
             isMe ? "items-end" : "items-start"
           )}
         >
           <div
             className={cn(
-              "flex w-full max-w-full flex-wrap items-baseline gap-x-1.5 gap-y-0.5 px-0.5",
-              isMe ? "justify-end" : "justify-start"
+              "flex w-full min-w-0 flex-col gap-0.5 px-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-2 sm:gap-y-0.5",
+              isMe ? "items-end sm:justify-end" : "items-start sm:justify-start"
             )}
           >
-            <span className="min-w-0 max-w-[min(100%,12rem)] truncate text-[11px] font-semibold leading-tight text-[#65676b] dark:text-gray-300 sm:max-w-[14rem]">
+            <span className="max-w-full text-[11px] font-semibold leading-tight text-[#65676b] dark:text-gray-300">
               {isMe ? (
                 <>
                   You
@@ -113,7 +130,7 @@ export function MessageBubble({
             </span>
             <time
               dateTime={message.created_at}
-              className="shrink-0 text-[10px] tabular-nums text-[#8a8d91] dark:text-gray-400"
+              className="max-w-[min(100%,20rem)] text-[10px] leading-snug text-[#8a8d91] [word-break:break-word] dark:text-gray-400 sm:text-right sm:tabular-nums"
             >
               {timeStr}
             </time>
@@ -121,7 +138,7 @@ export function MessageBubble({
 
           <div
             className={cn(
-              "rounded-[20px] px-3.5 py-2.5 text-[15px] leading-snug shadow-sm sm:rounded-[24px] sm:px-[18px] sm:py-3",
+              "w-fit max-w-[min(85vw,20rem)] rounded-[20px] px-3.5 py-2.5 text-[15px] leading-snug shadow-sm sm:max-w-[min(75vw,24rem)] sm:rounded-[24px] sm:px-[18px] sm:py-3",
               bubbleColor
             )}
           >
@@ -154,7 +171,9 @@ export function MessageBubble({
               </div>
             )}
             {message.message_text && message.message_text !== "Photo" && (
-              <p className="whitespace-pre-wrap break-words">{message.message_text}</p>
+              <p className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] [text-wrap:pretty]">
+                {message.message_text}
+              </p>
             )}
             {message.message_text === "Photo" && !imgUrl && (
               <p className="text-sm opacity-90">Photo</p>

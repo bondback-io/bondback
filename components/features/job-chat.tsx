@@ -15,7 +15,11 @@ export type JobChatProps = {
   jobId: number;
   currentUserId: string;
   canChat: boolean;
-  currentUserRole: "lister" | "cleaner" | null;
+  /**
+   * Profile active role (header switcher). When lister and cleaner on the job are the same user,
+   * this selects lister vs cleaner styling and labels.
+   */
+  activeAppRole?: "lister" | "cleaner" | null;
   listerId: string | null;
   cleanerId: string | null;
   listerName: string | null;
@@ -39,7 +43,7 @@ export function JobChat({
   jobId,
   currentUserId,
   canChat,
-  currentUserRole,
+  activeAppRole = null,
   listerId,
   cleanerId,
   listerName,
@@ -97,7 +101,7 @@ export function JobChat({
         cleanerName={cleanerName}
         listerAvatarUrl={listerAvatarUrl}
         cleanerAvatarUrl={cleanerAvatarUrl}
-        currentUserRole={currentUserRole}
+        activeAppRole={activeAppRole}
         jobTitle={m.jobTitle}
         agreedPriceLabel={m.agreedPriceLabel}
         statusPillLabel={m.statusPillLabel}

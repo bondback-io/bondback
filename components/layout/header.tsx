@@ -50,6 +50,7 @@ export const Header = async ({
   return (
     <header
       className={cn(
+        /** Site chrome: keep above in-page sticky search/filter bars (z-20). */
         "sticky top-0 z-30 w-full border-b border-navHeaderBorder/95 bg-navHeaderSurface/95 backdrop-blur-md",
         "dark:border-gray-800 dark:bg-gray-950/95",
         "shadow-sm shadow-sky-900/10 dark:shadow-none",

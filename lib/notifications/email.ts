@@ -109,7 +109,8 @@ export type NotificationType =
   | "checklist_all_complete"
   | "new_job_in_area"
   | "job_status_update"
-  | "early_accept_declined";
+  | "early_accept_declined"
+  | "listing_public_comment";
 
 export type SendEmailOptions = {
   /** When set, logs to email_logs (and always logs a masked line to console). */
@@ -409,6 +410,7 @@ export async function buildNotificationEmail(
     new_job_in_area: `New bond clean near you — have a squiz – Bond Back`,
     job_status_update: `Job update — #${id} – Bond Back`,
     early_accept_declined: `Early pick update — your bid – Bond Back`,
+    listing_public_comment: `Someone commented on your listing – Bond Back`,
   };
 
   let element: React.ReactElement;
@@ -499,6 +501,7 @@ export async function buildNotificationEmail(
     case "checklist_all_complete":
     case "job_status_update":
     case "early_accept_declined":
+    case "listing_public_comment":
     case "new_job_in_area": {
       const headlines: Record<string, string> = {
         after_photos_uploaded: "After photos are in",
@@ -506,6 +509,7 @@ export async function buildNotificationEmail(
         checklist_all_complete: "Checklist complete",
         job_status_update: "Something changed on your job",
         early_accept_declined: "Early pick update",
+        listing_public_comment: "New public comment",
         new_job_in_area: "New job in your area",
       };
       const h = headlines[type] ?? "Update";

@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BidderProfilePreviewDialog } from "@/components/features/bidder-profile-preview-dialog";
 import { useToast } from "@/components/ui/use-toast";
@@ -30,6 +31,47 @@ export type BidWithBidder = BidRow & {
 
 /** When the auction is no longer live, `active` bids show this in the Status column. */
 export type ClosedAuctionBidStatus = "lister_cancelled" | "auction_ended";
+
+function BidderCellContents({ bid }: { bid: BidWithBidder }) {
+  const p = bid.bidder_profile;
+  const ratingRaw = p?.cleaner_avg_rating;
+  const rating =
+    ratingRaw != null && !Number.isNaN(Number(ratingRaw)) ? Number(ratingRaw) : null;
+  const jobsRaw = p?.completed_jobs_count;
+  const jobs =
+    jobsRaw != null && !Number.isNaN(Number(jobsRaw))
+      ? Math.max(0, Math.round(Number(jobsRaw)))
+      : null;
+  const name = bidderDisplayNameForBid(bid);
+
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left">
+      {rating != null && (
+        <span
+          className="inline-flex shrink-0 items-center gap-0.5"
+          title={`Average rating ${rating.toFixed(1)}`}
+        >
+          <Star
+            className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+            aria-hidden
+          />
+          <span className="tabular-nums font-semibold text-foreground dark:text-gray-100">
+            {rating.toFixed(1)}
+          </span>
+        </span>
+      )}
+      {jobs != null && jobs > 0 && (
+        <span
+          className="shrink-0 tabular-nums text-muted-foreground dark:text-gray-400"
+          title="Completed jobs on Bond Back"
+        >
+          ({jobs})
+        </span>
+      )}
+      <span className="min-w-0 break-words font-medium text-primary dark:text-blue-300">{name}</span>
+    </span>
+  );
+}
 
 export type BidHistoryTableProps = {
   bids: BidWithBidder[];
@@ -71,11 +113,6 @@ export function BidHistoryTable({
 
   const openBidderPreview = async (bid: BidWithBidder) => {
     setPreviewOpen(true);
-    if (bid.bidder_profile) {
-      setPreviewProfile(bid.bidder_profile);
-      setPreviewLoading(false);
-      return;
-    }
     setPreviewProfile(null);
     setPreviewLoading(true);
     const res = await getBidderProfileForListingBid(listingId, bid.cleaner_id);
@@ -203,9 +240,9 @@ export function BidHistoryTable({
                 <button
                   type="button"
                   onClick={() => void openBidderPreview(bid)}
-                  className="break-words text-left text-sm font-medium text-primary underline-offset-4 hover:underline dark:text-blue-300"
+                  className="break-words text-left text-sm underline-offset-4 hover:underline"
                 >
-                  {bidderDisplayNameForBid(bid)}
+                  <BidderCellContents bid={bid} />
                 </button>
               </div>
               <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-border pt-3 dark:border-gray-700">
@@ -284,9 +321,9 @@ export function BidHistoryTable({
                   <button
                     type="button"
                     onClick={() => void openBidderPreview(bid)}
-                    className="text-left font-medium text-primary underline-offset-4 hover:underline dark:text-blue-300"
+                    className="text-left underline-offset-4 hover:underline"
                   >
-                    {bidderDisplayNameForBid(bid)}
+                    <BidderCellContents bid={bid} />
                   </button>
                 </td>
                 <td className="px-3 py-2 text-right font-medium tabular-nums text-foreground dark:text-gray-100">

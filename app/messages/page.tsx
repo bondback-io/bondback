@@ -29,6 +29,15 @@ const MessagesPage = async () => {
     redirect("/login");
   }
 
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("active_role")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  const activeAppRole =
+    (profileRow as { active_role: "lister" | "cleaner" | null } | null)?.active_role ??
+    null;
+
   // Jobs where messenger is allowed (matches server `sendJobMessage` + RLS).
   const { data: jobsData } = await supabase
     .from("jobs")
@@ -107,6 +116,7 @@ const MessagesPage = async () => {
 
       <MessagesPageClient
         currentUserId={session.user.id}
+        activeAppRole={activeAppRole}
         jobs={jobs}
         listings={listings}
         messages={messages}

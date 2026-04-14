@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { countCompletedJobsByWinnerIds } from "@/lib/bids/completed-job-counts";
 import type { Database } from "@/types/supabase";
 import type { BidBidderProfileSummary } from "@/lib/bids/bidder-types";
 import { BIDDER_PROFILE_SUMMARY_SELECT } from "@/lib/bids/enrich-bids-with-bidders";
@@ -135,7 +136,69 @@ export async function getBidderProfileForListingBid(
     return { ok: false, error: "Profile not found." };
   }
 
-  return { ok: true, profile: row as BidBidderProfileSummary };
+  const base = row as BidBidderProfileSummary;
+
+  const [jobsRes, reviewsRes] = await Promise.all([
+    admin
+      .from("jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("winner_id", cleanerId)
+      .eq("status", "completed"),
+    admin
+      .from("reviews")
+      .select(
+        "id, overall_rating, review_text, created_at, reviewer:reviewer_id(full_name)"
+      )
+      .eq("reviewee_id", cleanerId)
+      .eq("reviewee_type", "cleaner")
+      .order("created_at", { ascending: false })
+      .limit(4),
+  ]);
+
+  const completed_jobs_count = jobsRes.count ?? 0;
+
+  type ReviewRow = {
+    id: number;
+    overall_rating: number;
+    review_text: string | null;
+    created_at: string;
+    reviewer: { full_name: string | null } | { full_name: string | null }[] | null;
+  };
+
+  const recent_reviews_as_cleaner: BidBidderProfileSummary["recent_reviews_as_cleaner"] =
+    (reviewsRes.data ?? []).map((raw) => {
+      const r = raw as ReviewRow;
+      const rev = r.reviewer;
+      const reviewerName = Array.isArray(rev)
+        ? (rev[0]?.full_name ?? null)
+        : (rev?.full_name ?? null);
+      return {
+        id: r.id,
+        overall_rating: Number(r.overall_rating),
+        review_text: r.review_text,
+        created_at: r.created_at,
+        reviewer_display_name: reviewerName,
+      };
+    });
+
+  const avgRaw = base.cleaner_avg_rating;
+  const cleaner_avg_rating =
+    avgRaw != null && !Number.isNaN(Number(avgRaw)) ? Number(avgRaw) : null;
+  const countRaw = base.cleaner_total_reviews;
+  const cleaner_total_reviews =
+    countRaw != null && !Number.isNaN(Number(countRaw))
+      ? Math.max(0, Math.round(Number(countRaw)))
+      : 0;
+
+  const profile: BidBidderProfileSummary = {
+    ...base,
+    cleaner_avg_rating,
+    cleaner_total_reviews,
+    completed_jobs_count,
+    recent_reviews_as_cleaner,
+  };
+
+  return { ok: true, profile };
 }
 
 export type HydrateBidderProfilesResult =
@@ -183,5 +246,14 @@ export async function hydrateBidderProfilesForListing(
     const id = String((row as { id: string }).id);
     byId[id] = row as BidBidderProfileSummary;
   }
+
+  const counts = await countCompletedJobsByWinnerIds(adminCheck, toLoad);
+  for (const id of toLoad) {
+    const row = byId[id];
+    if (row) {
+      byId[id] = { ...row, completed_jobs_count: counts.get(id) ?? 0 };
+    }
+  }
+
   return { ok: true, byId };
 }

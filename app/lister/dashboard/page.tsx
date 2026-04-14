@@ -262,7 +262,7 @@ export default async function ListerDashboardPage() {
   return (
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
       {/* Mobile: title — sticky; desktop: title only (no job search / radius — listers use Browse Cleaners / listings) */}
-      <div className="sticky top-0 z-30 -mx-4 space-y-2 border-b border-border bg-background/95 px-4 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 md:static md:mx-0 md:space-y-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+      <div className="sticky top-0 z-20 -mx-4 space-y-2 border-b border-border bg-background/95 px-4 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:border-gray-800 dark:bg-gray-950/95 md:static md:mx-0 md:space-y-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
         <header className="flex items-center justify-between gap-3 py-1 sm:static sm:mx-0 sm:px-0 sm:py-0">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <h1 className="truncate text-lg font-semibold tracking-tight text-foreground dark:text-gray-100 sm:text-xl">

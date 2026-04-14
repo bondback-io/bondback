@@ -17,6 +17,10 @@ import { JobPaymentReturnAck } from "@/components/features/job-payment-return-ac
 import { ListingAuctionDetail } from "@/components/features/listing-auction-detail";
 import type { BidWithBidder } from "@/components/features/bid-history-table";
 import { enrichBidsWithBidderProfiles } from "@/lib/bids/enrich-bids-with-bidders";
+import { cn } from "@/lib/utils";
+import { shouldShowPublicListingComments } from "@/lib/listing-public-comments-visibility";
+import { fetchListingCommentsPublic } from "@/lib/actions/listing-comments";
+import { ListingPublicCommentsDock } from "@/components/features/listing-public-comments-dock";
 
 export const dynamic = "force-dynamic";
 
@@ -187,8 +191,18 @@ export default async function ListingDetailPage({
     String(listingRow.lister_id) === String(user.id) &&
     roles.includes("lister");
 
+  const showPublicComments = shouldShowPublicListingComments(listingRow, hasActiveJob);
+  const initialPublicComments = showPublicComments
+    ? await fetchListingCommentsPublic(listingId, String(listingRow.lister_id))
+    : [];
+
   return (
-    <section className="space-y-4 pt-1 pb-6 sm:space-y-6 sm:pt-4">
+    <section
+      className={cn(
+        "space-y-4 pt-1 pb-6 sm:space-y-6 sm:pt-4",
+        showPublicComments && "pb-24 xl:pb-6"
+      )}
+    >
       <JobPaymentReturnAck
         notice={
           paymentNotice === "success" ||
@@ -201,16 +215,35 @@ export default async function ListingDetailPage({
         feePercentage={feePercentage}
         isStripeTestMode={stripeTestModeForPayment}
       />
-      <ListingAuctionDetail
-        listing={listingRow}
-        initialBids={initialBids}
-        isCleaner={isCleaner}
-        isListerOwner={ownsListingAsLister}
-        isListerSessionActive={isListerActive}
-        hasActiveJob={hasActiveJob}
-        numericJobId={numericJobId}
-        currentUserId={sessionUserId ?? null}
-      />
+      <div className="page-inner mx-auto w-full max-w-6xl px-3 sm:px-4">
+        <div
+          className={cn(
+            "xl:grid xl:items-start xl:gap-6",
+            showPublicComments && "xl:grid-cols-[minmax(0,1fr)_280px]"
+          )}
+        >
+          <div className="min-w-0">
+            <ListingAuctionDetail
+              listing={listingRow}
+              initialBids={initialBids}
+              isCleaner={isCleaner}
+              isListerOwner={ownsListingAsLister}
+              isListerSessionActive={isListerActive}
+              hasActiveJob={hasActiveJob}
+              numericJobId={numericJobId}
+              currentUserId={sessionUserId ?? null}
+            />
+          </div>
+          {showPublicComments ? (
+            <ListingPublicCommentsDock
+              listingId={listingId}
+              listerId={String(listingRow.lister_id)}
+              initialComments={initialPublicComments}
+              currentUserId={sessionUserId ?? null}
+            />
+          ) : null}
+        </div>
+      </div>
     </section>
   );
 }

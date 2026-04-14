@@ -60,7 +60,7 @@ export function PushPermissionBanner({ userId }: { userId: string | null }) {
     <div
       role="region"
       aria-label="Push notifications"
-      className="sticky top-0 z-[60] border-b border-primary/20 bg-primary/10 px-4 py-3 dark:bg-primary/15"
+      className="sticky top-0 z-20 border-b border-primary/20 bg-primary/10 px-4 py-3 dark:bg-primary/15"
     >
       <div className="container mx-auto flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 items-start gap-3">

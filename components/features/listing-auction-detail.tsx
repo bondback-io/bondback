@@ -308,7 +308,7 @@ export function ListingAuctionDetail({
     : "Listing ended";
 
   return (
-    <div className="page-inner mx-auto max-w-4xl space-y-4 pb-10 max-md:space-y-3 sm:space-y-6">
+    <div className="mx-auto w-full max-w-4xl space-y-4 pb-10 max-md:space-y-3 sm:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button variant="ghost" asChild className="-ml-2 w-fit">
           <Link
@@ -582,6 +582,42 @@ export function ListingAuctionDetail({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="space-y-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <CardTitle className="text-xl leading-tight md:text-2xl">About this listing</CardTitle>
+            {isLive ? (
+              <Badge className="shrink-0">Live</Badge>
+            ) : (
+              <Badge
+                variant="secondary"
+                className="shrink-0 font-semibold uppercase tracking-wide"
+              >
+                Not live
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {specialInstructionsForDisplay(listing.special_instructions).trim() && (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
+              <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
+                Special instructions
+              </h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
+                {specialInstructionsForDisplay(listing.special_instructions)}
+              </p>
+            </div>
+          )}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Property description</h3>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
+              {listingPropertyDescriptionBody(listing) || "No property description provided."}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Property summary */}
       <Card>
         <CardHeader className="pb-2">
@@ -847,42 +883,6 @@ export function ListingAuctionDetail({
         onClose={() => setPhotoLightbox(null)}
         ariaLabel="Initial condition photos"
       />
-
-      <Card>
-        <CardHeader className="space-y-2">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <CardTitle className="text-xl leading-tight md:text-2xl">About this listing</CardTitle>
-            {isLive ? (
-              <Badge className="shrink-0">Live</Badge>
-            ) : (
-              <Badge
-                variant="secondary"
-                className="shrink-0 font-semibold uppercase tracking-wide"
-              >
-                Not live
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {specialInstructionsForDisplay(listing.special_instructions).trim() && (
-            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
-              <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
-                Special instructions
-              </h3>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
-                {specialInstructionsForDisplay(listing.special_instructions)}
-              </p>
-            </div>
-          )}
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">Property description</h3>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
-              {listingPropertyDescriptionBody(listing) || "No property description provided."}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
 
       {showCleanerBidUi && (
         <Card id="place-bid">

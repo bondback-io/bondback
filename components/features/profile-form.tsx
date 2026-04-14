@@ -361,7 +361,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       withHeaderCheck.forEach((f) => fd.append("files", f));
       const { results, error: actionError } = await uploadProcessedPhotos(fd, {
         bucket: "profile-photos",
-        pathPrefix: `${profile.id}/portfolio`,
+        pathPrefix: String(profile.id),
         maxFiles: PHOTO_LIMITS.PORTFOLIO,
         existingCount: portfolioUrls.length,
         generateThumb: true,
@@ -389,9 +389,13 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
         const base = Array.isArray(portfolioUrls) ? portfolioUrls : [];
         const nextUrls = [...base, ...newUrls].slice(0, PHOTO_LIMITS.PORTFOLIO);
         setPortfolioUrls(nextUrls);
-        updateProfile({ portfolio_photo_urls: nextUrls }).then((result) => {
-          if (!result.ok) setSubmitError(result.error ?? undefined);
-        });
+        const saveResult = await updateProfile({ portfolio_photo_urls: nextUrls });
+        if (!saveResult.ok) {
+          setPortfolioUrls(base);
+          const err = saveResult.error ?? "Could not save portfolio photos.";
+          setSubmitError(err);
+          toast({ variant: "destructive", title: "Could not save photos", description: err });
+        }
       }
     } catch (err: unknown) {
       const msg = formatPhotoUploadError(err);
@@ -405,14 +409,19 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
     }
   };
 
-  const removePortfolioUrl = (url: string) => {
+  const removePortfolioUrl = async (url: string) => {
+    const prev = portfolioUrls;
     const next = portfolioUrls.filter((u) => u !== url);
     setPortfolioUrls(next);
-    updateProfile({
+    const result = await updateProfile({
       portfolio_photo_urls: next.length > 0 ? next : null,
-    }).then((result) => {
-      if (!result.ok) setSubmitError(result.error ?? undefined);
     });
+    if (!result.ok) {
+      setPortfolioUrls(prev);
+      const err = result.error ?? "Could not update portfolio.";
+      setSubmitError(err);
+      toast({ variant: "destructive", title: "Could not remove photo", description: err });
+    }
   };
 
   const toggleSpecialty = (s: string) => {

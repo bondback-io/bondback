@@ -41,6 +41,8 @@ function iconForType(type: NotificationRow["type"]) {
       return <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />;
     case "new_bid":
       return <Megaphone className="h-4 w-4 shrink-0 text-primary" />;
+    case "listing_public_comment":
+      return <MessageSquare className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />;
     default:
       return <Bell className="h-4 w-4 shrink-0 text-muted-foreground" />;
   }
@@ -56,6 +58,7 @@ function labelForType(type: NotificationRow["type"]): string {
     case "dispute_resolved": return "Dispute resolved";
     case "job_created": return "Job created";
     case "new_bid": return "New bid";
+    case "listing_public_comment": return "Listing comment";
     default: return "Update";
   }
 }

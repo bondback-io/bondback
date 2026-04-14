@@ -175,7 +175,7 @@ export function AdminShell({ activeHref, children }: AdminShellProps) {
       {/* Mobile: sticky sub-header + menu drawer */}
       <div
         className={cn(
-          "sticky z-30 flex items-center justify-between gap-3 border-b border-border bg-background/95 py-2.5 backdrop-blur-md md:hidden",
+          "sticky z-20 flex items-center justify-between gap-3 border-b border-border bg-background/95 py-2.5 backdrop-blur-md md:hidden",
           "top-[3.25rem] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]",
           "dark:border-gray-800 dark:bg-gray-950/95"
         )}

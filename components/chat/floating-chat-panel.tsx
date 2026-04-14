@@ -1,16 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useChatPanel } from "@/components/chat/chat-panel-context";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageCircle } from "lucide-react";
 import { JobChat } from "@/components/features/job-chat";
 import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
 import { formatCents } from "@/lib/listings";
 import { buildChatStatusPill } from "@/lib/chat-messenger-display";
-import { jobParticipantRole } from "@/lib/chat-participant-role";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 export function FloatingChatPanel() {
   const {
@@ -24,6 +23,32 @@ export function FloatingChatPanel() {
     currentUserId,
   } = useChatPanel();
 
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const [activeAppRole, setActiveAppRole] = useState<"lister" | "cleaner" | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setActiveAppRole(null);
+      return;
+    }
+    let cancelled = false;
+    void supabase
+      .from("profiles")
+      .select("active_role")
+      .eq("id", currentUserId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const row = data as { active_role: "lister" | "cleaner" | null } | null;
+        setActiveAppRole(row?.active_role ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, supabase]);
+
   const selected = useMemo(
     () => conversations.find((c) => c.jobId === selectedJobId) ?? null,
     [conversations, selectedJobId]
@@ -35,11 +60,6 @@ export function FloatingChatPanel() {
     selected && selected.agreedAmountCents != null && selected.agreedAmountCents > 0
       ? formatCents(selected.agreedAmountCents)
       : "—";
-
-  const participantRole =
-    !!currentUserId && !!selected
-      ? jobParticipantRole(currentUserId, selected.listerId, selected.cleanerId)
-      : null;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 flex justify-end px-3 pb-3 sm:px-4 sm:pb-4">
@@ -133,7 +153,7 @@ export function FloatingChatPanel() {
                     jobId={selected.jobId}
                     currentUserId={currentUserId}
                     canChat={isChatUnlockedForJobStatus(selected.status)}
-                    currentUserRole={participantRole}
+                    activeAppRole={activeAppRole}
                     listerId={selected.listerId}
                     cleanerId={selected.cleanerId}
                     listerName={selected.listerName}

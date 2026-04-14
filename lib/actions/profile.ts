@@ -63,6 +63,9 @@ export async function updateProfile(
   revalidatePath("/dashboard");
   revalidatePath("/jobs");
   revalidatePath("/my-listings");
+  if (Object.prototype.hasOwnProperty.call(updates, "portfolio_photo_urls")) {
+    revalidatePath(`/cleaners/${session.user.id}`);
+  }
   return { ok: true };
 }
 

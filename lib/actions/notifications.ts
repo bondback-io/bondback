@@ -50,6 +50,7 @@ export type NotificationType =
   | "new_job_in_area"
   | "job_status_update"
   | "early_accept_declined"
+  | "listing_public_comment"
   | "daily_digest";
 
 export type CreateNotificationOptions = {
@@ -132,6 +133,9 @@ export async function createNotification(
   revalidatePath("/notifications");
 
   if (options?.adminTest) return true;
+
+  /** In-app only (no email/SMS/push noise for public Q&A). */
+  if (type === "listing_public_comment") return true;
 
   const globalSettings = await getGlobalSettings();
   const prefs = await getNotificationPrefs(userId);

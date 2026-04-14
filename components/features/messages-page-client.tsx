@@ -9,8 +9,6 @@ import { JobChat } from "@/components/features/job-chat";
 import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
 import { formatCents } from "@/lib/listings";
 import { buildChatStatusPill } from "@/lib/chat-messenger-display";
-import { jobParticipantRole } from "@/lib/chat-participant-role";
-
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobMessageRow = Database["public"]["Tables"]["job_messages"]["Row"];
@@ -43,6 +41,8 @@ export type Conversation = {
 
 type MessagesPageClientProps = {
   currentUserId: string;
+  /** profiles.active_role — chat lister/cleaner labels when you are both on a job */
+  activeAppRole?: "lister" | "cleaner" | null;
   jobs: JobRow[];
   listings: ListingRow[];
   messages: JobMessageRow[];
@@ -51,6 +51,7 @@ type MessagesPageClientProps = {
 
 export function MessagesPageClient({
   currentUserId,
+  activeAppRole = null,
   jobs,
   listings,
   messages,
@@ -347,11 +348,7 @@ export function MessagesPageClient({
             jobId={selected.jobId}
             currentUserId={currentUserId}
             canChat={isChatUnlockedForJobStatus(selected.jobStatus)}
-            currentUserRole={jobParticipantRole(
-              currentUserId,
-              selected.listerId,
-              selected.cleanerId
-            )}
+            activeAppRole={activeAppRole}
             listerId={selected.listerId}
             cleanerId={selected.cleanerId}
             listerName={selected.listerName}

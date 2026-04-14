@@ -101,6 +101,9 @@ export function buildNotificationPersistFields(
     case "daily_digest":
       title = "Daily digest";
       break;
+    case "listing_public_comment":
+      title = "Public comment";
+      break;
     default:
       title = "Update";
   }

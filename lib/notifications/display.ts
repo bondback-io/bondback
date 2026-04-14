@@ -98,6 +98,8 @@ function labelForType(type: NotificationRow["type"]): string {
       return "Early acceptance";
     case "daily_digest":
       return "Daily digest";
+    case "listing_public_comment":
+      return "Listing comment";
     default:
       return "Update";
   }

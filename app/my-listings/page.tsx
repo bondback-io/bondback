@@ -258,7 +258,7 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
 
   return (
     <section className="page-inner pb-28 pt-4 sm:pb-10 sm:pt-8">
-      <div className="sticky top-0 z-30 -mx-4 border-b border-border/80 bg-background/95 px-4 pb-4 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur supports-[backdrop-filter]:bg-background/90 dark:border-gray-800 dark:bg-gray-950/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+      <div className="sticky top-0 z-20 -mx-4 border-b border-border/80 bg-background/95 px-4 pb-4 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur supports-[backdrop-filter]:bg-background/90 dark:border-gray-800 dark:bg-gray-950/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
         <Link
           href={dashboardHref}
           className="mb-4 inline-flex min-h-[44px] touch-manipulation items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground dark:text-gray-400"

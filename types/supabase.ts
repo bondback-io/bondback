@@ -64,6 +64,9 @@ export interface Database {
           distance_unit: string | null;
           /** Unique marketplace handle for cleaners (lowercase); shown on bids when set. */
           cleaner_username: string | null;
+          /** Denormalized from reviews where reviewee is this cleaner. */
+          cleaner_avg_rating: number | null;
+          cleaner_total_reviews: number | null;
         };
         Insert: {
           id: string;
@@ -112,6 +115,8 @@ export interface Database {
           theme_preference?: string | null;
           distance_unit?: string | null;
           cleaner_username?: string | null;
+          cleaner_avg_rating?: number | null;
+          cleaner_total_reviews?: number | null;
         };
         Update: {
           roles?: string[] | null;
@@ -158,6 +163,8 @@ export interface Database {
           theme_preference?: string | null;
           distance_unit?: string | null;
           cleaner_username?: string | null;
+          cleaner_avg_rating?: number | null;
+          cleaner_total_reviews?: number | null;
         };
         Relationships: [
           {
@@ -277,6 +284,55 @@ export interface Database {
             columns: ["lister_id"];
             isOneToOne: false;
             referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      listing_comments: {
+        Row: {
+          id: string;
+          listing_id: string;
+          user_id: string;
+          parent_comment_id: string | null;
+          message_text: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          listing_id: string;
+          user_id: string;
+          parent_comment_id?: string | null;
+          message_text: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          listing_id?: string;
+          user_id?: string;
+          parent_comment_id?: string | null;
+          message_text?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "listing_comments_listing_id_fkey";
+            columns: ["listing_id"];
+            isOneToOne: false;
+            referencedRelation: "listings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_comments_parent_comment_id_fkey";
+            columns: ["parent_comment_id"];
+            isOneToOne: false;
+            referencedRelation: "listing_comments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_comments_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           }
         ];
@@ -536,6 +592,7 @@ export interface Database {
             | "new_job_in_area"
             | "job_status_update"
             | "early_accept_declined"
+            | "listing_public_comment"
             | "daily_digest";
           job_id: number | null;
           message_text: string;
@@ -572,6 +629,7 @@ export interface Database {
             | "new_job_in_area"
             | "job_status_update"
             | "early_accept_declined"
+            | "listing_public_comment"
             | "daily_digest";
           job_id?: number | null;
           message_text: string;
@@ -605,6 +663,7 @@ export interface Database {
             | "new_job_in_area"
             | "job_status_update"
             | "early_accept_declined"
+            | "listing_public_comment"
             | "daily_digest";
           job_id?: number | null;
           message_text?: string;

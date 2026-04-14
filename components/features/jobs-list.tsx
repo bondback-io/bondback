@@ -422,7 +422,7 @@ export function JobsList({
     showMobileRadiusStrip && centerLat != null && centerLon != null ? (
       <TooltipProvider delayDuration={200}>
         <div
-          className="sticky top-0 z-40 -mx-4 mb-4 border-b border-border bg-background/95 px-4 pb-3 pt-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85 dark:border-gray-800 dark:bg-gray-950/95 md:hidden"
+          className="sticky top-0 z-20 -mx-4 mb-4 border-b border-border bg-background/95 px-4 pb-3 pt-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85 dark:border-gray-800 dark:bg-gray-950/95 md:hidden"
         >
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-2">

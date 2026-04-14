@@ -125,6 +125,8 @@ export function syntheticProfileFromAuthUser(u: User): ProfileRow {
     theme_preference: null,
     distance_unit: null,
     cleaner_username: null,
+    cleaner_avg_rating: null,
+    cleaner_total_reviews: null,
   };
 }
 

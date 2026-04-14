@@ -694,14 +694,14 @@ export function MobileJobSearchBar({
     <div
       className={cn(
         sticky
-          ? "sticky top-0 z-[35] border-b border-border/80 bg-background/95 pb-3 pt-2 shadow-sm backdrop-blur-md dark:border-gray-800 dark:bg-gray-950/95 md:pb-4"
+          ? "sticky top-0 z-20 border-b border-border/80 bg-background/95 pb-3 pt-2 shadow-sm backdrop-blur-md dark:border-gray-800 dark:bg-gray-950/95 md:pb-4"
           : "relative border-0 bg-transparent pb-2 pt-0 shadow-none",
         sticky && variant === "cleaners" && "pb-2 pt-1.5 md:pb-4 md:pt-2",
         className
       )}
     >
       <div className="flex items-center gap-2 md:gap-3">
-        <div className="relative z-[45] min-h-[44px] min-w-0 flex-1 md:min-h-[44px]">
+        <div className="relative z-10 min-h-[44px] min-w-0 flex-1 md:min-h-[44px]">
           <Input
             type="search"
             enterKeyHint="search"

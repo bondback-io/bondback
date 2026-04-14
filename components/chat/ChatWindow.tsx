@@ -11,6 +11,7 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { cn } from "@/lib/utils";
 import {
+  isDualListerCleaner,
   jobParticipantRole,
   messageSenderJobRole,
   normalizeChatUid,
@@ -27,7 +28,8 @@ export type ChatWindowProps = {
   cleanerName: string | null;
   listerAvatarUrl: string | null;
   cleanerAvatarUrl: string | null;
-  currentUserRole: "lister" | "cleaner" | null;
+  /** Profile active role — used for dual lister/cleaner same-user jobs and shell styling. */
+  activeAppRole?: "lister" | "cleaner" | null;
   jobTitle: string;
   agreedPriceLabel: string;
   /** Short job status label (e.g. In progress, Funds in escrow) */
@@ -94,7 +96,7 @@ export function ChatWindow({
   cleanerName,
   listerAvatarUrl,
   cleanerAvatarUrl,
-  currentUserRole,
+  activeAppRole = null,
   jobTitle,
   agreedPriceLabel,
   statusPillLabel,
@@ -116,12 +118,17 @@ export function ChatWindow({
     typeof supabase.channel
   > | null>(null);
 
-  /** Job participant role (lister vs cleaner on this thread), not app nav “active role”. */
-  const participantRole = useMemo(
-    () => jobParticipantRole(currentUserId, listerId, cleanerId),
-    [currentUserId, listerId, cleanerId]
+  const dualListerCleanerJob = useMemo(
+    () => isDualListerCleaner(listerId, cleanerId),
+    [listerId, cleanerId]
   );
-  const shellRole = participantRole ?? currentUserRole;
+
+  /** Job participant role (lister vs cleaner on this thread); `activeAppRole` disambiguates dual-hat jobs. */
+  const participantRole = useMemo(
+    () => jobParticipantRole(currentUserId, listerId, cleanerId, activeAppRole ?? null),
+    [currentUserId, listerId, cleanerId, activeAppRole]
+  );
+  const shellRole = participantRole;
 
   const otherPartyFirstName = useMemo(() => {
     const isMeLister = shellRole === "lister";
@@ -497,11 +504,10 @@ export function ChatWindow({
           messages.map((m, i) => {
             const isMe =
               normalizeChatUid(m.sender_id) === normalizeChatUid(currentUserId);
-            const senderRole = messageSenderJobRole(
-              m.sender_id,
-              listerId,
-              cleanerId
-            );
+            const senderRole =
+              dualListerCleanerJob && isMe
+                ? (shellRole ?? "lister")
+                : messageSenderJobRole(m.sender_id, listerId, cleanerId);
             const isListerSender = senderRole === "lister";
             const senderLabel =
               (isListerSender
