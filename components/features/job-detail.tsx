@@ -30,7 +30,6 @@ import {
   type ClosedAuctionBidStatus,
 } from "@/components/features/bid-history-table";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
-import { BuyNowButton } from "@/components/features/buy-now-button";
 import {
   formatCents,
   collectListingPhotoUrls,
@@ -4086,29 +4085,6 @@ export function JobDetail({
               isCleaner={isCleaner}
               currentUserId={currentUserId}
             />
-
-            {isCleaner &&
-              listing.buy_now_cents != null &&
-              listing.buy_now_cents > 0 &&
-              effectiveCurrentLowestCents >= listing.buy_now_cents && (
-                <div className="rounded-2xl border border-violet-200/80 bg-violet-50/50 px-4 py-4 dark:border-violet-900/40 dark:bg-violet-950/25">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-300">
-                    Or skip the auction
-                  </p>
-                  <p className="mt-1 text-xs text-violet-700/90 dark:text-violet-200/80">
-                    Secure this job at the buy-now price instead of waiting for the auction to end.
-                  </p>
-                  <div className="mt-3">
-                    <BuyNowButton
-                      listingId={listingId}
-                      buyNowCents={listing.buy_now_cents}
-                      disabled={!isLive}
-                      currentUserId={currentUserId}
-                      className="w-full min-h-14 justify-center px-4 text-base font-semibold sm:flex-1"
-                    />
-                  </div>
-                </div>
-              )}
           </CardContent>
         </Card>
       )}

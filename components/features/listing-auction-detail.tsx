@@ -41,7 +41,6 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
-import { BuyNowButton } from "@/components/features/buy-now-button";
 import {
   BidHistoryTable,
   type BidWithBidder,
@@ -495,6 +494,42 @@ export function ListingAuctionDetail({
         </div>
       )}
 
+      <Card>
+        <CardHeader className="space-y-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <CardTitle className="text-xl leading-tight md:text-2xl">About this listing</CardTitle>
+            {isLive ? (
+              <Badge className="shrink-0">Live</Badge>
+            ) : (
+              <Badge
+                variant="secondary"
+                className="shrink-0 font-semibold uppercase tracking-wide"
+              >
+                Not live
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {specialInstructionsForDisplay(listing.special_instructions).trim() && (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
+              <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
+                Special instructions
+              </h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
+                {specialInstructionsForDisplay(listing.special_instructions)}
+              </p>
+            </div>
+          )}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Property description</h3>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
+              {listingPropertyDescriptionBody(listing) || "No property description provided."}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Pricing — full-width strip on desktop; stacked on small screens */}
       <Card
         className={cn(
@@ -578,42 +613,6 @@ export function ListingAuctionDetail({
                 </p>
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="space-y-2">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <CardTitle className="text-xl leading-tight md:text-2xl">About this listing</CardTitle>
-            {isLive ? (
-              <Badge className="shrink-0">Live</Badge>
-            ) : (
-              <Badge
-                variant="secondary"
-                className="shrink-0 font-semibold uppercase tracking-wide"
-              >
-                Not live
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {specialInstructionsForDisplay(listing.special_instructions).trim() && (
-            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 dark:border-amber-800/40 dark:bg-amber-950/25">
-              <h3 className="mb-2 text-sm font-semibold text-amber-950 dark:text-amber-100">
-                Special instructions
-              </h3>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">
-                {specialInstructionsForDisplay(listing.special_instructions)}
-              </p>
-            </div>
-          )}
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">Property description</h3>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-200">
-              {listingPropertyDescriptionBody(listing) || "No property description provided."}
-            </p>
           </div>
         </CardContent>
       </Card>
@@ -889,23 +888,13 @@ export function ListingAuctionDetail({
           <CardHeader>
             <CardTitle className="text-lg">Place a bid</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {typeof listing.buy_now_cents === "number" && listing.buy_now_cents > 0 && (
-              <BuyNowButton
-                listingId={listing.id}
-                buyNowCents={listing.buy_now_cents}
-                currentUserId={currentUserId}
-              />
-            )}
-            <div>
-              <h3 className="mb-2 text-sm font-semibold">Your bid</h3>
-              <PlaceBidForm
-                listingId={listing.id}
-                listing={listing}
-                isCleaner={isCleaner}
-                currentUserId={currentUserId}
-              />
-            </div>
+          <CardContent>
+            <PlaceBidForm
+              listingId={listing.id}
+              listing={listing}
+              isCleaner={isCleaner}
+              currentUserId={currentUserId}
+            />
           </CardContent>
         </Card>
       )}

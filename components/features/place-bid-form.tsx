@@ -23,6 +23,7 @@ import {
 } from "@/lib/bidding-rules";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { ConnectRequiredModal } from "@/components/features/connect-required-modal";
+import { BuyNowButton } from "@/components/features/buy-now-button";
 import {
   addPendingBid,
   notifyPendingBidsChanged,
@@ -190,6 +191,26 @@ export function PlaceBidForm({
               "border-emerald-500/30 ring-1 ring-emerald-500/10 dark:border-emerald-900/50 dark:ring-emerald-900/20"
           )}
         >
+          {isCleaner &&
+            typeof listing.buy_now_cents === "number" &&
+            listing.buy_now_cents > 0 &&
+            currentLowest >= listing.buy_now_cents && (
+              <div className="border-b border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.14] via-emerald-500/[0.06] to-transparent px-4 py-3.5 dark:border-emerald-900/40 dark:from-emerald-950/45 dark:via-emerald-950/25 dark:to-transparent sm:px-5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
+                  Buy it now
+                </p>
+                <p className="mt-1 text-xs leading-snug text-emerald-900/90 dark:text-emerald-100/80">
+                  Lock in this job at the buy-now price — no need to undercut the current lowest bid.
+                </p>
+                <BuyNowButton
+                  listingId={listingId}
+                  buyNowCents={listing.buy_now_cents}
+                  currentUserId={currentUserId}
+                  className="mt-3 w-full min-h-12 justify-center px-4 text-base font-bold tracking-wide shadow-sm sm:min-h-[3.25rem]"
+                />
+              </div>
+            )}
+
           <div className="flex items-start gap-3 border-b border-border/80 px-4 py-4 dark:border-gray-800 sm:px-5 sm:py-4">
             <div
               className={cn(

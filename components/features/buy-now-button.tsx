@@ -62,7 +62,7 @@ export function BuyNowButton({
         disabled={disabled || loading}
         className={cn(className)}
       >
-        {loading ? "Securing…" : `Secure at this price – ${formatCents(buyNowCents)}`}
+        {loading ? "Securing…" : `${formatCents(buyNowCents)} BUY NOW`}
       </Button>
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
       {currentUserId && (
