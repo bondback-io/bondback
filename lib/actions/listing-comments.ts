@@ -346,7 +346,12 @@ export async function postListingComment(params: {
       if (!canReplyAsLister && !canReplyAsThreadOwner) {
         return { ok: false, error: "Only the lister or the thread owner can reply here." };
       }
-      if (String(session.user.id) === listerId && !isActiveListerSession) {
+      /** Lister mode is required to answer *others'* questions; thread owners may reply in Cleaner mode. */
+      if (
+        String(session.user.id) === listerId &&
+        !isActiveListerSession &&
+        !canReplyAsThreadOwner
+      ) {
         return {
           ok: false,
           error: "Switch to Lister in the header to reply to public questions on your listing.",
