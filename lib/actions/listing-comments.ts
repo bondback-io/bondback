@@ -146,9 +146,32 @@ export async function postListingComment(params: {
 
   const { data: posterProfile } = await readClient
     .from("profiles")
-    .select("roles, full_name")
+    .select("roles, full_name, active_role")
     .eq("id", session.user.id)
     .maybeSingle();
+
+  const rolesArr = (posterProfile as { roles?: string[] | null } | null)?.roles ?? [];
+  const rolesLower = rolesArr.map((r) => String(r).toLowerCase());
+  const hasCleanerRole = rolesLower.includes("cleaner");
+  const hasListerRole = rolesLower.includes("lister");
+  const activeRoleRaw = (posterProfile as { active_role?: string | null } | null)?.active_role;
+  const activeRoleResolved =
+    (typeof activeRoleRaw === "string" && activeRoleRaw.trim()
+      ? activeRoleRaw.trim().toLowerCase()
+      : null) ?? (rolesLower[0] ?? null);
+  /** Matches listing detail page: browsing as cleaner on own listing can start Q&A threads. */
+  const isActiveCleanerSession = activeRoleResolved === "cleaner" && hasCleanerRole;
+  /** Replying as property owner requires Lister mode when the user has both roles. */
+  const isActiveListerSession = activeRoleResolved === "lister" && hasListerRole;
+
+  const ownsThisListing = String(session.user.id) === listerId;
+  if (!ownsThisListing && isActiveListerSession) {
+    return {
+      ok: false,
+      error:
+        "Listers can't post in Q&A on other people's listings. Switch to Cleaner in the header to ask a question.",
+    };
+  }
 
   if (params.parentCommentId) {
     const { data: parent } = await readClient
@@ -170,6 +193,13 @@ export async function postListingComment(params: {
         error: "Only the property lister can reply to public questions.",
       };
     }
+    if (String(session.user.id) === listerId && !isActiveListerSession) {
+      return {
+        ok: false,
+        error:
+          "Switch to Lister in the header to reply to public questions on your listing.",
+      };
+    }
     if (pr?.parent_comment_id != null) {
       return {
         ok: false,
@@ -186,7 +216,7 @@ export async function postListingComment(params: {
       }
     }
   } else {
-    if (String(session.user.id) === listerId) {
+    if (String(session.user.id) === listerId && !isActiveCleanerSession) {
       return {
         ok: false,
         error:
@@ -232,7 +262,10 @@ export async function postListingComment(params: {
     message_text: ins.message_text,
     created_at: ins.created_at,
     author_display_name: displayName(prof?.full_name, "Member"),
-    author_role_label: baseLabel,
+    author_role_label:
+      isActiveCleanerSession && String(session.user.id) === listerId
+        ? "Cleaner"
+        : baseLabel,
   };
 
   revalidatePath(`/listings/${params.listingId}`);

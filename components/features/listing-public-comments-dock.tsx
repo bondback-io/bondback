@@ -32,6 +32,13 @@ export type ListingPublicCommentsDockProps = {
   listerId: string;
   initialComments: ListingCommentPublic[];
   currentUserId: string | null;
+  /**
+   * True when the viewer owns this listing and their active role is Lister (not Cleaner).
+   * Dual-role users browsing as Cleaner get the normal composer; Lister mode is reply-only for new threads.
+   */
+  ownerListerSession: boolean;
+  /** True when signed-in user does not own this listing and active role is Lister — Q&A posting is disabled. */
+  listerActiveViewingOthersListing: boolean;
   /** Unread in-app Q&A notifications for this listing (server count). */
   initialQaUnreadCount?: number;
 };
@@ -94,15 +101,13 @@ function CommentBlock({
 function GroupedCommentThreads({
   comments,
   listerId,
-  currentUserId,
-  viewerIsLister,
+  ownerListerSession,
   onReply,
 }: {
   comments: ListingCommentPublic[];
   listerId: string;
-  currentUserId: string | null;
-  /** Signed-in user is the listing owner — they cannot start threads, only reply. */
-  viewerIsLister: boolean;
+  /** Owner viewing in Lister mode: reply-only; Cleaner mode uses full composer. */
+  ownerListerSession: boolean;
   onReply: (id: string) => void;
 }) {
   const byParent = useMemo(() => {
@@ -120,7 +125,7 @@ function GroupedCommentThreads({
   if (roots.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground dark:text-gray-500">
-        {viewerIsLister
+        {ownerListerSession
           ? "No questions yet. When cleaners ask something here, open a thread and use Reply to respond."
           : "No comments yet. Be the first to ask a question."}
       </p>
@@ -132,9 +137,7 @@ function GroupedCommentThreads({
       {roots.map((root) => {
         const replies = byParent.get(root.id) ?? [];
         const canListerReply =
-          Boolean(currentUserId) &&
-          String(currentUserId) === String(listerId) &&
-          String(root.user_id) !== String(listerId);
+          ownerListerSession && String(root.user_id) !== String(listerId);
         const replyLabel =
           replies.length === 0
             ? "No replies yet"
@@ -194,6 +197,8 @@ function CommentsPanelInner({
   listerId,
   comments,
   currentUserId,
+  ownerListerSession,
+  listerActiveViewingOthersListing,
   replyToId,
   setReplyToId,
   draft,
@@ -205,6 +210,8 @@ function CommentsPanelInner({
   listerId: string;
   comments: ListingCommentPublic[];
   currentUserId: string | null;
+  ownerListerSession: boolean;
+  listerActiveViewingOthersListing: boolean;
   replyToId: string | null;
   setReplyToId: (id: string | null) => void;
   draft: string;
@@ -216,9 +223,7 @@ function CommentsPanelInner({
     ? comments.find((c) => c.id === replyToId)?.author_display_name
     : null;
 
-  const viewerIsLister =
-    Boolean(currentUserId) && String(currentUserId) === String(listerId);
-  const composerDisabledForLister = viewerIsLister && !replyToId;
+  const composerDisabledForListerOwner = ownerListerSession && !replyToId;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -227,7 +232,13 @@ function CommentsPanelInner({
           Public questions &amp; comments
         </h2>
         <p className="mt-1 text-xs leading-snug text-muted-foreground dark:text-gray-500">
-          {viewerIsLister ? (
+          {listerActiveViewingOthersListing ? (
+            <>
+              You&apos;re browsing as a Lister. Public Q&amp;A is for cleaners and other members on this
+              listing — switch to <span className="font-medium text-foreground">Cleaner</span> in the
+              header if you want to ask a question.
+            </>
+          ) : ownerListerSession ? (
             <>
               You can only reply under questions from cleaners and other members — open a thread and use
               Reply. You can&apos;t start a new thread here.
@@ -249,8 +260,7 @@ function CommentsPanelInner({
         <GroupedCommentThreads
           comments={comments}
           listerId={listerId}
-          currentUserId={currentUserId}
-          viewerIsLister={viewerIsLister}
+          ownerListerSession={ownerListerSession}
           onReply={setReplyToId}
         />
       </ScrollArea>
@@ -265,7 +275,13 @@ function CommentsPanelInner({
             </Link>{" "}
             to send a message.
           </p>
-        ) : composerDisabledForLister ? (
+        ) : listerActiveViewingOthersListing ? (
+          <p className="text-center text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
+            Listers can&apos;t post in Q&amp;A on other people&apos;s listings. Switch to{" "}
+            <span className="font-medium text-foreground dark:text-gray-200">Cleaner</span> in the header
+            to ask a question here.
+          </p>
+        ) : composerDisabledForListerOwner ? (
           <p className="text-center text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
             To respond, expand a question above and tap{" "}
             <span className="font-medium text-foreground dark:text-gray-200">Reply</span> — you can&apos;t
@@ -277,7 +293,7 @@ function CommentsPanelInner({
             onSubmit={(e) => {
               e.preventDefault();
               if (posting || !draft.trim()) return;
-              if (viewerIsLister && !replyToId) return;
+              if (ownerListerSession && !replyToId) return;
               onPost();
             }}
           >
@@ -311,7 +327,7 @@ function CommentsPanelInner({
             <Button
               type="submit"
               className="w-full touch-manipulation"
-              disabled={posting || !draft.trim() || (viewerIsLister && !replyToId)}
+              disabled={posting || !draft.trim() || (ownerListerSession && !replyToId)}
             >
               {posting ? (
                 <>
@@ -336,6 +352,8 @@ export function ListingPublicCommentsDock({
   listerId,
   initialComments,
   currentUserId,
+  ownerListerSession,
+  listerActiveViewingOthersListing,
   initialQaUnreadCount = 0,
 }: ListingPublicCommentsDockProps) {
   const { toast } = useToast();
@@ -420,21 +438,32 @@ export function ListingPublicCommentsDock({
       const supabase = createBrowserSupabaseClient();
       const { data: p } = await supabase
         .from("profiles")
-        .select("full_name, roles")
+        .select("full_name, roles, active_role")
         .eq("id", row.user_id)
         .maybeSingle();
       const fullName = (p as { full_name?: string | null } | null)?.full_name;
       const roles = (p as { roles?: string[] | null } | null)?.roles;
+      const activeRoleRaw = (p as { active_role?: string | null } | null)?.active_role;
+      const rolesArr = Array.isArray(roles) ? roles.map((x) => String(x).toLowerCase()) : [];
+      const activeResolved =
+        (typeof activeRoleRaw === "string" && activeRoleRaw.trim()
+          ? activeRoleRaw.trim().toLowerCase()
+          : null) ?? rolesArr[0] ?? null;
+      const hasCleaner = rolesArr.includes("cleaner");
       const name =
         (fullName ?? "").trim().length > 0
           ? (fullName as string).length > 48
             ? `${(fullName as string).slice(0, 47)}…`
             : (fullName as string)
           : "Member";
-      const roleLabel =
-        String(row.user_id) === String(listerId)
+      const sameAsLister = String(row.user_id) === String(listerId);
+      const showAsCleanerOnOwnListing =
+        sameAsLister && activeResolved === "cleaner" && hasCleaner;
+      const roleLabel = showAsCleanerOnOwnListing
+        ? ("Cleaner" as const)
+        : sameAsLister
           ? ("Lister" as const)
-          : Array.isArray(roles) && roles.map((x) => String(x).toLowerCase()).includes("cleaner")
+          : hasCleaner
             ? ("Cleaner" as const)
             : ("Member" as const);
       return {
@@ -488,10 +517,8 @@ export function ListingPublicCommentsDock({
 
   const handlePost = async (opts?: { closeMobileSheet?: boolean }) => {
     if (!currentUserId || !draft.trim()) return false;
-    if (
-      String(currentUserId) === String(listerId) &&
-      replyToId == null
-    ) {
+    if (listerActiveViewingOthersListing) return false;
+    if (ownerListerSession && replyToId == null) {
       return false;
     }
     setPosting(true);
@@ -594,6 +621,8 @@ export function ListingPublicCommentsDock({
                 listerId={listerId}
                 comments={comments}
                 currentUserId={currentUserId}
+                ownerListerSession={ownerListerSession}
+                listerActiveViewingOthersListing={listerActiveViewingOthersListing}
                 replyToId={replyToId}
                 setReplyToId={setReplyToId}
                 draft={draft}
@@ -643,6 +672,8 @@ export function ListingPublicCommentsDock({
                 listerId={listerId}
                 comments={comments}
                 currentUserId={currentUserId}
+                ownerListerSession={ownerListerSession}
+                listerActiveViewingOthersListing={listerActiveViewingOthersListing}
                 replyToId={replyToId}
                 setReplyToId={setReplyToId}
                 draft={draft}

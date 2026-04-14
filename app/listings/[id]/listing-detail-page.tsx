@@ -192,6 +192,12 @@ export default async function ListingDetailPage({
     String(listingRow.lister_id) === String(user.id) &&
     roles.includes("lister");
 
+  const ownsThisListing =
+    !!sessionUserId && String(listingRow.lister_id) === String(sessionUserId);
+  /** Browsing as Lister on someone else's listing — no Q&A posting (switch to Cleaner to participate). */
+  const listerActiveViewingOthersListing =
+    !!sessionUserId && !ownsThisListing && isListerActive;
+
   const showPublicComments = shouldShowPublicListingComments(listingRow, hasActiveJob);
   const initialPublicComments = showPublicComments
     ? await fetchListingCommentsPublic(listingId, String(listingRow.lister_id))
@@ -248,6 +254,8 @@ export default async function ListingDetailPage({
               listerId={String(listingRow.lister_id)}
               initialComments={initialPublicComments}
               currentUserId={sessionUserId ?? null}
+              ownerListerSession={ownsListingAsLister && isListerActive}
+              listerActiveViewingOthersListing={listerActiveViewingOthersListing}
               initialQaUnreadCount={initialQaUnreadCount}
             />
           ) : null}
