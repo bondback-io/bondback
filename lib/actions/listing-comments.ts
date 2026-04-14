@@ -144,6 +144,19 @@ export async function postListingComment(params: {
 
   const listerId = String(row.lister_id);
 
+  const { data: posterProfile } = await readClient
+    .from("profiles")
+    .select("active_role, roles, full_name")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  const activeRoleRaw = (posterProfile as { active_role?: string | null } | null)?.active_role;
+  const activeRole =
+    typeof activeRoleRaw === "string" ? activeRoleRaw.trim().toLowerCase() : "";
+  const rolesArr = (posterProfile as { roles?: string[] | null } | null)?.roles ?? [];
+  const hasCleanerRole = rolesArr.map((r) => String(r).toLowerCase()).includes("cleaner");
+  /** Dual-role: browse/post as cleaner on own listing (same user id as lister_id). */
+  const isActiveCleanerSession = activeRole === "cleaner" && hasCleanerRole;
+
   if (params.parentCommentId) {
     const { data: parent } = await readClient
       .from("listing_comments")
@@ -170,18 +183,13 @@ export async function postListingComment(params: {
         error: "Replies are only allowed on top-level questions, not nested threads.",
       };
     }
-    if (String(pr?.user_id) === listerId) {
-      return {
-        ok: false,
-        error: "You can only reply to questions from cleaners and other visitors.",
-      };
-    }
+    // Root author may be lister_id when they posted as cleaner on their own listing — lister may still reply.
   } else {
-    if (String(session.user.id) === listerId) {
+    if (String(session.user.id) === listerId && !isActiveCleanerSession) {
       return {
         ok: false,
         error:
-          "The lister cannot post public questions here. Use My listings to manage this job.",
+          "Switch to Cleaner in the header to post a public question on your own listing, or use My listings to manage this job.",
       };
     }
   }
@@ -209,13 +217,12 @@ export async function postListingComment(params: {
     return { ok: false, error: msg };
   }
 
-  const { data: author } = await readClient
-    .from("profiles")
-    .select("full_name, roles")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
   const ins = inserted as ListingCommentRow;
+  const prof = posterProfile as {
+    full_name?: string | null;
+    roles?: string[] | null;
+  } | null;
+  const baseLabel = roleLabel(session.user.id, listerId, prof?.roles);
   const comment: ListingCommentPublic = {
     id: ins.id,
     listing_id: ins.listing_id,
@@ -223,15 +230,11 @@ export async function postListingComment(params: {
     parent_comment_id: ins.parent_comment_id,
     message_text: ins.message_text,
     created_at: ins.created_at,
-    author_display_name: displayName(
-      (author as { full_name?: string | null } | null)?.full_name,
-      "Member"
-    ),
-    author_role_label: roleLabel(
-      session.user.id,
-      listerId,
-      (author as { roles?: string[] | null } | null)?.roles
-    ),
+    author_display_name: displayName(prof?.full_name, "Member"),
+    author_role_label:
+      isActiveCleanerSession && String(session.user.id) === listerId
+        ? "Cleaner"
+        : baseLabel,
   };
 
   revalidatePath(`/listings/${params.listingId}`);
