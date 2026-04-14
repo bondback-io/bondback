@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { PHOTO_LIMITS } from "@/lib/photo-validation";
 import type { Database } from "@/types/supabase";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
+import { revieweeTypeOrRoleFilter } from "@/lib/reviews/cleaner-review-filters";
 
 type ReviewsRow = Database["public"]["Tables"]["reviews"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -256,7 +257,7 @@ async function recomputeProfileAverages(
     .from("reviews")
     .select("overall_rating")
     .eq("reviewee_id", userId as never)
-    .eq("reviewee_type", revieweeType as never);
+    .or(revieweeTypeOrRoleFilter(revieweeType));
 
   if (error) {
     throw error;

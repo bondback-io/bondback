@@ -30,6 +30,7 @@ import type { DistanceUnitPref, ThemePreference } from "@/lib/types";
 import { getAppBaseUrl } from "@/lib/site";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
+import { REVIEWEE_IS_CLEANER_OR } from "@/lib/reviews/cleaner-review-filters";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -130,7 +131,7 @@ const ProfilePage = async ({
           "id, job_id, overall_rating, quality_of_work, reliability, communication, punctuality, review_text, review_photos, created_at, reviewer_id"
         )
         .eq("reviewee_id", session.user.id)
-        .eq("reviewee_type", "cleaner")
+        .or(REVIEWEE_IS_CLEANER_OR)
         .order("created_at", { ascending: false })
         .limit(20)
     : { data: [] as any[] };

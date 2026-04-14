@@ -210,6 +210,20 @@ export function PlaceBidForm({
                 />
               </div>
             )}
+          {isCleaner &&
+            typeof listing.buy_now_cents === "number" &&
+            listing.buy_now_cents > 0 &&
+            currentLowest < listing.buy_now_cents && (
+              <div className="border-b border-sky-500/25 bg-gradient-to-br from-sky-500/[0.12] via-sky-500/[0.05] to-transparent px-4 py-3.5 dark:border-sky-900/40 dark:from-sky-950/40 dark:via-sky-950/25 dark:to-transparent sm:px-5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-300">
+                  Buy now unavailable at current bid
+                </p>
+                <p className="mt-1 text-xs leading-snug text-sky-900/90 dark:text-sky-100/80">
+                  The lowest bid is already below the buy-now price ({formatCents(listing.buy_now_cents)}).
+                  Please continue bidding to remain competitive until the lister selects a winning bidder.
+                </p>
+              </div>
+            )}
 
           <div className="flex items-start gap-3 border-b border-border/80 px-4 py-4 dark:border-gray-800 sm:px-5 sm:py-4">
             <div

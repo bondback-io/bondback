@@ -25,6 +25,8 @@ export type ListingCommentPublic = {
   created_at: string;
   author_display_name: string;
   author_role_label: "Lister" | "Cleaner" | "Member";
+  /** True when this author is banned from further Q&A participation on this listing. */
+  author_banned?: boolean;
 };
 
 function roleLabel(
@@ -42,6 +44,64 @@ function displayName(fullName: string | null | undefined, fallback: string): str
   const t = (fullName ?? "").trim();
   if (t.length > 0) return t.length > 48 ? `${t.slice(0, 47)}…` : t;
   return fallback;
+}
+
+type QaBanRow = {
+  listing_id: string;
+  user_id: string;
+  banned_by_user_id: string;
+  reason: string | null;
+  created_at: string;
+};
+
+async function getListingQaBannedUsersMap(
+  readClient: SupabaseClient<Database>,
+  listingId: string
+): Promise<Map<string, QaBanRow>> {
+  const { data } = await (readClient as any)
+    .from("listing_comment_bans")
+    .select("listing_id, user_id, banned_by_user_id, reason, created_at")
+    .eq("listing_id", listingId);
+
+  const rows = (data ?? []) as QaBanRow[];
+  return new Map(rows.map((r) => [String(r.user_id), r]));
+}
+
+async function getRootCommentForThread(
+  readClient: SupabaseClient<Database>,
+  commentId: string
+): Promise<{
+  id: string;
+  listing_id: string;
+  user_id: string;
+  parent_comment_id: string | null;
+} | null> {
+  const { data: start } = await readClient
+    .from("listing_comments")
+    .select("id, listing_id, user_id, parent_comment_id")
+    .eq("id", commentId)
+    .maybeSingle();
+  if (!start) return null;
+
+  const first = start as {
+    id: string;
+    listing_id: string;
+    user_id: string;
+    parent_comment_id: string | null;
+  };
+  if (!first.parent_comment_id) return first;
+
+  const { data: root } = await readClient
+    .from("listing_comments")
+    .select("id, listing_id, user_id, parent_comment_id")
+    .eq("id", first.parent_comment_id)
+    .maybeSingle();
+  return (root ?? first) as {
+    id: string;
+    listing_id: string;
+    user_id: string;
+    parent_comment_id: string | null;
+  };
 }
 
 /** Server load for listing page — works with anon session for public read. */
@@ -64,6 +124,7 @@ export async function fetchListingCommentsPublic(
   }
 
   const typedRows = rows as ListingCommentRow[];
+  const banMap = await getListingQaBannedUsersMap(supabase as SupabaseClient<Database>, listingId);
   const userIds = [...new Set(typedRows.map((r) => r.user_id))];
   const { data: profiles } = await supabase
     .from("profiles")
@@ -91,6 +152,7 @@ export async function fetchListingCommentsPublic(
       created_at: r.created_at,
       author_display_name: displayName(p?.full_name, "Member"),
       author_role_label: roleLabel(r.user_id, listerId, p?.roles),
+      author_banned: banMap.has(String(r.user_id)),
     };
   });
 }
@@ -143,6 +205,10 @@ export async function postListingComment(params: {
   }
 
   const listerId = String(row.lister_id);
+  const banMap = await getListingQaBannedUsersMap(readClient, params.listingId);
+  if (banMap.has(String(session.user.id))) {
+    return { ok: false, error: "You are banned from posting in this listing Q&A." };
+  }
 
   const { data: posterProfile } = await readClient
     .from("profiles")
@@ -173,49 +239,57 @@ export async function postListingComment(params: {
     };
   }
 
+  let insertParentId: string | null = params.parentCommentId;
   if (params.parentCommentId) {
-    const { data: parent } = await readClient
-      .from("listing_comments")
-      .select("id, listing_id, user_id, parent_comment_id")
-      .eq("id", params.parentCommentId)
-      .maybeSingle();
-    const pr = parent as {
-      listing_id?: string;
-      user_id?: string;
-      parent_comment_id?: string | null;
-    } | null;
-    if (!parent || String(pr?.listing_id) !== String(params.listingId)) {
+    const root = await getRootCommentForThread(readClient, params.parentCommentId);
+    if (!root || String(root.listing_id) !== String(params.listingId)) {
       return { ok: false, error: "Invalid reply target." };
     }
-    if (String(session.user.id) !== listerId) {
-      return {
-        ok: false,
-        error: "Only the property lister can reply to public questions.",
-      };
+
+    const rootAuthorId = String(root.user_id);
+    const isRootAuthor = String(session.user.id) === rootAuthorId;
+    const rootAuthorIsLister = rootAuthorId === listerId;
+    if (rootAuthorIsLister) {
+      return { ok: false, error: "Replies are only allowed on cleaner-started threads." };
+    }
+
+    const canReplyAsLister = String(session.user.id) === listerId && isActiveListerSession;
+    const canReplyAsThreadOwner = isRootAuthor;
+    if (!canReplyAsLister && !canReplyAsThreadOwner) {
+      return { ok: false, error: "Only the lister or the thread owner can reply here." };
     }
     if (String(session.user.id) === listerId && !isActiveListerSession) {
       return {
         ok: false,
-        error:
-          "Switch to Lister in the header to reply to public questions on your listing.",
+        error: "Switch to Lister in the header to reply to public questions on your listing.",
       };
     }
-    if (pr?.parent_comment_id != null) {
-      return {
-        ok: false,
-        error: "Replies are only allowed on top-level questions, not nested threads.",
-      };
+    if (canReplyAsThreadOwner && String(session.user.id) !== rootAuthorId) {
+      return { ok: false, error: "You can only reply within your own thread." };
     }
-    if (String(session.user.id) === listerId) {
-      if (String(pr?.user_id) === String(listerId)) {
+    if (banMap.has(rootAuthorId)) {
+      return { ok: false, error: "This thread owner is banned; replying is locked." };
+    }
+    // Keep all replies flattened under the root thread for simpler rendering/moderation.
+    insertParentId = root.id;
+  } else {
+    // Cleaner (or member) can only start one thread per listing.
+    if (hasCleanerRole) {
+      const { data: existingRoot } = await readClient
+        .from("listing_comments")
+        .select("id")
+        .eq("listing_id", params.listingId)
+        .eq("user_id", session.user.id)
+        .is("parent_comment_id", null)
+        .limit(1)
+        .maybeSingle();
+      if (existingRoot?.id) {
         return {
           ok: false,
-          error:
-            "You can only reply to questions from cleaners and other members, not to your own thread.",
+          error: "You can only start one thread per listing. Reply in your existing thread instead.",
         };
       }
     }
-  } else {
     if (String(session.user.id) === listerId && !isActiveCleanerSession) {
       return {
         ok: false,
@@ -230,7 +304,7 @@ export async function postListingComment(params: {
     .insert({
       listing_id: params.listingId,
       user_id: session.user.id,
-      parent_comment_id: params.parentCommentId,
+      parent_comment_id: insertParentId,
       message_text: mod.text,
     } as never)
     .select("id, listing_id, user_id, parent_comment_id, message_text, created_at")
@@ -266,6 +340,7 @@ export async function postListingComment(params: {
       isActiveCleanerSession && String(session.user.id) === listerId
         ? "Cleaner"
         : baseLabel,
+    author_banned: false,
   };
 
   revalidatePath(`/listings/${params.listingId}`);
@@ -291,12 +366,8 @@ export async function postListingComment(params: {
   }
 
   if (params.parentCommentId) {
-    const { data: parentRow } = await readClient
-      .from("listing_comments")
-      .select("user_id")
-      .eq("id", params.parentCommentId)
-      .maybeSingle();
-    const askerId = String((parentRow as { user_id?: string } | null)?.user_id ?? "");
+    const root = await getRootCommentForThread(readClient, params.parentCommentId);
+    const askerId = String(root?.user_id ?? "");
     if (
       askerId &&
       askerId !== session.user.id &&
@@ -335,4 +406,115 @@ export async function postListingComment(params: {
   }
 
   return { ok: true, comment };
+}
+
+export type RemoveListingCommentResult =
+  | { ok: true; removedIds: string[] }
+  | { ok: false; error: string };
+
+export async function removeListingComment(params: {
+  listingId: string;
+  commentId: string;
+  scope: "comment" | "thread";
+}): Promise<RemoveListingCommentResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "Sign in required." };
+
+  const admin = createSupabaseAdminClient();
+  const readClient = (admin ?? supabase) as SupabaseClient<Database>;
+  const { data: listing } = await readClient
+    .from("listings")
+    .select("id, lister_id")
+    .eq("id", params.listingId)
+    .maybeSingle();
+  if (!listing) return { ok: false, error: "Listing not found." };
+  if (String((listing as { lister_id: string }).lister_id) !== String(session.user.id)) {
+    return { ok: false, error: "Only the listing lister can moderate Q&A." };
+  }
+
+  const root = await getRootCommentForThread(readClient, params.commentId);
+  if (!root || String(root.listing_id) !== String(params.listingId)) {
+    return { ok: false, error: "Comment not found." };
+  }
+
+  if (params.scope === "thread") {
+    const { data: threadRows } = await readClient
+      .from("listing_comments")
+      .select("id")
+      .eq("listing_id", params.listingId)
+      .or(`id.eq.${root.id},parent_comment_id.eq.${root.id}`);
+    const ids = ((threadRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+    if (ids.length === 0) return { ok: true, removedIds: [] };
+    await readClient.from("listing_comments").delete().in("id", ids as never);
+    revalidatePath(`/listings/${params.listingId}`);
+    return { ok: true, removedIds: ids };
+  }
+
+  await readClient.from("listing_comments").delete().eq("id", params.commentId);
+  revalidatePath(`/listings/${params.listingId}`);
+  return { ok: true, removedIds: [params.commentId] };
+}
+
+export type BanCleanerFromListingQaResult =
+  | { ok: true; bannedUserId: string }
+  | { ok: false; error: string };
+
+export async function banCleanerFromListingQa(params: {
+  listingId: string;
+  targetUserId: string;
+  reason?: string | null;
+}): Promise<BanCleanerFromListingQaResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "Sign in required." };
+
+  const admin = createSupabaseAdminClient();
+  const readClient = (admin ?? supabase) as SupabaseClient<Database>;
+  const { data: listing } = await readClient
+    .from("listings")
+    .select("id, lister_id")
+    .eq("id", params.listingId)
+    .maybeSingle();
+  if (!listing) return { ok: false, error: "Listing not found." };
+  const listerId = String((listing as { lister_id: string }).lister_id);
+  if (String(session.user.id) !== listerId) {
+    return { ok: false, error: "Only the listing lister can ban users in Q&A." };
+  }
+  if (String(params.targetUserId) === listerId) {
+    return { ok: false, error: "You cannot ban yourself." };
+  }
+
+  const { data: profile } = await readClient
+    .from("profiles")
+    .select("roles")
+    .eq("id", params.targetUserId)
+    .maybeSingle();
+  const roles = (((profile as { roles?: string[] | null } | null)?.roles ?? []) as string[]).map((r) =>
+    String(r).toLowerCase()
+  );
+  if (!roles.includes("cleaner")) {
+    return { ok: false, error: "Only cleaner users can be banned from Q&A." };
+  }
+
+  const reason =
+    (params.reason ?? "").trim() || "user was banned for misconduct";
+  const payload = {
+    listing_id: params.listingId,
+    user_id: params.targetUserId,
+    banned_by_user_id: session.user.id,
+    reason,
+    created_at: new Date().toISOString(),
+  };
+  const { error } = await (readClient as any)
+    .from("listing_comment_bans")
+    .upsert(payload, { onConflict: "listing_id,user_id" });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/listings/${params.listingId}`);
+  return { ok: true, bannedUserId: String(params.targetUserId) };
 }

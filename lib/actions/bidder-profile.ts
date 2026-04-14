@@ -7,6 +7,7 @@ import { countCompletedJobsByWinnerIds } from "@/lib/bids/completed-job-counts";
 import type { Database } from "@/types/supabase";
 import type { BidBidderProfileSummary } from "@/lib/bids/bidder-types";
 import { BIDDER_PROFILE_SUMMARY_SELECT } from "@/lib/bids/enrich-bids-with-bidders";
+import { REVIEWEE_IS_CLEANER_OR } from "@/lib/reviews/cleaner-review-filters";
 
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
@@ -150,7 +151,7 @@ export async function getBidderProfileForListingBid(
         "id, overall_rating, review_text, created_at, reviewer:reviewer_id(full_name)"
       )
       .eq("reviewee_id", cleanerId)
-      .eq("reviewee_type", "cleaner")
+      .or(REVIEWEE_IS_CLEANER_OR)
       .order("created_at", { ascending: false })
       .limit(4),
   ]);

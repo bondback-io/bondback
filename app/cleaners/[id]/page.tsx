@@ -25,6 +25,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { cn } from "@/lib/utils";
 import { CleanerReviewCountPreview } from "@/components/features/cleaner-review-count-preview";
+import { REVIEWEE_IS_CLEANER_OR } from "@/lib/reviews/cleaner-review-filters";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -118,7 +119,7 @@ export default async function CleanerProfilePage({
     `
     )
     .eq("reviewee_id", id)
-    .eq("reviewee_type", "cleaner")
+    .or(REVIEWEE_IS_CLEANER_OR)
     .order("created_at", { ascending: false });
 
   const reviewsSafe = (reviews ?? []) as any[];

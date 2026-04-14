@@ -19,6 +19,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
+  banCleanerFromListingQa,
+  removeListingComment,
   postListingComment,
   type ListingCommentPublic,
 } from "@/lib/actions/listing-comments";
@@ -49,14 +51,35 @@ function sortByCreated(a: ListingCommentPublic, b: ListingCommentPublic) {
 
 function CommentBlock({
   c,
+  root,
+  currentUserId,
+  ownerListerSession,
   showReplyButton,
   onReply,
+  onBan,
+  onRemoveComment,
+  onRemoveThread,
 }: {
   c: ListingCommentPublic;
+  root: ListingCommentPublic;
+  currentUserId: string | null;
+  ownerListerSession: boolean;
   showReplyButton: boolean;
   onReply: (id: string) => void;
+  onBan: (userId: string) => void;
+  onRemoveComment: (commentId: string) => void;
+  onRemoveThread: (rootId: string) => void;
 }) {
   const rel = formatDistanceToNow(new Date(c.created_at), { addSuffix: true });
+  const commenterIsCurrentUser =
+    Boolean(currentUserId) && String(currentUserId) === String(c.user_id);
+  const canThreadOwnerReply =
+    Boolean(currentUserId) && String(currentUserId) === String(root.user_id);
+  const canReplyAsThreadOwner = canThreadOwnerReply;
+  const canReply = showReplyButton || canReplyAsThreadOwner;
+  const canModerate = ownerListerSession && String(c.user_id) !== String(currentUserId);
+  const canBan = canModerate && String(c.author_role_label).toLowerCase() === "cleaner";
+
   return (
     <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-900/40">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -70,6 +93,11 @@ function CommentBlock({
           >
             {c.author_role_label}
           </Badge>
+          {c.author_banned ? (
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-destructive">
+              user was banned for misconduct
+            </span>
+          ) : null}
         </div>
         <time
           className="shrink-0 text-[11px] text-muted-foreground dark:text-gray-500"
@@ -81,17 +109,53 @@ function CommentBlock({
       <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/95 dark:text-gray-200">
         {c.message_text}
       </p>
-      {showReplyButton ? (
-        <div className="mt-2 flex justify-end">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => onReply(c.id)}
-          >
-            Reply
-          </Button>
+      {canReply || canModerate ? (
+        <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+          {canReply ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => onReply(c.id)}
+              disabled={c.author_banned && !commenterIsCurrentUser}
+            >
+              Reply
+            </Button>
+          ) : null}
+          {canBan ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-destructive hover:text-destructive"
+              onClick={() => onBan(c.user_id)}
+            >
+              Ban cleaner
+            </Button>
+          ) : null}
+          {canModerate ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-destructive hover:text-destructive"
+              onClick={() => onRemoveComment(c.id)}
+            >
+              Remove post
+            </Button>
+          ) : null}
+          {canModerate && c.parent_comment_id == null ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-destructive hover:text-destructive"
+              onClick={() => onRemoveThread(c.id)}
+            >
+              Remove thread
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -102,13 +166,21 @@ function GroupedCommentThreads({
   comments,
   listerId,
   ownerListerSession,
+  currentUserId,
   onReply,
+  onBan,
+  onRemoveComment,
+  onRemoveThread,
 }: {
   comments: ListingCommentPublic[];
   listerId: string;
   /** Owner viewing in Lister mode: reply-only; Cleaner mode uses full composer. */
   ownerListerSession: boolean;
+  currentUserId: string | null;
   onReply: (id: string) => void;
+  onBan: (userId: string) => void;
+  onRemoveComment: (commentId: string) => void;
+  onRemoveThread: (rootId: string) => void;
 }) {
   const byParent = useMemo(() => {
     const m = new Map<string | null, ListingCommentPublic[]>();
@@ -136,13 +208,12 @@ function GroupedCommentThreads({
     <div className="space-y-2">
       {roots.map((root) => {
         const replies = byParent.get(root.id) ?? [];
-        const canListerReply =
-          ownerListerSession && String(root.user_id) !== String(listerId);
+        const canListerReply = ownerListerSession && String(root.user_id) !== String(listerId);
         const replyLabel =
           replies.length === 0
             ? "No replies yet"
             : replies.length === 1
-              ? "1 lister reply"
+              ? "1 reply"
               : `${replies.length} replies`;
 
         return (
@@ -175,13 +246,33 @@ function GroupedCommentThreads({
               </div>
             </summary>
             <div className="space-y-2 border-t border-border/60 px-3 py-3 dark:border-gray-800">
-              <CommentBlock c={root} showReplyButton={canListerReply} onReply={onReply} />
+              <CommentBlock
+                c={root}
+                root={root}
+                currentUserId={currentUserId}
+                ownerListerSession={ownerListerSession}
+                showReplyButton={canListerReply}
+                onReply={onReply}
+                onBan={onBan}
+                onRemoveComment={onRemoveComment}
+                onRemoveThread={onRemoveThread}
+              />
               {replies.map((r) => (
                 <div
                   key={r.id}
                   className="border-l-2 border-primary/25 pl-3 dark:border-primary/35"
                 >
-                  <CommentBlock c={r} showReplyButton={false} onReply={onReply} />
+                  <CommentBlock
+                    c={r}
+                    root={root}
+                    currentUserId={currentUserId}
+                    ownerListerSession={ownerListerSession}
+                    showReplyButton={false}
+                    onReply={onReply}
+                    onBan={onBan}
+                    onRemoveComment={onRemoveComment}
+                    onRemoveThread={onRemoveThread}
+                  />
                 </div>
               ))}
             </div>
@@ -205,6 +296,9 @@ function CommentsPanelInner({
   setDraft,
   posting,
   onPost,
+  onBan,
+  onRemoveComment,
+  onRemoveThread,
 }: {
   listingId: string;
   listerId: string;
@@ -218,10 +312,18 @@ function CommentsPanelInner({
   setDraft: (s: string) => void;
   posting: boolean;
   onPost: () => void;
+  onBan: (userId: string) => void;
+  onRemoveComment: (commentId: string) => void;
+  onRemoveThread: (rootId: string) => void;
 }) {
   const replyHint = replyToId
     ? comments.find((c) => c.id === replyToId)?.author_display_name
     : null;
+  const viewerIsBanned =
+    Boolean(currentUserId) &&
+    comments.some(
+      (c) => String(c.user_id) === String(currentUserId) && c.author_banned
+    );
 
   const composerDisabledForListerOwner = ownerListerSession && !replyToId;
 
@@ -261,7 +363,11 @@ function CommentsPanelInner({
           comments={comments}
           listerId={listerId}
           ownerListerSession={ownerListerSession}
+          currentUserId={currentUserId}
           onReply={setReplyToId}
+          onBan={onBan}
+          onRemoveComment={onRemoveComment}
+          onRemoveThread={onRemoveThread}
         />
       </ScrollArea>
       <div className="shrink-0 space-y-2 border-t border-border pt-3 dark:border-gray-800">
@@ -274,6 +380,10 @@ function CommentsPanelInner({
               Sign in
             </Link>{" "}
             to send a message.
+          </p>
+        ) : viewerIsBanned ? (
+          <p className="text-center text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
+            You were banned for misconduct and can no longer post or reply in this Q&amp;A.
           </p>
         ) : listerActiveViewingOthersListing ? (
           <p className="text-center text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
@@ -335,7 +445,7 @@ function CommentsPanelInner({
                   Sending…
                 </>
               ) : replyToId ? (
-                "Send reply"
+                "Reply message"
               ) : (
                 "Send Message"
               )}
@@ -364,6 +474,7 @@ export function ListingPublicCommentsDock({
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [qaUnread, setQaUnread] = useState(initialQaUnreadCount);
+  const [moderating, setModerating] = useState(false);
 
   const sheetOpenRef = useRef(sheetOpen);
   const desktopCollapsedRef = useRef(desktopCollapsed);
@@ -550,6 +661,60 @@ export function ListingPublicCommentsDock({
     }
   };
 
+  const handleBan = async (userId: string) => {
+    if (!ownerListerSession || moderating) return;
+    const ok = window.confirm("Ban this cleaner from further Q&A comments and replies?");
+    if (!ok) return;
+    setModerating(true);
+    try {
+      const res = await banCleanerFromListingQa({
+        listingId,
+        targetUserId: userId,
+        reason: "user was banned for misconduct",
+      });
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Could not ban", description: res.error });
+        return;
+      }
+      setComments((prev) =>
+        prev.map((c) =>
+          String(c.user_id) === String(userId)
+            ? { ...c, author_banned: true }
+            : c
+        )
+      );
+      toast({ title: "Cleaner banned", description: "User can no longer post or reply here." });
+    } finally {
+      setModerating(false);
+    }
+  };
+
+  const handleRemove = async (commentId: string, scope: "comment" | "thread") => {
+    if (!ownerListerSession || moderating) return;
+    const msg =
+      scope === "thread"
+        ? "Remove this entire thread and all replies?"
+        : "Remove this post?";
+    const ok = window.confirm(msg);
+    if (!ok) return;
+    setModerating(true);
+    try {
+      const res = await removeListingComment({ listingId, commentId, scope });
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Could not remove", description: res.error });
+        return;
+      }
+      const removed = new Set(res.removedIds.map((id) => String(id)));
+      setComments((prev) => prev.filter((c) => !removed.has(String(c.id))));
+      toast({
+        title: scope === "thread" ? "Thread removed" : "Post removed",
+        description: scope === "thread" ? "The whole thread was removed." : "The post was removed.",
+      });
+    } finally {
+      setModerating(false);
+    }
+  };
+
   const commentCountBadge =
     comments.length > 0 ? (
       <Badge variant="secondary" className="tabular-nums">
@@ -627,8 +792,11 @@ export function ListingPublicCommentsDock({
                 setReplyToId={setReplyToId}
                 draft={draft}
                 setDraft={setDraft}
-                posting={posting}
+                posting={posting || moderating}
                 onPost={() => void handlePost()}
+                onBan={(userId) => void handleBan(userId)}
+                onRemoveComment={(id) => void handleRemove(id, "comment")}
+                onRemoveThread={(id) => void handleRemove(id, "thread")}
               />
             </CardContent>
           </Card>
@@ -678,8 +846,11 @@ export function ListingPublicCommentsDock({
                 setReplyToId={setReplyToId}
                 draft={draft}
                 setDraft={setDraft}
-                posting={posting}
+                posting={posting || moderating}
                 onPost={() => void handlePost({ closeMobileSheet: true })}
+                onBan={(userId) => void handleBan(userId)}
+                onRemoveComment={(id) => void handleRemove(id, "comment")}
+                onRemoveThread={(id) => void handleRemove(id, "thread")}
               />
             </div>
           </SheetContent>
