@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useAbnAutoSaveOnValid } from "@/hooks/use-abn-auto-save-on-valid";
 import { useForm, Controller } from "react-hook-form";
@@ -76,6 +76,12 @@ import {
   AbnLiveValidationMessages,
 } from "@/components/features/abn-validation-ui";
 import { SuburbPostcodeAutocomplete } from "@/components/features/suburb-postcode-autocomplete";
+import {
+  clearPortfolioUrlsSessionCacheIfDbMatches,
+  normalizePortfolioPhotoUrls,
+  readPortfolioUrlsSessionCache,
+  writePortfolioUrlsSessionCache,
+} from "@/lib/profile-portfolio-urls";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -150,11 +156,11 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(
     effectiveProfilePhotoUrl(profile)
   );
-  const [portfolioUrls, setPortfolioUrls] = useState<string[]>(
-    Array.isArray(profile.portfolio_photo_urls)
-      ? profile.portfolio_photo_urls
-      : []
-  );
+  const [portfolioUrls, setPortfolioUrls] = useState<string[]>(() => {
+    const fromDb = normalizePortfolioPhotoUrls(profile.portfolio_photo_urls);
+    if (fromDb.length > 0) return fromDb;
+    return readPortfolioUrlsSessionCache(profile.id);
+  });
   const [profilePhotoPhase, setProfilePhotoPhase] = useState<
     "idle" | "compressing" | "uploading"
   >("idle");
@@ -179,6 +185,10 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
 
   const { toast } = useToast();
   const router = useRouter();
+
+  useEffect(() => {
+    clearPortfolioUrlsSessionCacheIfDbMatches(profile.id, profile.portfolio_photo_urls);
+  }, [profile.id, profile.portfolio_photo_urls]);
 
   const listerForm = useForm<ListerValues>({
     resolver: zodResolver(listerSchema),
@@ -292,6 +302,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       setProfilePhotoUrl(res.url);
       const updateResult = await updateProfile({ profile_photo_url: res.url });
       if (!updateResult.ok) setSubmitError(updateResult.error);
+      else router.refresh();
     } catch (err: unknown) {
       const msg = formatPhotoUploadError(err);
       startPhotoTransition(() => setProfilePhotoUrl(revertUrl));
@@ -359,7 +370,7 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
     try {
       const fd = new FormData();
       withHeaderCheck.forEach((f) => fd.append("files", f));
-      const { results, error: actionError } = await uploadProcessedPhotos(fd, {
+      const { results, error: actionError, ok: uploadOk } = await uploadProcessedPhotos(fd, {
         bucket: "profile-photos",
         pathPrefix: String(profile.id),
         maxFiles: PHOTO_LIMITS.PORTFOLIO,
@@ -385,16 +396,27 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
           newUrls.push(r.url);
         }
       });
+      if (!actionError && !uploadOk && newUrls.length === 0 && results.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Upload failed",
+          description: "No photos could be uploaded. Check file size and format, then try again.",
+        });
+      }
       if (newUrls.length > 0) {
         const base = Array.isArray(portfolioUrls) ? portfolioUrls : [];
         const nextUrls = [...base, ...newUrls].slice(0, PHOTO_LIMITS.PORTFOLIO);
         setPortfolioUrls(nextUrls);
+        writePortfolioUrlsSessionCache(profile.id, nextUrls);
         const saveResult = await updateProfile({ portfolio_photo_urls: nextUrls });
         if (!saveResult.ok) {
           setPortfolioUrls(base);
+          writePortfolioUrlsSessionCache(profile.id, base);
           const err = saveResult.error ?? "Could not save portfolio photos.";
           setSubmitError(err);
           toast({ variant: "destructive", title: "Could not save photos", description: err });
+        } else {
+          router.refresh();
         }
       }
     } catch (err: unknown) {
@@ -421,6 +443,9 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       const err = result.error ?? "Could not update portfolio.";
       setSubmitError(err);
       toast({ variant: "destructive", title: "Could not remove photo", description: err });
+    } else {
+      writePortfolioUrlsSessionCache(profile.id, next);
+      router.refresh();
     }
   };
 

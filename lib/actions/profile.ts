@@ -46,16 +46,30 @@ export async function updateProfile(
   }
 
   const admin = createSupabaseAdminClient();
-  if (!admin) {
-    return { ok: false, error: "Server configuration error (admin client unavailable)." };
-  }
-  const { error } = await admin
-    .from("profiles")
-    .update({ ...safeUpdates, updated_at: new Date().toISOString() } as never)
-    .eq("id", session.user.id);
+  const payload = { ...safeUpdates, updated_at: new Date().toISOString() } as never;
 
-  if (error) {
-    return { ok: false, error: error.message };
+  if (admin) {
+    const { error } = await admin
+      .from("profiles")
+      .update(payload)
+      .eq("id", session.user.id);
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+  } else {
+    // Fallback when SUPABASE_SERVICE_ROLE_KEY is missing (e.g. local dev): user session + RLS.
+    const { error } = await supabase
+      .from("profiles")
+      .update(payload)
+      .eq("id", session.user.id);
+    if (error) {
+      return {
+        ok: false,
+        error:
+          error.message ||
+          "Could not update profile. Ensure you are signed in and RLS allows profile updates, or set SUPABASE_SERVICE_ROLE_KEY for server-side updates.",
+      };
+    }
   }
 
   revalidatePath("/profile");
