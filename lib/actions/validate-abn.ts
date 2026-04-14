@@ -1,6 +1,7 @@
 "use server";
 
 import { getRequireAbnForValidation } from "@/lib/actions/global-settings";
+import { fetchAbrAbnDetailsJson } from "@/lib/abr/abn-details-json";
 
 /**
  * Validate an ABN against the Australian Business Register (ABR) web service.
@@ -9,8 +10,6 @@ import { getRequireAbnForValidation } from "@/lib/actions/global-settings";
  * @see https://abr.business.gov.au/json/
  * @see https://abr.business.gov.au/Documentation/WebServiceRegistration
  */
-
-const ABR_JSON_URL = "https://abr.business.gov.au/json/AbnDetails.aspx";
 
 export type ValidateAbnResult =
   | { ok: true; entityName?: string }
@@ -42,42 +41,13 @@ export async function validateAbnWithAbr(abn: string): Promise<ValidateAbnResult
     return { ok: false, error: "ABN must be 11 digits." };
   }
 
-  const guid = process.env.ABR_GUID ?? process.env.ABN_LOOKUP_GUID;
-  if (!guid || !guid.trim()) {
-    return { ok: false, error: "ABN lookup is not configured. Please try again later." };
+  const fetched = await fetchAbrAbnDetailsJson(digits);
+  if (!fetched.ok) {
+    return { ok: false, error: fetched.error };
   }
-
-  const url = `${ABR_JSON_URL}?abn=${encodeURIComponent(digits)}&guid=${encodeURIComponent(guid.trim())}`;
+  const data = fetched.data;
 
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      next: { revalidate: 0 },
-    });
-    const text = await res.text();
-
-    if (!res.ok) {
-      return { ok: false, error: "ABN lookup service is temporarily unavailable." };
-    }
-
-    let data: Record<string, unknown>;
-    try {
-      data = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      const jsonpStart = text.indexOf("(");
-      const jsonpEnd = text.lastIndexOf(")");
-      if (jsonpStart !== -1 && jsonpEnd > jsonpStart) {
-        try {
-          data = JSON.parse(text.slice(jsonpStart + 1, jsonpEnd)) as Record<string, unknown>;
-        } catch {
-          return { ok: false, error: "ABN lookup could not be completed. Please try again." };
-        }
-      } else {
-        return { ok: false, error: "ABN lookup could not be completed. Please try again." };
-      }
-    }
-
     const message = typeof data.Message === "string" ? data.Message : "";
     if (message && /no records found|invalid|not recognised|error/i.test(message)) {
       return { ok: false, error: "This ABN was not found or is not active on the Australian Business Register." };
@@ -103,3 +73,4 @@ export async function validateAbnWithAbr(abn: string): Promise<ValidateAbnResult
     return { ok: false, error: "ABN lookup failed. Please check the number and try again." };
   }
 }
+

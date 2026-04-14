@@ -2,8 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { format } from "date-fns";
-import { Star, Briefcase, ExternalLink } from "lucide-react";
+import { Star, Briefcase, ExternalLink, MessageSquare } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +17,7 @@ import { bidderLegalNameFromProfile } from "@/lib/bids/bidder-display";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { cn } from "@/lib/utils";
+import { CleanerReviewCountPreview } from "@/components/features/cleaner-review-count-preview";
 
 export type BidderProfilePreviewDialogProps = {
   open: boolean;
@@ -69,7 +69,17 @@ export function BidderProfilePreviewDialog({
   const jobsDone =
     profile?.completed_jobs_count != null ? Math.max(0, profile.completed_jobs_count) : null;
   const recent = profile?.recent_reviews_as_cleaner ?? [];
-  const showRecent = recent.length > 0;
+  const reviewPopoverSnippets = recent.map((r) => ({
+    id: String(r.id),
+    text: (r.review_text ?? "").trim(),
+    author: r.reviewer_display_name,
+    createdAt: r.created_at,
+    rating: r.overall_rating,
+  }));
+  const reviewPopoverHint =
+    reviewCount > recent.length && recent.length > 0
+      ? `Showing ${recent.length} most recent — open full profile for all ${reviewCount}.`
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -156,10 +166,19 @@ export function BidderProfilePreviewDialog({
                   ) : (
                     <span className="text-xs text-muted-foreground dark:text-gray-400">Not rated yet</span>
                   )}
-                  <p className="flex flex-wrap items-center gap-x-1 text-[11px] text-muted-foreground dark:text-gray-400">
-                    <span>
-                      {reviewCount} review{reviewCount === 1 ? "" : "s"}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground dark:text-gray-400">
+                    {reviewCount > 0 ? (
+                      <span className="inline-flex items-center gap-0.5">
+                        <MessageSquare className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
+                        <CleanerReviewCountPreview
+                          count={reviewCount}
+                          snippets={reviewPopoverSnippets}
+                          moreCountHint={reviewPopoverHint}
+                        />
+                      </span>
+                    ) : (
+                      <span>0 reviews</span>
+                    )}
                     {jobsDone != null && jobsDone > 0 ? (
                       <>
                         <span aria-hidden>·</span>
@@ -169,51 +188,9 @@ export function BidderProfilePreviewDialog({
                         </span>
                       </>
                     ) : null}
-                  </p>
+                  </div>
                 </div>
               </div>
-
-              {showRecent ? (
-                <div>
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-500">
-                    Recent reviews
-                  </p>
-                  <ul className="max-h-[220px] space-y-2 overflow-y-auto pr-0.5">
-                    {recent.slice(0, 3).map((r) => (
-                      <li
-                        key={r.id}
-                        className="rounded-lg border border-border/80 bg-background/60 px-2.5 py-2 dark:border-gray-800 dark:bg-gray-900/40"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-xs font-medium text-foreground dark:text-gray-100">
-                            {r.reviewer_display_name?.trim() || "Lister"}
-                          </p>
-                          <time
-                            className="shrink-0 text-[10px] text-muted-foreground tabular-nums dark:text-gray-500"
-                            dateTime={r.created_at}
-                          >
-                            {(() => {
-                              try {
-                                return format(new Date(r.created_at), "d MMM yyyy");
-                              } catch {
-                                return "";
-                              }
-                            })()}
-                          </time>
-                        </div>
-                        <div className="mt-1">
-                          <StarRow rating={r.overall_rating} size="xs" />
-                        </div>
-                        {r.review_text?.trim() ? (
-                          <p className="mt-1 line-clamp-3 text-[11px] leading-snug text-muted-foreground dark:text-gray-400">
-                            {r.review_text.trim()}
-                          </p>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
 
               {profile.bio?.trim() ? (
                 <div>

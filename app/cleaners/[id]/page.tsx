@@ -123,13 +123,28 @@ export default async function CleanerProfilePage({
 
   const reviewsSafe = (reviews ?? []) as any[];
 
-  const reviewSnippets = reviewsSafe
-    .slice(0, 4)
-    .map((r: { id: string; review_text?: string | null }) => ({
-      id: String(r.id),
-      text: String(r.review_text ?? "").trim(),
-    }))
-    .filter((x: { text: string }) => x.text.length > 0);
+  const reviewPopoverSnippets = reviewsSafe.slice(0, 10).map((r: any) => ({
+    id: String(r.id),
+    text: String(r.review_text ?? "").trim(),
+    author: r.reviewer?.full_name ?? null,
+    createdAt: r.created_at as string,
+    rating: Number(r.overall_rating),
+  }));
+  const reviewPopoverHint =
+    cleanerCount > reviewPopoverSnippets.length && reviewPopoverSnippets.length > 0
+      ? `Showing ${reviewPopoverSnippets.length} most recent of ${cleanerCount} reviews.`
+      : null;
+
+  const latestWrittenReview = reviewsSafe.find(
+    (r: { review_text?: string | null }) => String(r.review_text ?? "").trim().length > 0
+  ) as
+    | {
+        review_text?: string | null;
+        reviewer?: { full_name?: string | null };
+        created_at?: string;
+        overall_rating?: number;
+      }
+    | undefined;
 
   const avg = cleanerAvg ?? (() => {
     if (!reviewsSafe.length) return null;
@@ -291,6 +306,68 @@ export default async function CleanerProfilePage({
               />
             </div>
 
+            {starValue != null && cleanerCount > 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-semibold tabular-nums text-foreground dark:text-gray-100">
+                    {starValue.toFixed(1)}
+                  </span>
+                  <div className="flex items-center gap-0.5 text-amber-400">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star
+                        key={s}
+                        className={`h-4 w-4 ${
+                          avg && s <= Math.round(avg)
+                            ? "fill-amber-400"
+                            : "text-muted-foreground/40"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <span className="text-xs text-muted-foreground dark:text-gray-400">
+                  <CleanerReviewCountPreview
+                    count={cleanerCount}
+                    snippets={reviewPopoverSnippets}
+                    moreCountHint={reviewPopoverHint}
+                  />
+                </span>
+              </div>
+            )}
+
+            {latestWrittenReview && String(latestWrittenReview.review_text ?? "").trim() ? (
+              <figure className="rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-4 py-3 text-left dark:border-amber-900/40 dark:bg-amber-950/30">
+                <figcaption className="text-[11px] font-bold uppercase tracking-wide text-amber-900/90 dark:text-amber-200/90">
+                  Latest written review
+                </figcaption>
+                <blockquote className="mt-2 text-sm leading-relaxed text-foreground dark:text-gray-100">
+                  <span className="text-muted-foreground">&ldquo;</span>
+                  {String(latestWrittenReview.review_text).trim()}
+                  <span className="text-muted-foreground">&rdquo;</span>
+                </blockquote>
+                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground dark:text-gray-400">
+                  <span>
+                    — {latestWrittenReview.reviewer?.full_name?.trim() || "Lister"}
+                    {latestWrittenReview.created_at
+                      ? (() => {
+                          try {
+                            return ` · ${format(new Date(latestWrittenReview.created_at), "d MMM yyyy")}`;
+                          } catch {
+                            return "";
+                          }
+                        })()
+                      : ""}
+                  </span>
+                  <Link
+                    href="#cleaner-rating-reputation"
+                    className="font-semibold text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400"
+                  >
+                    All reviews
+                  </Link>
+                </p>
+              </figure>
+            ) : null}
+
             <ul className="grid gap-2 sm:grid-cols-2">
               <li className="flex min-h-[44px] items-center gap-2 rounded-xl border border-border/80 bg-background/60 px-3 py-2.5 text-left dark:border-gray-800 dark:bg-gray-900/60">
                 <FileCheck
@@ -437,7 +514,10 @@ export default async function CleanerProfilePage({
         </Card>
       )}
 
-      <Card className="border-border/80 dark:border-gray-800 dark:bg-gray-950/50">
+      <Card
+        id="cleaner-rating-reputation"
+        className="scroll-mt-24 border-border/80 dark:border-gray-800 dark:bg-gray-950/50"
+      >
         <CardHeader className="pb-2">
           <CardTitle className="text-lg">Rating &amp; reputation</CardTitle>
         </CardHeader>
@@ -471,7 +551,8 @@ export default async function CleanerProfilePage({
             <p className="text-xs text-muted-foreground">
               <CleanerReviewCountPreview
                 count={cleanerCount}
-                snippets={reviewSnippets}
+                snippets={reviewPopoverSnippets}
+                moreCountHint={reviewPopoverHint}
               />
               {completedJobsCount != null && completedJobsCount > 0 && (
                 <>
