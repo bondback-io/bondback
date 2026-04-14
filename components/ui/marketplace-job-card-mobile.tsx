@@ -254,8 +254,11 @@ function JobCardMarketplaceMobileInner({
             {(typeof bidCount === "number" || startingBidDisplay) && (
               <div className="flex flex-wrap items-center gap-2">
                 {typeof bidCount === "number" && (
-                  <span className="inline-flex items-center gap-1 rounded-lg bg-muted/90 px-2 py-1 text-xs font-bold text-foreground dark:bg-gray-800 dark:text-gray-100">
-                    <Gavel className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.08] px-2 py-1 text-xs font-bold text-emerald-950 dark:border-emerald-600/45 dark:bg-emerald-950/45 dark:text-emerald-100">
+                    <Gavel
+                      className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300"
+                      aria-hidden
+                    />
                     {bidCount} bid{bidCount !== 1 ? "s" : ""}
                   </span>
                 )}
@@ -542,8 +545,11 @@ function JobCardMarketplaceMobileInner({
           {(typeof bidCount === "number" || startingBidDisplay) && (
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {typeof bidCount === "number" && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary dark:bg-primary/20 dark:text-primary-foreground">
-                  <Gavel className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/[0.1] px-3 py-1 text-sm font-bold text-emerald-950 dark:border-emerald-600/50 dark:bg-emerald-950/50 dark:text-emerald-100">
+                  <Gavel
+                    className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300"
+                    aria-hidden
+                  />
                   {bidCount} bid{bidCount !== 1 ? "s" : ""}
                 </span>
               )}

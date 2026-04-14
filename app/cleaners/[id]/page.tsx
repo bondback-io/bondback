@@ -25,6 +25,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { cn } from "@/lib/utils";
 import { CleanerReviewCountPreview } from "@/components/features/cleaner-review-count-preview";
+import { CleanerExperienceBadge } from "@/components/shared/cleaner-experience-badge";
 import {
   isMissingRevieweeRoleColumnError,
   REVIEWEE_IS_CLEANER_OR,
@@ -267,7 +268,7 @@ export default async function CleanerProfilePage({
 
       <div className="overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-emerald-950/40 via-background to-sky-950/25 shadow-lg ring-1 ring-emerald-500/10 dark:from-emerald-950/50 dark:via-gray-950 dark:to-sky-950/20 dark:border-gray-800">
         <div className="flex flex-col gap-6 p-6 sm:p-8 md:flex-row md:items-start md:gap-10">
-          <div className="relative mx-auto shrink-0 md:mx-0">
+          <div className="mx-auto flex shrink-0 flex-col items-center md:mx-0">
             <div
               className={cn(
                 "relative h-36 w-36 overflow-hidden rounded-2xl border-2 border-emerald-500/30 bg-muted shadow-md sm:h-44 sm:w-44",
@@ -284,18 +285,13 @@ export default async function CleanerProfilePage({
                 priority
               />
             </div>
-            {completedJobsCount != null && completedJobsCount > 0 && (
-              <div className="absolute -bottom-2 -right-2 rounded-full border border-emerald-600/50 bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md dark:bg-emerald-500">
-                {completedJobsCount} job{completedJobsCount === 1 ? "" : "s"} done
-              </div>
-            )}
+            <div className="mt-3 flex justify-center">
+              <CleanerExperienceBadge jobs={completedJobsCount ?? 0} />
+            </div>
           </div>
 
           <div className="min-w-0 flex-1 space-y-4 text-center md:text-left">
             <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                Professional cleaner
-              </p>
               <h1 className="text-2xl font-bold tracking-tight text-foreground dark:text-gray-50 sm:text-3xl">
                 {displayName}
               </h1>

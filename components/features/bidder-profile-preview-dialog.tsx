@@ -18,6 +18,7 @@ import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { cn } from "@/lib/utils";
 import { CleanerReviewCountPreview } from "@/components/features/cleaner-review-count-preview";
+import { CleanerExperienceBadge } from "@/components/shared/cleaner-experience-badge";
 
 export type BidderProfilePreviewDialogProps = {
   open: boolean;
@@ -67,7 +68,7 @@ export function BidderProfilePreviewDialog({
       ? Math.max(0, Math.round(Number(profile.cleaner_total_reviews)))
       : 0;
   const jobsDone =
-    profile?.completed_jobs_count != null ? Math.max(0, profile.completed_jobs_count) : null;
+    profile?.completed_jobs_count != null ? Math.max(0, profile.completed_jobs_count) : 0;
   const recent = profile?.recent_reviews_as_cleaner ?? [];
   const reviewPopoverSnippets = recent.map((r) => ({
     id: String(r.id),
@@ -110,22 +111,25 @@ export function BidderProfilePreviewDialog({
             </DialogHeader>
             <div className="space-y-4 px-5 pb-5 pt-3 sm:px-6">
               <div className="flex flex-wrap items-start gap-3">
-                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-muted ring-2 ring-border dark:bg-gray-900 dark:ring-gray-700 sm:h-24 sm:w-24">
-                  {profile.profile_photo_url?.trim() ? (
-                    <Image
-                      src={profile.profile_photo_url.trim()}
-                      alt=""
-                      fill
-                      className="object-cover"
-                      sizes="96px"
-                      placeholder="blur"
-                      blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xl font-semibold text-muted-foreground dark:text-gray-500">
-                      {titleName.slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
+                <div className="flex shrink-0 flex-col items-center gap-2">
+                  <div className="relative h-20 w-20 overflow-hidden rounded-full bg-muted ring-2 ring-border dark:bg-gray-900 dark:ring-gray-700 sm:h-24 sm:w-24">
+                    {profile.profile_photo_url?.trim() ? (
+                      <Image
+                        src={profile.profile_photo_url.trim()}
+                        alt=""
+                        fill
+                        className="object-cover"
+                        sizes="96px"
+                        placeholder="blur"
+                        blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xl font-semibold text-muted-foreground dark:text-gray-500">
+                        {titleName.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <CleanerExperienceBadge jobs={jobsDone} />
                 </div>
                 <div className="min-w-0 flex-1 space-y-1.5">
                   {profile.business_name?.trim() ? (
@@ -180,7 +184,7 @@ export function BidderProfilePreviewDialog({
                     ) : (
                       <span>0 reviews</span>
                     )}
-                    {jobsDone != null && jobsDone > 0 ? (
+                    {jobsDone > 0 ? (
                       <>
                         <span aria-hidden>·</span>
                         <span className="inline-flex items-center gap-0.5">

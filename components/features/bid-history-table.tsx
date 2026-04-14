@@ -20,6 +20,7 @@ import {
 import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BidderProfilePreviewDialog } from "@/components/features/bidder-profile-preview-dialog";
+import { CleanerExperienceBadge } from "@/components/shared/cleaner-experience-badge";
 import { useToast } from "@/components/ui/use-toast";
 
 export type { BidBidderProfileSummary };
@@ -46,19 +47,18 @@ function bidderListingLineStats(bid: BidWithBidder) {
       : jobsRaw != null && !Number.isNaN(Number(jobsRaw))
         ? Math.max(0, Math.round(Number(jobsRaw)))
         : 0;
-  const isNewCleaner = jobs === 0;
-  return { rating, jobs, isNewCleaner };
+  return { rating, jobs };
 }
 
 function BidderCellContents({
   bid,
-  hideNewCleanerBadge = false,
+  hideExperienceBadge = false,
 }: {
   bid: BidWithBidder;
   /** Mobile cards show the badge in the &quot;Bidder&quot; header — omit inline badge. */
-  hideNewCleanerBadge?: boolean;
+  hideExperienceBadge?: boolean;
 }) {
-  const { rating, jobs, isNewCleaner } = bidderListingLineStats(bid);
+  const { rating, jobs } = bidderListingLineStats(bid);
   const name = bidderDisplayNameForBid(bid);
 
   return (
@@ -82,14 +82,7 @@ function BidderCellContents({
         ({jobs})
       </span>
       <span className="min-w-0 break-words font-medium text-primary dark:text-blue-300">{name}</span>
-      {isNewCleaner && !hideNewCleanerBadge ? (
-        <Badge
-          variant="secondary"
-          className="shrink-0 border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-950/50 dark:text-emerald-300"
-        >
-          New Cleaner
-        </Badge>
-      ) : null}
+      {!hideExperienceBadge ? <CleanerExperienceBadge jobs={jobs} /> : null}
     </span>
   );
 }
@@ -249,7 +242,7 @@ export function BidHistoryTable({
       <ul className="space-y-3 md:hidden">
         {sorted.map((bid) => {
           const statusEl = statusLabel(bid);
-          const { isNewCleaner } = bidderListingLineStats(bid);
+          const { jobs: headerJobs } = bidderListingLineStats(bid);
           return (
             <li
               key={bid.id}
@@ -260,21 +253,14 @@ export function BidHistoryTable({
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
                     Bidder
                   </p>
-                  {isNewCleaner ? (
-                    <Badge
-                      variant="secondary"
-                      className="shrink-0 border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-950/50 dark:text-emerald-300"
-                    >
-                      New Cleaner
-                    </Badge>
-                  ) : null}
+                  <CleanerExperienceBadge jobs={headerJobs} />
                 </div>
                 <button
                   type="button"
                   onClick={() => void openBidderPreview(bid)}
                   className="break-words text-left text-sm underline-offset-4 hover:underline"
                 >
-                  <BidderCellContents bid={bid} hideNewCleanerBadge />
+                  <BidderCellContents bid={bid} hideExperienceBadge />
                 </button>
               </div>
               <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-border pt-3 dark:border-gray-700">

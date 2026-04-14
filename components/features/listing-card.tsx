@@ -685,8 +685,15 @@ function ListingCardInner({
         {/* Bid count — desktop */}
         <div className="flex items-center gap-2">
           {typeof bidCount === "number" ? (
-            <Badge variant="secondary" className="gap-1.5 text-xs font-medium dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700" aria-label={`${bidCount} bid${bidCount !== 1 ? "s" : ""}`}>
-              <Gavel className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <Badge
+              variant="secondary"
+              className="gap-1.5 border border-emerald-500/25 bg-emerald-500/[0.08] text-xs font-medium text-emerald-950 dark:border-emerald-600/45 dark:bg-emerald-950/45 dark:text-emerald-100"
+              aria-label={`${bidCount} bid${bidCount !== 1 ? "s" : ""}`}
+            >
+              <Gavel
+                className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300"
+                aria-hidden
+              />
               {bidCount} bid{bidCount !== 1 ? "s" : ""}
             </Badge>
           ) : hasBids ? (
