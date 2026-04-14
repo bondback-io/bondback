@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import Joyride, { ACTIONS, type CallBackProps, STATUS, type Step } from "react-joyride";
+import {
+  Joyride,
+  EVENTS,
+  type EventData,
+  type Step,
+  type TooltipRenderProps,
+} from "react-joyride";
 import { markOnboardingTourSeen } from "@/lib/actions/profile";
 import { PRODUCT_TOUR_RESTART_EVENT } from "@/lib/product-tour-constants";
 import type { ProfileRole } from "@/lib/types";
@@ -41,7 +47,7 @@ function listerSteps(isDesktop: boolean): Step[] {
     {
       target: "body",
       placement: "center",
-      disableBeacon: true,
+      skipBeacon: true,
       content: (
         <p className="m-0 text-sm leading-relaxed text-popover-foreground">
           Welcome to Bond Back. You&apos;re in <strong>Lister</strong> mode — post bond cleans, compare
@@ -51,9 +57,8 @@ function listerSteps(isDesktop: boolean): Step[] {
     },
     {
       target: createTarget,
-      disableBeacon: true,
+      skipBeacon: true,
       placement: isDesktop ? "bottom" : "bottom",
-      disableScrolling: false,
       spotlightPadding: 10,
       content: (
         <p className="m-0 text-sm leading-relaxed text-popover-foreground">
@@ -64,7 +69,7 @@ function listerSteps(isDesktop: boolean): Step[] {
     },
     {
       target: listingsTarget,
-      disableBeacon: true,
+      skipBeacon: true,
       placement: isDesktop ? "bottom" : "top",
       spotlightPadding: 10,
       content: (
@@ -84,7 +89,7 @@ function listerSteps(isDesktop: boolean): Step[] {
     },
     {
       target: "#tour-account-tools-nav",
-      disableBeacon: true,
+      skipBeacon: true,
       placement: "bottom",
       spotlightPadding: 8,
       content: (
@@ -97,7 +102,7 @@ function listerSteps(isDesktop: boolean): Step[] {
     },
     {
       target: "#tour-footer-help",
-      disableBeacon: true,
+      skipBeacon: true,
       placement: "top",
       spotlightPadding: 8,
       content: (
@@ -116,7 +121,7 @@ function cleanerSteps(isDesktop: boolean): Step[] {
     {
       target: "body",
       placement: "center",
-      disableBeacon: true,
+      skipBeacon: true,
       content: (
         <p className="m-0 text-sm leading-relaxed text-popover-foreground">
           Welcome to Bond Back. You&apos;re in <strong>Cleaner</strong> mode — browse jobs, bid with clear
@@ -126,7 +131,7 @@ function cleanerSteps(isDesktop: boolean): Step[] {
     },
     {
       target: jobsTarget,
-      disableBeacon: true,
+      skipBeacon: true,
       placement: isDesktop ? "bottom" : "top",
       spotlightPadding: 10,
       content: (
@@ -148,7 +153,7 @@ function cleanerSteps(isDesktop: boolean): Step[] {
     {
       target: "body",
       placement: "center",
-      disableBeacon: true,
+      skipBeacon: true,
       content: (
         <p className="m-0 text-sm leading-relaxed text-popover-foreground">
           On a job page, place your <strong>bid</strong> or use <strong>public comments</strong> to ask the
@@ -158,7 +163,7 @@ function cleanerSteps(isDesktop: boolean): Step[] {
     },
     {
       target: messagesTarget,
-      disableBeacon: true,
+      skipBeacon: true,
       placement: isDesktop ? "bottom" : "top",
       spotlightPadding: 10,
       content: (
@@ -170,7 +175,7 @@ function cleanerSteps(isDesktop: boolean): Step[] {
     },
     {
       target: "#tour-account-tools-nav",
-      disableBeacon: true,
+      skipBeacon: true,
       placement: "bottom",
       spotlightPadding: 8,
       content: (
@@ -183,20 +188,7 @@ function cleanerSteps(isDesktop: boolean): Step[] {
   ];
 }
 
-type TourTooltipProps = {
-  continuous: boolean;
-  index: number;
-  isLastStep: boolean;
-  size: number;
-  step: Step;
-  backProps: React.ButtonHTMLAttributes<HTMLButtonElement>;
-  closeProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
-  primaryProps: React.ButtonHTMLAttributes<HTMLButtonElement>;
-  skipProps: React.ButtonHTMLAttributes<HTMLButtonElement>;
-  tooltipProps: React.HTMLAttributes<HTMLDivElement>;
-};
-
-function ProductTourTooltip(tooltipProps: TourTooltipProps) {
+function ProductTourTooltip(tooltipProps: TooltipRenderProps) {
   const {
     continuous,
     index,
@@ -235,18 +227,16 @@ function ProductTourTooltip(tooltipProps: TourTooltipProps) {
               />
             ))}
           </div>
-          {closeProps ? (
-            <button
-              type="button"
-              {...closeProps}
-              className="flex h-9 min-w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted dark:text-gray-400 dark:hover:bg-gray-800"
-              aria-label="Close tour"
-            >
-              <span className="text-lg leading-none" aria-hidden>
-                ×
-              </span>
-            </button>
-          ) : null}
+          <button
+            type="button"
+            {...closeProps}
+            className="flex h-9 min-w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted dark:text-gray-400 dark:hover:bg-gray-800"
+            aria-label="Close tour"
+          >
+            <span className="text-lg leading-none" aria-hidden>
+              ×
+            </span>
+          </button>
         </div>
       </div>
       <div className="px-3 py-3.5 sm:px-4 sm:py-4">{step.content}</div>
@@ -338,17 +328,9 @@ export function ProductTour({ activeRole, isEmailVerified, hasSeenOnboardingTour
     }
   }, [router]);
 
-  const handleCallback = React.useCallback(
-    (data: CallBackProps) => {
-      const { status, action } = data;
-
-      if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-        setRun(false);
-        void persistTourSeen();
-        return;
-      }
-
-      if (action === ACTIONS.CLOSE || action === ACTIONS.SKIP) {
+  const handleEvent = React.useCallback(
+    (data: EventData) => {
+      if (data.type === EVENTS.TOUR_END) {
         setRun(false);
         void persistTourSeen();
       }
@@ -366,40 +348,28 @@ export function ProductTour({ activeRole, isEmailVerified, hasSeenOnboardingTour
       run={run}
       steps={steps}
       continuous
-      showProgress={false}
-      showSkipButton={false}
-      hideCloseButton={false}
-      disableCloseOnEsc={false}
       scrollToFirstStep
-      scrollOffset={88}
-      spotlightClicks
-      disableScrolling={false}
-      tooltipComponent={ProductTourTooltip as any}
-      floaterProps={{
-        disableAnimation: false,
-        styles: {
-          floater: { filter: undefined },
-        },
+      onEvent={handleEvent}
+      options={{
+        zIndex: 10050,
+        primaryColor: "hsl(var(--primary))",
+        textColor: "hsl(var(--popover-foreground))",
+        backgroundColor: "hsl(var(--popover))",
+        arrowColor: "hsl(var(--popover))",
+        overlayColor: "rgba(15, 23, 42, 0.55)",
+        showProgress: false,
+        scrollOffset: 88,
+        blockTargetInteraction: false,
+        spotlightRadius: 12,
       }}
       styles={{
-        options: {
-          zIndex: 10050,
-          width: undefined,
-          primaryColor: "hsl(var(--primary))",
-          textColor: "hsl(var(--popover-foreground))",
-          backgroundColor: "hsl(var(--popover))",
-          arrowColor: "hsl(var(--popover))",
-          overlayColor: "rgba(15, 23, 42, 0.55)",
-        },
-        spotlight: {
-          borderRadius: 12,
-        },
         overlay: {
           mixBlendMode: "normal",
         },
+        floater: { filter: undefined },
       }}
       locale={{ last: "Done", next: "Next", back: "Back" }}
-      callback={handleCallback}
+      tooltipComponent={ProductTourTooltip}
     />
   );
 }
