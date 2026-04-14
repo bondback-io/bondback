@@ -339,7 +339,7 @@ export function PlaceBidForm({
                   listingId={listingId}
                   buyNowCents={listing.buy_now_cents}
                   currentUserId={currentUserId}
-                  className="mt-3 w-full min-h-12 justify-center px-4 text-base font-bold tracking-wide shadow-sm sm:min-h-[3.25rem]"
+                  className="mt-3 h-14 min-h-14 w-full gap-2 px-4 text-lg font-semibold shadow-sm sm:max-w-md"
                 />
               </div>
             )}

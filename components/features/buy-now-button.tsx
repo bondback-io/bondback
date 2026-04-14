@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/listings";
 import { ConnectRequiredModal } from "@/components/features/connect-required-modal";
 import { cn } from "@/lib/utils";
+import { BadgeDollarSign, Loader2 } from "lucide-react";
 
 export type BuyNowButtonProps = {
   listingId: string;
@@ -69,7 +70,17 @@ export function BuyNowButton({
         disabled={disabled || loading}
         className={cn(className)}
       >
-        {loading ? "Securing…" : `BUY NOW | ${formatCents(buyNowCents)}`}
+        {loading ? (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+            Securing…
+          </>
+        ) : (
+          <>
+            <BadgeDollarSign className="h-5 w-5 shrink-0 opacity-90" aria-hidden />
+            {`BUY NOW | ${formatCents(buyNowCents)}`}
+          </>
+        )}
       </Button>
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
       {currentUserId && (

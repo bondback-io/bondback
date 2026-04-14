@@ -46,6 +46,32 @@ function displayName(fullName: string | null | undefined, fallback: string): str
   return fallback;
 }
 
+function normalizeRoles(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((r) => String(r).toLowerCase().trim()).filter(Boolean);
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((r) => String(r).toLowerCase().trim()).filter(Boolean);
+      }
+    } catch {
+      // not JSON array; fallback to comma-separated/plain token
+    }
+    if (trimmed.includes(",")) {
+      return trimmed
+        .split(",")
+        .map((r) => r.toLowerCase().trim())
+        .filter(Boolean);
+    }
+    return [trimmed.toLowerCase()];
+  }
+  return [];
+}
+
 type QaBanRow = {
   listing_id: string;
   user_id: string;
@@ -229,8 +255,9 @@ export async function postListingComment(params: {
       .eq("id", session.user.id)
       .maybeSingle();
 
-    const rolesArr = (posterProfile as { roles?: string[] | null } | null)?.roles ?? [];
-    const rolesLower = rolesArr.map((r) => String(r).toLowerCase());
+    const rolesLower = normalizeRoles(
+      (posterProfile as { roles?: unknown } | null)?.roles ?? []
+    );
     const hasCleanerRole = rolesLower.includes("cleaner");
     const hasListerRole = rolesLower.includes("lister");
     const activeRoleRaw = (posterProfile as { active_role?: string | null } | null)?.active_role;
@@ -515,9 +542,7 @@ export async function banCleanerFromListingQa(params: {
     .select("roles")
     .eq("id", params.targetUserId)
     .maybeSingle();
-  const roles = (((profile as { roles?: string[] | null } | null)?.roles ?? []) as string[]).map((r) =>
-    String(r).toLowerCase()
-  );
+  const roles = normalizeRoles((profile as { roles?: unknown } | null)?.roles ?? []);
   if (!roles.includes("cleaner")) {
     return { ok: false, error: "Only cleaner users can be banned from Q&A." };
   }
