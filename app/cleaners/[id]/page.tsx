@@ -665,12 +665,13 @@ export default async function CleanerProfilePage({
                             key={`${path}-${idx}`}
                             className="relative h-16 w-20 overflow-hidden rounded-md border border-border bg-muted/40 dark:border-gray-700"
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <OptimizedImage
                               src={makePhotoUrl(path)}
                               alt=""
-                              loading="lazy"
-                              decoding="async"
+                              width={80}
+                              height={64}
+                              sizes="80px"
+                              quality={70}
                               className="h-full w-full object-cover"
                             />
                           </div>
@@ -737,12 +738,13 @@ export default async function CleanerProfilePage({
                           key={`${path}-${idx}`}
                           className="h-14 w-16 overflow-hidden rounded-md border bg-muted/40"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
+                          <OptimizedImage
                             src={makePhotoUrl(path)}
                             alt="Review"
-                            loading="lazy"
-                            decoding="async"
+                            width={64}
+                            height={56}
+                            sizes="64px"
+                            quality={70}
                             className="h-full w-full object-cover"
                           />
                         </div>

@@ -1405,12 +1405,14 @@ export function MyListingsList({
             className="max-h-[90vh] max-w-3xl overflow-hidden rounded-lg bg-background shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <OptimizedImage
               src={previewUrl}
               alt="Listing photo"
-              loading="eager"
-              decoding="async"
+              width={1200}
+              height={900}
+              sizes="(max-width: 768px) 100vw, 80vw"
+              quality={80}
+              priority
               className="h-full w-full object-contain"
             />
           </div>

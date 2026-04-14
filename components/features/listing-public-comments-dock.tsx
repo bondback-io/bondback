@@ -428,7 +428,7 @@ function CommentsPanelInner({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={replyToId ? "Write your reply…" : "Write a message…"}
-              className="min-h-[72px] resize-none text-sm dark:border-gray-700 dark:bg-gray-900/80 md:min-h-[88px]"
+              className="min-h-[72px] resize-none text-base dark:border-gray-700 dark:bg-gray-900/80 md:min-h-[88px] md:text-sm"
               maxLength={2000}
               disabled={posting}
               name="qa-message"
@@ -847,7 +847,7 @@ export function ListingPublicCommentsDock({
                 draft={draft}
                 setDraft={setDraft}
                 posting={posting || moderating}
-                onPost={() => void handlePost({ closeMobileSheet: true })}
+                onPost={() => void handlePost()}
                 onBan={(userId) => void handleBan(userId)}
                 onRemoveComment={(id) => void handleRemove(id, "comment")}
                 onRemoveThread={(id) => void handleRemove(id, "thread")}

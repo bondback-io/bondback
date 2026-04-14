@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import {
   TableCell,
   TableRow,
@@ -138,12 +139,13 @@ export function DisputeRow({
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted">
               {lister?.profile_photo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <OptimizedImage
                   src={lister.profile_photo_url}
                   alt=""
-                  loading="lazy"
-                  decoding="async"
+                  width={32}
+                  height={32}
+                  sizes="32px"
+                  quality={70}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -159,12 +161,13 @@ export function DisputeRow({
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted">
               {cleaner?.profile_photo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <OptimizedImage
                   src={cleaner.profile_photo_url}
                   alt=""
-                  loading="lazy"
-                  decoding="async"
+                  width={32}
+                  height={32}
+                  sizes="32px"
+                  quality={70}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -207,12 +210,13 @@ export function DisputeRow({
                   className="relative h-9 w-9 shrink-0 overflow-hidden rounded border border-border bg-muted dark:border-gray-700"
                   aria-label={`View evidence photo ${idx + 1}`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <OptimizedImage
                     src={url}
                     alt=""
-                    loading="lazy"
-                    decoding="async"
+                    width={36}
+                    height={36}
+                    sizes="36px"
+                    quality={70}
                     className="h-full w-full object-cover"
                   />
                 </button>
@@ -286,12 +290,12 @@ export function DisputeRow({
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {evidence.map((url, idx) => (
                     <div key={idx} className="relative aspect-square overflow-hidden rounded-md border bg-muted dark:border-gray-800">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <OptimizedImage
                         src={url}
                         alt={`Evidence ${idx + 1}`}
-                        loading="lazy"
-                        decoding="async"
+                        fill
+                        sizes="(max-width: 640px) 45vw, 160px"
+                        quality={75}
                         className="h-full w-full object-cover"
                       />
                     </div>
@@ -311,12 +315,12 @@ export function DisputeRow({
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {responseEvidence.map((url, idx) => (
                     <div key={idx} className="relative aspect-square overflow-hidden rounded-md border bg-muted dark:border-gray-800">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <OptimizedImage
                         src={url}
                         alt={`Response ${idx + 1}`}
-                        loading="lazy"
-                        decoding="async"
+                        fill
+                        sizes="(max-width: 640px) 45vw, 160px"
+                        quality={75}
                         className="h-full w-full object-cover"
                       />
                     </div>

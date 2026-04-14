@@ -6,6 +6,7 @@ import { Check, CheckCheck } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/types/supabase";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 
 type JobMessageRow = Database["public"]["Tables"]["job_messages"]["Row"];
 
@@ -86,12 +87,13 @@ export function MessageBubble({
         {!isMe && showAvatar && (
           <Avatar className="mt-6 h-10 w-10 shrink-0 border border-border/40 bg-muted shadow-sm dark:border-gray-600 sm:h-11 sm:w-11">
             {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <OptimizedImage
                 src={avatarUrl}
                 alt=""
-                loading="lazy"
-                decoding="async"
+                width={44}
+                height={44}
+                sizes="44px"
+                quality={75}
                 className="h-full w-full rounded-full object-cover"
               />
             ) : (

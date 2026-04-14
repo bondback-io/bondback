@@ -15,9 +15,14 @@ import {
 import { ListerActiveJobsList } from "@/components/mobile-fab";
 import { ResponsiveListerListingCards } from "@/components/lister/responsive-lister-listing-cards";
 import { cn } from "@/lib/utils";
-import { formatCents, isListingLive, listingIdsWithCancelledJobs } from "@/lib/listings";
+import {
+  formatCents,
+  isListingLive,
+  listingIdsWithCancelledJobs,
+  listingTitleWithoutSuburbSuffix,
+} from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
-import { ChevronDown, XCircle } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
 import { fetchListingsForLister } from "@/lib/actions/listings";
 import {
@@ -475,30 +480,37 @@ export default async function ListerDashboardPage() {
         </div>
       </div>
 
-      {/* Recent activity — below completed jobs */}
-      <CollapsibleActivityFeed
-        items={activityItems}
-        viewAllHref="/notifications"
-        emptyMessage="Bids, job updates and payments will appear here."
-      />
-
-      {/* Cancelled listings / jobs — jobs with status cancelled + listings ended early (no job row) */}
+      {/* Cancelled listings / jobs — same card chrome as cleaner dashboard; below completed */}
       <details className="group rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:rounded-xl md:border">
-        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-2 px-5 py-4 text-base font-semibold text-foreground dark:text-gray-200 md:min-h-0 md:px-4 md:py-3 md:text-sm md:font-medium [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center gap-2">
-            <XCircle className="h-4 w-4 text-destructive" />
-            Cancelled listings / jobs
-            {totalCancelledItems > 0 && (
-              <Badge variant="destructive" className="text-xs">
-                {totalCancelledItems}
-              </Badge>
-            )}
-          </span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+          <div className="border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
+                    Cancelled listings / jobs
+                  </h2>
+                  {totalCancelledItems > 0 && (
+                    <Badge variant="secondary" className="px-2.5 py-0.5 text-sm md:text-xs">
+                      {totalCancelledItems}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm leading-snug text-muted-foreground dark:text-gray-400 md:text-xs">
+                  For your records — listings you ended early or jobs you cancelled after assignment. Tap to expand
+                  and view the list.
+                </p>
+              </div>
+              <ChevronDown
+                className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 md:h-4 md:w-4"
+                aria-hidden
+              />
+            </div>
+          </div>
         </summary>
-        <div className="border-t border-border px-4 py-3 dark:border-gray-800">
+        <div className="p-4 md:p-3">
           {totalCancelledItems === 0 ? (
-            <p className="text-xs text-muted-foreground dark:text-gray-500">
+            <p className="py-4 text-center text-base text-muted-foreground dark:text-gray-400 md:py-3 md:text-sm">
               No cancelled listings or jobs yet. Items you cancel appear here for history.
             </p>
           ) : (
@@ -521,20 +533,21 @@ export default async function ListerDashboardPage() {
                     <li key={row.id}>
                       <Link
                         href={jobHref}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
+                        className="flex min-h-[52px] flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm transition-colors hover:bg-muted/50 dark:border-gray-800 dark:hover:bg-gray-800/50 md:min-h-12"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-foreground dark:text-gray-100">
-                            {listing?.title ?? `Job #${job.id}`}
+                          <p className="line-clamp-2 text-base font-semibold text-foreground dark:text-gray-100 md:line-clamp-1">
+                            {listingTitleWithoutSuburbSuffix(
+                              listing?.title ?? `Job #${job.id}`,
+                              listing?.suburb
+                            )}
                           </p>
-                          <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                          <p className="mt-0.5 text-sm text-muted-foreground dark:text-gray-400">
                             Job cancelled by you
                             {cancelledAt && ` · ${cancelledAt}`} · Un-assigned
                           </p>
                         </div>
-                        <span className="text-xs font-medium text-primary">
-                          View →
-                        </span>
+                        <span className="shrink-0 text-sm font-semibold text-primary">View →</span>
                       </Link>
                     </li>
                   );
@@ -551,20 +564,18 @@ export default async function ListerDashboardPage() {
                   <li key={row.id}>
                     <Link
                       href={listingHref}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm transition hover:bg-muted/50 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:bg-gray-800/70"
+                      className="flex min-h-[52px] flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm transition-colors hover:bg-muted/50 dark:border-gray-800 dark:hover:bg-gray-800/50 md:min-h-12"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground dark:text-gray-100">
-                          {listing.title}
+                        <p className="line-clamp-2 text-base font-semibold text-foreground dark:text-gray-100 md:line-clamp-1">
+                          {listingTitleWithoutSuburbSuffix(listing.title, listing.suburb)}
                         </p>
-                        <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                        <p className="mt-0.5 text-sm text-muted-foreground dark:text-gray-400">
                           Listing ended early (auction cancelled)
                           {cancelledAt && ` · ${cancelledAt}`}
                         </p>
                       </div>
-                      <span className="text-xs font-medium text-primary">
-                        View →
-                      </span>
+                      <span className="shrink-0 text-sm font-semibold text-primary">View →</span>
                     </Link>
                   </li>
                 );
@@ -573,6 +584,13 @@ export default async function ListerDashboardPage() {
           )}
         </div>
       </details>
+
+      {/* Recent activity — below cancelled */}
+      <CollapsibleActivityFeed
+        items={activityItems}
+        viewAllHref="/notifications"
+        emptyMessage="Bids, job updates and payments will appear here."
+      />
 
     </section>
   );

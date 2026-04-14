@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 import { isGooglePublicAvatarUrl } from "@/lib/google-avatar-url";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import {
   Dialog,
   DialogContent,
@@ -231,12 +232,13 @@ export function UserMenu({ session }: UserMenuProps) {
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-foreground ring-1 ring-border/50 dark:bg-gray-700 dark:text-gray-100 dark:ring-gray-600">
         {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <OptimizedImage
             src={avatarUrl}
             alt=""
-            loading="lazy"
-            decoding="async"
+            width={32}
+            height={32}
+            sizes="32px"
+            quality={75}
             referrerPolicy={isGooglePublicAvatarUrl(avatarUrl) ? "no-referrer" : undefined}
             className="h-8 w-8 rounded-full object-cover"
           />
@@ -333,12 +335,13 @@ export function UserMenu({ session }: UserMenuProps) {
               <div className="flex items-center gap-3 px-1 pt-2">
                 <Avatar className="h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-border dark:border-gray-700">
                   {avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <OptimizedImage
                       src={avatarUrl}
                       alt=""
-                      loading="lazy"
-                      decoding="async"
+                      width={56}
+                      height={56}
+                      sizes="56px"
+                      quality={75}
                       referrerPolicy={isGooglePublicAvatarUrl(avatarUrl) ? "no-referrer" : undefined}
                       className="h-full w-full rounded-full object-cover"
                     />

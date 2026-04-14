@@ -38,6 +38,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import { CheckCircle2, HelpCircle, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { formatCents } from "@/lib/listings";
@@ -520,12 +521,13 @@ export function GuidedDisputeForm({
                     key={`${url}-${index}`}
                     className="relative h-20 w-20 overflow-hidden rounded-lg border border-border dark:border-gray-700"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <OptimizedImage
                       src={url}
                       alt=""
-                      loading="lazy"
-                      decoding="async"
+                      width={80}
+                      height={80}
+                      sizes="80px"
+                      quality={70}
                       className="h-full w-full object-cover"
                     />
                     <button
