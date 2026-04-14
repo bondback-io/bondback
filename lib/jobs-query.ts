@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { LISTING_FULL_SELECT } from "@/lib/supabase/queries";
+import { parseUtcTimestamp } from "@/lib/utils";
 
 export type JobsListFilters = {
   suburb?: string;
@@ -118,4 +119,133 @@ export function buildLiveListingsQuery(
   }
 
   return query;
+}
+
+/** Row shape needed to mirror `buildLiveListingsQuery` predicates (realtime + client filtering). */
+export type ListingFilterRow = {
+  status?: string | null;
+  cancelled_early_at?: string | null;
+  end_time?: string | null;
+  suburb?: string | null;
+  postcode?: string | null;
+  reserve_cents?: number | null;
+  current_lowest_bid_cents?: number | null;
+  buy_now_cents?: number | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  property_type?: string | null;
+};
+
+/**
+ * True when a listing row would be included by `buildLiveListingsQuery` with the same filters
+ * (used to ignore irrelevant realtime events when search filters are active).
+ */
+export function listingMatchesJobsListFilters(
+  row: ListingFilterRow,
+  filters: JobsListFilters
+): boolean {
+  if (String(row.status ?? "").toLowerCase() !== "live") return false;
+  if (row.cancelled_early_at != null && String(row.cancelled_early_at).trim() !== "") {
+    return false;
+  }
+  if (
+    !row.end_time ||
+    parseUtcTimestamp(String(row.end_time)) <= Date.now()
+  ) {
+    return false;
+  }
+
+  const suburbFilter = (filters.suburb ?? "").trim();
+  const postcodeFilter = (filters.postcode ?? "").trim();
+  if (suburbFilter || postcodeFilter) {
+    let matches = false;
+    if (postcodeFilter && String(row.postcode ?? "").trim() === postcodeFilter) {
+      matches = true;
+    }
+    if (suburbFilter) {
+      const s = String(row.suburb ?? "").toLowerCase();
+      if (s.includes(suburbFilter.toLowerCase())) matches = true;
+    }
+    if (!matches) return false;
+  }
+
+  const minPriceFilter = (filters.min_price ?? "").trim();
+  const maxPriceFilter = (filters.max_price ?? "").trim();
+  if (minPriceFilter) {
+    const minCents = Number(minPriceFilter) * 100;
+    if (!Number.isNaN(minCents) && (row.reserve_cents ?? 0) < minCents) return false;
+  }
+  if (maxPriceFilter) {
+    const maxCents = Number(maxPriceFilter) * 100;
+    if (!Number.isNaN(maxCents) && (row.reserve_cents ?? 0) > maxCents) return false;
+  }
+
+  const minBidPriceFilter = (filters.min_bid_price ?? "").trim();
+  const maxBidPriceFilter = (filters.max_bid_price ?? "").trim();
+  if (minBidPriceFilter) {
+    const minCents = Number(minBidPriceFilter) * 100;
+    if (!Number.isNaN(minCents) && (row.current_lowest_bid_cents ?? 0) < minCents) {
+      return false;
+    }
+  }
+  if (maxBidPriceFilter) {
+    const maxCents = Number(maxBidPriceFilter) * 100;
+    if (!Number.isNaN(maxCents) && (row.current_lowest_bid_cents ?? 0) > maxCents) {
+      return false;
+    }
+  }
+
+  const buyNowOnlyFilter = (filters.buy_now_only ?? "").trim();
+  if (
+    buyNowOnlyFilter &&
+    buyNowOnlyFilter !== "0" &&
+    buyNowOnlyFilter.toLowerCase() !== "false"
+  ) {
+    if (!(typeof row.buy_now_cents === "number" && row.buy_now_cents > 0)) return false;
+  }
+
+  const bedroomsFilter = (filters.bedrooms ?? "").trim();
+  if (bedroomsFilter) {
+    const beds = Number(bedroomsFilter);
+    if (!Number.isNaN(beds) && beds > 0) {
+      const br = row.bedrooms;
+      if (beds >= 5) {
+        if (typeof br !== "number" || br < 5) return false;
+      } else if (br !== beds) {
+        return false;
+      }
+    }
+  }
+
+  const bathroomsFilter = (filters.bathrooms ?? "").trim();
+  if (bathroomsFilter) {
+    const baths = Number(bathroomsFilter);
+    if (!Number.isNaN(baths) && baths > 0) {
+      const bt = row.bathrooms;
+      if (baths >= 4) {
+        if (typeof bt !== "number" || bt < 4) return false;
+      } else if (bt !== baths) {
+        return false;
+      }
+    }
+  }
+
+  const propertyTypeFilter = (filters.property_type ?? "").trim();
+  if (propertyTypeFilter) {
+    if (String(row.property_type ?? "") !== propertyTypeFilter) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Live listing still on the clock (matches list card visibility; uses same UTC rules as UI).
+ */
+export function isListingLiveForJobsBrowse(row: ListingFilterRow): boolean {
+  if (String(row.status ?? "").toLowerCase() !== "live") return false;
+  if (row.cancelled_early_at != null && String(row.cancelled_early_at).trim() !== "") {
+    return false;
+  }
+  if (!row.end_time) return false;
+  return parseUtcTimestamp(String(row.end_time)) > Date.now();
 }

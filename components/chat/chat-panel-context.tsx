@@ -6,12 +6,16 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { ReactNode } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/supabase";
 import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
+
+/** Max job ids per Supabase `in.(...)` realtime filter — keeps URL size safe with many chats. */
+const REALTIME_JOB_ID_CHUNK = 45;
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -79,6 +83,27 @@ export function ChatPanelProvider({
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [unreadByJob, setUnreadByJob] = useState<Record<number, number>>({});
 
+  const selectedJobIdRef = useRef(selectedJobId);
+  const isOpenRef = useRef(isOpen);
+  const autoOpenRef = useRef(autoOpenOnNewMessage);
+  useEffect(() => {
+    selectedJobIdRef.current = selectedJobId;
+  }, [selectedJobId]);
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+  useEffect(() => {
+    autoOpenRef.current = autoOpenOnNewMessage;
+  }, [autoOpenOnNewMessage]);
+
+  /** Stable while conversation previews update — avoids tearing down realtime on every new message. */
+  const conversationJobIdsFingerprint = useMemo(() => {
+    if (conversations.length === 0) return "";
+    return [...new Set(conversations.map((c) => c.jobId))]
+      .sort((a, b) => a - b)
+      .join(",");
+  }, [conversations]);
+
   // Load active jobs + metadata when user or when panel opens (so approved jobs appear)
   useEffect(() => {
     if (!currentUserId) return;
@@ -99,6 +124,7 @@ export function ChatPanelProvider({
       if (cancelled) return;
       if (!jobs.length) {
         setConversations([]);
+        setSelectedJobId(null);
         return;
       }
 
@@ -204,10 +230,11 @@ export function ChatPanelProvider({
       });
 
       setConversations(convos);
-      if (!selectedJobId) {
+      setSelectedJobId((prev) => {
+        if (prev != null && convos.some((c) => c.jobId === prev)) return prev;
         const first = convos[0];
-        if (first) setSelectedJobId(first.jobId);
-      }
+        return first ? first.jobId : null;
+      });
     };
 
     load().catch((err) => {
@@ -215,85 +242,132 @@ export function ChatPanelProvider({
          
         console.warn("[ChatPanelProvider] Failed to load conversations:", err?.message ?? err);
       }
-      if (!cancelled) setConversations([]);
+      if (!cancelled) {
+        setConversations([]);
+        setSelectedJobId(null);
+      }
     });
     return () => {
       cancelled = true;
     };
-    // Refetch when panel opens so a job just approved on /jobs/[id] appears in the list
-  }, [currentUserId, supabase, selectedJobId, isOpen]);
+    // Refetch when panel opens so a job just approved on /jobs/[id] appears in the list.
+    // Do not depend on selectedJobId — avoids refetching every time the user switches threads.
+  }, [currentUserId, supabase, isOpen]);
 
   // Realtime updates for new messages: update preview + unread count
   useEffect(() => {
-    if (!currentUserId || conversations.length === 0) return;
+    if (!currentUserId || conversationJobIdsFingerprint.length === 0) return;
 
-    const jobIds = conversations.map((c) => c.jobId);
-    const channel = supabase
-      .channel("chat-panel-job-messages")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "job_messages",
-          filter: `job_id=in.(${jobIds.join(",")})`,
-        },
-        (payload) => {
-          const m = payload.new as JobMessageRow;
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.jobId === m.job_id
-                ? {
-                    ...c,
-                    lastMessageText: m.message_text,
-                    lastMessageAt: m.created_at,
-                  }
-                : c
-            )
-          );
-          if (m.sender_id !== currentUserId) {
+    const jobIds = conversationJobIdsFingerprint
+      .split(",")
+      .map((id) => parseInt(id, 10))
+      .filter((n) => Number.isFinite(n));
+    if (jobIds.length === 0) return;
+
+    const channels: ReturnType<typeof supabase.channel>[] = [];
+
+    const removeAll = () => {
+      for (const ch of channels) {
+        void supabase.removeChannel(ch);
+      }
+      channels.length = 0;
+    };
+
+    const messageHandler = (payload: { new: Record<string, unknown> }) => {
+      const m = payload.new as JobMessageRow;
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.jobId === m.job_id
+            ? {
+                ...c,
+                lastMessageText: m.message_text,
+                lastMessageAt: m.created_at,
+              }
+            : c
+        )
+      );
+      const sel = selectedJobIdRef.current;
+      const open = isOpenRef.current;
+      if (m.sender_id !== currentUserId) {
+        setUnreadByJob((prev) => ({
+          ...prev,
+          [m.job_id]:
+            sel === m.job_id && open ? 0 : (prev[m.job_id] ?? 0) + 1,
+        }));
+
+        if (
+          autoOpenRef.current &&
+          typeof document !== "undefined" &&
+          document.visibilityState === "visible" &&
+          document.hasFocus()
+        ) {
+          if (!open) {
+            setTimeout(() => {
+              setIsOpen(true);
+              setSelectedJobId(m.job_id as number);
+              setUnreadByJob((prev) => ({
+                ...prev,
+                [m.job_id]: 0,
+              }));
+            }, 900);
+          } else if (sel !== m.job_id) {
+            setSelectedJobId(m.job_id as number);
             setUnreadByJob((prev) => ({
               ...prev,
-              [m.job_id]:
-                (selectedJobId === m.job_id && isOpen
-                  ? 0
-                  : (prev[m.job_id] ?? 0) + 1),
+              [m.job_id]: 0,
             }));
-
-            // Auto-open logic: only if enabled and tab focused.
-            if (
-              autoOpenOnNewMessage &&
-              typeof document !== "undefined" &&
-              document.hasFocus()
-            ) {
-              // If panel is closed, open after a short delay and jump to this job.
-              if (!isOpen) {
-                setTimeout(() => {
-                  setIsOpen(true);
-                  setSelectedJobId(m.job_id as number);
-                  setUnreadByJob((prev) => ({
-                    ...prev,
-                    [m.job_id]: 0,
-                  }));
-                }, 900);
-              } else if (selectedJobId !== m.job_id) {
-                // If panel already open but showing another job, jump to this one.
-                setSelectedJobId(m.job_id as number);
-                setUnreadByJob((prev) => ({
-                  ...prev,
-                  [m.job_id]: 0,
-                }));
-              }
-            }
           }
         }
-      )
-      .subscribe();
+      }
+    };
+
+    const subscribe = () => {
+      removeAll();
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      const ch = supabase.channel(
+        `chat-jm:${currentUserId}:${conversationJobIdsFingerprint.slice(0, 120)}`
+      );
+      for (let i = 0; i < jobIds.length; i += REALTIME_JOB_ID_CHUNK) {
+        const chunk = jobIds.slice(i, i + REALTIME_JOB_ID_CHUNK);
+        if (chunk.length === 0) continue;
+        ch.on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "job_messages",
+            filter: `job_id=in.(${chunk.join(",")})`,
+          },
+          messageHandler
+        );
+      }
+      ch.subscribe();
+      channels.push(ch);
+    };
+
+    const onVisibility = () => {
+      if (typeof document === "undefined") return;
+      if (document.visibilityState === "hidden") {
+        removeAll();
+      } else {
+        subscribe();
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+    subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+      removeAll();
     };
-  }, [conversations, currentUserId, supabase, selectedJobId, isOpen]);
+  }, [conversationJobIdsFingerprint, currentUserId, supabase]);
 
   const unreadTotal = useMemo(
     () => Object.values(unreadByJob).reduce((sum, v) => sum + v, 0),

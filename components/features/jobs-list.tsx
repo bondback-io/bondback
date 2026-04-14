@@ -12,7 +12,11 @@ import {
 import { getListingCoverUrl } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
-import type { JobsListFilters } from "@/lib/jobs-query";
+import {
+  type JobsListFilters,
+  isListingLiveForJobsBrowse,
+  listingMatchesJobsListFilters,
+} from "@/lib/jobs-query";
 import { getJobsPage } from "@/lib/actions/jobs-list";
 import type { ListerCardData } from "@/lib/lister-card-data";
 import { Button } from "@/components/ui/button";
@@ -182,51 +186,96 @@ export function JobsList({
     return () => observer.disconnect();
   }, [hasMore, loadingMore, loadMore]);
 
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  /** Unsubscribe while tab is hidden to cut idle realtime traffic; resubscribe on focus. */
   useEffect(() => {
-    const channel = supabase
-      .channel("listings-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "listings",
-          filter: "status=eq.live"
-        },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            const row = payload.new as ListingRow & { cancelled_early_at?: string | null };
-            const cancelledEarly =
-              row.cancelled_early_at != null && String(row.cancelled_early_at).trim() !== "";
-            if (!cancelledEarly && parseUtcTimestamp(row.end_time) > Date.now()) {
-              setListings((prev) => {
-                if (prev.some((l) => String(l.id) === String(row.id))) return prev;
-                return [row, ...prev];
-              });
-            }
-          } else if (payload.eventType === "UPDATE") {
-            const row = payload.new as ListingRow & { cancelled_early_at?: string | null };
-            const cancelledEarly =
-              row.cancelled_early_at != null && String(row.cancelled_early_at).trim() !== "";
-            const stillLive =
-              String(row.status ?? "").toLowerCase() === "live" &&
-              !cancelledEarly &&
-              parseUtcTimestamp(row.end_time) > Date.now();
-            setListings((prev) => {
-              if (!stillLive) {
-                return prev.filter((l) => String(l.id) !== String(row.id));
-              }
-              return prev.map((l) => (l.id === row.id ? row : l));
-            });
-          } else if (payload.eventType === "DELETE") {
-            setListings((prev) => prev.filter((l) => l.id !== payload.old.id));
-          }
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const remove = () => {
+      if (channel) {
+        void supabase.removeChannel(channel);
+        channel = null;
+      }
+    };
+
+    const handlePayload = (payload: {
+      eventType: "INSERT" | "UPDATE" | "DELETE";
+      new: Record<string, unknown>;
+      old: Record<string, unknown>;
+    }) => {
+      const f = filtersRef.current;
+      if (payload.eventType === "INSERT") {
+        const row = payload.new as ListingRow & { cancelled_early_at?: string | null };
+        if (!listingMatchesJobsListFilters(row, f)) return;
+        const cancelledEarly =
+          row.cancelled_early_at != null && String(row.cancelled_early_at).trim() !== "";
+        if (!cancelledEarly && isListingLiveForJobsBrowse(row)) {
+          setListings((prev) => {
+            if (prev.some((l) => String(l.id) === String(row.id))) return prev;
+            return [row, ...prev];
+          });
         }
-      )
-      .subscribe();
+      } else if (payload.eventType === "UPDATE") {
+        const row = payload.new as ListingRow & { cancelled_early_at?: string | null };
+        const stillLive = isListingLiveForJobsBrowse(row);
+        const matchesFilters = listingMatchesJobsListFilters(row, f);
+        setListings((prev) => {
+          const idStr = String(row.id);
+          const wasInList = prev.some((l) => String(l.id) === idStr);
+          if (!stillLive || !matchesFilters) {
+            return prev.filter((l) => String(l.id) !== idStr);
+          }
+          if (wasInList) {
+            return prev.map((l) => (String(l.id) === idStr ? row : l));
+          }
+          return [row, ...prev];
+        });
+      } else if (payload.eventType === "DELETE") {
+        setListings((prev) => prev.filter((l) => l.id !== payload.old.id));
+      }
+    };
+
+    const subscribe = () => {
+      remove();
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      channel = supabase
+        .channel("listings-live")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "listings",
+            filter: "status=eq.live",
+          },
+          handlePayload
+        )
+        .subscribe();
+    };
+
+    const onVisibility = () => {
+      if (typeof document === "undefined") return;
+      if (document.visibilityState === "hidden") {
+        remove();
+      } else {
+        subscribe();
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+    subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+      remove();
     };
   }, [supabase]);
 
