@@ -167,7 +167,7 @@ export function ListerListingCard({
                 {!isLocalDraft && (
                   <>
                     <DropdownMenuItem asChild className="min-h-11 cursor-pointer text-base">
-                      <Link href={href}>
+                      <Link prefetch href={href}>
                         <Gavel className="mr-2 h-4 w-4" />
                         View bids &amp; job
                       </Link>
@@ -260,7 +260,7 @@ export function ListerListingCard({
               className="h-11 w-full rounded-xl text-base font-semibold sm:h-10 sm:max-w-xs"
               size="lg"
             >
-              <Link href={href}>{openCtaLabel}</Link>
+              <Link prefetch href={href}>{openCtaLabel}</Link>
             </Button>
           </div>
         </div>

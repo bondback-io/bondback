@@ -469,6 +469,7 @@ function ListingCardInner({
       <div className="relative h-[200px] w-full overflow-hidden bg-muted dark:bg-gray-800 md:aspect-[4/3] md:h-auto">
         <Link
           href={jobHref}
+          prefetch
           className="absolute inset-0 z-0 flex min-h-[48px] min-w-[48px] items-center justify-center no-underline transition-transform hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.98]"
           aria-label={`View listing: ${title}`}
         >
@@ -727,6 +728,7 @@ function ListingCardInner({
               >
                 <Link
                   href={jobHref}
+                  prefetch
                   className={cn(
                     "flex items-center justify-center no-underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                     isCleaner ? "min-h-12" : "min-h-10"
@@ -748,6 +750,7 @@ function ListingCardInner({
               >
                 <Link
                   href={jobHref}
+                  prefetch
                   className={cn(
                     "flex items-center justify-center no-underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                     isCleaner ? "min-h-12" : "min-h-10"

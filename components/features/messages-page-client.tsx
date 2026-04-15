@@ -18,6 +18,13 @@ import {
   messengerPeerCleanerUsername,
   messengerPeerDisplayName,
 } from "@/lib/chat-messenger-display";
+
+/** DB/JSON may surface non-strings; `x?.trim()` throws when `x` is truthy but not a string (e.g. number). */
+function safeTrim(v: unknown): string {
+  if (v == null) return "";
+  return String(v).trim();
+}
+
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobMessageRow = Database["public"]["Tables"]["job_messages"]["Row"];
@@ -43,7 +50,8 @@ function ConversationPickerAvatar({
   useEffect(() => {
     setImgFailed(false);
   }, [photoUrl]);
-  const showImg = Boolean(photoUrl?.trim()) && !imgFailed;
+  const photoSrc = safeTrim(photoUrl);
+  const showImg = Boolean(photoSrc) && !imgFailed;
   const isDesktop = size === "desktop";
   const px = isDesktop ? 36 : 32;
 
@@ -59,7 +67,7 @@ function ConversationPickerAvatar({
         )}
       >
         <OptimizedImage
-          src={photoUrl!.trim()}
+          src={photoSrc}
           alt=""
           width={px}
           height={px}
@@ -246,8 +254,11 @@ export function MessagesPageClient({
               : null,
           autoReleaseAt: jr.auto_release_at ?? null,
           cleanerConfirmedComplete: jr.cleaner_confirmed_complete === true,
-          hasPaymentHold: !!jr.payment_intent_id?.trim(),
-          paymentReleasedAt: jr.payment_released_at?.trim() ?? null,
+          hasPaymentHold: !!safeTrim(jr.payment_intent_id),
+          paymentReleasedAt:
+            jr.payment_released_at == null
+              ? null
+              : safeTrim(jr.payment_released_at) || null,
         };
       }),
     [jobs, listingById, latestByJob, profileById, currentUserId]
@@ -310,7 +321,7 @@ export function MessagesPageClient({
       <div className="mt-1 space-y-1">
         {completedConvos.map((c) => {
           const isSelected = c.jobId === selectedJobId;
-          const initial = (c.listingTitle ?? "J").trim().charAt(0).toUpperCase();
+          const initial = safeTrim(c.listingTitle ?? "J").charAt(0).toUpperCase();
           return (
             <button
               key={c.jobId}
@@ -364,7 +375,7 @@ export function MessagesPageClient({
         <ul className="divide-y divide-slate-100 dark:divide-slate-800/80">
           {completedConvos.map((c) => {
             const isSelected = c.jobId === selectedJobId;
-            const label = (c.listingTitle ?? "Bond clean job").trim();
+            const label = safeTrim(c.listingTitle ?? "Bond clean job");
             return (
               <li key={c.jobId}>
                 <button

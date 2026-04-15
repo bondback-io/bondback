@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { applyListingAuctionOutcomes, fetchListingsForLister } from "@/lib/actions/listings";
@@ -13,6 +14,7 @@ import {
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import MyListingsLoading from "./loading";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -65,7 +67,7 @@ function parseTabParam(raw: string | undefined): ListerViewTab {
   return "active";
 }
 
-export default async function MyListingsPage({ searchParams }: MyListingsPageProps) {
+async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
   const supabase = await createServerSupabaseClient();
   const resolved = searchParams ? await searchParams : {};
   const editId = resolved?.edit ?? null;
@@ -307,5 +309,15 @@ export default async function MyListingsPage({ searchParams }: MyListingsPagePro
         />
       </div>
     </section>
+  );
+}
+
+export default async function MyListingsPage({ searchParams }: MyListingsPageProps) {
+  const resolvedSearchParams = (searchParams ? await searchParams : {}) ?? {};
+  const suspenseKey = JSON.stringify(resolvedSearchParams);
+  return (
+    <Suspense key={suspenseKey} fallback={<MyListingsLoading />}>
+      <MyListingsPageContent searchParams={Promise.resolve(resolvedSearchParams)} />
+    </Suspense>
   );
 }

@@ -105,7 +105,7 @@ export function ListerDisputedCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuItem asChild className="min-h-11 cursor-pointer text-base">
-                  <Link href={jobPageBase}>Open job page</Link>
+                  <Link prefetch href={jobPageBase}>Open job page</Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -142,7 +142,7 @@ export function ListerDisputedCard({
               className="h-12 w-full rounded-xl text-base font-semibold shadow-sm"
               size="lg"
             >
-              <Link href={disputeHash} className="inline-flex items-center justify-center gap-2">
+              <Link prefetch href={disputeHash} className="inline-flex items-center justify-center gap-2">
                 <Scale className="h-4 w-4 shrink-0" aria-hidden />
                 Review dispute
               </Link>
@@ -153,7 +153,7 @@ export function ListerDisputedCard({
               className="h-12 w-full rounded-xl border-2 text-base font-semibold"
               size="lg"
             >
-              <Link href={disputeHash} className="inline-flex items-center justify-center gap-2">
+              <Link prefetch href={disputeHash} className="inline-flex items-center justify-center gap-2">
                 <ArrowRightCircle className="h-4 w-4 shrink-0" aria-hidden />
                 Respond
               </Link>
@@ -166,7 +166,7 @@ export function ListerDisputedCard({
               className="h-12 w-full rounded-xl text-base font-semibold"
               size="lg"
             >
-              <Link href={messagesHref} className="inline-flex items-center justify-center gap-2">
+              <Link prefetch href={messagesHref} className="inline-flex items-center justify-center gap-2">
                 <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
                 View chat
               </Link>
@@ -178,7 +178,7 @@ export function ListerDisputedCard({
                 className="h-12 w-full rounded-xl bg-emerald-600 text-base font-semibold hover:bg-emerald-700 dark:bg-emerald-600"
                 size="lg"
               >
-                <Link href={releaseHash} className="inline-flex items-center justify-center gap-2">
+                <Link prefetch href={releaseHash} className="inline-flex items-center justify-center gap-2">
                   <Banknote className="h-4 w-4 shrink-0" aria-hidden />
                   Finalize &amp; release funds
                 </Link>
@@ -190,7 +190,7 @@ export function ListerDisputedCard({
                 className="h-12 w-full rounded-xl text-base font-semibold"
                 size="lg"
               >
-                <Link href={jobPageBase}>Open full job</Link>
+                <Link prefetch href={jobPageBase}>Open full job</Link>
               </Button>
             )}
           </div>

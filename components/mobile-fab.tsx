@@ -190,6 +190,7 @@ export function ListerActiveJobsList({
           <li key={item.jobId}>
             <Link
               href={detailHref}
+              prefetch
               className={cn(
                 "flex min-h-[4.5rem] gap-3 rounded-xl border border-border/70 bg-muted/15 p-3 pr-2 transition-colors",
                 "hover:bg-muted/40 active:bg-muted/50",

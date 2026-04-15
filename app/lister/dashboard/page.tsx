@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
@@ -37,6 +38,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
 import { detailUrlForCardItem, bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
+import ListerDashboardLoading from "./loading";
 import {
   normalizeProfileRolesFromDb,
   resolveActiveRoleFromProfile,
@@ -57,7 +59,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-export default async function ListerDashboardPage() {
+async function ListerDashboardContent() {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -593,5 +595,13 @@ export default async function ListerDashboardPage() {
       />
 
     </section>
+  );
+}
+
+export default function ListerDashboardPage() {
+  return (
+    <Suspense fallback={<ListerDashboardLoading />}>
+      <ListerDashboardContent />
+    </Suspense>
   );
 }

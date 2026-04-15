@@ -156,7 +156,7 @@ function DashboardListingCardInner({
 
           <div className="flex flex-col gap-3 pt-1">
             <Button asChild size="lg" variant="default" className="min-h-12 w-full rounded-xl text-base font-semibold">
-              <Link href={detailUrl} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
+              <Link prefetch href={detailUrl} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
                 <Eye className="h-5 w-5" aria-hidden />
                 View Listing
               </Link>
@@ -302,7 +302,7 @@ function DashboardListingCardInner({
           </p>
           <div className="mt-auto flex flex-wrap gap-2 pt-1">
             <Button asChild size="sm" className="rounded-full" variant="default">
-              <Link href={detailUrl} className="no-underline hover:no-underline">
+              <Link prefetch href={detailUrl} className="no-underline hover:no-underline">
                 View Listing
               </Link>
             </Button>

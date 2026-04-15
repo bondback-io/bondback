@@ -24,6 +24,7 @@ import { JobsPageMobileShell } from "@/components/features/jobs-page-mobile-shel
 import { OfflineJobsPrimer } from "@/components/offline/offline-jobs-primer";
 import { JobsPageMobileChrome } from "@/components/mobile-job-search";
 import { clampMaxTravelKm, nextSearchRadiusKm } from "@/lib/max-travel-km";
+import JobsLoading from "./loading";
 
 export const metadata: Metadata = {
   title: "Browse bond cleaning jobs",
@@ -60,7 +61,7 @@ type JobsPageSearchParams = {
   property_type?: string;
 };
 
-export default async function JobsPage({
+async function JobsPageContent({
   searchParams,
 }: {
   searchParams?: Promise<JobsPageSearchParams>;
@@ -335,5 +336,19 @@ export default async function JobsPage({
     </Suspense>
     </OfflineJobsPrimer>
     </JobsPageMobileShell>
+  );
+}
+
+export default async function JobsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<JobsPageSearchParams>;
+}) {
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const suspenseKey = JSON.stringify(resolvedSearchParams);
+  return (
+    <Suspense key={suspenseKey} fallback={<JobsLoading />}>
+      <JobsPageContent searchParams={Promise.resolve(resolvedSearchParams)} />
+    </Suspense>
   );
 }

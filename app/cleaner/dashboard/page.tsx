@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -45,6 +46,7 @@ import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-compl
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import { bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
+import CleanerDashboardLoading from "./loading";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -74,7 +76,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-export default async function CleanerDashboardPage() {
+async function CleanerDashboardContent() {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -590,5 +592,13 @@ export default async function CleanerDashboardPage() {
       />
 
     </section>
+  );
+}
+
+export default function CleanerDashboardPage() {
+  return (
+    <Suspense fallback={<CleanerDashboardLoading />}>
+      <CleanerDashboardContent />
+    </Suspense>
   );
 }

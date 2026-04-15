@@ -334,7 +334,7 @@ function DashboardJobCardInner({
 
           <div className="flex flex-col gap-3.5 pt-1">
             <Button asChild size="lg" variant="default" className="min-h-14 w-full rounded-xl text-lg font-semibold">
-              <Link href={detailUrl} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
+              <Link prefetch href={detailUrl} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
                 <Eye className="h-6 w-6" aria-hidden />
                 View Details
               </Link>
@@ -346,6 +346,7 @@ function DashboardJobCardInner({
               className="min-h-14 w-full rounded-xl border-2 text-lg font-semibold dark:border-gray-500 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
             >
               <Link
+                prefetch
                 href={`/messages?job=${messagesJobParam}`}
                 className="flex items-center justify-center gap-2 no-underline hover:no-underline"
               >
@@ -361,6 +362,7 @@ function DashboardJobCardInner({
                 className="min-h-14 w-full rounded-xl border border-sky-500/30 bg-sky-500/10 text-lg font-semibold text-sky-900 hover:bg-sky-500/20 dark:border-sky-700/50 dark:bg-sky-950/50 dark:text-sky-100 dark:hover:bg-sky-950/80"
               >
                 <Link
+                  prefetch
                   href={`/jobs/${encodeURIComponent(String(job.id))}#job-after-photos`}
                   className="flex items-center justify-center gap-2 no-underline hover:no-underline"
                 >
@@ -375,7 +377,7 @@ function DashboardJobCardInner({
                 size="lg"
                 className="min-h-14 w-full rounded-xl bg-violet-600 text-lg font-semibold text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
               >
-                <Link href={detailUrl} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
+                <Link prefetch href={detailUrl} className="flex items-center justify-center gap-2 no-underline hover:no-underline">
                   <Sparkles className="h-6 w-6 shrink-0" aria-hidden />
                   Review &amp; release
                 </Link>
@@ -501,12 +503,12 @@ function DashboardJobCardInner({
           </div>
           <div className="mt-auto flex flex-wrap gap-2.5 pt-1">
             <Button asChild className="min-h-11 rounded-full px-5 text-sm font-semibold" variant="default">
-              <Link href={detailUrl} className="no-underline hover:no-underline">
+              <Link prefetch href={detailUrl} className="no-underline hover:no-underline">
                 View Job
               </Link>
             </Button>
             <Button asChild variant="outline" className="min-h-11 rounded-full px-5 text-sm font-semibold">
-              <Link href={`/messages?job=${messagesJobParam}`} className="no-underline hover:no-underline">
+              <Link prefetch href={`/messages?job=${messagesJobParam}`} className="no-underline hover:no-underline">
                 <MessageCircle className="mr-1.5 h-4 w-4" />
                 {viewerRole === "cleaner" ? "Message" : "Chat"}
               </Link>
@@ -518,6 +520,7 @@ function DashboardJobCardInner({
                 className="min-h-11 rounded-full border border-sky-500/30 bg-sky-500/10 px-5 text-sm font-semibold text-sky-900 dark:border-sky-700/40 dark:bg-sky-950/40 dark:text-sky-100"
               >
                 <Link
+                  prefetch
                   href={`/jobs/${encodeURIComponent(String(job.id))}#job-after-photos`}
                   className="no-underline hover:no-underline"
                 >
@@ -531,7 +534,7 @@ function DashboardJobCardInner({
                 asChild
                 className="min-h-11 rounded-full bg-violet-600 px-5 text-sm font-semibold hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
               >
-                <Link href={detailUrl} className="no-underline hover:no-underline">
+                <Link prefetch href={detailUrl} className="no-underline hover:no-underline">
                   <Sparkles className="mr-1.5 h-4 w-4" />
                   Review
                 </Link>

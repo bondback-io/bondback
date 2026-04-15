@@ -12,6 +12,12 @@ export default function MyListingsLoading() {
         <Skeleton className="h-12 w-full max-w-xs rounded-lg sm:h-10" />
         <Skeleton className="h-12 min-h-[48px] w-full max-w-[200px] rounded-full sm:h-11 sm:min-h-0" />
       </div>
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <Skeleton className="h-10 rounded-xl sm:w-24" />
+        <Skeleton className="h-10 rounded-xl sm:w-24" />
+        <Skeleton className="h-10 rounded-xl sm:w-24" />
+        <Skeleton className="h-10 rounded-xl sm:w-24" />
+      </div>
       <Card className="border-border p-4 dark:border-gray-800 sm:p-4">
         <JobCardSkeletonGrid count={6} className="grid-cols-1 md:grid-cols-2" />
       </Card>
