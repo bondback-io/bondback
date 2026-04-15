@@ -55,6 +55,8 @@ export function messengerPeerDisplayName(
   const last = String(profile.last_name ?? "").trim();
   const composed = [first, last].filter(Boolean).join(" ").trim();
   if (composed) return composed;
+  const business = String(profile.business_name ?? "").trim();
+  if (business) return business;
   const raw = String(profile.cleaner_username ?? "").trim().toLowerCase();
   if (raw) return `@${raw}`;
   return fallback;

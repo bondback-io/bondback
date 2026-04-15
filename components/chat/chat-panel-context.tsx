@@ -172,37 +172,44 @@ export function ChatPanelProvider({
       const jobIds = jobs.map((j) => j.id);
       const listingIds = jobs.map((j) => j.listing_id);
 
-      const [{ data: listingsData }, { data: profilesData }, { data: msgData }] =
-        await Promise.all([
-          supabase
-            .from("listings")
-            .select("*")
-            .in("id", listingIds as any),
-          supabase
-            .from("profiles")
-            .select("*")
-            .in(
-              "id",
-              Array.from(
-                new Set(
-                  jobs
-                    .map((j) => [j.lister_id, j.winner_id])
-                    .flat()
-                    .filter(Boolean) as string[]
-                )
-              ) as any
-            ),
-          supabase
-            .from("job_messages")
-            .select("*")
-            .in("job_id", jobIds as any)
-            .order("created_at", { ascending: false }),
-        ]);
+      const peerIds = Array.from(
+        new Set(
+          jobs
+            .map((j) => [j.lister_id, j.winner_id])
+            .flat()
+            .filter(Boolean) as string[]
+        )
+      );
+
+      const [{ data: listingsData }, { data: msgData }, peerRes] = await Promise.all([
+        supabase
+          .from("listings")
+          .select("*")
+          .in("id", listingIds as any),
+        supabase
+          .from("job_messages")
+          .select("*")
+          .in("job_id", jobIds as any)
+          .order("created_at", { ascending: false }),
+        fetch("/api/messenger/peer-profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: peerIds }),
+        }),
+      ]);
 
       if (cancelled) return;
 
       const listings = (listingsData ?? []) as ListingRow[];
-      const profiles = (profilesData ?? []) as ProfileRow[];
+      let profiles: ProfileRow[] = [];
+      if (peerRes.ok) {
+        try {
+          const peerJson = (await peerRes.json()) as { profiles?: ProfileRow[] };
+          profiles = peerJson.profiles ?? [];
+        } catch {
+          profiles = [];
+        }
+      }
       const messages = (msgData ?? []) as JobMessageRow[];
 
       const listingById = new Map<string | number, ListingRow>();

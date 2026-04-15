@@ -429,6 +429,11 @@ export function ChatWindow({
     setError(null);
     setUploadingImage(true);
     try {
+      // Let the browser paint the loading state before the server action runs.
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+
       const fd = new FormData();
       fd.append("file", file);
       const { ok, results, error: upErr } = await uploadProcessedPhotos(fd, {
@@ -478,26 +483,24 @@ export function ChatWindow({
       }
       setText("");
 
-      void (async () => {
-        const res = await sendJobMessage(jobId, caption || "Photo", {
-          imageUrl: url,
+      const res = await sendJobMessage(jobId, caption || "Photo", {
+        imageUrl: url,
+      });
+      if (!res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        setText(caption);
+        setError(res.error);
+        return;
+      }
+      const liveCh = typingChannelRef.current;
+      if (res.message && liveCh) {
+        void liveCh.send({
+          type: "broadcast",
+          event: "chat_message",
+          payload: res.message,
         });
-        if (!res.ok) {
-          setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-          setText(caption);
-          setError(res.error);
-          return;
-        }
-        const liveCh = typingChannelRef.current;
-        if (res.message && liveCh) {
-          void liveCh.send({
-            type: "broadcast",
-            event: "chat_message",
-            payload: res.message,
-          });
-        }
-        void markRead();
-      })();
+      }
+      void markRead();
     } finally {
       setUploadingImage(false);
     }
@@ -700,10 +703,9 @@ export function ChatWindow({
                 : null;
             const senderRole = persistedRole ?? messageSenderJobRole(m.sender_id, listerId, cleanerId);
             const isListerSender = senderRole === "lister";
-            const senderLabel =
-              (isListerSender
-                ? (listerName ?? "Lister").split(" ")[0]
-                : (cleanerName ?? "Cleaner").split(" ")[0]) ?? "Partner";
+            const senderLabel = isListerSender
+              ? (listerName?.trim() || "Lister")
+              : (cleanerName?.trim() || "Cleaner");
             const avatarUrl = isListerSender ? listerAvatarUrl : cleanerAvatarUrl;
             const prev = messages[i - 1];
             const showAvatar =

@@ -20,6 +20,7 @@ import { AdminDeleteJobButton } from "@/components/admin/admin-delete-job-button
 import { adminForceCompleteJob, adminRefundJob, adminResetAllJobs, adminReinstateJob } from "@/lib/actions/admin-jobs";
 import { AdminJobsPendingReviewTable } from "@/components/admin/admin-jobs-pending-review-table";
 import { JOB_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
+import { profileFieldIsAdmin } from "@/lib/is-admin";
 import { adminJobGrossCents } from "@/lib/admin-job-gross";
 
 interface AdminJobsPageProps {
@@ -64,7 +65,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (!profileData || !(profileData as any).is_admin) {
+  if (!profileData || !profileFieldIsAdmin((profileData as { is_admin?: unknown }).is_admin)) {
     redirect("/dashboard");
   }
 

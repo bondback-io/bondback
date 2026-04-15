@@ -2,7 +2,7 @@
 
 import { useRef, type KeyboardEvent, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { ImagePlus, Send } from "lucide-react";
+import { ImagePlus, Loader2, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ChatInputProps = {
@@ -69,6 +69,25 @@ export function ChatInput({
         "dark:shadow-[0_-4px_24px_rgba(0,0,0,0.35)]"
       )}
     >
+      {sending && (
+        <div className="mx-auto max-w-3xl px-2 pb-1 sm:px-3">
+          <div
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-medium shadow-sm sm:text-sm",
+              isCleaner
+                ? "border-emerald-200/90 bg-emerald-50/95 text-emerald-900 dark:border-emerald-800/50 dark:bg-emerald-950/60 dark:text-emerald-100"
+                : isLister
+                  ? "border-sky-200/90 bg-sky-50/95 text-sky-900 dark:border-sky-800/50 dark:bg-slate-900/80 dark:text-sky-100"
+                  : "border-border bg-muted/80 text-foreground dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100"
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin sm:h-[18px] sm:w-[18px]" aria-hidden />
+            <span>Uploading photo…</span>
+          </div>
+        </div>
+      )}
       <div className="mx-auto flex max-w-3xl items-end gap-1.5 px-2 pb-1 sm:gap-2.5 sm:px-3 sm:pb-2">
         <input
           ref={fileRef}
@@ -89,10 +108,15 @@ export function ChatInput({
             "mb-0.5 h-11 w-11 shrink-0 rounded-full touch-manipulation sm:h-12 sm:w-12",
             accentPhoto
           )}
-          onClick={() => fileRef.current?.click()}
-          aria-label="Attach photo"
+          onClick={() => !sending && fileRef.current?.click()}
+          aria-label={sending ? "Uploading photo" : "Attach photo"}
+          aria-busy={sending}
         >
-          <ImagePlus className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={1.75} />
+          {sending ? (
+            <Loader2 className="h-7 w-7 animate-spin sm:h-8 sm:w-8" strokeWidth={2} aria-hidden />
+          ) : (
+            <ImagePlus className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={1.75} />
+          )}
         </Button>
         <div className="relative min-h-[46px] flex-1 sm:min-h-[48px]">
           <input
@@ -137,11 +161,7 @@ export function ChatInput({
           onClick={onSend}
           aria-label="Send message"
         >
-          {sending ? (
-            <span className="text-base animate-pulse">…</span>
-          ) : (
-            <Send className="h-5 w-5 sm:h-6 sm:w-6" />
-          )}
+          <Send className="h-5 w-5 sm:h-6 sm:w-6" />
         </Button>
       </div>
     </div>

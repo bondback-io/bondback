@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { Avatar } from "@/components/ui/avatar";
 import { Check, CheckCheck } from "lucide-react";
@@ -7,6 +8,12 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/types/supabase";
 import { OptimizedImage } from "@/components/ui/optimized-image";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type JobMessageRow = Database["public"]["Tables"]["job_messages"]["Row"];
 
@@ -56,6 +63,7 @@ export function MessageBubble({
   isDelivered,
   isRead,
 }: MessageBubbleProps) {
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const imgUrl = message.image_url?.trim() || null;
   const senderIsLister = senderRole === "lister";
   const timeStr = formatChatMessageTime(message.created_at);
@@ -155,10 +163,9 @@ export function MessageBubble({
               >
                 <button
                   type="button"
-                  className="relative block h-44 w-full min-w-[200px] max-w-[260px] sm:h-48"
-                  onClick={() =>
-                    window.open(imgUrl, "_blank", "noopener,noreferrer")
-                  }
+                  className="relative block h-44 w-full min-w-[200px] max-w-[260px] cursor-zoom-in sm:h-48"
+                  onClick={() => setImagePreviewOpen(true)}
+                  aria-label="View full size"
                 >
                   <Image
                     src={imgUrl}
@@ -181,6 +188,32 @@ export function MessageBubble({
               <p className="text-sm opacity-90">Photo</p>
             )}
           </div>
+
+          {imgUrl && (
+            <Dialog open={imagePreviewOpen} onOpenChange={setImagePreviewOpen}>
+              <DialogContent
+                className={cn(
+                  "max-h-[min(96vh,920px)] max-w-[min(96vw,1200px)] border-0 bg-transparent p-0 shadow-none",
+                  "flex flex-col gap-0 overflow-visible sm:max-w-[min(96vw,1200px)]",
+                  "data-[state=open]:animate-in data-[state=closed]:animate-out"
+                )}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+              >
+                <DialogTitle className="sr-only">Photo preview</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Full size image from chat. Close with the button, Escape, or by clicking outside.
+                </DialogDescription>
+                <div className="flex max-h-[min(90vh,880px)] w-full items-center justify-center px-2 pb-2 pt-10 sm:px-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- dynamic remote URL; large lightbox */}
+                  <img
+                    src={imgUrl}
+                    alt=""
+                    className="max-h-[min(85vh,820px)] w-auto max-w-full rounded-lg object-contain shadow-2xl"
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {isMe && (
             <div

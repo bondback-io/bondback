@@ -29,6 +29,12 @@ import {
 import { profileFieldIsAdmin } from "@/lib/is-admin";
 import { isListerJobPipelineActive } from "@/lib/my-listings/lister-listing-helpers";
 import { parseJobTopUpPayments } from "@/lib/job-top-up";
+import {
+  buildMessengerProfileMap,
+  getMessengerProfile,
+  messengerPeerDisplayName,
+} from "@/lib/chat-messenger-display";
+import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-server";
 
 export type JobDetailRouteMode = "jobs" | "listings";
 
@@ -256,39 +262,23 @@ export async function JobDetailPageContent({
   let listerVerificationBadges: string[] | null = null;
   let cleanerVerificationBadges: string[] | null = null;
 
-  if (job && job.lister_id) {
-    const { data: listerProfile } = await supabase
-      .from("profiles")
-      .select("full_name, profile_photo_url, verification_badges")
-      .eq("id", job.lister_id)
-      .maybeSingle();
-    const lp = listerProfile as {
-      full_name?: string | null;
-      profile_photo_url?: string | null;
-      verification_badges?: string[] | null;
-    } | null;
-    listerName = lp?.full_name ?? null;
-    listerAvatarUrl = lp?.profile_photo_url ?? null;
-    listerVerificationBadges = Array.isArray(lp?.verification_badges)
-      ? lp.verification_badges
+  if (job && (job.lister_id || job.winner_id)) {
+    const peerRows = await fetchMessengerPeerProfilesByIds([
+      job.lister_id as string | null,
+      job.winner_id as string | null,
+    ]);
+    const peerMap = buildMessengerProfileMap(peerRows as ProfileRow[]);
+    const listerProfile = getMessengerProfile(peerMap, job.lister_id as string | null);
+    const cleanerProfile = getMessengerProfile(peerMap, job.winner_id as string | null);
+    listerName = messengerPeerDisplayName(listerProfile, "Owner");
+    cleanerName = messengerPeerDisplayName(cleanerProfile, "Cleaner");
+    listerAvatarUrl = listerProfile?.profile_photo_url ?? null;
+    cleanerAvatarUrl = cleanerProfile?.profile_photo_url ?? null;
+    listerVerificationBadges = Array.isArray(listerProfile?.verification_badges)
+      ? listerProfile.verification_badges
       : null;
-  }
-
-  if (job && job.winner_id) {
-    const { data: cleanerProfile } = await supabase
-      .from("profiles")
-      .select("full_name, profile_photo_url, verification_badges")
-      .eq("id", job.winner_id)
-      .maybeSingle();
-    const cp = cleanerProfile as {
-      full_name?: string | null;
-      profile_photo_url?: string | null;
-      verification_badges?: string[] | null;
-    } | null;
-    cleanerName = cp?.full_name ?? null;
-    cleanerAvatarUrl = cp?.profile_photo_url ?? null;
-    cleanerVerificationBadges = Array.isArray(cp?.verification_badges)
-      ? cp.verification_badges
+    cleanerVerificationBadges = Array.isArray(cleanerProfile?.verification_badges)
+      ? cleanerProfile.verification_badges
       : null;
   }
 

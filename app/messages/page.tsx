@@ -5,6 +5,7 @@ import type { Database } from "@/types/supabase";
 import { MessagesPageClient } from "@/components/features/messages-page-client";
 import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
 import { effectiveMessengerRoleFromProfile } from "@/lib/chat-participant-role";
+import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-server";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -79,11 +80,16 @@ const MessagesPage = async () => {
   const jobIds = jobs.map((j) => j.id);
   const listingIds = jobs.map((j) => j.listing_id);
 
-  const [
-    { data: messagesData },
-    { data: listingsData },
-    { data: profilesData },
-  ] = await Promise.all([
+  const peerUserIds = Array.from(
+    new Set(
+      jobs
+        .map((j) => [j.lister_id, j.winner_id])
+        .flat()
+        .filter(Boolean) as string[]
+    )
+  );
+
+  const [{ data: messagesData }, { data: listingsData }, profilesData] = await Promise.all([
     supabase
       .from("job_messages")
       .select("*")
@@ -93,20 +99,7 @@ const MessagesPage = async () => {
       .from("listings")
       .select("*")
       .in("id", listingIds),
-    supabase
-      .from("profiles")
-      .select("*")
-      .in(
-        "id",
-        Array.from(
-          new Set(
-            jobs
-              .map((j) => [j.lister_id, j.winner_id])
-              .flat()
-              .filter(Boolean) as string[]
-          )
-        ) as any
-      ),
+    fetchMessengerPeerProfilesByIds(peerUserIds),
   ]);
 
   const messages = (messagesData ?? []) as JobMessageRow[];
