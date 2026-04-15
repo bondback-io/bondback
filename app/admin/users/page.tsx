@@ -30,11 +30,19 @@ import { AdminUsersFilters } from "@/components/admin/admin-users-filters";
 import { AdminUserVerificationActions } from "@/components/admin/admin-user-verification-actions";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { PROFILE_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
+import { adminJobGrossCents } from "@/lib/admin-job-gross";
 import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 import { calculateProfileStrengthPercent } from "@/lib/profile-strength";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
-type JobRow = { id: number; lister_id: string; winner_id: string | null; listing_id: string; status: string };
+type JobRow = {
+  id: number;
+  lister_id: string;
+  winner_id: string | null;
+  listing_id: string;
+  status: string;
+  agreed_amount_cents?: number | null;
+};
 type ListingRow = { id: string; current_lowest_bid_cents: number | null };
 
 interface AdminUsersPageProps {
@@ -89,7 +97,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
           .order("id", { ascending: false }),
     serviceRoleMissing
       ? { data: [] as JobRow[], error: null }
-      : supabaseAdmin!.from("jobs").select("id, lister_id, winner_id, listing_id, status"),
+      : supabaseAdmin!.from("jobs").select("id, lister_id, winner_id, listing_id, status, agreed_amount_cents"),
     serviceRoleMissing || !supabaseAdmin
       ? Promise.resolve([] as User[])
       : listAllAuthUsersPaginated(supabaseAdmin),
@@ -154,7 +162,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     if (j.winner_id) totalJobsByUser.set(j.winner_id, (totalJobsByUser.get(j.winner_id) ?? 0) + 1);
     if (j.status === "completed" && j.winner_id && j.listing_id) {
       const list = listingsMap.get(j.listing_id);
-      const cents = list?.current_lowest_bid_cents ?? 0;
+      const cents = adminJobGrossCents(j, list?.current_lowest_bid_cents);
       totalEarningsByUser.set(j.winner_id, (totalEarningsByUser.get(j.winner_id) ?? 0) + (cents || 0));
     }
   }

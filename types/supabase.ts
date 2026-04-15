@@ -423,6 +423,8 @@ export interface Database {
           title: string | null;
           agreed_amount_cents: number | null;
           payment_intent_id: string | null;
+          /** Additional escrow holds (separate PaymentIntents); see `lib/job-top-up.ts`. */
+          top_up_payments: Json;
           /** When status is accepted without escrow; lister must Pay & Start by this time (UTC). */
           lister_payment_due_at: string | null;
           payment_released_at: string | null;
@@ -457,6 +459,7 @@ export interface Database {
           title?: string | null;
           agreed_amount_cents?: number | null;
           payment_intent_id?: string | null;
+          top_up_payments?: Json;
           lister_payment_due_at?: string | null;
           payment_released_at?: string | null;
           stripe_transfer_id?: string | null;
@@ -489,6 +492,7 @@ export interface Database {
           title?: string | null;
           agreed_amount_cents?: number | null;
           payment_intent_id?: string | null;
+          top_up_payments?: Json;
           lister_payment_due_at?: string | null;
           payment_released_at?: string | null;
           stripe_transfer_id?: string | null;

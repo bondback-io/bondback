@@ -5,6 +5,10 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { createNotification } from "@/lib/actions/notifications";
 import { canSendJobChatMessages } from "@/lib/chat-unlock";
+import {
+  effectiveMessengerRoleFromProfile,
+  isJobThreadVisibleForMessengerRole,
+} from "@/lib/chat-participant-role";
 
 /** Supabase/auth UUIDs may differ by casing; strict `===` caused wrong recipient → self-notify. */
 function normalizeUuid(id: string | null | undefined): string {
@@ -225,6 +229,31 @@ export async function sendJobMessage(
     };
   }
 
+  const { data: messengerProfile } = await supabase
+    .from("profiles")
+    .select("active_role, roles")
+    .eq("id", uid)
+    .maybeSingle();
+  const messengerRole = effectiveMessengerRoleFromProfile({
+    active_role:
+      (messengerProfile as { active_role?: string | null } | null)?.active_role ?? null,
+    roles: (messengerProfile as { roles?: string[] | null } | null)?.roles ?? null,
+  });
+  if (
+    !isJobThreadVisibleForMessengerRole({
+      userId: uid,
+      listerId: j.lister_id,
+      cleanerId: j.winner_id,
+      messengerRole,
+    })
+  ) {
+    return {
+      ok: false,
+      error:
+        "This job chat is only available in the matching mode. Switch to Lister or Cleaner in the header, then reopen Messages.",
+    };
+  }
+
   // Messaging stops once payment has been released to the cleaner (read-only thread after that).
   if (
     !canSendJobChatMessages({
@@ -256,12 +285,9 @@ export async function sendJobMessage(
   // Persist sender role for dual-role/self jobs so historical messages keep correct role labeling.
   let senderRole: "lister" | "cleaner" = isListerParticipant ? "lister" : "cleaner";
   if (isListerParticipant && isCleanerParticipant) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("active_role")
-      .eq("id", uid)
-      .maybeSingle();
-    const ar = String((profile as { active_role?: string | null } | null)?.active_role ?? "")
+    const ar = String(
+      (messengerProfile as { active_role?: string | null } | null)?.active_role ?? ""
+    )
       .trim()
       .toLowerCase();
     senderRole = ar === "cleaner" ? "cleaner" : "lister";
@@ -296,7 +322,14 @@ export async function sendJobMessage(
   inserted = insErr.data as typeof inserted;
 
   // Notify only the other party (never the sender). Defer so the client returns immediately after insert.
-  const recipientId = isListerParticipant ? j.winner_id : j.lister_id;
+  const recipientId =
+    isListerParticipant && isCleanerParticipant
+      ? senderRole === "lister"
+        ? j.winner_id
+        : j.lister_id
+      : isListerParticipant
+        ? j.winner_id
+        : j.lister_id;
   if (
     recipientId &&
     typeof recipientId === "string" &&
@@ -359,6 +392,27 @@ export async function markJobMessagesRead(
     (j.winner_id != null && isSameUser(uid, j.winner_id));
   if (!okParticipant) {
     return { ok: false, error: "Not a participant." };
+  }
+
+  const { data: messengerProfile } = await supabase
+    .from("profiles")
+    .select("active_role, roles")
+    .eq("id", uid)
+    .maybeSingle();
+  const messengerRole = effectiveMessengerRoleFromProfile({
+    active_role:
+      (messengerProfile as { active_role?: string | null } | null)?.active_role ?? null,
+    roles: (messengerProfile as { roles?: string[] | null } | null)?.roles ?? null,
+  });
+  if (
+    !isJobThreadVisibleForMessengerRole({
+      userId: uid,
+      listerId: j.lister_id,
+      cleanerId: j.winner_id,
+      messengerRole,
+    })
+  ) {
+    return { ok: false, error: "Not available in your current mode." };
   }
 
   const nowIso = new Date().toISOString();

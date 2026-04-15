@@ -28,6 +28,7 @@ import {
 } from "@/lib/jobs/load-job-for-detail-route";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
 import { isListerJobPipelineActive } from "@/lib/my-listings/lister-listing-helpers";
+import { parseJobTopUpPayments } from "@/lib/job-top-up";
 
 export type JobDetailRouteMode = "jobs" | "listings";
 
@@ -89,9 +90,12 @@ export async function JobDetailPageContent({
 
   if (paymentSuccessReturn && checkoutSessionId?.startsWith("cs_")) {
     const result = await fulfillStripeCheckoutReturn(checkoutSessionId);
-    redirect(
-      `${paymentRedirectBase}?payment_notice=${result.ok ? "success" : "error"}`
-    );
+    const noticeParam = !result.ok
+      ? "error"
+      : result.notice === "top_up_success"
+        ? "top_up_success"
+        : "success";
+    redirect(`${paymentRedirectBase}?payment_notice=${noticeParam}`);
   }
 
   if (paymentParam === "canceled") {
@@ -188,6 +192,9 @@ export async function JobDetailPageContent({
       ? jobAgreed
       : listingBuyNow ?? listingReserve ?? 0
     : 0;
+  const topUpPayments = parseJobTopUpPayments(
+    (job as JobRow | null)?.top_up_payments ?? null
+  );
   const proposedRefundAmount =
     (job as { proposed_refund_amount?: number | null })
       ?.proposed_refund_amount ?? null;
@@ -387,6 +394,7 @@ export async function JobDetailPageContent({
         <JobPaymentReturnAck
           notice={
             paymentNotice === "success" ||
+            paymentNotice === "top_up_success" ||
             paymentNotice === "error" ||
             paymentNotice === "canceled"
               ? paymentNotice
@@ -521,6 +529,7 @@ export async function JobDetailPageContent({
           canLeaveReview={canLeaveReview}
           myReviewOfCleaner={myReviewOfCleaner}
           myReviewOfLister={myReviewOfLister}
+          topUpPayments={topUpPayments}
         />
       </section>
     </OfflineJobsPrimer>

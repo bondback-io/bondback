@@ -34,6 +34,7 @@ import {
   ShieldCheck,
   User as UserIcon,
 } from "lucide-react";
+import { adminJobGrossCents } from "@/lib/admin-job-gross";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -96,7 +97,9 @@ async function getAdminDashboardData() {
           .eq("status", "live"),
         supabase
           .from("jobs")
-          .select("id, listing_id, status", { count: "exact" })
+          .select("id, listing_id, status, agreed_amount_cents, winner_id, created_at, updated_at", {
+            count: "exact",
+          })
           .order("created_at", { ascending: false }),
         supabase
           .from("jobs")
@@ -125,7 +128,7 @@ async function getAdminDashboardData() {
 
     const totalGrossCents = completedJobs.reduce((sum, job) => {
       const listing = listingsMap.get(job.listing_id as string);
-      return sum + (listing?.current_lowest_bid_cents ?? 0);
+      return sum + adminJobGrossCents(job as JobRow, listing?.current_lowest_bid_cents);
     }, 0);
     const totalRevenueCents = Math.round(totalGrossCents * PLATFORM_FEE_RATE);
 
@@ -141,7 +144,7 @@ async function getAdminDashboardData() {
 
     for (const job of completedJobs) {
       const listing = listingsMap.get(job.listing_id as string);
-      const gross = listing?.current_lowest_bid_cents ?? 0;
+      const gross = adminJobGrossCents(job as JobRow, listing?.current_lowest_bid_cents);
       if (gross <= 0) continue;
       const fee = Math.round(gross * PLATFORM_FEE_RATE);
       const when = new Date((job as any).updated_at || job.created_at);
@@ -218,7 +221,7 @@ async function getAdminDashboardData() {
       const winnerId = (job as { winner_id?: string | null }).winner_id;
       if (!winnerId) continue;
       const listing = listingsMap.get(job.listing_id as string);
-      const gross = listing?.current_lowest_bid_cents ?? 0;
+      const gross = adminJobGrossCents(job as JobRow, listing?.current_lowest_bid_cents);
       if (gross <= 0) continue;
       const fee = Math.round(gross * PLATFORM_FEE_RATE);
       const net = gross - fee;

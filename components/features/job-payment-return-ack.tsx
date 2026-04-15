@@ -18,7 +18,7 @@ function formatAudFromCents(cents: number): string {
   return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
 }
 
-export type PaymentNotice = "success" | "error" | "canceled" | null;
+export type PaymentNotice = "success" | "top_up_success" | "error" | "canceled" | null;
 
 export type JobPaymentReturnAckProps = {
   notice: PaymentNotice;
@@ -80,6 +80,50 @@ export function JobPaymentReturnAck({
                 </p>
                 <p className="text-muted-foreground">
                   The cleaner can proceed — you don&apos;t need to pay again to start the job.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-3">
+            <Button type="button" onClick={stripQuery} className="w-full sm:w-auto">
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  if (notice === "top_up_success") {
+    return (
+      <Dialog
+        open
+        onOpenChange={(next) => {
+          if (!next) stripQuery();
+        }}
+      >
+        <DialogContent className="max-w-md sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Top-up received</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-left text-sm text-muted-foreground">
+                {isStripeTestMode && (
+                  <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-amber-950 dark:text-amber-100">
+                    Test mode — no real charge was processed.
+                  </p>
+                )}
+                <p>
+                  Your top-up payment succeeded. This was a <strong className="text-foreground">new</strong>{" "}
+                  charge (separate from your original Pay &amp; Start payment). The job portion you added is{" "}
+                  <strong className="text-foreground">held in escrow</strong> with your existing hold until you
+                  finalize and release funds.
+                </p>
+                <p>
+                  The agreed job total on this page is now <strong className="text-foreground">{jobAmount}</strong>{" "}
+                  (including the top-up). The platform fee on the top-up is separate from the cleaner&apos;s payout.
+                </p>
+                <p className="text-muted-foreground">
+                  The cleaner has been notified that extra funds are available for additional agreed work.
                 </p>
               </div>
             </DialogDescription>

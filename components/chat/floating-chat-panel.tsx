@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useChatPanel } from "@/components/chat/chat-panel-context";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,8 +8,7 @@ import { MessageCircle } from "lucide-react";
 import { JobChat } from "@/components/features/job-chat";
 import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
 import { formatCents } from "@/lib/listings";
-import { buildChatStatusPill } from "@/lib/chat-messenger-display";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { buildChatStatusPill, isJobListerUser } from "@/lib/chat-messenger-display";
 
 export function FloatingChatPanel() {
   const {
@@ -21,33 +20,8 @@ export function FloatingChatPanel() {
     closePanel,
     toggleCollapsed,
     currentUserId,
+    messengerRoleFilter,
   } = useChatPanel();
-
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const [activeAppRole, setActiveAppRole] = useState<"lister" | "cleaner" | null>(
-    null
-  );
-
-  useEffect(() => {
-    if (!currentUserId) {
-      setActiveAppRole(null);
-      return;
-    }
-    let cancelled = false;
-    void supabase
-      .from("profiles")
-      .select("active_role")
-      .eq("id", currentUserId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return;
-        const row = data as { active_role: "lister" | "cleaner" | null } | null;
-        setActiveAppRole(row?.active_role ?? null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUserId, supabase]);
 
   const selected = useMemo(
     () => conversations.find((c) => c.jobId === selectedJobId) ?? null,
@@ -109,7 +83,7 @@ export function FloatingChatPanel() {
                       conversations.map((c) => {
                         const isSelected = c.jobId === selectedJobId;
                         const isCurrentUserLister =
-                          currentUserId != null && currentUserId === c.listerId;
+                          currentUserId != null && isJobListerUser(currentUserId, c.listerId);
                         const activeCleanerTheme =
                           isCurrentUserLister && c.cleanerId != null;
 
@@ -161,7 +135,8 @@ export function FloatingChatPanel() {
                     jobId={selected.jobId}
                     currentUserId={currentUserId}
                     canChat={isChatUnlockedForJobStatus(selected.status)}
-                    activeAppRole={activeAppRole}
+                    activeAppRole={messengerRoleFilter}
+                    messengerRoleFilter={messengerRoleFilter}
                     listerId={selected.listerId}
                     cleanerId={selected.cleanerId}
                     listerName={selected.listerName}

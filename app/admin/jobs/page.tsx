@@ -20,6 +20,7 @@ import { AdminDeleteJobButton } from "@/components/admin/admin-delete-job-button
 import { adminForceCompleteJob, adminRefundJob, adminResetAllJobs, adminReinstateJob } from "@/lib/actions/admin-jobs";
 import { AdminJobsPendingReviewTable } from "@/components/admin/admin-jobs-pending-review-table";
 import { JOB_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
+import { adminJobGrossCents } from "@/lib/admin-job-gross";
 
 interface AdminJobsPageProps {
   searchParams: Promise<{
@@ -30,6 +31,20 @@ interface AdminJobsPageProps {
 function listingIdKey(id: string | number): string {
   return String(id);
 }
+
+/** Query `?status=` values — must match `jobs.status` in the database. */
+const ADMIN_JOB_STATUS_FILTERS: { value: string; label: string }[] = [
+  { value: "accepted", label: "Accepted" },
+  { value: "in_progress", label: "In progress" },
+  { value: "completed_pending_approval", label: "Pending approval" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "disputed", label: "Disputed" },
+  { value: "dispute_negotiating", label: "Dispute negotiating" },
+  { value: "in_review", label: "In review" },
+  { value: "refunded", label: "Refunded" },
+  { value: "partially_refunded", label: "Partially refunded" },
+];
 
 export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps) {
   const sp = await searchParams;
@@ -93,7 +108,10 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
     });
   }
 
-  const selectedStatus = (sp.status ?? "").toLowerCase();
+  const rawStatus = (sp.status ?? "").toLowerCase();
+  const selectedStatus = ADMIN_JOB_STATUS_FILTERS.some((f) => f.value === rawStatus)
+    ? rawStatus
+    : "";
 
   const nowMs = Date.now();
   const pendingReviewJobs = jobs
@@ -122,10 +140,10 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
 
   const statusBadge = (status: string) => {
     const s = status.toLowerCase();
-    if (s === "pending" || s === "accepted") {
+    if (s === "accepted") {
       return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200";
     }
-    if (s === "in_progress" || s === "active") {
+    if (s === "in_progress") {
       return "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200";
     }
     if (s === "completed_pending_approval") {
@@ -134,8 +152,14 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
     if (s === "completed") {
       return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200";
     }
-    if (s === "disputed") {
+    if (s === "cancelled") {
+      return "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200";
+    }
+    if (s === "disputed" || s === "in_review" || s === "dispute_negotiating") {
       return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200";
+    }
+    if (s === "refunded" || s === "partially_refunded") {
+      return "bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-200";
     }
     return "bg-muted text-muted-foreground";
   };
@@ -155,12 +179,12 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
       </div>
 
       <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-3 text-xs sm:text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium text-muted-foreground dark:text-gray-300">
-              Filter by status:
+        <CardContent className="flex flex-col gap-3 p-3 text-xs sm:text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="shrink-0 text-[11px] font-medium text-muted-foreground dark:text-gray-300">
+              Filter by status
             </span>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex min-w-0 flex-1 flex-wrap gap-1">
               <a
                 href="/admin/jobs"
                 className={`rounded-full px-3 py-1 text-[11px] ${
@@ -171,25 +195,24 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
               >
                 All
               </a>
-              {["pending", "active", "in_progress", "completed", "disputed"].map(
-                (s) => (
-                  <a
-                    key={s}
-                    href={`/admin/jobs?status=${s}`}
-                    className={`rounded-full px-3 py-1 text-[11px] ${
-                      selectedStatus === s
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                    }`}
-                  >
-                    {s.replace("_", " ")}
-                  </a>
-                )
-              )}
+              {ADMIN_JOB_STATUS_FILTERS.map(({ value, label }) => (
+                <a
+                  key={value}
+                  href={`/admin/jobs?status=${encodeURIComponent(value)}`}
+                  className={`rounded-full px-3 py-1 text-[11px] ${
+                    selectedStatus === value
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                  }`}
+                >
+                  {label}
+                </a>
+              ))}
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground dark:text-gray-300">
-            Showing {filteredJobs.length} job(s).
+            Showing {filteredJobs.length} of {jobs.length} job(s)
+            {selectedStatus ? ` · status = ${selectedStatus.replace(/_/g, " ")}` : ""}.
           </p>
         </CardContent>
       </Card>
@@ -265,10 +288,11 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                     </TableCell>
                     <TableCell className="text-right text-[11px] tabular-nums text-foreground dark:text-gray-100">
                       {(() => {
-                        const cents = job.listing_id
+                        const listingLow = job.listing_id
                           ? listingsMap.get(listingIdKey(job.listing_id))?.current_lowest_bid_cents
-                          : null;
-                        return cents != null ? `$${(cents / 100).toFixed(0)}` : "—";
+                          : undefined;
+                        const cents = adminJobGrossCents(job, listingLow);
+                        return cents > 0 ? `$${(cents / 100).toFixed(0)}` : "—";
                       })()}
                     </TableCell>
                     <TableCell>
@@ -277,7 +301,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                           job.status
                         )}`}
                       >
-                        {String(job.status).replace("_", " ")}
+                        {String(job.status).replace(/_/g, " ")}
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-[11px] text-muted-foreground">

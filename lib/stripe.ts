@@ -145,6 +145,80 @@ export async function createJobCheckoutSessionUrl(
   return session.url ?? null;
 }
 
+/**
+ * Additional escrow hold for an in-progress job (separate PaymentIntent from initial Pay & Start).
+ * `topUpAgreedCents` is the extra job amount to the cleaner (platform fee added as second line item).
+ */
+export async function createJobTopUpCheckoutSessionUrl(
+  job: { id: number | string },
+  listing: { title: string; suburb: string; postcode: string },
+  topUpAgreedCents: number,
+  feePercent: number,
+  noteForMetadata: string | null,
+  options?: { listingTitleSuffix?: string }
+): Promise<string | null> {
+  const baseUrl = getStripeCheckoutAppUrl();
+  const stripe = await getStripeServer();
+  const agreedCents = Math.max(1, Math.floor(topUpAgreedCents));
+  const feeCents = Math.round((agreedCents * feePercent) / 100);
+  const totalCents = agreedCents + feeCents;
+  const jobIdStr = String(job.id);
+  const note = (noteForMetadata ?? "").trim().slice(0, 450);
+  const suffix = options?.listingTitleSuffix?.trim() ? ` — ${options.listingTitleSuffix.trim()}` : "";
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "aud",
+          unit_amount: agreedCents,
+          product_data: {
+            name: `${listing.title}${suffix}`,
+            description: `Extra job payment (held in escrow): ${listing.suburb} ${listing.postcode}. Separate charge from your original job payment.`,
+          },
+        },
+      },
+      ...(feeCents > 0
+        ? [
+            {
+              quantity: 1,
+              price_data: {
+                currency: "aud",
+                unit_amount: feeCents,
+                product_data: {
+                  name: "Platform fee (top-up)",
+                  description: `${feePercent}% on this top-up`,
+                },
+              },
+            },
+          ]
+        : []),
+    ],
+    success_url: `${baseUrl}/jobs/${jobIdStr}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${baseUrl}/jobs/${jobIdStr}?payment=canceled`,
+    client_reference_id: jobIdStr,
+    metadata: {
+      job_id: jobIdStr,
+      type: "job_top_up",
+      top_up_agreed_cents: String(agreedCents),
+      ...(note ? { top_up_note: note } : {}),
+    },
+    payment_intent_data: {
+      capture_method: "manual",
+      metadata: {
+        job_id: jobIdStr,
+        type: "job_top_up",
+        top_up_agreed_cents: String(agreedCents),
+        ...(note ? { top_up_note: note } : {}),
+      },
+    },
+  });
+  return session.url ?? null;
+}
+
 export type CreateSetupIntentCheckoutSessionOptions = {
   /** Return URLs point at /stripe/lister-setup-return for postMessage + window.close from popup. */
   popupReturn?: boolean;

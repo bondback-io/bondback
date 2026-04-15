@@ -127,6 +127,8 @@ import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction
 import { JobPaymentTimeline, type JobPaymentTimelineProps } from "@/components/features/job-payment-timeline";
 import { JobProgressTimeline } from "@/components/features/job-progress-timeline";
 import { JobPaymentBreakdown } from "@/components/features/job-payment-breakdown";
+import { ListerJobTopUpModal } from "@/components/features/lister-job-top-up-modal";
+import type { JobTopUpPaymentRecord } from "@/lib/job-top-up";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { hydrateBidderProfilesForListing } from "@/lib/actions/bidder-profile";
 
@@ -559,6 +561,8 @@ export type JobDetailProps = {
   myReviewOfCleaner?: JobDetailMySubmittedReview | null;
   /** Signed-in user’s submitted review of the lister (when already on file). */
   myReviewOfLister?: JobDetailMySubmittedReview | null;
+  /** Lister top-up escrow rows (separate PaymentIntents linked to this job). */
+  topUpPayments?: JobTopUpPaymentRecord[];
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -640,6 +644,7 @@ export function JobDetail({
   canLeaveReview = false,
   myReviewOfCleaner = null,
   myReviewOfLister = null,
+  topUpPayments = [],
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -738,6 +743,7 @@ export function JobDetail({
   } | null>(null);
   const [showListerFinalizeNotice, setShowListerFinalizeNotice] =
     useState(false);
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [submittedCleanerReview, setSubmittedCleanerReview] = useState(false);
   const [submittedListerReview, setSubmittedListerReview] = useState(false);
   const [showCleanerReviewForm, setShowCleanerReviewForm] = useState(false);
@@ -1389,6 +1395,27 @@ export function JobDetail({
   }, [localJobStatus, jobStatus]);
 
   const hasAfterPhotos = afterPhotoEntries.length >= 3;
+
+  const canListerTopUp = useMemo(
+    () =>
+      Boolean(
+        isJobLister &&
+          jobId &&
+          hasPaymentHold &&
+          !paymentTimeline?.paymentReleasedAt &&
+          !showListerFinalizeNotice &&
+          (localJobStatus === "in_progress" ||
+            localJobStatus === "completed_pending_approval")
+      ),
+    [
+      isJobLister,
+      jobId,
+      hasPaymentHold,
+      paymentTimeline?.paymentReleasedAt,
+      showListerFinalizeNotice,
+      localJobStatus,
+    ]
+  );
 
   const handleFinalizePayment = () => {
     if (!jobId || !isJobLister) return;
@@ -2845,6 +2872,49 @@ export function JobDetail({
             numericJobId && (
             <JobHistoryCollapsible enabled={false}>
             <>
+              {topUpPayments.length > 0 && (
+                <div className="mb-3 space-y-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.04] px-3 py-3 dark:border-emerald-800/40 dark:bg-emerald-950/25 sm:px-4">
+                  <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">
+                    Top-up payments (extra escrow)
+                  </p>
+                  <p className="text-[11px] leading-snug text-muted-foreground dark:text-gray-400">
+                    Each entry is a separate card charge on top of Pay &amp; Start. Job amounts stay in escrow
+                    until the lister releases funds.
+                  </p>
+                  <ul className="space-y-2">
+                    {topUpPayments.map((t, idx) => {
+                      const ms = parseUtcTimestamp(t.created_at);
+                      const whenLabel =
+                        Number.isFinite(ms) && ms > 0
+                          ? format(new Date(ms), "d MMM yyyy, h:mm a")
+                          : t.created_at;
+                      return (
+                        <li
+                          key={`${t.payment_intent_id}-${idx}`}
+                          className="rounded-lg border border-border/60 bg-background/90 px-3 py-2 text-xs dark:border-gray-700 dark:bg-gray-900/60"
+                        >
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <span className="font-semibold tabular-nums text-foreground dark:text-gray-100">
+                              {formatCents(t.agreed_cents)}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground dark:text-gray-500">
+                              {whenLabel}
+                            </span>
+                          </div>
+                          {t.note != null && t.note.trim() !== "" ? (
+                            <p className="mt-1 text-[11px] text-muted-foreground dark:text-gray-400">
+                              {t.note.trim()}
+                            </p>
+                          ) : null}
+                          <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground/80 dark:text-gray-500">
+                            PaymentIntent: {t.payment_intent_id}
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
               {localJobStatus === "in_progress" && (
                 <div
                   className={cn(
@@ -3363,6 +3433,21 @@ export function JobDetail({
                     isStripeTestMode={isStripeTestMode}
                     variant="release"
                   />
+                )}
+                {canListerTopUp && (
+                  <div className="space-y-2 rounded-lg border border-sky-500/25 bg-sky-50/50 px-3 py-3 dark:border-sky-800/50 dark:bg-sky-950/30 sm:px-4">
+                    <p className="text-xs font-medium text-sky-950 dark:text-sky-100">
+                      Need more scope covered? Add extra funds (new escrow hold).
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="min-h-11 w-full touch-manipulation border-sky-600/35 bg-white/90 font-semibold text-sky-950 hover:bg-sky-100 dark:border-sky-600 dark:bg-sky-950/50 dark:text-sky-50 dark:hover:bg-sky-900/40"
+                      onClick={() => setShowTopUpModal(true)}
+                    >
+                      Top Up Payment
+                    </Button>
+                  </div>
                 )}
                 <div className="space-y-2 rounded-lg border border-border/70 bg-background/80 px-3 py-3 dark:border-gray-700 dark:bg-gray-800/40 sm:px-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -4703,6 +4788,15 @@ export function JobDetail({
           )}
         </JobHistoryCollapsible>
       )}
+
+      {jobId != null && jobId !== "" ? (
+        <ListerJobTopUpModal
+          open={showTopUpModal}
+          onOpenChange={setShowTopUpModal}
+          jobId={jobId}
+          feePercentage={feePercentage}
+        />
+      ) : null}
 
       <ImageLightboxGallery
         open={photoLightbox != null}

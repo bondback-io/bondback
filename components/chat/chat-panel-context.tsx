@@ -13,7 +13,12 @@ import type { ReactNode } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/supabase";
 import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
+import { effectiveMessengerRoleFromProfile } from "@/lib/chat-participant-role";
+import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
 import {
+  buildMessengerProfileMap,
+  getMessengerProfile,
+  isJobListerUser,
   messengerPeerCleanerUsername,
   messengerPeerDisplayName,
 } from "@/lib/chat-messenger-display";
@@ -61,6 +66,8 @@ type ChatPanelState = {
   unreadByJob: Record<number, number>;
   unreadTotal: number;
   conversations: Conversation[];
+  /** Matches `/messages` + `sendJobMessage` — dual-role inbox separation. */
+  messengerRoleFilter: "lister" | "cleaner";
 };
 
 type ChatPanelContextValue = ChatPanelState & {
@@ -90,6 +97,10 @@ export function ChatPanelProvider({
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [unreadByJob, setUnreadByJob] = useState<Record<number, number>>({});
+  const [messengerRoleFilter, setMessengerRoleFilter] = useState<"lister" | "cleaner">(
+    "lister"
+  );
+  const [roleReloadNonce, setRoleReloadNonce] = useState(0);
 
   const selectedJobIdRef = useRef(selectedJobId);
   const isOpenRef = useRef(isOpen);
@@ -112,27 +123,49 @@ export function ChatPanelProvider({
       .join(",");
   }, [conversations]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onRole = () => setRoleReloadNonce((n) => n + 1);
+    window.addEventListener(ACTIVE_ROLE_CHANGED_EVENT, onRole);
+    return () => window.removeEventListener(ACTIVE_ROLE_CHANGED_EVENT, onRole);
+  }, []);
+
   // Load active jobs + metadata when user or when panel opens (so approved jobs appear)
   useEffect(() => {
     if (!currentUserId) return;
     let cancelled = false;
 
     const load = async () => {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("active_role, roles")
+        .eq("id", currentUserId)
+        .maybeSingle();
+      const mr = effectiveMessengerRoleFromProfile({
+        active_role: (prof as { active_role?: string | null } | null)?.active_role ?? null,
+        roles: (prof as { roles?: string[] | null } | null)?.roles ?? null,
+      });
+      if (!cancelled) setMessengerRoleFilter(mr);
+
       // Only show chat for jobs approved to start (in_progress). Hide chat and cleaner
       // until lister has approved; cleaners also don't see the panel until then.
-      const { data: jobsData } = await supabase
+      let jobsQuery = supabase
         .from("jobs")
         .select("*")
-        .or(
-          `lister_id.eq.${currentUserId},winner_id.eq.${currentUserId}` as never
-        )
         .in("status", [...CHAT_UNLOCK_STATUSES] as never[]);
+      if (mr === "lister") {
+        jobsQuery = jobsQuery.eq("lister_id", currentUserId as never);
+      } else {
+        jobsQuery = jobsQuery.eq("winner_id", currentUserId as never);
+      }
+      const { data: jobsData } = await jobsQuery;
 
       const jobs = (jobsData ?? []) as JobRow[];
       if (cancelled) return;
       if (!jobs.length) {
         setConversations([]);
         setSelectedJobId(null);
+        setUnreadByJob({});
         return;
       }
 
@@ -175,8 +208,7 @@ export function ChatPanelProvider({
       const listingById = new Map<string | number, ListingRow>();
       listings.forEach((l) => listingById.set(l.id as string | number, l));
 
-      const profileById = new Map<string, ProfileRow>();
-      profiles.forEach((p) => profileById.set(p.id as string, p));
+      const profileById = buildMessengerProfileMap(profiles);
 
       const latestByJob: Record<number, JobMessageRow | undefined> = {};
       for (const m of messages) {
@@ -189,14 +221,10 @@ export function ChatPanelProvider({
         const listing = listingById.get(job.listing_id as string | number);
         const latest = latestByJob[job.id as number];
 
-        const isLister = currentUserId === job.lister_id;
+        const isLister = isJobListerUser(currentUserId, job.lister_id as string | null);
         const otherPartyRole = isLister ? "cleaner" : "lister";
-        const listerProfile = job.lister_id
-          ? profileById.get(job.lister_id as string)
-          : null;
-        const cleanerProfile = job.winner_id
-          ? profileById.get(job.winner_id as string)
-          : null;
+        const listerProfile = getMessengerProfile(profileById, job.lister_id as string | null);
+        const cleanerProfile = getMessengerProfile(profileById, job.winner_id as string | null);
 
         const jr = job as JobRow & {
           agreed_amount_cents?: number | null;
@@ -264,6 +292,7 @@ export function ChatPanelProvider({
       if (!cancelled) {
         setConversations([]);
         setSelectedJobId(null);
+        setUnreadByJob({});
       }
     });
     return () => {
@@ -271,7 +300,7 @@ export function ChatPanelProvider({
     };
     // Refetch when panel opens so a job just approved on /jobs/[id] appears in the list.
     // Do not depend on selectedJobId — avoids refetching every time the user switches threads.
-  }, [currentUserId, supabase, isOpen]);
+  }, [currentUserId, supabase, isOpen, roleReloadNonce]);
 
   // Realtime updates for new messages: update preview + unread count
   useEffect(() => {
@@ -442,6 +471,7 @@ export function ChatPanelProvider({
     unreadByJob,
     unreadTotal,
     conversations,
+    messengerRoleFilter,
     toggleOpen,
     openPanel,
     closePanel,

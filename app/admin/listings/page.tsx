@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { format } from "date-fns";
+import { endOfDay, format, isValid, parseISO, startOfDay } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -31,10 +31,45 @@ function listingIdKey(id: string | number): string {
   return String(id);
 }
 
+const SORT_OPTIONS = [
+  { value: "created_desc", label: "Created: newest first" },
+  { value: "created_asc", label: "Created: oldest first" },
+  { value: "end_asc", label: "Time ending: soonest first" },
+  { value: "end_desc", label: "Time ending: latest first" },
+  { value: "price_asc", label: "Price: low to high" },
+  { value: "price_desc", label: "Price: high to low" },
+  { value: "bids_asc", label: "Bids: fewest first" },
+  { value: "bids_desc", label: "Bids: most first" },
+] as const;
+
+type SortValue = (typeof SORT_OPTIONS)[number]["value"];
+
+const SORT_VALUES = new Set<string>(SORT_OPTIONS.map((o) => o.value));
+
+function endTimeMs(listing: ListingRow): number | null {
+  const raw = listing.end_time as string | null | undefined;
+  if (raw == null || raw === "") return null;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Price used for admin table display, sorting, and price filters (cents). */
+function effectiveListingPriceCents(listing: ListingRow): number | null {
+  if (listing.current_lowest_bid_cents != null) return listing.current_lowest_bid_cents;
+  if (listing.reserve_cents != null) return listing.reserve_cents;
+  return null;
+}
+
 interface AdminListingsPageProps {
   searchParams?: Promise<{
     q?: string;
     status?: string;
+    sort?: string;
+    price_min?: string;
+    price_max?: string;
+    bids?: string;
+    created_from?: string;
+    created_to?: string;
   }>;
 }
 
@@ -68,6 +103,30 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
   const sp = (await searchParams) ?? {};
   const q = (sp.q ?? "").trim().toLowerCase();
   const statusFilter = (sp.status ?? "all").toLowerCase();
+  const sortRaw = (sp.sort ?? "created_desc").toLowerCase();
+  const sort: SortValue = SORT_VALUES.has(sortRaw) ? (sortRaw as SortValue) : "created_desc";
+
+  const priceMinParsed = parseInt(String(sp.price_min ?? "").trim(), 10);
+  const priceMaxParsed = parseInt(String(sp.price_max ?? "").trim(), 10);
+  const priceMinCents =
+    Number.isFinite(priceMinParsed) && priceMinParsed >= 0 ? priceMinParsed * 100 : null;
+  const priceMaxCents =
+    Number.isFinite(priceMaxParsed) && priceMaxParsed >= 0 ? priceMaxParsed * 100 : null;
+
+  const bidsFilter = (sp.bids ?? "all").toLowerCase();
+  const bidsFilterNorm =
+    bidsFilter === "none" || bidsFilter === "has" ? bidsFilter : "all";
+
+  const createdFromRaw = (sp.created_from ?? "").trim();
+  const createdToRaw = (sp.created_to ?? "").trim();
+  const createdFromParsed = createdFromRaw ? parseISO(createdFromRaw) : null;
+  const createdToParsed = createdToRaw ? parseISO(createdToRaw) : null;
+  const createdFromStart =
+    createdFromParsed && isValid(createdFromParsed)
+      ? startOfDay(createdFromParsed)
+      : null;
+  const createdToEnd =
+    createdToParsed && isValid(createdToParsed) ? endOfDay(createdToParsed) : null;
 
   /** Service role bypasses RLS so admin can see all listings and lister names. */
   const db = (createSupabaseAdminClient() ?? supabase) as SupabaseClient<Database>;
@@ -124,13 +183,70 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
 
     if (!matchesStatus) return false;
 
-    if (!q) return true;
+    if (q) {
+      const title = (listing.title ?? "").toLowerCase();
+      const suburb = (listing.suburb ?? "").toLowerCase();
+      const idMatch = String(listing.id).includes(q);
+      if (!title.includes(q) && !suburb.includes(q) && !idMatch) return false;
+    }
 
-    const title = (listing.title ?? "").toLowerCase();
-    const suburb = (listing.suburb ?? "").toLowerCase();
-    const idMatch = String(listing.id).includes(q);
+    const bidCount =
+      bidCountByListingId.get(listingIdKey(listing.id as string | number)) ?? 0;
+    if (bidsFilterNorm === "none" && bidCount !== 0) return false;
+    if (bidsFilterNorm === "has" && bidCount < 1) return false;
 
-    return title.includes(q) || suburb.includes(q) || idMatch;
+    const priceCents = effectiveListingPriceCents(listing);
+    if (priceMinCents != null) {
+      if (priceCents == null || priceCents < priceMinCents) return false;
+    }
+    if (priceMaxCents != null) {
+      if (priceCents == null || priceCents > priceMaxCents) return false;
+    }
+
+    if (createdFromStart && listing.created_at) {
+      const ca = new Date(listing.created_at).getTime();
+      if (!Number.isFinite(ca) || ca < createdFromStart.getTime()) return false;
+    }
+    if (createdToEnd && listing.created_at) {
+      const ca = new Date(listing.created_at).getTime();
+      if (!Number.isFinite(ca) || ca > createdToEnd.getTime()) return false;
+    }
+
+    return true;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    const key = sort;
+    if (key === "created_desc" || key === "created_asc") {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return key === "created_desc" ? tb - ta : ta - tb;
+    }
+    if (key === "end_asc" || key === "end_desc") {
+      const ea = endTimeMs(a);
+      const eb = endTimeMs(b);
+      const aN = ea ?? (key === "end_asc" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
+      const bN = eb ?? (key === "end_asc" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
+      return key === "end_asc" ? aN - bN : bN - aN;
+    }
+    if (key === "price_asc") {
+      const pa = effectiveListingPriceCents(a) ?? Number.MAX_SAFE_INTEGER;
+      const pb = effectiveListingPriceCents(b) ?? Number.MAX_SAFE_INTEGER;
+      return pa - pb;
+    }
+    if (key === "price_desc") {
+      const pa = effectiveListingPriceCents(a) ?? -1;
+      const pb = effectiveListingPriceCents(b) ?? -1;
+      return pb - pa;
+    }
+    if (key === "bids_asc" || key === "bids_desc") {
+      const ba =
+        bidCountByListingId.get(listingIdKey(a.id as string | number)) ?? 0;
+      const bb =
+        bidCountByListingId.get(listingIdKey(b.id as string | number)) ?? 0;
+      return key === "bids_asc" ? ba - bb : bb - ba;
+    }
+    return 0;
   });
 
   return (
@@ -147,43 +263,144 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
               </p>
             </div>
             <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-              {filtered.length} of {listings.length} listings
+              {sorted.length} of {listings.length} listings
             </Badge>
           </CardHeader>
         </Card>
 
         {/* Filters */}
         <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <CardContent className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <form className="flex w-full max-w-md items-center gap-2" action="/admin/listings" method="GET">
-              <Input
-                type="search"
-                name="q"
-                defaultValue={sp.q ?? ""}
-                placeholder="Search by ID, title or suburb"
-                className="h-9 text-sm dark:bg-gray-800 dark:border-gray-700"
-              />
-              <select
-                name="status"
-                defaultValue={sp.status ?? "all"}
-                className="h-9 rounded-md border border-border bg-background px-2 text-xs dark:border-gray-700 dark:bg-gray-900"
-              >
-                <option value="all">All statuses</option>
-                <option value="live">Live</option>
-                <option value="ended">Ended</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="draft">Draft</option>
-              </select>
-              <Button type="submit" size="sm" className="whitespace-nowrap">
-                Apply
-              </Button>
+          <CardContent className="space-y-3 p-3">
+            <form action="/admin/listings" method="GET" className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="sm:col-span-2 lg:col-span-2">
+                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+                    Search
+                  </label>
+                  <Input
+                    type="search"
+                    name="q"
+                    defaultValue={sp.q ?? ""}
+                    placeholder="ID, title or suburb"
+                    className="h-9 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+                    Status
+                  </label>
+                  <select
+                    name="status"
+                    defaultValue={sp.status ?? "all"}
+                    className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs dark:border-gray-700 dark:bg-gray-900"
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="live">Live</option>
+                    <option value="ended">Ended</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+                    Sort
+                  </label>
+                  <select
+                    name="sort"
+                    defaultValue={sort}
+                    className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs dark:border-gray-700 dark:bg-gray-900"
+                  >
+                    {SORT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+                    Price min ($)
+                  </label>
+                  <Input
+                    type="number"
+                    name="price_min"
+                    min={0}
+                    step={1}
+                    placeholder="Any"
+                    defaultValue={sp.price_min ?? ""}
+                    className="h-9 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+                    Price max ($)
+                  </label>
+                  <Input
+                    type="number"
+                    name="price_max"
+                    min={0}
+                    step={1}
+                    placeholder="Any"
+                    defaultValue={sp.price_max ?? ""}
+                    className="h-9 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+                    Bids
+                  </label>
+                  <select
+                    name="bids"
+                    defaultValue={bidsFilterNorm}
+                    className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs dark:border-gray-700 dark:bg-gray-900"
+                  >
+                    <option value="all">Any</option>
+                    <option value="has">Has bids (1+)</option>
+                    <option value="none">No bids</option>
+                  </select>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <Button type="submit" size="sm" className="h-9">
+                    Apply filters
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="h-9" asChild>
+                    <Link href="/admin/listings">Clear</Link>
+                  </Button>
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+                    Created from
+                  </label>
+                  <Input
+                    type="date"
+                    name="created_from"
+                    defaultValue={createdFromRaw}
+                    className="h-9 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+                    Created to
+                  </label>
+                  <Input
+                    type="date"
+                    name="created_to"
+                    defaultValue={createdToRaw}
+                    className="h-9 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  />
+                </div>
+              </div>
             </form>
             <p className="text-xs text-muted-foreground dark:text-gray-400">
               Showing{" "}
               <span className="font-semibold">
-                {filtered.length} of {listings.length}
+                {sorted.length} of {listings.length}
               </span>{" "}
-              listings
+              listings (unassigned to a job).
             </p>
           </CardContent>
         </Card>
@@ -196,7 +413,7 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
             </CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
-            {filtered.length === 0 ? (
+            {sorted.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground dark:text-gray-400">
                 No listings match your filters.
               </div>
@@ -209,6 +426,7 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
                     <TableHead>Title</TableHead>
                     <TableHead className="hidden sm:table-cell">Suburb</TableHead>
                     <TableHead className="text-right whitespace-nowrap">Price</TableHead>
+                    <TableHead className="whitespace-nowrap text-xs sm:text-sm">Time ending</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden sm:table-cell text-right">Bids</TableHead>
                     <TableHead className="hidden lg:table-cell">Created</TableHead>
@@ -216,7 +434,7 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((listing) => {
+                  {sorted.map((listing) => {
                     const lister = listing.lister_id
                       ? profilesMap.get(listing.lister_id) ?? null
                       : null;
@@ -239,12 +457,17 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
                           {lister?.full_name ?? "—"}
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm">
-                          <Link
-                            href={`/listings/${listing.id}`}
-                            className="font-medium text-primary underline-offset-4 hover:underline"
-                          >
-                            {listing.title ?? "Untitled listing"}
-                          </Link>
+                          <div className="space-y-0.5">
+                            <Link
+                              href={`/listings/${listing.id}`}
+                              className="font-medium text-primary underline-offset-4 hover:underline"
+                            >
+                              {listing.title ?? "Untitled listing"}
+                            </Link>
+                            <p className="text-[11px] text-muted-foreground dark:text-gray-400 md:hidden">
+                              Lister · {lister?.full_name ?? "—"}
+                            </p>
+                          </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell text-xs text-muted-foreground dark:text-gray-400">
                           {listing.suburb ?? "—"}
@@ -256,11 +479,16 @@ export default async function AdminListingsPage({ searchParams }: AdminListingsP
                               ? `Reserve $${(listing.reserve_cents / 100).toFixed(0)}`
                               : "—"}
                         </TableCell>
+                        <TableCell className="whitespace-nowrap text-[11px] text-muted-foreground dark:text-gray-400 sm:text-xs">
+                          {listing.end_time
+                            ? format(new Date(listing.end_time), "dd MMM yyyy, HH:mm")
+                            : "—"}
+                        </TableCell>
                         <TableCell>
                           <Badge
                             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusClass}`}
                           >
-                            {status.replace("_", " ")}
+                            {status.replace(/_/g, " ")}
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell text-right text-xs tabular-nums text-muted-foreground dark:text-gray-400">

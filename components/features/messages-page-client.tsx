@@ -1,14 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
 import type { Database } from "@/types/supabase";
 import { JobChat } from "@/components/features/job-chat";
 import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
 import { formatCents } from "@/lib/listings";
 import {
   buildChatStatusPill,
+  buildMessengerProfileMap,
+  getMessengerProfile,
+  isJobListerUser,
   messengerPeerCleanerUsername,
   messengerPeerDisplayName,
 } from "@/lib/chat-messenger-display";
@@ -50,6 +55,8 @@ type MessagesPageClientProps = {
   currentUserId: string;
   /** profiles.active_role — chat lister/cleaner labels when you are both on a job */
   activeAppRole?: "lister" | "cleaner" | null;
+  /** Resolved inbox mode (lister-owned jobs vs jobs you won as cleaner) — matches `sendJobMessage` gating. */
+  messengerRoleFilter: "lister" | "cleaner";
   jobs: JobRow[];
   listings: ListingRow[];
   messages: JobMessageRow[];
@@ -59,15 +66,34 @@ type MessagesPageClientProps = {
 export function MessagesPageClient({
   currentUserId,
   activeAppRole = null,
+  messengerRoleFilter,
   jobs,
   listings,
   messages,
   profiles,
 }: MessagesPageClientProps) {
+  const router = useRouter();
   const [selectedJobId, setSelectedJobId] = useState<number | null>(() => {
     const firstActive = jobs.find((j) => j.status === "in_progress");
     return (firstActive?.id as number | undefined) ?? (jobs[0]?.id as number);
   });
+
+  useEffect(() => {
+    const onRole = () => {
+      router.refresh();
+    };
+    window.addEventListener(ACTIVE_ROLE_CHANGED_EVENT, onRole);
+    return () => window.removeEventListener(ACTIVE_ROLE_CHANGED_EVENT, onRole);
+  }, [router]);
+
+  useEffect(() => {
+    const ids = new Set(jobs.map((j) => j.id as number));
+    if (selectedJobId != null && !ids.has(selectedJobId)) {
+      const firstActive = jobs.find((j) => j.status === "in_progress");
+      const next = (firstActive?.id as number | undefined) ?? (jobs[0]?.id as number | undefined);
+      setSelectedJobId(next ?? null);
+    }
+  }, [jobs, selectedJobId]);
 
   const listingById = useMemo(() => {
     const map = new Map<string | number, ListingRow>();
@@ -75,11 +101,10 @@ export function MessagesPageClient({
     return map;
   }, [listings]);
 
-  const profileById = useMemo(() => {
-    const map = new Map<string, ProfileRow>();
-    profiles.forEach((p) => map.set(p.id as string, p));
-    return map;
-  }, [profiles]);
+  const profileById = useMemo(
+    () => buildMessengerProfileMap(profiles as ProfileRow[]),
+    [profiles]
+  );
 
   const latestByJob: Record<number, JobMessageRow | undefined> = useMemo(() => {
     const map: Record<number, JobMessageRow | undefined> = {};
@@ -97,14 +122,10 @@ export function MessagesPageClient({
         const listing = listingById.get(job.listing_id as string | number);
         const latest = latestByJob[job.id as number];
 
-        const isLister = currentUserId === job.lister_id;
+        const isLister = isJobListerUser(currentUserId, job.lister_id as string | null);
         const otherPartyRole = isLister ? "cleaner" : "lister";
-        const listerProfile = job.lister_id
-          ? profileById.get(job.lister_id as string)
-          : null;
-        const cleanerProfile = job.winner_id
-          ? profileById.get(job.winner_id as string)
-          : null;
+        const listerProfile = getMessengerProfile(profileById, job.lister_id as string | null);
+        const cleanerProfile = getMessengerProfile(profileById, job.winner_id as string | null);
 
         const jr = job as JobRow & {
           agreed_amount_cents?: number | null;
@@ -195,7 +216,7 @@ export function MessagesPageClient({
       }
     }
 
-    const isCurrentUserLister = currentUserId === c.listerId;
+    const isCurrentUserLister = isJobListerUser(currentUserId, c.listerId);
     const activeCleanerTheme = isCurrentUserLister && c.cleanerId != null;
 
     return {
@@ -207,7 +228,8 @@ export function MessagesPageClient({
     };
   }
 
-  const historyBlock = (
+  /** Desktop sidebar: richer rows with avatar chips. */
+  const historyBlockDesktop = (
     <details className="group">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 [&::-webkit-details-marker]:hidden">
         <span>History</span>
@@ -252,28 +274,78 @@ export function MessagesPageClient({
     </details>
   );
 
+  /** Mobile: minimal read-only archive — short list, scroll-contained so it stays above toasts / nav. */
+  const historyBlockMobile = (
+    <details className="group relative z-0">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-1 py-1 text-[10px] font-medium text-slate-600 dark:text-slate-400 [&::-webkit-details-marker]:hidden">
+        <span className="truncate uppercase tracking-wide text-slate-500 dark:text-slate-500">
+          Past chats
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span className="hidden text-[9px] font-normal normal-case tracking-normal text-slate-400 sm:inline">
+            Read-only
+          </span>
+          <span className="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            {completedConvos.length}
+          </span>
+        </span>
+      </summary>
+      <div className="mt-1 rounded-md border border-slate-200/70 bg-white/90 dark:border-slate-700/90 dark:bg-slate-950/80">
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800/80">
+          {completedConvos.map((c) => {
+            const isSelected = c.jobId === selectedJobId;
+            const label = (c.listingTitle ?? "Bond clean job").trim();
+            return (
+              <li key={c.jobId}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedJobId(c.jobId)}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-2 py-1.5 text-left transition",
+                    isSelected
+                      ? "bg-violet-50/95 dark:bg-violet-950/35"
+                      : "active:bg-slate-100/90 dark:active:bg-slate-800/60"
+                  )}
+                >
+                  <span className="min-w-0 flex-1 truncate text-[11px] leading-snug text-slate-800 dark:text-slate-100">
+                    {label}
+                  </span>
+                  {isSelected ? (
+                    <span className="shrink-0 text-[9px] font-medium text-violet-600 dark:text-violet-300">
+                      Open
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </details>
+  );
+
   return (
     <div
       className={cn(
         "flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3",
-        "max-lg:h-[calc(100dvh-15.5rem)] max-lg:max-h-[calc(100dvh-15.5rem)] max-lg:min-h-[min(420px,85dvh)]",
+        "max-lg:h-[calc(100dvh-16.25rem-env(safe-area-inset-bottom,0px))] max-lg:max-h-[calc(100dvh-16.25rem-env(safe-area-inset-bottom,0px))] max-lg:min-h-[min(380px,82dvh)]",
         "lg:min-h-0 lg:h-auto lg:max-h-none"
       )}
     >
-      {/* Mobile: horizontal thread picker */}
-      <div className="shrink-0 lg:hidden">
-        <div className="rounded-xl border border-slate-200/90 bg-slate-50/90 px-2 py-2 dark:border-slate-800 dark:bg-slate-950/80">
-          <div className="mb-1.5 px-0.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      {/* Mobile: thread picker + past chats (height-capped + internal scroll so chat panel + toasts aren’t crowded) */}
+      <div className="flex min-h-0 max-h-[min(46dvh,320px)] shrink-0 flex-col lg:hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain rounded-xl border border-slate-200/90 bg-slate-50/90 dark:border-slate-800 dark:bg-slate-950/80">
+          <div className="min-h-0 shrink-0 px-2 pb-1 pt-1.5">
+            <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Chats
             </p>
           </div>
           {activeConvos.length === 0 ? (
-            <p className="px-1 py-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="px-2 pb-2 text-[11px] text-slate-500 dark:text-slate-400">
               No active conversations.
             </p>
           ) : (
-            <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [-webkit-overflow-scrolling:touch]">
+            <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-2 pb-1 [-webkit-overflow-scrolling:touch]">
               {activeConvos.map((c) => {
                 const isSelected = c.jobId === selectedJobId;
                 const { titleLine, jobLine, initial, relativeLabel, activeCleanerTheme } =
@@ -331,11 +403,11 @@ export function MessagesPageClient({
           {completedConvos.length > 0 && (
             <div
               className={cn(
-                "mt-2 border-t border-slate-200/80 pt-2 dark:border-slate-800",
+                "min-h-0 shrink-0 border-t border-slate-200/80 px-2 pb-2 pt-1.5 dark:border-slate-800",
                 activeConvos.length === 0 && "border-t-0 pt-0"
               )}
             >
-              {historyBlock}
+              {historyBlockMobile}
             </div>
           )}
         </div>
@@ -433,7 +505,7 @@ export function MessagesPageClient({
                   "border-t border-slate-200/80 pt-2 dark:border-slate-800"
               )}
             >
-              {historyBlock}
+              {historyBlockDesktop}
             </div>
           )}
         </div>
@@ -451,6 +523,7 @@ export function MessagesPageClient({
             currentUserId={currentUserId}
             canChat={isChatUnlockedForJobStatus(selected.jobStatus)}
             activeAppRole={activeAppRole}
+            messengerRoleFilter={messengerRoleFilter}
             listerId={selected.listerId}
             cleanerId={selected.cleanerId}
             listerName={selected.listerName}

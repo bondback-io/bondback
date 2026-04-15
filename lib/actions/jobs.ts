@@ -13,7 +13,18 @@ import {
   fetchPlatformFeePercentForListing,
   resolvePlatformFeePercent,
 } from "@/lib/platform-fee";
-import { getStripeServer, createJobCheckoutSessionUrl, createJobPaymentIntentWithSavedMethod } from "@/lib/stripe";
+import {
+  getStripeServer,
+  createJobCheckoutSessionUrl,
+  createJobPaymentIntentWithSavedMethod,
+  createJobTopUpCheckoutSessionUrl,
+} from "@/lib/stripe";
+import {
+  buildEscrowReleaseLegs,
+  isValidJobTopUpAgreedCents,
+  parseJobTopUpPayments,
+  type JobTopUpPaymentRecord,
+} from "@/lib/job-top-up";
 import { isStripeTestMode } from "@/lib/stripe/config";
 import { ensureConnectAccountCanReceiveTransfers } from "@/lib/actions/stripe-connect";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -596,7 +607,270 @@ export async function createJobCheckoutSession(
   }
 }
 
-export type FulfillJobPaymentFromSessionResult = { ok: true } | { ok: false; error: string };
+export type FulfillJobPaymentFromSessionResult =
+  | { ok: true; notice?: "success" | "top_up_success" }
+  | { ok: false; error: string };
+
+export type CreateJobTopUpCheckoutSessionResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string };
+
+/**
+ * Lister-only: extra escrow hold via a new Stripe Checkout session (separate PaymentIntent from initial pay).
+ */
+export async function createJobTopUpCheckoutSession(
+  jobId: string | number,
+  topUpAgreedCents: number,
+  note: string | null
+): Promise<CreateJobTopUpCheckoutSessionResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+  if (!isValidJobTopUpAgreedCents(topUpAgreedCents)) {
+    return {
+      ok: false,
+      error: "Top-up must be at least $20 and in $10 increments.",
+    };
+  }
+
+  const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
+  const { data: job, error: jobError } = await supabase
+    .from("jobs")
+    .select(
+      "id, lister_id, winner_id, status, listing_id, agreed_amount_cents, payment_intent_id, payment_released_at"
+    )
+    .eq("id", numericJobId)
+    .maybeSingle();
+
+  if (jobError || !job) {
+    return { ok: false, error: "Job not found." };
+  }
+
+  const row = job as {
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    listing_id: string;
+    payment_intent_id: string | null;
+    payment_released_at: string | null;
+    top_up_payments?: unknown;
+  };
+
+  if (row.lister_id !== session.user.id) {
+    return { ok: false, error: "Only the lister can add a top-up for this job." };
+  }
+  if (trimStr(row.payment_released_at)) {
+    return { ok: false, error: "Funds have already been released; top-up is not available." };
+  }
+  if (!trimStr(row.payment_intent_id)) {
+    return { ok: false, error: "Pay & Start Job first before adding a top-up." };
+  }
+  const st = String(row.status ?? "");
+  if (st !== "in_progress" && st !== "completed_pending_approval") {
+    return { ok: false, error: "Top-up is only available while the job is in progress or awaiting your release." };
+  }
+
+  const { data: listing, error: listingError } = await supabase
+    .from("listings")
+    .select("title, suburb, postcode, platform_fee_percentage")
+    .eq("id", row.listing_id)
+    .maybeSingle();
+  if (listingError || !listing) {
+    return { ok: false, error: "Listing not found for this job." };
+  }
+
+  const settings = await getGlobalSettings();
+  const feePercent = await fetchPlatformFeePercentForListing(
+    supabase,
+    row.listing_id,
+    settings
+  );
+
+  let url: string | null;
+  try {
+    url = await createJobTopUpCheckoutSessionUrl(
+      { id: numericJobId },
+      {
+        title: (listing as { title?: string }).title ?? "Bond clean job",
+        suburb: (listing as { suburb?: string }).suburb ?? "",
+        postcode: (listing as { postcode?: string }).postcode ?? "",
+      },
+      topUpAgreedCents,
+      feePercent,
+      note?.trim() ? note.trim().slice(0, 450) : null,
+      { listingTitleSuffix: "Top-up" }
+    );
+  } catch (e) {
+    const err = e as Error;
+    return { ok: false, error: err.message ?? "Could not start Stripe checkout." };
+  }
+  if (!url) {
+    return { ok: false, error: "Stripe did not return a payment link." };
+  }
+  return { ok: true, url };
+}
+
+/**
+ * After lister returns from Stripe Checkout for a job top-up: record PI, bump agreed_amount_cents, notify cleaner.
+ */
+export async function fulfillJobTopUpFromSession(
+  checkoutSessionId: string
+): Promise<FulfillJobPaymentFromSessionResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  let stripe: import("stripe").default;
+  try {
+    stripe = await getStripeServer();
+  } catch {
+    return { ok: false, error: "Stripe is not configured." };
+  }
+
+  try {
+    const cs = await stripe.checkout.sessions.retrieve(checkoutSessionId, {
+      expand: ["payment_intent"],
+    });
+    if (cs.mode !== "payment" || cs.metadata?.type !== "job_top_up") {
+      return { ok: false, error: "Invalid top-up session." };
+    }
+    if (cs.payment_status !== "paid") {
+      return { ok: false, error: "Top-up payment is not complete." };
+    }
+
+    const jobIdMeta = cs.metadata?.job_id ?? cs.client_reference_id;
+    if (!jobIdMeta) {
+      return { ok: false, error: "No job id on session." };
+    }
+    const numericJobId = Number(jobIdMeta);
+    const agreedFromMeta = Math.floor(Number(cs.metadata?.top_up_agreed_cents ?? 0));
+    if (!isValidJobTopUpAgreedCents(agreedFromMeta)) {
+      return { ok: false, error: "Invalid top-up amount on session." };
+    }
+
+    const pi =
+      typeof cs.payment_intent === "string"
+        ? await stripe.paymentIntents.retrieve(cs.payment_intent)
+        : (cs.payment_intent as Stripe.PaymentIntent | null);
+    if (!pi?.id) {
+      return { ok: false, error: "No PaymentIntent on session." };
+    }
+
+    const admin = createSupabaseAdminClient();
+    if (!admin) {
+      return { ok: false, error: "Server configuration error (admin client)." };
+    }
+
+    const { data: job, error: jobError } = await admin
+      .from("jobs")
+      .select(
+        "id, lister_id, winner_id, status, agreed_amount_cents, payment_intent_id, payment_released_at, listing_id, top_up_payments"
+      )
+      .eq("id", numericJobId)
+      .maybeSingle();
+
+    if (jobError || !job) {
+      return { ok: false, error: "Job not found." };
+    }
+
+    const j = job as {
+      lister_id: string;
+      winner_id: string | null;
+      status: string;
+      agreed_amount_cents: number | null;
+      payment_intent_id: string | null;
+      payment_released_at: string | null;
+      listing_id: string;
+      top_up_payments?: unknown;
+    };
+
+    if (j.lister_id !== session.user.id) {
+      return { ok: false, error: "Not authorized for this top-up." };
+    }
+    if (trimStr(j.payment_released_at)) {
+      return { ok: false, error: "Funds were already released." };
+    }
+    const st = String(j.status ?? "");
+    if (st !== "in_progress" && st !== "completed_pending_approval") {
+      return { ok: false, error: "Job is not in a state that accepts top-ups." };
+    }
+
+    const existing = parseJobTopUpPayments(j.top_up_payments as never);
+    if (existing.some((e) => e.payment_intent_id === pi.id)) {
+      revalidatePath(`/jobs/${numericJobId}`);
+      return { ok: true, notice: "top_up_success" };
+    }
+
+    const feePercent = await fetchPlatformFeePercentForListing(
+      supabase,
+      j.listing_id,
+      await getGlobalSettings()
+    );
+    const feeCents = Math.round((agreedFromMeta * feePercent) / 100);
+    const noteRaw = String(cs.metadata?.top_up_note ?? "").trim().slice(0, 2000);
+
+    const entry: JobTopUpPaymentRecord = {
+      payment_intent_id: pi.id,
+      agreed_cents: agreedFromMeta,
+      fee_cents: feeCents,
+      note: noteRaw || null,
+      created_at: new Date().toISOString(),
+    };
+    const nextList = [...existing, entry];
+    const nextAgreed = (j.agreed_amount_cents ?? 0) + agreedFromMeta;
+
+    const { error: updateError } = await admin
+      .from("jobs")
+      .update({
+        agreed_amount_cents: nextAgreed,
+        top_up_payments: nextList as unknown as never,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", numericJobId);
+
+    if (updateError) {
+      return { ok: false, error: updateError.message };
+    }
+
+    if (j.winner_id) {
+      const extra = `$${(agreedFromMeta / 100).toFixed(2)}`;
+      const msg = `The lister added ${extra} for additional work. Funds are held in escrow until final release.`;
+      try {
+        await createNotification(j.winner_id, "job_status_update", numericJobId, msg, {
+          listingUuid: j.listing_id,
+          amountCents: agreedFromMeta,
+        });
+      } catch (e) {
+        console.error("[fulfillJobTopUpFromSession] cleaner notify failed", e);
+      }
+    }
+
+    revalidatePath(`/jobs/${numericJobId}`);
+    revalidatePath("/jobs");
+    revalidatePath("/lister/dashboard");
+    revalidatePath("/cleaner/dashboard");
+    revalidatePath("/messages");
+    return { ok: true, notice: "top_up_success" };
+  } catch (e) {
+    const err = e as Error;
+    return {
+      ok: false,
+      error:
+        err.message && err.message.length < 200
+          ? err.message
+          : "Could not confirm top-up payment.",
+    };
+  }
+}
 
 /**
  * After lister returns from Stripe Checkout (Pay & Start Job), confirm the session and set job to in_progress.
@@ -628,6 +902,10 @@ export async function fulfillJobPaymentFromSession(
 
     if (cs.mode !== "payment") {
       return { ok: false, error: "Invalid session type." };
+    }
+
+    if (cs.metadata?.type === "job_top_up") {
+      return fulfillJobTopUpFromSession(checkoutSessionId);
     }
 
     const jobIdMeta = cs.metadata?.job_id ?? cs.client_reference_id;
@@ -809,6 +1087,9 @@ export async function fulfillStripeCheckoutReturn(
     }
 
     const jobIdMeta = cs.metadata?.job_id ?? cs.client_reference_id;
+    if (cs.metadata?.type === "job_top_up") {
+      return fulfillJobTopUpFromSession(checkoutSessionId);
+    }
     if (jobIdMeta && cs.metadata?.type !== "buy_now") {
       return fulfillJobPaymentFromSession(checkoutSessionId);
     }
@@ -1336,7 +1617,7 @@ export async function releaseJobFunds(
   const { data: job, error: jobError } = await supabase
     .from("jobs")
     .select(
-      "id, listing_id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id"
+      "id, listing_id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id, top_up_payments"
     )
     .eq("id", numericJobId)
     .maybeSingle();
@@ -1352,6 +1633,7 @@ export async function releaseJobFunds(
     winner_id: string | null;
     payment_released_at: string | null;
     stripe_transfer_id: string | null;
+    top_up_payments?: unknown;
   };
 
   if (j.payment_released_at) {
@@ -1361,10 +1643,9 @@ export async function releaseJobFunds(
   if (!trimStr(j.payment_intent_id)) {
     return { ok: false, error: "Job has no payment hold (payment_intent_id)." };
   }
-  const paymentIntentId = trimStr(j.payment_intent_id);
 
-  const agreedCents = j.agreed_amount_cents ?? 0;
-  if (agreedCents < 1) {
+  const agreedCentsTotal = j.agreed_amount_cents ?? 0;
+  if (agreedCentsTotal < 1) {
     return { ok: false, error: "Job has no agreed amount." };
   }
 
@@ -1372,6 +1653,19 @@ export async function releaseJobFunds(
     return { ok: false, error: "Job has no cleaner (winner_id)." };
   }
   const winnerId = trimStr(j.winner_id);
+
+  const legs = buildEscrowReleaseLegs({
+    paymentIntentId: j.payment_intent_id,
+    agreedAmountCents: j.agreed_amount_cents,
+    topUpPaymentsRaw: j.top_up_payments as never,
+  });
+  if (!legs?.length) {
+    return {
+      ok: false,
+      error:
+        "Could not align escrow payments with the job total. If you used top-ups, contact support.",
+    };
+  }
 
   /** RLS usually allows users to read only their own profile; listers cannot read the cleaner's row. */
   const adminForPayout = createSupabaseAdminClient();
@@ -1396,70 +1690,6 @@ export async function releaseJobFunds(
   }
 
   try {
-    const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-    if (pi.status === "requires_action") {
-      return {
-        ok: false,
-        error: "This payment requires authentication (e.g. 3D Secure). Please complete verification from your payment method or use a different card, then try again.",
-      };
-    }
-    if (pi.status !== "succeeded" && pi.status !== "requires_capture") {
-      return {
-        ok: false,
-        error: `Payment cannot be released yet (status: ${pi.status}). Please ensure the payment was completed successfully.`,
-      };
-    }
-
-    let chargeId: string | undefined;
-    if (pi.status === "requires_capture") {
-      const captured = await stripe.paymentIntents.capture(paymentIntentId);
-      chargeId =
-        typeof captured.latest_charge === "string"
-          ? captured.latest_charge
-          : (captured.latest_charge as { id?: string } | null)?.id;
-    } else if (pi.status === "succeeded" && trimStr(j.stripe_transfer_id)) {
-      // Already captured and transfer created previously; ensure DB is in sync
-      const nowIso = new Date().toISOString();
-      const { error: updateError } = await supabase
-        .from("jobs")
-        .update({ payment_released_at: nowIso, updated_at: nowIso } as never)
-        .eq("id", numericJobId);
-      if (updateError) return { ok: false, error: updateError.message };
-      return { ok: true };
-    } else if (pi.status === "succeeded") {
-      chargeId =
-        typeof pi.latest_charge === "string"
-          ? pi.latest_charge
-          : (pi.latest_charge as { id?: string } | null)?.id;
-    }
-
-    // Transfer cleaner's net share from the platform escrow balance.
-    // Fee is computed from the job price (agreed_amount_cents), and the payment hold totals:
-    // total = job + fee; net = total - fee.
-    const settings = await getGlobalSettings();
-    const feePercent = await fetchPlatformFeePercentForListing(
-      supabase,
-      j.listing_id,
-      settings
-    );
-    const feeCents = Math.round((agreedCents * feePercent) / 100);
-    const totalCents = agreedCents + feeCents;
-    const netCents = Math.max(1, totalCents - feeCents);
-
-    const transferParams: {
-      amount: number;
-      currency: string;
-      destination: string;
-      metadata: { job_id: string };
-      source_transaction?: string;
-    } = {
-      amount: netCents,
-      currency: "aud",
-      destination: stripeConnectId,
-      metadata: { job_id: String(numericJobId) },
-    };
-    if (chargeId) transferParams.source_transaction = chargeId;
-
     const connectReady = await ensureConnectAccountCanReceiveTransfers(
       stripe,
       stripeConnectId
@@ -1468,14 +1698,73 @@ export async function releaseJobFunds(
       return { ok: false, error: connectReady.error };
     }
 
-    const transfer = await stripe.transfers.create(transferParams);
+    const transferIds: string[] = [];
+    let updatedTopUps = parseJobTopUpPayments(j.top_up_payments as never);
+
+    for (const leg of legs) {
+      const pi = await stripe.paymentIntents.retrieve(leg.paymentIntentId);
+      if (pi.status === "requires_action") {
+        return {
+          ok: false,
+          error:
+            "This payment requires authentication (e.g. 3D Secure). Please complete verification from your payment method or use a different card, then try again.",
+        };
+      }
+      if (pi.status !== "succeeded" && pi.status !== "requires_capture") {
+        return {
+          ok: false,
+          error: `Payment cannot be released yet (status: ${pi.status}). Please ensure every payment was completed successfully.`,
+        };
+      }
+
+      let chargeId: string | undefined;
+      if (pi.status === "requires_capture") {
+        const captured = await stripe.paymentIntents.capture(leg.paymentIntentId);
+        chargeId =
+          typeof captured.latest_charge === "string"
+            ? captured.latest_charge
+            : (captured.latest_charge as { id?: string } | null)?.id;
+      } else if (pi.status === "succeeded") {
+        chargeId =
+          typeof pi.latest_charge === "string"
+            ? pi.latest_charge
+            : (pi.latest_charge as { id?: string } | null)?.id;
+      }
+
+      const transferParams: {
+        amount: number;
+        currency: string;
+        destination: string;
+        metadata: { job_id: string; leg?: string };
+        source_transaction?: string;
+      } = {
+        amount: Math.max(1, leg.agreedCents),
+        currency: "aud",
+        destination: stripeConnectId,
+        metadata: {
+          job_id: String(numericJobId),
+          leg: leg.topUpIndex < 0 ? "primary" : `top_up_${leg.topUpIndex}`,
+        },
+      };
+      if (chargeId) transferParams.source_transaction = chargeId;
+
+      const transfer = await stripe.transfers.create(transferParams);
+      transferIds.push(transfer.id);
+
+      if (leg.topUpIndex >= 0 && updatedTopUps[leg.topUpIndex]) {
+        updatedTopUps = updatedTopUps.map((row, idx) =>
+          idx === leg.topUpIndex ? { ...row, stripe_transfer_id: transfer.id } : row
+        );
+      }
+    }
 
     const nowIso = new Date().toISOString();
     const { error: updateError } = await supabase
       .from("jobs")
       .update({
         payment_released_at: nowIso,
-        stripe_transfer_id: transfer.id,
+        stripe_transfer_id: transferIds.join(","),
+        top_up_payments: updatedTopUps as unknown as never,
         updated_at: nowIso,
       } as never)
       .eq("id", numericJobId);
@@ -1486,11 +1775,21 @@ export async function releaseJobFunds(
 
     const testMode = await isStripeTestMode();
     if (testMode) {
-      console.log("[Stripe Test] PaymentIntent captured:", paymentIntentId, "Transfer created:", transfer.id);
+      console.log(
+        "[Stripe Test] Multi-leg release:",
+        legs.map((l) => l.paymentIntentId),
+        "Transfers:",
+        transferIds
+      );
     }
     return {
       ok: true,
-      ...(testMode ? { transferId: transfer.id, paymentIntentId: paymentIntentId } : {}),
+      ...(testMode
+        ? {
+            transferId: transferIds[transferIds.length - 1],
+            paymentIntentId: legs[0]?.paymentIntentId,
+          }
+        : {}),
     };
   } catch (e) {
     const err = e as Error & { type?: string; code?: string; raw?: { message?: string } };

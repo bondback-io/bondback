@@ -1,6 +1,43 @@
 import type { Database } from "@/types/supabase";
+import { normalizeChatUid } from "@/lib/chat-participant-role";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+/**
+ * Profile rows keyed by both raw `id` and `normalizeChatUid(id)` so job foreign keys always resolve
+ * (PostgREST / JS sometimes differ on UUID dash casing vs `jobs.winner_id`).
+ */
+export function buildMessengerProfileMap(profiles: ProfileRow[]): Map<string, ProfileRow> {
+  const map = new Map<string, ProfileRow>();
+  for (const p of profiles) {
+    const id = String((p as { id?: string }).id ?? "").trim();
+    if (!id) continue;
+    map.set(id, p);
+    const n = normalizeChatUid(id);
+    if (n) map.set(n, p);
+  }
+  return map;
+}
+
+export function getMessengerProfile(
+  map: Map<string, ProfileRow>,
+  userId: string | null | undefined
+): ProfileRow | null {
+  if (userId == null) return null;
+  const raw = String(userId).trim();
+  if (!raw) return null;
+  return map.get(raw) ?? map.get(normalizeChatUid(raw)) ?? null;
+}
+
+/** Whether the signed-in user is the job lister (UUID-safe). */
+export function isJobListerUser(
+  currentUserId: string,
+  jobListerId: string | null | undefined
+): boolean {
+  const a = normalizeChatUid(currentUserId);
+  const b = normalizeChatUid(jobListerId);
+  return a !== "" && a === b;
+}
 
 /**
  * Shared UI label for the job messenger header status pill.

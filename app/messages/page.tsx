@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { MessagesPageClient } from "@/components/features/messages-page-client";
 import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
+import { effectiveMessengerRoleFromProfile } from "@/lib/chat-participant-role";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -31,22 +32,30 @@ const MessagesPage = async () => {
 
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("active_role")
+    .select("active_role, roles")
     .eq("id", session.user.id)
     .maybeSingle();
   const activeAppRole =
     (profileRow as { active_role: "lister" | "cleaner" | null } | null)?.active_role ??
     null;
+  const messengerRoleFilter = effectiveMessengerRoleFromProfile({
+    active_role: (profileRow as { active_role?: string | null } | null)?.active_role ?? null,
+    roles: (profileRow as { roles?: string[] | null } | null)?.roles ?? null,
+  });
 
-  // Jobs where messenger is allowed (matches server `sendJobMessage` + RLS).
-  const { data: jobsData } = await supabase
+  // Jobs where messenger is allowed for the user’s current marketplace mode (lister vs cleaner).
+  // Dual-role users must not see cleaner threads while in lister mode, and vice versa.
+  let jobsQuery = supabase
     .from("jobs")
     .select("*")
-    .or(
-      `lister_id.eq.${session.user.id},winner_id.eq.${session.user.id}`,
-    )
     .in("status", [...CHAT_UNLOCK_STATUSES])
     .order("created_at", { ascending: false });
+  if (messengerRoleFilter === "lister") {
+    jobsQuery = jobsQuery.eq("lister_id", session.user.id);
+  } else {
+    jobsQuery = jobsQuery.eq("winner_id", session.user.id);
+  }
+  const { data: jobsData } = await jobsQuery;
 
   const jobs = (jobsData ?? []) as JobRow[];
 
@@ -58,8 +67,9 @@ const MessagesPage = async () => {
             Messages
           </h1>
           <p className="text-sm text-muted-foreground">
-            You don&apos;t have any job conversations yet. Once an auction
-            finishes and a job is created, you&apos;ll see it here.
+            You don&apos;t have any job conversations in your current{" "}
+            {messengerRoleFilter === "cleaner" ? "Cleaner" : "Lister"} mode. Switch role in the
+            header if you expected a different inbox, or check back once a matching job is active.
           </p>
         </div>
       </section>
@@ -118,6 +128,7 @@ const MessagesPage = async () => {
       <MessagesPageClient
         currentUserId={session.user.id}
         activeAppRole={activeAppRole}
+        messengerRoleFilter={messengerRoleFilter}
         jobs={jobs}
         listings={listings}
         messages={messages}

@@ -32,6 +32,8 @@ export type ChatWindowProps = {
   cleanerAvatarUrl: string | null;
   /** Profile active role — used for dual lister/cleaner same-user jobs and shell styling. */
   activeAppRole?: "lister" | "cleaner" | null;
+  /** When set (e.g. from `/messages`), dual-role users only open threads for their current inbox mode. */
+  messengerRoleFilter?: "lister" | "cleaner" | null;
   jobTitle: string;
   agreedPriceLabel: string;
   /** Short job status label (e.g. In progress, Funds in escrow) */
@@ -45,6 +47,17 @@ export type ChatWindowProps = {
   /** Job detail link in header (messages page). */
   viewJobHref?: string;
 };
+
+/** Splits listing titles like "2 Beds … in CURRIMUNDI" so the agreed amount can sit beside the suburb. */
+function parseListingTitleInLocation(title: string): { beforeIn: string; suburb: string } | null {
+  const marker = " in ";
+  const idx = title.lastIndexOf(marker);
+  if (idx <= 0) return null;
+  const beforeIn = title.slice(0, idx).trim();
+  const suburb = title.slice(idx + marker.length).trim();
+  if (!beforeIn || !suburb) return null;
+  return { beforeIn, suburb };
+}
 
 function isOptimisticId(id: number): boolean {
   return id < 0;
@@ -103,6 +116,7 @@ export function ChatWindow({
   listerAvatarUrl,
   cleanerAvatarUrl,
   activeAppRole = null,
+  messengerRoleFilter = null,
   jobTitle,
   agreedPriceLabel,
   statusPillLabel,
@@ -128,16 +142,29 @@ export function ChatWindow({
 
   /** Job participant role (lister vs cleaner on this thread); `activeAppRole` disambiguates dual-hat jobs. */
   const participantRole = useMemo(
-    () => jobParticipantRole(currentUserId, listerId, cleanerId, activeAppRole ?? null),
-    [currentUserId, listerId, cleanerId, activeAppRole]
+    () =>
+      jobParticipantRole(
+        currentUserId,
+        listerId,
+        cleanerId,
+        activeAppRole ?? null,
+        messengerRoleFilter
+      ),
+    [currentUserId, listerId, cleanerId, activeAppRole, messengerRoleFilter]
   );
   const shellRole = participantRole;
 
   const otherPartyFirstName = useMemo(() => {
+    if (!shellRole) return "Partner";
     const isMeLister = shellRole === "lister";
     const raw = isMeLister ? cleanerName : listerName;
     return (raw ?? (isMeLister ? "Cleaner" : "Owner")).split(" ")[0] ?? "Partner";
   }, [shellRole, cleanerName, listerName]);
+
+  const titleLocation = useMemo(
+    () => parseListingTitleInLocation(jobTitle.trim()),
+    [jobTitle]
+  );
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -147,6 +174,11 @@ export function ChatWindow({
   }, []);
 
   useEffect(() => {
+    if (!participantRole) {
+      setMessages([]);
+      return;
+    }
+
     let cancelled = false;
 
     const load = async () => {
@@ -207,7 +239,7 @@ export function ChatWindow({
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [supabase, jobId, currentUserId]);
+  }, [supabase, jobId, currentUserId, participantRole]);
 
   useEffect(() => {
     scrollToBottom();
@@ -218,18 +250,21 @@ export function ChatWindow({
   }, [jobId]);
 
   useEffect(() => {
+    if (!participantRole) return;
     void markRead();
-  }, [markRead, jobId, messages.length]);
+  }, [markRead, jobId, messages.length, participantRole]);
 
   useEffect(() => {
+    if (!participantRole) return;
     const onVis = () => {
       if (document.visibilityState === "visible") void markRead();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [markRead]);
+  }, [markRead, participantRole]);
 
   useEffect(() => {
+    if (!participantRole) return;
     if (typeof window === "undefined") return;
     const handler = (event: Event) => {
       const custom = event as CustomEvent<{
@@ -249,9 +284,20 @@ export function ChatWindow({
         handler as EventListener
       );
     };
-  }, [jobId, currentUserId]);
+  }, [jobId, currentUserId, participantRole]);
 
   useEffect(() => {
+    if (!participantRole) {
+      return () => {
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+        const prev = typingChannelRef.current;
+        if (prev) {
+          void supabase.removeChannel(prev);
+          typingChannelRef.current = null;
+        }
+      };
+    }
     const ch = supabase.channel(`job-typing-${jobId}`, {
       config: { broadcast: { ack: false } },
     });
@@ -291,7 +337,7 @@ export function ChatWindow({
       supabase.removeChannel(ch);
       typingChannelRef.current = null;
     };
-  }, [supabase, jobId, currentUserId, otherPartyFirstName]);
+  }, [supabase, jobId, currentUserId, otherPartyFirstName, participantRole]);
 
   const broadcastTyping = useCallback(() => {
     const ch = typingChannelRef.current;
@@ -482,6 +528,26 @@ export function ChatWindow({
     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200"
     : "bg-[#e7f3ff] text-[#0084ff] dark:bg-sky-950/80 dark:text-sky-300";
 
+  if (!participantRole) {
+    return (
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-200/90 bg-slate-50/90 px-4 py-10 text-center dark:border-slate-800 dark:bg-slate-950/60",
+          messagesLayout ? "min-h-0 flex-1" : "min-h-[240px] sm:min-h-[280px]"
+        )}
+      >
+        <p className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          This job chat isn&apos;t available in your current mode
+        </p>
+        <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+          Switch between <span className="font-medium text-foreground">Lister</span> and{" "}
+          <span className="font-medium text-foreground">Cleaner</span> in the header to open the inbox
+          that matches how you&apos;re participating on this job.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -510,43 +576,81 @@ export function ChatWindow({
         heightClass
       )}
     >
-      {/* Job header — title, price, status, optional View job */}
+      {/* Job header — title + suburb + amount (compact on mobile), status pill, View job */}
       <header
         className={cn(
-          "sticky top-0 z-10 shrink-0 border-b px-3 py-2 shadow-sm sm:px-4 sm:py-2.5",
+          "sticky top-0 z-10 shrink-0 border-b px-2.5 py-1.5 shadow-sm sm:px-4 sm:py-2",
           headerBar
         )}
       >
-        <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:gap-2.5">
-          <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div className="mx-auto flex max-w-3xl flex-col gap-1 sm:gap-2">
+          <div className="flex items-start justify-between gap-1.5 sm:gap-3">
             <div className="min-w-0 flex-1">
-              <h2 className="line-clamp-2 text-[15px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:text-[17px]">
-                {jobTitle}
-              </h2>
+              {titleLocation ? (
+                <p className="line-clamp-3 text-[12px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:line-clamp-2 sm:text-[15px] sm:leading-snug">
+                  <span>{titleLocation.beforeIn}</span>
+                  <span className="font-bold text-[#050505] dark:text-slate-50"> in </span>
+                  <span className="inline-flex max-w-full flex-wrap items-baseline gap-x-1.5 gap-y-0 align-baseline">
+                    <span className="break-words">{titleLocation.suburb}</span>
+                    <span
+                      className={cn(
+                        "shrink-0 text-[11px] font-semibold tabular-nums sm:text-[15px]",
+                        priceAccent
+                      )}
+                    >
+                      {agreedPriceLabel}
+                    </span>
+                  </span>
+                </p>
+              ) : (
+                <>
+                  <h2 className="line-clamp-2 text-[12px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:text-[16px]">
+                    {jobTitle}
+                  </h2>
+                  <div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                    <p
+                      className={cn(
+                        "text-[11px] font-semibold tabular-nums sm:text-[15px]",
+                        priceAccent
+                      )}
+                    >
+                      {agreedPriceLabel}
+                    </p>
+                    {viewJobHref ? (
+                      <Link
+                        href={viewJobHref}
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold no-underline transition active:opacity-70 sm:text-[13px]",
+                          isCleanerRole
+                            ? "text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+                            : isListerRole
+                              ? "text-sky-700 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300"
+                              : "text-primary hover:underline"
+                        )}
+                      >
+                        View job
+                        <ChevronRight className="h-3 w-3 opacity-80 sm:h-3.5 sm:w-3.5" aria-hidden />
+                      </Link>
+                    ) : null}
+                  </div>
+                </>
+              )}
             </div>
             <span
               className={cn(
-                "max-w-[min(46%,11rem)] shrink-0 rounded-full px-2 py-1 text-center text-[9px] font-semibold uppercase leading-tight tracking-wide sm:max-w-none sm:px-2.5 sm:text-[10px] sm:normal-case sm:tracking-normal",
+                "max-w-[min(42%,9.5rem)] shrink-0 self-start rounded-full px-1.5 py-0.5 text-center text-[8px] font-semibold uppercase leading-tight tracking-wide sm:max-w-none sm:px-2.5 sm:py-1 sm:text-[10px] sm:normal-case sm:tracking-normal",
                 pillAccent
               )}
             >
               {statusPillLabel}
             </span>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <p
-              className={cn(
-                "text-[14px] font-semibold tabular-nums sm:text-[15px]",
-                priceAccent
-              )}
-            >
-              {agreedPriceLabel}
-            </p>
-            {viewJobHref ? (
+          {titleLocation && viewJobHref ? (
+            <div className="flex justify-end">
               <Link
                 href={viewJobHref}
                 className={cn(
-                  "inline-flex items-center gap-0.5 text-[12px] font-semibold no-underline transition active:opacity-70 sm:text-[13px]",
+                  "inline-flex items-center gap-0.5 text-[11px] font-semibold no-underline transition active:opacity-70 sm:text-[13px]",
                   isCleanerRole
                     ? "text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
                     : isListerRole
@@ -555,10 +659,10 @@ export function ChatWindow({
                 )}
               >
                 View job
-                <ChevronRight className="h-3.5 w-3.5 opacity-80" aria-hidden />
+                <ChevronRight className="h-3 w-3 opacity-80 sm:h-3.5 sm:w-3.5" aria-hidden />
               </Link>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </header>
 

@@ -20,6 +20,8 @@ export type JobChatProps = {
    * this selects lister vs cleaner styling and labels.
    */
   activeAppRole?: "lister" | "cleaner" | null;
+  /** Inbox mode for dual-role accounts — must match server `sendJobMessage` visibility. */
+  messengerRoleFilter?: "lister" | "cleaner" | null;
   listerId: string | null;
   cleanerId: string | null;
   listerName: string | null;
@@ -48,6 +50,7 @@ export function JobChat({
   currentUserId,
   canChat,
   activeAppRole = null,
+  messengerRoleFilter = null,
   listerId,
   cleanerId,
   listerName,
@@ -115,6 +118,7 @@ export function JobChat({
         listerAvatarUrl={listerAvatarUrl}
         cleanerAvatarUrl={cleanerAvatarUrl}
         activeAppRole={activeAppRole}
+        messengerRoleFilter={messengerRoleFilter}
         jobTitle={m.jobTitle}
         agreedPriceLabel={m.agreedPriceLabel}
         statusPillLabel={m.statusPillLabel}
