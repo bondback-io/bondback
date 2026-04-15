@@ -29,17 +29,18 @@ const MessagesPage = async () => {
   const supabase = await createServerSupabaseClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  const userId = String(user?.id ?? "").trim();
+  if (!userId) {
     redirect("/login");
   }
 
   const { data: profileRow } = await supabase
     .from("profiles")
     .select("active_role, roles")
-    .eq("id", session.user.id)
+    .eq("id", userId)
     .maybeSingle();
   const activeAppRole =
     (profileRow as { active_role: "lister" | "cleaner" | null } | null)?.active_role ??
@@ -57,9 +58,9 @@ const MessagesPage = async () => {
     .in("status", [...CHAT_UNLOCK_STATUSES])
     .order("created_at", { ascending: false });
   if (messengerRoleFilter === "lister") {
-    jobsQuery = jobsQuery.eq("lister_id", session.user.id);
+    jobsQuery = jobsQuery.eq("lister_id", userId);
   } else {
-    jobsQuery = jobsQuery.eq("winner_id", session.user.id);
+    jobsQuery = jobsQuery.eq("winner_id", userId);
   }
   const { data: jobsData } = await jobsQuery;
 
@@ -157,7 +158,7 @@ const MessagesPage = async () => {
       </div>
 
       <MessagesPageClient
-        currentUserId={session.user.id}
+        currentUserId={userId}
         activeAppRole={activeAppRole}
         messengerRoleFilter={messengerRoleFilter}
         jobs={jobs}
