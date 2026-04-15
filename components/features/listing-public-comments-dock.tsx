@@ -58,6 +58,31 @@ function sortByCreated(a: UiComment, b: UiComment) {
   return a.created_at.localeCompare(b.created_at);
 }
 
+function CommentAvatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
+  const src = String(photoUrl ?? "").trim();
+  const initials = String(name || "M")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("") || "M";
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name || "Member"}
+        className="h-7 w-7 rounded-full border border-border/70 object-cover dark:border-gray-700"
+        loading="lazy"
+      />
+    );
+  }
+  return (
+    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-muted text-[11px] font-semibold text-muted-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+      {initials}
+    </div>
+  );
+}
+
 function CommentBlock({
   c,
   root,
@@ -93,6 +118,7 @@ function CommentBlock({
     <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-900/40">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <CommentAvatar name={c.author_display_name} photoUrl={c.author_avatar_url} />
           <span className="truncate text-sm font-semibold text-foreground dark:text-gray-100">
             {c.author_display_name}
           </span>
@@ -599,12 +625,13 @@ export function ListingPublicCommentsDock({
       const supabase = createBrowserSupabaseClient();
       const { data: p } = await supabase
         .from("profiles")
-        .select("full_name, roles, active_role, cleaner_username")
+        .select("full_name, roles, active_role, cleaner_username, profile_photo_url")
         .eq("id", row.user_id)
         .maybeSingle();
       const fullName = (p as { full_name?: string | null } | null)?.full_name;
       const cleanerUsername = (p as { cleaner_username?: string | null } | null)?.cleaner_username;
       const roles = (p as { roles?: string[] | null } | null)?.roles;
+      const avatarUrl = (p as { profile_photo_url?: string | null } | null)?.profile_photo_url;
       const name = qaAuthorDisplayName({
         userId: String(row.user_id),
         listerId,
@@ -634,6 +661,7 @@ export function ListingPublicCommentsDock({
         message_text: row.message_text,
         created_at: row.created_at,
         author_display_name: name,
+        author_avatar_url: avatarUrl ?? null,
         author_role_label: roleLabel,
         posted_as_role: posted,
       };
@@ -666,6 +694,23 @@ export function ListingPublicCommentsDock({
           if (!row?.id) return;
           const enriched = await enrichInsert(row);
           setComments((prev) => {
+            const knownAuthor = prev.find(
+              (c) =>
+                String(c.user_id) === String(row.user_id) &&
+                !c.optimistic &&
+                (String(c.author_display_name ?? "").trim().toLowerCase() !== "member" ||
+                  String(c.author_avatar_url ?? "").trim().length > 0)
+            );
+            const mergedEnriched: UiComment = knownAuthor
+              ? {
+                  ...enriched,
+                  author_display_name:
+                    String(enriched.author_display_name ?? "").trim().toLowerCase() === "member"
+                      ? knownAuthor.author_display_name
+                      : enriched.author_display_name,
+                  author_avatar_url: enriched.author_avatar_url ?? knownAuthor.author_avatar_url ?? null,
+                }
+              : enriched;
             if (prev.some((c) => c.id === row.id)) return prev;
             const optimisticIdx = prev.findIndex(
               (c) =>
@@ -676,10 +721,10 @@ export function ListingPublicCommentsDock({
             );
             if (optimisticIdx >= 0) {
               const next = [...prev];
-              next[optimisticIdx] = enriched;
+              next[optimisticIdx] = mergedEnriched;
               return next.sort(sortByCreated);
             }
-            return [...prev, enriched].sort(sortByCreated);
+            return [...prev, mergedEnriched].sort(sortByCreated);
           });
         }
       )
@@ -731,6 +776,7 @@ export function ListingPublicCommentsDock({
       message_text: message,
       created_at: new Date().toISOString(),
       author_display_name: existingSelf?.author_display_name ?? "You",
+      author_avatar_url: existingSelf?.author_avatar_url ?? null,
       author_role_label: optimisticRoleLabel,
       posted_as_role: optimisticPostedRole,
       author_banned: false,

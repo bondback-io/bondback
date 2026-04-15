@@ -12,7 +12,7 @@ import {
   loadSupportTicketForViewer,
   submitSupportTicketReply,
 } from "@/lib/actions/support-thread";
-import { ticketDisplayId } from "@/lib/actions/support";
+import { ticketDisplayId } from "@/lib/support/ticket-format";
 
 export const dynamic = "force-dynamic";
 

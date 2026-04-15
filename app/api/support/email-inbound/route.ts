@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/notifications/email";
-import { supportTicketEmailToken, ticketDisplayId } from "@/lib/actions/support";
+import { supportTicketEmailToken, ticketDisplayId } from "@/lib/support/ticket-format";
 
 const TICKET_TOKEN_RE = /\[TICKET:([0-9a-f-]{36})\]/i;
 

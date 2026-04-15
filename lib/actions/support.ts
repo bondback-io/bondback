@@ -11,6 +11,7 @@ import { SupportTicketAdminAlert } from "@/emails/SupportTicketAdminAlert";
 import { sendEmail } from "@/lib/notifications/email";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { SUPPORT_CATEGORY_OPTIONS } from "@/lib/support-categorize";
+import { supportTicketEmailToken, ticketDisplayId } from "@/lib/support/ticket-format";
 
 const BUCKET = "support-attachments";
 const MAX_FILES = 5;
@@ -159,16 +160,6 @@ export async function uploadSupportAttachments(
   }
 
   return { ok: true, paths };
-}
-
-export function ticketDisplayId(uuid: string): string {
-  const hex = uuid.replace(/-/g, "").slice(0, 8).toUpperCase();
-  return `TKT-${hex}`;
-}
-
-/** Stable token appended to email subjects so inbound replies map to a ticket reliably. */
-export function supportTicketEmailToken(ticketId: string): string {
-  return `[TICKET:${String(ticketId).trim()}]`;
 }
 
 function supportDescriptionEmailPreview(raw: string, max = 400): string {

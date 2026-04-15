@@ -20,7 +20,7 @@ type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type ListingCommentRow = Database["public"]["Tables"]["listing_comments"]["Row"];
 type ProfileMiniRow = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
-  "id" | "full_name" | "roles" | "cleaner_username"
+  "id" | "full_name" | "roles" | "cleaner_username" | "profile_photo_url"
 >;
 
 export type ListingCommentPublic = {
@@ -31,6 +31,7 @@ export type ListingCommentPublic = {
   message_text: string;
   created_at: string;
   author_display_name: string;
+  author_avatar_url?: string | null;
   author_role_label: "Lister" | "Cleaner" | "Member";
   /** Role context at post time; drives labels when user_id equals lister_id (dual role). */
   posted_as_role?: ListingCommentPostedAsRole | null;
@@ -183,16 +184,34 @@ export async function fetchListingCommentsPublic(
   const userIds = [...new Set(typedRows.map((r) => r.user_id))];
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, full_name, roles, cleaner_username")
+    .select("id, full_name, roles, cleaner_username, profile_photo_url")
     .in("id", userIds);
-
+  const profileRows = ((profiles ?? []) as ProfileMiniRow[]).slice();
+  const missingUserIds = userIds.filter(
+    (uid) => !profileRows.some((p) => String(p.id) === String(uid))
+  );
+  if (missingUserIds.length > 0) {
+    const admin = createSupabaseAdminClient();
+    if (admin) {
+      const { data: adminProfiles, error: adminErr } = await admin
+        .from("profiles")
+        .select("id, full_name, roles, cleaner_username, profile_photo_url")
+        .in("id", missingUserIds);
+      if (adminErr) {
+        console.warn("[fetchListingCommentsPublic admin profile fallback]", adminErr.message);
+      } else if (adminProfiles?.length) {
+        profileRows.push(...(adminProfiles as ProfileMiniRow[]));
+      }
+    }
+  }
   const byUser = new Map(
-    ((profiles ?? []) as ProfileMiniRow[]).map((p) => [
+    profileRows.map((p) => [
       p.id,
       {
         full_name: p.full_name as string | null,
         roles: p.roles as string[] | null,
         cleaner_username: p.cleaner_username as string | null,
+        profile_photo_url: p.profile_photo_url as string | null,
       },
     ])
   );
@@ -221,6 +240,7 @@ export async function fetchListingCommentsPublic(
         roles: p?.roles,
         fallback: "Member",
       }),
+      author_avatar_url: p?.profile_photo_url ?? null,
       author_role_label: listingCommentAuthorRoleLabel({
         userId: String(r.user_id),
         listerId,
@@ -289,7 +309,7 @@ export async function postListingComment(params: {
 
     const { data: posterProfile } = await readClient
       .from("profiles")
-      .select("roles, full_name, active_role, cleaner_username")
+      .select("roles, full_name, active_role, cleaner_username, profile_photo_url")
       .eq("id", session.user.id)
       .maybeSingle();
 
@@ -439,6 +459,7 @@ export async function postListingComment(params: {
       full_name?: string | null;
       roles?: string[] | null;
       cleaner_username?: string | null;
+      profile_photo_url?: string | null;
     } | null;
     const postedPersisted = parsePostedAsRole(ins.posted_as_role) ?? postedAsRoleForInsert;
     const comment: ListingCommentPublic = {
@@ -456,6 +477,7 @@ export async function postListingComment(params: {
         roles: prof?.roles,
         fallback: "Member",
       }),
+      author_avatar_url: prof?.profile_photo_url ?? null,
       author_role_label: listingCommentAuthorRoleLabel({
         userId: String(session.user.id),
         listerId,

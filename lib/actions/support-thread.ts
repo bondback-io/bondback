@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
 import { sendEmail } from "@/lib/notifications/email";
-import { supportTicketEmailToken, ticketDisplayId } from "@/lib/actions/support";
+import { supportTicketEmailToken, ticketDisplayId } from "@/lib/support/ticket-format";
 
 type SupportTicketRow = Database["public"]["Tables"]["support_tickets"]["Row"];
 type SupportTicketMessageRow = Database["public"]["Tables"]["support_ticket_messages"]["Row"];
