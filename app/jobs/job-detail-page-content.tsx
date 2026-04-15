@@ -395,42 +395,57 @@ export async function JobDetailPageContent({
         {user && jobId && <RecordJobView jobId={jobId} />}
         {pipelineActive ? (
           <Alert className="border-primary/40 bg-primary/5">
-            <Briefcase className="h-4 w-4" aria-hidden />
-            <AlertDescription className="ml-1">
-              <span className="font-semibold text-foreground">This is an active job</span>
-              {cleanerName ? (
-                <>
-                  {" "}
-                  — assigned cleaner:{" "}
-                  <span className="font-medium">{cleanerName}</span>
-                </>
-              ) : (
-                " — cleaner assigned."
-              )}
-            </AlertDescription>
+            <div className="flex items-start gap-2">
+              <Briefcase
+                className="mt-0.5 h-4 w-4 shrink-0 text-foreground"
+                aria-hidden
+              />
+              <AlertDescription className="min-w-0 flex-1 p-0 leading-snug sm:leading-relaxed">
+                <span className="font-semibold text-foreground">This is an active job</span>
+                {cleanerName ? (
+                  <>
+                    {" "}
+                    — assigned cleaner:{" "}
+                    <span className="font-medium">{cleanerName}</span>
+                  </>
+                ) : (
+                  " — cleaner assigned."
+                )}
+              </AlertDescription>
+            </div>
           </Alert>
         ) : completedJobBanner ? (
           <Alert className="border-emerald-500/30 bg-emerald-500/[0.06] dark:border-emerald-800/50 dark:bg-emerald-950/25">
-            <Briefcase className="h-4 w-4 text-emerald-700 dark:text-emerald-400" aria-hidden />
-            <AlertDescription className="ml-1 text-emerald-950 dark:text-emerald-100">
-              <span className="font-semibold text-foreground dark:text-emerald-50">
-                This job is completed
-              </span>
-              {cleanerName ? (
-                <>
-                  {" "}
-                  — cleaner: <span className="font-medium">{cleanerName}</span>
-                </>
-              ) : null}
-            </AlertDescription>
+            <div className="flex items-start gap-2">
+              <Briefcase
+                className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400"
+                aria-hidden
+              />
+              <AlertDescription className="min-w-0 flex-1 p-0 text-emerald-950 leading-snug dark:text-emerald-100 sm:leading-relaxed">
+                <span className="font-semibold text-foreground dark:text-emerald-50">
+                  This job is completed
+                </span>
+                {cleanerName ? (
+                  <>
+                    {" "}
+                    — cleaner: <span className="font-medium">{cleanerName}</span>
+                  </>
+                ) : null}
+              </AlertDescription>
+            </div>
           </Alert>
         ) : cancelledJobBanner ? (
           <Alert className="border-border bg-muted/40 dark:border-gray-700 dark:bg-gray-900/40">
-            <Briefcase className="h-4 w-4" aria-hidden />
-            <AlertDescription className="ml-1">
-              <span className="font-semibold text-foreground">This job is no longer active</span>
-              <span className="text-muted-foreground"> — it was cancelled.</span>
-            </AlertDescription>
+            <div className="flex items-start gap-2">
+              <Briefcase
+                className="mt-0.5 h-4 w-4 shrink-0 text-foreground"
+                aria-hidden
+              />
+              <AlertDescription className="min-w-0 flex-1 p-0 leading-snug sm:leading-relaxed">
+                <span className="font-semibold text-foreground">This job is no longer active</span>
+                <span className="text-muted-foreground"> — it was cancelled.</span>
+              </AlertDescription>
+            </div>
           </Alert>
         ) : null}
         <Button variant="ghost" asChild className="dark:hover:bg-gray-800 dark:hover:text-gray-100">

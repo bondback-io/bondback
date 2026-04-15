@@ -62,7 +62,11 @@ function parseListingTitleInLocation(title: string): { beforeIn: string; suburb:
   return { beforeIn, suburb };
 }
 
-/** Line 1 = property headline; line 2 = `in SUBURB [STATE] [POSTCODE]` using DB fields when present. */
+/**
+ * Line 1 = property headline (before trailing " in …" in title when present).
+ * `locationTail` = `SUBURB STATE POSTCODE` (space-separated, each part omitted if missing) for
+ * the header line `in {locationTail} {price}` — state/postcode come from listing row when set.
+ */
 function buildMessengerHeaderLines(
   jobTitle: string,
   listingSuburb?: string | null,
@@ -197,6 +201,10 @@ export function ChatWindow({
       ),
     [jobTitle, listingSuburb, listingState, listingPostcode]
   );
+
+  const headerShowPrice =
+    Boolean(trimStr(agreedPriceLabel)) && agreedPriceLabel !== "—";
+  const headerLocationOrPriceRow = Boolean(headerLocationTail) || headerShowPrice;
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -539,9 +547,9 @@ export function ChatWindow({
   };
 
   const heightClass = messagesLayout
-    ? "min-h-0 h-full w-full flex-1 max-lg:min-h-0 max-lg:flex-1 lg:flex-none lg:min-h-[min(92dvh,720px)]"
+    ? "min-h-0 h-full w-full flex-1 max-lg:min-h-0 max-lg:flex-1 lg:min-h-0 lg:flex-1"
     : variant === "compact"
-      ? "min-h-[260px] max-h-[52vh] sm:max-h-[58vh]"
+      ? "min-h-[280px] max-h-[54vh] sm:min-h-[300px] sm:max-h-[60vh] lg:min-h-[320px] lg:max-h-[min(64vh,700px)]"
       : "min-h-[min(92dvh,720px)] sm:min-h-[520px]";
 
   const isListerRole = shellRole === "lister";
@@ -611,34 +619,37 @@ export function ChatWindow({
         heightClass
       )}
     >
-      {/* Job header — title + suburb + amount (compact on mobile), status pill, View job */}
+      {/* Job header — title; then `in Suburb State Postcode` + price on one row; status pill; View job */}
       <header
         className={cn(
           "sticky top-0 z-10 shrink-0 border-b px-2.5 py-1.5 shadow-sm sm:px-4 sm:py-2",
           headerBar
         )}
       >
-        <div className="mx-auto flex max-w-3xl flex-col gap-1 sm:gap-2">
+        <div className="mx-auto flex max-w-3xl flex-col gap-1 sm:gap-2 lg:max-w-5xl">
           <div className="flex items-start justify-between gap-1.5 sm:gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[12px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:text-[15px] sm:leading-snug">
                 {headerLine1}
               </p>
-              {headerLocationTail ? (
-                <p className="mt-0.5 whitespace-normal break-words text-[11px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:text-[14px]">
-                  {` in ${headerLocationTail}`}
+              {headerLocationOrPriceRow ? (
+                <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 whitespace-normal break-words text-[11px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:text-[14px]">
+                  {headerLocationTail ? (
+                    <span>{`in ${headerLocationTail}`}</span>
+                  ) : null}
+                  {headerShowPrice ? (
+                    <span
+                      className={cn(
+                        "font-semibold tabular-nums tracking-normal",
+                        priceAccent,
+                        "text-[11px] sm:text-[15px]"
+                      )}
+                    >
+                      {agreedPriceLabel}
+                    </span>
+                  ) : null}
                 </p>
               ) : null}
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                <p
-                  className={cn(
-                    "text-[11px] font-semibold tabular-nums sm:text-[15px]",
-                    priceAccent
-                  )}
-                >
-                  {agreedPriceLabel}
-                </p>
-              </div>
             </div>
             <span
               className={cn(

@@ -105,7 +105,7 @@ async function CleanerDashboardContent() {
   const { data: jobsData } = await supabase
     .from("jobs")
     .select(
-      "id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id"
+      "id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments"
     )
     .eq("winner_id", user.id)
     .in("status", ["accepted", "in_progress", "completed", "completed_pending_approval", "cancelled"])

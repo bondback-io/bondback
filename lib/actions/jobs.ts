@@ -693,7 +693,7 @@ export async function createJobTopUpCheckoutSession(
   let url: string | null;
   try {
     url = await createJobTopUpCheckoutSessionUrl(
-      { id: numericJobId },
+      { id: numericJobId, listingId: row.listing_id },
       {
         title: (listing as { title?: string }).title ?? "Bond clean job",
         suburb: (listing as { suburb?: string }).suburb ?? "",
@@ -807,6 +807,7 @@ export async function fulfillJobTopUpFromSession(
     const existing = parseJobTopUpPayments(j.top_up_payments as never);
     if (existing.some((e) => e.payment_intent_id === pi.id)) {
       revalidatePath(`/jobs/${numericJobId}`);
+      revalidatePath(`/listings/${j.listing_id}`);
       return { ok: true, notice: "top_up_success" };
     }
 
@@ -855,10 +856,12 @@ export async function fulfillJobTopUpFromSession(
     }
 
     revalidatePath(`/jobs/${numericJobId}`);
+    revalidatePath(`/listings/${j.listing_id}`);
     revalidatePath("/jobs");
     revalidatePath("/lister/dashboard");
     revalidatePath("/cleaner/dashboard");
     revalidatePath("/messages");
+    revalidatePath("/my-listings");
     return { ok: true, notice: "top_up_success" };
   } catch (e) {
     const err = e as Error;

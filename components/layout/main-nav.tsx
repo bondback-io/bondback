@@ -171,8 +171,8 @@ function MobileNavContent({
             className="rounded-lg font-semibold text-foreground dark:text-gray-100"
             aria-label="Bond Back home"
           >
-            <span className="rounded-lg bg-primary px-2.5 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10">
-              Bond<span className="font-normal text-primary-foreground/90"> Back</span>
+            <span className="rounded-lg bg-primary px-2.5 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10">
+              Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
             </span>
           </Link>
         </SheetClose>

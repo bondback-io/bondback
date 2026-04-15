@@ -49,6 +49,9 @@ export async function createBuyNowCheckoutSessionUrl(
   listing: { id: string; title: string; suburb: string; postcode: string; buy_now_cents: number; lister_id: string }
 ): Promise<string | null> {
   const baseUrl = getStripeCheckoutAppUrl();
+  /** Land on API route first — avoids RSC → API → job redirect chain (reload/loop issues in App Router). */
+  const returnNext = `/listings/${listing.id}`;
+  const successUrl = `${baseUrl}/api/stripe/checkout/return?session_id={CHECKOUT_SESSION_ID}&next=${encodeURIComponent(returnNext)}`;
   const stripe = await getStripeServer();
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -66,7 +69,7 @@ export async function createBuyNowCheckoutSessionUrl(
         },
       },
     ],
-    success_url: `${baseUrl}/listings/${listing.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    success_url: successUrl,
     cancel_url: `${baseUrl}/listings/${listing.id}?payment=canceled`,
     client_reference_id: listing.id,
     metadata: {
@@ -98,6 +101,8 @@ export async function createJobCheckoutSessionUrl(
   const feeCents = Math.round((agreedCents * feePercent) / 100);
   const totalCents = agreedCents + feeCents;
   const jobIdStr = String(job.id);
+  const returnNext = `/jobs/${jobIdStr}`;
+  const successUrl = `${baseUrl}/api/stripe/checkout/return?session_id={CHECKOUT_SESSION_ID}&next=${encodeURIComponent(returnNext)}`;
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -130,7 +135,7 @@ export async function createJobCheckoutSessionUrl(
           ]
         : []),
     ],
-    success_url: `${baseUrl}/jobs/${jobIdStr}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    success_url: successUrl,
     cancel_url: `${baseUrl}/jobs/${jobIdStr}?payment=canceled`,
     client_reference_id: jobIdStr,
     metadata: {
@@ -150,7 +155,7 @@ export async function createJobCheckoutSessionUrl(
  * `topUpAgreedCents` is the extra job amount to the cleaner (platform fee added as second line item).
  */
 export async function createJobTopUpCheckoutSessionUrl(
-  job: { id: number | string },
+  job: { id: number | string; listingId?: string | null },
   listing: { title: string; suburb: string; postcode: string },
   topUpAgreedCents: number,
   feePercent: number,
@@ -163,6 +168,11 @@ export async function createJobTopUpCheckoutSessionUrl(
   const feeCents = Math.round((agreedCents * feePercent) / 100);
   const totalCents = agreedCents + feeCents;
   const jobIdStr = String(job.id);
+  /** Return to listing page so lister sees updated Payment breakdown (top-ups). */
+  const lid = job.listingId != null ? String(job.listingId).trim() : "";
+  const returnNext =
+    lid !== "" ? `/listings/${encodeURIComponent(lid)}` : `/jobs/${jobIdStr}`;
+  const successUrl = `${baseUrl}/api/stripe/checkout/return?session_id={CHECKOUT_SESSION_ID}&next=${encodeURIComponent(returnNext)}`;
   const note = (noteForMetadata ?? "").trim().slice(0, 450);
   const suffix = options?.listingTitleSuffix?.trim() ? ` — ${options.listingTitleSuffix.trim()}` : "";
 
@@ -197,7 +207,7 @@ export async function createJobTopUpCheckoutSessionUrl(
           ]
         : []),
     ],
-    success_url: `${baseUrl}/jobs/${jobIdStr}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    success_url: successUrl,
     cancel_url: `${baseUrl}/jobs/${jobIdStr}?payment=canceled`,
     client_reference_id: jobIdStr,
     metadata: {

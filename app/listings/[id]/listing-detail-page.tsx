@@ -14,7 +14,9 @@ import { profileFieldIsAdmin } from "@/lib/is-admin";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { JobPaymentReturnAck } from "@/components/features/job-payment-return-ack";
+import { JobPaymentBreakdown } from "@/components/features/job-payment-breakdown";
 import { ListingAuctionDetail } from "@/components/features/listing-auction-detail";
+import { parseJobTopUpPayments } from "@/lib/job-top-up";
 import type { BidWithBidder } from "@/components/features/bid-history-table";
 import { enrichBidsWithBidderProfiles } from "@/lib/bids/enrich-bids-with-bidders";
 import { cn } from "@/lib/utils";
@@ -177,6 +179,9 @@ export default async function ListingDetailPage({
       ? jobAgreed
       : listingBuyNow ?? listingReserve ?? 0
     : 0;
+  const jobTopUpPayments = jobRow
+    ? parseJobTopUpPayments(jobRow.top_up_payments)
+    : [];
 
   const { data: bids } = await supabase
     .from("bids")
@@ -222,6 +227,7 @@ export default async function ListingDetailPage({
       <JobPaymentReturnAck
         notice={
           paymentNotice === "success" ||
+          paymentNotice === "top_up_success" ||
           paymentNotice === "error" ||
           paymentNotice === "canceled"
             ? paymentNotice
@@ -261,6 +267,25 @@ export default async function ListingDetailPage({
           )}
         >
           <div className="min-w-0 xl:min-h-0">
+            {hasActiveJob &&
+              jobRow &&
+              ownsListingAsLister &&
+              agreedAmountCents > 0 &&
+              (jobRow.status === "accepted" ||
+                jobRow.status === "in_progress" ||
+                jobRow.status === "completed_pending_approval") && (
+                <div className="mb-4 space-y-3">
+                  <JobPaymentBreakdown
+                    agreedAmountCents={agreedAmountCents}
+                    feePercentage={feePercentage}
+                    isStripeTestMode={stripeTestModeForPayment}
+                    variant={
+                      jobRow.status === "accepted" ? "pay" : "release"
+                    }
+                    topUpPayments={jobTopUpPayments}
+                  />
+                </div>
+              )}
             <ListingAuctionDetail
               listing={listingRow}
               initialBids={initialBids}

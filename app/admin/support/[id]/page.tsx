@@ -15,6 +15,8 @@ import {
   submitSupportTicketReply,
 } from "@/lib/actions/support-thread";
 import { ticketDisplayId } from "@/lib/support/ticket-format";
+import { AdminDeleteSupportTicketButton } from "@/components/admin/admin-delete-support-ticket-button";
+import { profileFieldIsAdmin } from "@/lib/is-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +35,9 @@ export default async function AdminSupportTicketDetailPage({
     .select("is_admin")
     .eq("id", user.id)
     .maybeSingle();
-  if (!(profile as { is_admin?: boolean | null } | null)?.is_admin) redirect("/dashboard");
+  if (!profileFieldIsAdmin((profile as { is_admin?: unknown } | null)?.is_admin)) {
+    redirect("/dashboard");
+  }
 
   const { id } = await params;
   const { ticket, isAdmin } = await loadSupportTicketForViewer(id);
@@ -55,13 +59,16 @@ export default async function AdminSupportTicketDetailPage({
 
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
           <CardHeader className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="text-lg font-semibold dark:text-gray-100">
                 {ticket.subject}
               </CardTitle>
-              <Badge variant="outline" className="text-[10px]">
-                {ticket.status}
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="text-[10px]">
+                  {ticket.status}
+                </Badge>
+                <AdminDeleteSupportTicketButton ticketId={ticket.id} />
+              </div>
             </div>
             <p className="text-xs text-muted-foreground dark:text-gray-400">
               {ticketDisplayId(ticket.id)} • Created {format(new Date(ticket.created_at), "dd MMM yyyy, HH:mm")}

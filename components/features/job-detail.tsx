@@ -2678,6 +2678,7 @@ export function JobDetail({
                   feePercentage={feePercentage}
                   isStripeTestMode={isStripeTestMode}
                   variant="pay"
+                  topUpPayments={topUpPayments}
                 />
               )}
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/60 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800/40">
@@ -3440,6 +3441,7 @@ export function JobDetail({
                     feePercentage={feePercentage}
                     isStripeTestMode={isStripeTestMode}
                     variant="release"
+                    topUpPayments={topUpPayments}
                   />
                 )}
                 {canListerTopUp && (

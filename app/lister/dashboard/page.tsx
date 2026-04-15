@@ -93,7 +93,7 @@ async function ListerDashboardContent() {
     supabase
       .from("jobs")
       .select(
-        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete"
+        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments"
       )
       .eq("lister_id", user.id),
     supabase

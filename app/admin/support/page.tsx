@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/table";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminSupportFilters } from "@/components/admin/admin-support-filters";
+import { AdminDeleteSupportTicketButton } from "@/components/admin/admin-delete-support-ticket-button";
+import { profileFieldIsAdmin } from "@/lib/is-admin";
 
 type SupportTicketRow = Database["public"]["Tables"]["support_tickets"]["Row"];
 
@@ -45,7 +47,7 @@ export default async function AdminSupportPage({
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (!profileData || !(profileData as { is_admin?: boolean }).is_admin) {
+  if (!profileData || !profileFieldIsAdmin((profileData as { is_admin?: unknown }).is_admin)) {
     redirect("/dashboard");
   }
 
@@ -108,12 +110,13 @@ export default async function AdminSupportPage({
                   <TableHead className="dark:text-gray-300">AI suggested</TableHead>
                   <TableHead className="dark:text-gray-300">Status</TableHead>
                   <TableHead className="dark:text-gray-300">Created</TableHead>
+                  <TableHead className="w-10 text-right dark:text-gray-300" aria-label="Actions" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {tickets.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground dark:text-gray-400">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground dark:text-gray-400">
                       No tickets match the filters.
                     </TableCell>
                   </TableRow>
@@ -166,6 +169,9 @@ export default async function AdminSupportPage({
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground dark:text-gray-400">
                         {format(new Date(t.created_at), "dd MMM yyyy, HH:mm")}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <AdminDeleteSupportTicketButton ticketId={String(t.id)} variant="ghost" />
                       </TableCell>
                     </TableRow>
                   ))

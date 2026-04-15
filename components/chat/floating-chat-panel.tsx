@@ -39,8 +39,8 @@ export function FloatingChatPanel() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 flex justify-end px-3 pb-3 sm:px-4 sm:pb-4">
       <div
-        className={`flex max-h-[78vh] rounded-2xl border bg-background shadow-xl transition-all duration-200 dark:border-gray-800 dark:bg-gray-900 ${
-          isCollapsed ? "w-[52px]" : "w-full max-w-4xl"
+        className={`flex max-h-[78vh] rounded-2xl border bg-background shadow-xl transition-all duration-200 dark:border-gray-800 dark:bg-gray-900 sm:max-h-[82vh] lg:max-h-[min(88vh,900px)] ${
+          isCollapsed ? "w-[52px]" : "w-full max-w-4xl lg:max-w-5xl"
         }`}
       >
         {/* Collapse bar */}

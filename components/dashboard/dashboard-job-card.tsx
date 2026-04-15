@@ -33,6 +33,8 @@ import {
 import { cn } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
+import { parseJobTopUpPayments } from "@/lib/job-top-up";
+import type { Json } from "@/types/supabase";
 
 type JobRow = {
   id: number | string;
@@ -42,6 +44,7 @@ type JobRow = {
   cleaner_id?: string | null;
   cleaner_confirmed_complete?: boolean | null;
   agreed_amount_cents?: number | null;
+  top_up_payments?: Json | null;
 };
 
 function jobCardStatusPresentation(status: string): {
@@ -170,6 +173,7 @@ function DashboardJobCardInner({
   const { label: statusLabel, badgeClass: statusClass } = jobCardStatusPresentation(job.status);
 
   const agreed = job.agreed_amount_cents;
+  const topUpCount = parseJobTopUpPayments(job.top_up_payments ?? null).length;
   const gross =
     agreed != null && agreed > 0
       ? agreed
@@ -295,6 +299,11 @@ function DashboardJobCardInner({
             <p className="text-5xl font-extrabold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
               {formatCents(gross)}
             </p>
+            {topUpCount > 0 && (
+              <p className="mt-1 text-[11px] font-medium text-emerald-800/85 dark:text-emerald-300/90">
+                Includes {topUpCount} top-up{topUpCount === 1 ? "" : "s"} — agreed job total
+              </p>
+            )}
             {daysLine && (
               <>
                 <div
@@ -495,6 +504,11 @@ function DashboardJobCardInner({
                 </span>
               )}
             </div>
+            {topUpCount > 0 && (
+              <p className="mt-1 text-[10px] font-medium text-emerald-800/85 dark:text-emerald-300/90">
+                Includes {topUpCount} top-up{topUpCount === 1 ? "" : "s"} — agreed job total
+              </p>
+            )}
             {daysLine != null && (
               <p className="mt-1.5 text-[10px] font-medium leading-snug text-emerald-800/70 dark:text-emerald-400/75">
                 Preferred clean timing — not payment or auction timing.

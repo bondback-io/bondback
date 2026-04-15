@@ -6,6 +6,8 @@ import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/adm
 import type { Database } from "@/types/supabase";
 import { sendEmail } from "@/lib/notifications/email";
 import { supportTicketEmailToken, ticketDisplayId } from "@/lib/support/ticket-format";
+import { profileFieldIsAdmin } from "@/lib/is-admin";
+import { logAdminActivity } from "@/lib/admin-activity-log";
 
 type SupportTicketRow = Database["public"]["Tables"]["support_tickets"]["Row"];
 type SupportTicketMessageRow = Database["public"]["Tables"]["support_ticket_messages"]["Row"];
@@ -33,7 +35,7 @@ async function isAdminUser(
     .select("is_admin")
     .eq("id", userId)
     .maybeSingle();
-  return (data as { is_admin?: boolean | null } | null)?.is_admin === true;
+  return profileFieldIsAdmin((data as { is_admin?: unknown } | null)?.is_admin);
 }
 
 export async function listMySupportTickets(): Promise<SupportTicketRow[]> {
@@ -166,6 +168,78 @@ export async function submitSupportTicketReply(formData: FormData): Promise<void
   revalidatePath("/support");
   revalidatePath(`/admin/support/${ticketId}`);
   revalidatePath("/admin/support");
+}
+
+/** Collect storage object paths from ticket row and thread messages before row delete. */
+function collectSupportAttachmentPaths(
+  ticket: { attachment_urls?: string[] | null },
+  messages: { attachment_urls?: string[] | null }[]
+): string[] {
+  const paths = new Set<string>();
+  for (const u of ticket.attachment_urls ?? []) {
+    const s = trimText(u);
+    if (s) paths.add(s);
+  }
+  for (const m of messages) {
+    for (const u of m.attachment_urls ?? []) {
+      const s = trimText(u);
+      if (s) paths.add(s);
+    }
+  }
+  return [...paths];
+}
+
+export async function adminDeleteSupportTicket(ticketId: string): Promise<void> {
+  const id = trimText(ticketId);
+  if (!id) throw new Error("Missing ticket.");
+
+  const { supabase, userId } = await requireSessionUser();
+  const adminOk = await isAdminUser(supabase, userId);
+  if (!adminOk) throw new Error("Not authorised.");
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new Error("SUPABASE_SERVICE_ROLE_KEY required.");
+
+  const { data: ticket, error: loadErr } = await admin
+    .from("support_tickets")
+    .select("id, subject, attachment_urls")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadErr) throw new Error(loadErr.message);
+  if (!ticket) throw new Error("Ticket not found.");
+
+  const { data: msgRows, error: msgErr } = await admin
+    .from("support_ticket_messages")
+    .select("attachment_urls")
+    .eq("ticket_id", id);
+  if (msgErr) throw new Error(msgErr.message);
+
+  const paths = collectSupportAttachmentPaths(
+    ticket as { attachment_urls?: string[] | null },
+    (msgRows ?? []) as { attachment_urls?: string[] | null }[]
+  );
+  if (paths.length > 0) {
+    const { error: stErr } = await admin.storage.from("support-attachments").remove(paths);
+    if (stErr && process.env.NODE_ENV !== "production") {
+      console.warn("[adminDeleteSupportTicket] storage remove:", stErr.message);
+    }
+  }
+
+  const { error: delErr } = await admin.from("support_tickets").delete().eq("id", id);
+  if (delErr) throw new Error(delErr.message);
+
+  await logAdminActivity({
+    adminId: userId,
+    actionType: "support_ticket_deleted",
+    targetType: "support_ticket",
+    targetId: id,
+    details: { subject: trimText((ticket as { subject?: string }).subject).slice(0, 120) },
+  });
+
+  revalidatePath("/admin/support");
+  revalidatePath(`/admin/support/${id}`);
+  revalidatePath("/support");
+  revalidatePath(`/support/${id}`);
 }
 
 export async function adminUpdateSupportTicketStatus(formData: FormData): Promise<void> {

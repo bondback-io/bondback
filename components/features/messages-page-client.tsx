@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { cn, trimStr } from "@/lib/utils";
@@ -127,6 +127,15 @@ function otherPartyAvatarUrl(c: Conversation): string | null {
   return c.otherPartyRole === "cleaner" ? c.cleanerAvatarUrl : c.listerAvatarUrl;
 }
 
+/** Matches `activeConvos` — threads that are not archived as “past” on /messages. */
+function firstActiveThreadJobId(jobs: JobRow[]): number | null {
+  const j = jobs.find(
+    (row) =>
+      isChatUnlockedForJobStatus(row.status) && row.status !== "completed"
+  );
+  return (j?.id as number | undefined) ?? null;
+}
+
 type MessagesPageClientProps = {
   currentUserId: string;
   /** profiles.active_role — chat lister/cleaner labels when you are both on a job */
@@ -149,10 +158,9 @@ export function MessagesPageClient({
   profiles,
 }: MessagesPageClientProps) {
   const router = useRouter();
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(() => {
-    const firstActive = jobs.find((j) => j.status === "in_progress");
-    return (firstActive?.id as number | undefined) ?? (jobs[0]?.id as number);
-  });
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(() =>
+    firstActiveThreadJobId(jobs)
+  );
 
   useEffect(() => {
     const onRole = () => {
@@ -165,9 +173,7 @@ export function MessagesPageClient({
   useEffect(() => {
     const ids = new Set(jobs.map((j) => j.id as number));
     if (selectedJobId != null && !ids.has(selectedJobId)) {
-      const firstActive = jobs.find((j) => j.status === "in_progress");
-      const next = (firstActive?.id as number | undefined) ?? (jobs[0]?.id as number | undefined);
-      setSelectedJobId(next ?? null);
+      setSelectedJobId(firstActiveThreadJobId(jobs));
     }
   }, [jobs, selectedJobId]);
 
@@ -303,11 +309,15 @@ export function MessagesPageClient({
     };
   }
 
+  const togglePastThread = (jobId: number) => {
+    setSelectedJobId((prev) => (prev === jobId ? null : jobId));
+  };
+
   /** Desktop sidebar: richer rows with avatar chips. */
   const historyBlockDesktop = (
     <details className="group">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 [&::-webkit-details-marker]:hidden">
-        <span>History</span>
+        <span>Past chats</span>
         <span className="rounded-full bg-slate-200/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">
           {completedConvos.length}
         </span>
@@ -320,7 +330,7 @@ export function MessagesPageClient({
             <button
               key={c.jobId}
               type="button"
-              onClick={() => setSelectedJobId(c.jobId)}
+              onClick={() => togglePastThread(c.jobId)}
               className={cn(
                 "flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition",
                 isSelected
@@ -339,7 +349,7 @@ export function MessagesPageClient({
                   {c.listingTitle ?? "Bond clean job"}
                 </p>
                 <p className="truncate text-[9px] text-slate-500 dark:text-slate-500">
-                  Done
+                  {isSelected ? "Tap again to hide" : "Read-only · tap to view"}
                 </p>
               </div>
             </button>
@@ -374,7 +384,7 @@ export function MessagesPageClient({
               <li key={c.jobId}>
                 <button
                   type="button"
-                  onClick={() => setSelectedJobId(c.jobId)}
+                  onClick={() => togglePastThread(c.jobId)}
                   className={cn(
                     "flex w-full items-center gap-2 px-2 py-1.5 text-left transition",
                     isSelected
@@ -387,9 +397,13 @@ export function MessagesPageClient({
                   </span>
                   {isSelected ? (
                     <span className="shrink-0 text-[9px] font-medium text-violet-600 dark:text-violet-300">
-                      Open
+                      Hide
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="shrink-0 text-[9px] font-medium text-slate-400 dark:text-slate-500">
+                      View
+                    </span>
+                  )}
                 </button>
               </li>
             );
@@ -404,7 +418,7 @@ export function MessagesPageClient({
       className={cn(
         "flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3",
         "max-lg:h-[calc(100dvh-16.25rem-env(safe-area-inset-bottom,0px))] max-lg:max-h-[calc(100dvh-16.25rem-env(safe-area-inset-bottom,0px))] max-lg:min-h-[min(380px,82dvh)]",
-        "lg:min-h-0 lg:h-auto lg:max-h-none"
+        "lg:min-h-[min(480px,calc(100dvh-12rem))]"
       )}
     >
       {/* Mobile: thread picker + past chats (height-capped + internal scroll so chat panel + toasts aren’t crowded) */}
@@ -568,8 +582,12 @@ export function MessagesPageClient({
       {/* Chat panel — fills remaining viewport height on mobile */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {!selected ? (
-          <Card className="flex flex-1 items-center justify-center text-xs text-muted-foreground dark:border-slate-800 dark:bg-slate-900/40">
-            <p>Select a conversation to open messages.</p>
+          <Card className="flex flex-1 flex-col items-center justify-center gap-1 px-4 py-8 text-center text-xs text-muted-foreground dark:border-slate-800 dark:bg-slate-900/40">
+            <p className="max-w-sm text-foreground/80 dark:text-slate-200">
+              {activeConvos.length === 0 && completedConvos.length > 0
+                ? "Read-only history: open Past chats, choose a thread, then choose it again to hide."
+                : "Select a conversation to open messages."}
+            </p>
           </Card>
         ) : (
           <JobChat

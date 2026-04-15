@@ -14,6 +14,8 @@ function sanitizeNextPath(raw: string | null): string {
  * GET /api/stripe/checkout/return
  * Confirms Stripe Checkout return server-side and redirects back with `payment_notice`.
  * Query: session_id=cs_...&next=/jobs/123
+ * Stripe success_url should point here directly (see `lib/stripe.ts`) so the browser does not
+ * hit the job page with ?payment=success first (avoids extra redirects / reload loops).
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);

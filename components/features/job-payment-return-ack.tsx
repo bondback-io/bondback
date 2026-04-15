@@ -41,6 +41,13 @@ export function JobPaymentReturnAck({
   const pathname = usePathname();
 
   const stripQuery = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${pathname}${window.location.hash ?? ""}`
+      );
+    }
     scheduleRouterAction(() => router.replace(pathname, { scroll: false }));
   }, [router, pathname]);
 

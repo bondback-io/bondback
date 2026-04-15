@@ -23,8 +23,8 @@ function LogoMark() {
       className="flex min-h-11 min-w-11 shrink-0 items-center justify-start rounded-xl transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       aria-label="Bond Back home"
     >
-      <span className="rounded-xl bg-primary px-2.5 py-2 text-sm font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10">
-        Bond<span className="font-normal text-primary-foreground/90"> Back</span>
+      <span className="rounded-xl bg-primary px-2.5 py-2 text-sm font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10">
+        Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
       </span>
     </Link>
   );
@@ -127,8 +127,8 @@ export const Header = async ({
               className="flex shrink-0 items-center gap-2 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg"
               aria-label="Bond Back home"
             >
-              <span className="rounded-lg bg-primary px-2 py-1.5 text-sm font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10 sm:px-2.5">
-                Bond<span className="font-normal text-primary-foreground/90"> Back</span>
+              <span className="rounded-lg bg-primary px-2 py-1.5 text-sm font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10 sm:px-2.5">
+                Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
               </span>
               <span className="hidden truncate text-xs text-muted-foreground sm:inline lg:text-[13px]">
                 Bond clean marketplace
