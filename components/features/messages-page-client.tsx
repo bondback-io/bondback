@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import { cn } from "@/lib/utils";
 import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
 import type { Database } from "@/types/supabase";
@@ -22,12 +23,81 @@ type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobMessageRow = Database["public"]["Tables"]["job_messages"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
+function ConversationPickerAvatar({
+  photoUrl,
+  initial,
+  isSelected,
+  activeCleanerTheme,
+  className,
+  size = "default",
+}: {
+  photoUrl: string | null;
+  initial: string;
+  isSelected: boolean;
+  activeCleanerTheme: boolean;
+  /** e.g. `sm:h-9 sm:w-9` for desktop sidebar */
+  className?: string;
+  size?: "default" | "desktop";
+}) {
+  const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => {
+    setImgFailed(false);
+  }, [photoUrl]);
+  const showImg = Boolean(photoUrl?.trim()) && !imgFailed;
+  const isDesktop = size === "desktop";
+  const px = isDesktop ? 36 : 32;
+
+  if (showImg) {
+    return (
+      <span
+        className={cn(
+          "relative inline-flex shrink-0 overflow-hidden rounded-full ring-1 ring-black/5 dark:ring-white/10",
+          isDesktop ? "h-9 w-9" : "h-8 w-8",
+          isSelected && activeCleanerTheme && "ring-emerald-500/40",
+          isSelected && !activeCleanerTheme && "ring-sky-500/40",
+          className
+        )}
+      >
+        <OptimizedImage
+          src={photoUrl!.trim()}
+          alt=""
+          width={px}
+          height={px}
+          sizes={isDesktop ? "36px" : "32px"}
+          quality={75}
+          className="h-full w-full rounded-full object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      </span>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full font-bold text-white",
+        isDesktop ? "h-9 w-9 text-[11px]" : "h-8 w-8 text-[10px]",
+        isSelected && activeCleanerTheme
+          ? "bg-gradient-to-br from-emerald-500 to-teal-600"
+          : isSelected
+            ? "bg-gradient-to-br from-sky-500 to-blue-600"
+            : "bg-gradient-to-br from-slate-400 to-slate-600 dark:from-slate-600 dark:to-slate-700",
+        className
+      )}
+      aria-hidden
+    >
+      {initial}
+    </div>
+  );
+}
+
 export type Conversation = {
   jobId: number;
   listingId: string | null;
   jobStatus: string | null;
   listingTitle: string | null;
   listingSuburb: string | null;
+  listingState: string | null;
   listingPostcode: string | null;
   otherPartyName: string | null;
   otherPartyRole: "cleaner" | "lister";
@@ -50,6 +120,10 @@ export type Conversation = {
   /** When set, chat is read-only (funds released to cleaner). */
   paymentReleasedAt: string | null;
 };
+
+function otherPartyAvatarUrl(c: Conversation): string | null {
+  return c.otherPartyRole === "cleaner" ? c.cleanerAvatarUrl : c.listerAvatarUrl;
+}
 
 type MessagesPageClientProps = {
   currentUserId: string;
@@ -152,6 +226,7 @@ export function MessagesPageClient({
           jobStatus: job.status ?? null,
           listingTitle: listing?.title ?? null,
           listingSuburb: listing?.suburb ?? null,
+          listingState: listing?.state ?? null,
           listingPostcode: listing?.postcode ?? null,
           otherPartyName: otherPartyDisplayName,
           otherPartyRole,
@@ -161,10 +236,8 @@ export function MessagesPageClient({
           cleanerName: cleanerDisplay,
           otherPartyDisplayName,
           otherPartyUsername,
-          listerAvatarUrl:
-            (listerProfile as any)?.profile_photo_url ?? null,
-          cleanerAvatarUrl:
-            (cleanerProfile as any)?.profile_photo_url ?? null,
+          listerAvatarUrl: listerProfile?.profile_photo_url ?? null,
+          cleanerAvatarUrl: cleanerProfile?.profile_photo_url ?? null,
           lastMessageText: latest?.message_text ?? null,
           lastMessageAt: latest?.created_at ?? null,
           agreedAmountCents:
@@ -196,8 +269,6 @@ export function MessagesPageClient({
     const looksUsernameOnly = display.trim().startsWith("@");
     const titleLine =
       uname && !looksUsernameOnly ? `${display} (@${uname})` : display;
-    const baseTitle = c.listingTitle ?? "Bond clean job";
-    const jobLine = baseTitle.split(" in ")[0] ?? baseTitle;
     const initial = (
       display.replace(/^@/, "").trim().charAt(0) || "?"
     ).toUpperCase();
@@ -221,7 +292,6 @@ export function MessagesPageClient({
 
     return {
       titleLine,
-      jobLine,
       initial,
       relativeLabel,
       activeCleanerTheme,
@@ -348,16 +418,15 @@ export function MessagesPageClient({
             <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-2 pb-1 [-webkit-overflow-scrolling:touch]">
               {activeConvos.map((c) => {
                 const isSelected = c.jobId === selectedJobId;
-                const { titleLine, jobLine, initial, relativeLabel, activeCleanerTheme } =
-                  threadMeta(c);
+                const { titleLine, initial, relativeLabel, activeCleanerTheme } = threadMeta(c);
                 return (
                   <button
                     key={c.jobId}
                     type="button"
                     onClick={() => setSelectedJobId(c.jobId)}
                     className={cn(
-                      "snap-start shrink-0 rounded-xl border px-2.5 py-2 text-left transition active:scale-[0.99]",
-                      "w-[min(42vw,10.5rem)]",
+                      "snap-start shrink-0 rounded-xl border px-2 py-1.5 text-left transition active:scale-[0.99]",
+                      "w-max overflow-visible",
                       isSelected && activeCleanerTheme
                         ? "border-emerald-400/90 bg-emerald-50 shadow-sm dark:border-emerald-500/50 dark:bg-emerald-950/50"
                         : isSelected
@@ -365,23 +434,16 @@ export function MessagesPageClient({
                           : "border-slate-200/80 bg-white/90 dark:border-slate-700 dark:bg-slate-900/60"
                     )}
                   >
-                    <div className="flex items-start gap-2">
-                      <div
-                        className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white",
-                          isSelected && activeCleanerTheme
-                            ? "bg-gradient-to-br from-emerald-500 to-teal-600"
-                            : isSelected
-                              ? "bg-gradient-to-br from-sky-500 to-blue-600"
-                              : "bg-gradient-to-br from-slate-400 to-slate-600 dark:from-slate-600 dark:to-slate-700"
-                        )}
-                        aria-hidden
-                      >
-                        {initial}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-1">
-                          <p className="line-clamp-2 text-[11px] font-semibold leading-tight text-slate-900 dark:text-slate-50">
+                    <div className="flex items-center gap-2">
+                      <ConversationPickerAvatar
+                        photoUrl={otherPartyAvatarUrl(c)}
+                        initial={initial}
+                        isSelected={isSelected}
+                        activeCleanerTheme={activeCleanerTheme}
+                      />
+                      <div className="min-w-0 shrink-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="whitespace-nowrap text-[11px] font-semibold leading-tight text-slate-900 dark:text-slate-50">
                             {titleLine}
                           </p>
                           {relativeLabel ? (
@@ -390,9 +452,6 @@ export function MessagesPageClient({
                             </span>
                           ) : null}
                         </div>
-                        <p className="mt-0.5 line-clamp-1 text-[9px] leading-tight text-slate-500 dark:text-slate-400">
-                          {jobLine}
-                        </p>
                       </div>
                     </div>
                   </button>
@@ -432,8 +491,7 @@ export function MessagesPageClient({
               </p>
               {activeConvos.map((c) => {
                 const isSelected = c.jobId === selectedJobId;
-                const { titleLine, jobLine, initial, relativeLabel, activeCleanerTheme } =
-                  threadMeta(c);
+                const { titleLine, initial, relativeLabel, activeCleanerTheme } = threadMeta(c);
                 const loc =
                   c.listingSuburb || c.listingPostcode
                     ? `${c.listingSuburb ?? ""} ${c.listingPostcode ?? ""}`.trim()
@@ -453,22 +511,16 @@ export function MessagesPageClient({
                           : "border-transparent bg-white/50 hover:bg-slate-100/90 dark:bg-transparent dark:hover:bg-slate-800/70"
                     )}
                   >
-                    <div
-                      className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-sm sm:h-9 sm:w-9 sm:text-[11px]",
-                        isSelected && activeCleanerTheme
-                          ? "bg-gradient-to-br from-emerald-500 to-teal-600"
-                          : isSelected
-                            ? "bg-gradient-to-br from-sky-500 to-blue-600"
-                            : "bg-gradient-to-br from-slate-400 to-slate-600 dark:from-slate-500 dark:to-slate-700"
-                      )}
-                      aria-hidden
-                    >
-                      {initial}
-                    </div>
+                    <ConversationPickerAvatar
+                      photoUrl={otherPartyAvatarUrl(c)}
+                      initial={initial}
+                      isSelected={isSelected}
+                      activeCleanerTheme={activeCleanerTheme}
+                      size="desktop"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-1">
-                        <p className="truncate text-[12px] font-semibold leading-tight text-slate-900 dark:text-slate-100 sm:text-[13px]">
+                        <p className="break-words text-[12px] font-semibold leading-tight text-slate-900 dark:text-slate-100 sm:text-[13px]">
                           {titleLine}
                         </p>
                         {relativeLabel && (
@@ -477,9 +529,6 @@ export function MessagesPageClient({
                           </span>
                         )}
                       </div>
-                      <p className="truncate text-[10px] text-slate-600 dark:text-slate-400 sm:text-[11px]">
-                        {jobLine}
-                      </p>
                       {loc && (
                         <p className="truncate text-[9px] text-slate-400 dark:text-slate-500 sm:text-[10px]">
                           {loc}
@@ -535,6 +584,9 @@ export function MessagesPageClient({
             className="min-h-0 flex-1 rounded-xl border border-slate-200/90 shadow-sm dark:border-slate-800 lg:rounded-2xl lg:border-0 lg:shadow-none"
             messenger={{
               jobTitle: selected.listingTitle ?? "Bond clean job",
+              listingSuburb: selected.listingSuburb,
+              listingState: selected.listingState,
+              listingPostcode: selected.listingPostcode,
               agreedPriceLabel:
                 selected.agreedAmountCents != null && selected.agreedAmountCents > 0
                   ? formatCents(selected.agreedAmountCents)

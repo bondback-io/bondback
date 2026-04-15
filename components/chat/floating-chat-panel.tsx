@@ -146,6 +146,9 @@ export function FloatingChatPanel() {
                     variant="compact"
                     messenger={{
                       jobTitle: selected.listingTitle ?? "Bond clean job",
+                      listingSuburb: selected.listingSuburb,
+                      listingState: selected.listingState,
+                      listingPostcode: selected.listingPostcode,
                       agreedPriceLabel: agreedLabel,
                       statusPillLabel: buildChatStatusPill({
                         status: selected.status,

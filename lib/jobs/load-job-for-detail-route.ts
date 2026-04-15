@@ -255,7 +255,7 @@ export async function loadListingFullForSession(
     if (String(accessJob.listing_id) !== String(listingId)) {
       return null;
     }
-    if (!sessionMayReadJobOrAdmin(accessJob, sessionUserId, false)) {
+    if (!sessionMayReadJobOrAdmin(accessJob, sessionUserId, isAdmin)) {
       return null;
     }
     return row;
@@ -279,7 +279,7 @@ export async function loadListingFullForSession(
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (j && sessionMayReadJobOrAdmin(j as JobRow, sessionUserId, false)) {
+    if (j && sessionMayReadJobOrAdmin(j as JobRow, sessionUserId, isAdmin)) {
       return row;
     }
     return null;
@@ -307,6 +307,24 @@ export async function loadListingFullForSession(
   }
 
   return null;
+}
+
+/**
+ * Resolve `jobs.listing_id` for a numeric job PK (service role only).
+ * Used when user-scoped job reads fail but we still need the listing UUID for redirects / visibility checks.
+ */
+export async function tryResolveListingIdForNumericJobId(
+  jobId: number
+): Promise<string | null> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return null;
+  const { data } = await admin
+    .from("jobs")
+    .select("listing_id")
+    .eq("id", jobId)
+    .maybeSingle();
+  const lid = (data as { listing_id?: string | null } | null)?.listing_id;
+  return lid != null && String(lid).trim() !== "" ? String(lid) : null;
 }
 
 /**

@@ -35,6 +35,9 @@ export type ChatWindowProps = {
   /** When set (e.g. from `/messages`), dual-role users only open threads for their current inbox mode. */
   messengerRoleFilter?: "lister" | "cleaner" | null;
   jobTitle: string;
+  listingSuburb?: string | null;
+  listingState?: string | null;
+  listingPostcode?: string | null;
   agreedPriceLabel: string;
   /** Short job status label (e.g. In progress, Funds in escrow) */
   statusPillLabel: string;
@@ -48,7 +51,7 @@ export type ChatWindowProps = {
   viewJobHref?: string;
 };
 
-/** Splits listing titles like "2 Beds … in CURRIMUNDI" so the agreed amount can sit beside the suburb. */
+/** Splits listing titles like "2 Beds … in CURRIMUNDI" for the headline before the location line. */
 function parseListingTitleInLocation(title: string): { beforeIn: string; suburb: string } | null {
   const marker = " in ";
   const idx = title.lastIndexOf(marker);
@@ -57,6 +60,26 @@ function parseListingTitleInLocation(title: string): { beforeIn: string; suburb:
   const suburb = title.slice(idx + marker.length).trim();
   if (!beforeIn || !suburb) return null;
   return { beforeIn, suburb };
+}
+
+/** Line 1 = property headline; line 2 = `in SUBURB [STATE] [POSTCODE]` using DB fields when present. */
+function buildMessengerHeaderLines(
+  jobTitle: string,
+  listingSuburb?: string | null,
+  listingState?: string | null,
+  listingPostcode?: string | null
+): { line1: string; locationTail: string | null } {
+  const trimmed = jobTitle.trim();
+  const parsed = parseListingTitleInLocation(trimmed);
+  const subDb = listingSuburb?.trim() || "";
+  const stDb = listingState?.trim() || "";
+  const pcDb = listingPostcode?.trim() || "";
+  const subFromTitle = parsed?.suburb?.trim() || "";
+  const suburb = subDb || subFromTitle;
+  const locParts = [suburb, stDb, pcDb].filter(Boolean);
+  const line1 = parsed?.beforeIn ?? trimmed;
+  const locationTail = locParts.length > 0 ? locParts.join(" ") : null;
+  return { line1, locationTail };
 }
 
 function isOptimisticId(id: number): boolean {
@@ -118,6 +141,9 @@ export function ChatWindow({
   activeAppRole = null,
   messengerRoleFilter = null,
   jobTitle,
+  listingSuburb = null,
+  listingState = null,
+  listingPostcode = null,
   agreedPriceLabel,
   statusPillLabel,
   variant = "default",
@@ -161,9 +187,15 @@ export function ChatWindow({
     return (raw ?? (isMeLister ? "Cleaner" : "Owner")).split(" ")[0] ?? "Partner";
   }, [shellRole, cleanerName, listerName]);
 
-  const titleLocation = useMemo(
-    () => parseListingTitleInLocation(jobTitle.trim()),
-    [jobTitle]
+  const { line1: headerLine1, locationTail: headerLocationTail } = useMemo(
+    () =>
+      buildMessengerHeaderLines(
+        jobTitle.trim(),
+        listingSuburb,
+        listingState,
+        listingPostcode
+      ),
+    [jobTitle, listingSuburb, listingState, listingPostcode]
   );
 
   const scrollToBottom = useCallback(() => {
@@ -589,55 +621,24 @@ export function ChatWindow({
         <div className="mx-auto flex max-w-3xl flex-col gap-1 sm:gap-2">
           <div className="flex items-start justify-between gap-1.5 sm:gap-3">
             <div className="min-w-0 flex-1">
-              {titleLocation ? (
-                <p className="line-clamp-3 text-[12px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:line-clamp-2 sm:text-[15px] sm:leading-snug">
-                  <span>{titleLocation.beforeIn}</span>
-                  <span className="font-bold text-[#050505] dark:text-slate-50"> in </span>
-                  <span className="inline-flex max-w-full flex-wrap items-baseline gap-x-1.5 gap-y-0 align-baseline">
-                    <span className="break-words">{titleLocation.suburb}</span>
-                    <span
-                      className={cn(
-                        "shrink-0 text-[11px] font-semibold tabular-nums sm:text-[15px]",
-                        priceAccent
-                      )}
-                    >
-                      {agreedPriceLabel}
-                    </span>
-                  </span>
+              <p className="text-[12px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:text-[15px] sm:leading-snug">
+                {headerLine1}
+              </p>
+              {headerLocationTail ? (
+                <p className="mt-0.5 whitespace-normal break-words text-[11px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:text-[14px]">
+                  {` in ${headerLocationTail}`}
                 </p>
-              ) : (
-                <>
-                  <h2 className="line-clamp-2 text-[12px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:text-[16px]">
-                    {jobTitle}
-                  </h2>
-                  <div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
-                    <p
-                      className={cn(
-                        "text-[11px] font-semibold tabular-nums sm:text-[15px]",
-                        priceAccent
-                      )}
-                    >
-                      {agreedPriceLabel}
-                    </p>
-                    {viewJobHref ? (
-                      <Link
-                        href={viewJobHref}
-                        className={cn(
-                          "inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold no-underline transition active:opacity-70 sm:text-[13px]",
-                          isCleanerRole
-                            ? "text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
-                            : isListerRole
-                              ? "text-sky-700 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300"
-                              : "text-primary hover:underline"
-                        )}
-                      >
-                        View job
-                        <ChevronRight className="h-3 w-3 opacity-80 sm:h-3.5 sm:w-3.5" aria-hidden />
-                      </Link>
-                    ) : null}
-                  </div>
-                </>
-              )}
+              ) : null}
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <p
+                  className={cn(
+                    "text-[11px] font-semibold tabular-nums sm:text-[15px]",
+                    priceAccent
+                  )}
+                >
+                  {agreedPriceLabel}
+                </p>
+              </div>
             </div>
             <span
               className={cn(
@@ -648,7 +649,7 @@ export function ChatWindow({
               {statusPillLabel}
             </span>
           </div>
-          {titleLocation && viewJobHref ? (
+          {viewJobHref ? (
             <div className="flex justify-end">
               <Link
                 href={viewJobHref}

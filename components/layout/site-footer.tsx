@@ -11,7 +11,9 @@ export const SiteFooter = () => {
             <p className="font-medium text-foreground dark:text-gray-200">
               © {currentYear} Bond Back
             </p>
-            <p>Built for Aussie bond cleans and end of lease.</p>
+            <p className="md:whitespace-nowrap">
+              Built for Aussie bond cleans and end of lease.
+            </p>
           </div>
 
           <div className="flex w-full max-w-sm flex-col items-center gap-3 sm:max-w-none sm:items-end sm:gap-2">

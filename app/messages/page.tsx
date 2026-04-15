@@ -5,7 +5,12 @@ import type { Database } from "@/types/supabase";
 import { MessagesPageClient } from "@/components/features/messages-page-client";
 import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
 import { effectiveMessengerRoleFromProfile } from "@/lib/chat-participant-role";
-import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-server";
+import {
+  fetchMessengerPeerProfilesByIds,
+  MESSENGER_PEER_PROFILE_SELECT,
+} from "@/lib/messenger-peer-profiles-server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { normalizeChatUid } from "@/lib/chat-participant-role";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -104,7 +109,33 @@ const MessagesPage = async () => {
 
   const messages = (messagesData ?? []) as JobMessageRow[];
   const listings = (listingsData ?? []) as ListingRow[];
-  const profiles = (profilesData ?? []) as ProfileRow[];
+  let profiles = (profilesData ?? []) as ProfileRow[];
+
+  /** If RLS returned only the signed-in user, merge any missing job peers via service role (same as `fetchMessengerPeerProfilesByIds` when admin is available). */
+  const havePeerNorm = new Set(
+    profiles.map((p) => normalizeChatUid(String(p.id ?? ""))).filter(Boolean)
+  );
+  const missingPeerIds = peerUserIds.filter(
+    (id) => id && !havePeerNorm.has(normalizeChatUid(id))
+  );
+  if (missingPeerIds.length > 0) {
+    const admin = createSupabaseAdminClient();
+    if (admin) {
+      const { data: extra } = await admin
+        .from("profiles")
+        .select(MESSENGER_PEER_PROFILE_SELECT)
+        .in("id", missingPeerIds);
+      const seen = new Set(havePeerNorm);
+      for (const row of extra ?? []) {
+        const id = String((row as { id?: string }).id ?? "");
+        const k = normalizeChatUid(id);
+        if (k && !seen.has(k)) {
+          seen.add(k);
+          profiles = [...profiles, row as ProfileRow];
+        }
+      }
+    }
+  }
 
   return (
     <section className="page-inner space-y-3 pb-28 pt-2 sm:space-y-6 sm:py-8 md:pb-8">

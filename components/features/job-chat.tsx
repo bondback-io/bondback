@@ -9,6 +9,10 @@ export type JobChatMessengerProps = {
   jobTitle: string;
   agreedPriceLabel: string;
   statusPillLabel: string;
+  /** Listing location — shown under title in chat header (state + postcode need not be in `jobTitle`). */
+  listingSuburb?: string | null;
+  listingState?: string | null;
+  listingPostcode?: string | null;
 };
 
 export type JobChatProps = {
@@ -122,6 +126,9 @@ export function JobChat({
         jobTitle={m.jobTitle}
         agreedPriceLabel={m.agreedPriceLabel}
         statusPillLabel={m.statusPillLabel}
+        listingSuburb={m.listingSuburb}
+        listingState={m.listingState}
+        listingPostcode={m.listingPostcode}
         variant={variant}
         readOnly={readOnly}
         messagesLayout={messagesLayout}

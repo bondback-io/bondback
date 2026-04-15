@@ -36,6 +36,7 @@ type Conversation = {
   status: string | null;
   listingTitle: string | null;
   listingSuburb: string | null;
+  listingState: string | null;
   listingPostcode: string | null;
   otherPartyName: string | null;
   otherPartyRole: "cleaner" | "lister";
@@ -257,6 +258,7 @@ export function ChatPanelProvider({
           status: job.status ?? null,
           listingTitle: listing?.title ?? null,
           listingSuburb: listing?.suburb ?? null,
+          listingState: listing?.state ?? null,
           listingPostcode: listing?.postcode ?? null,
           otherPartyName: otherPartyDisplayName,
           otherPartyRole,

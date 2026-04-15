@@ -6,6 +6,7 @@ import { logSystemError } from "@/lib/system-error-log";
 import {
   loadJobByNumericIdForSession,
   loadListingFullForSession,
+  tryResolveListingIdForNumericJobId,
 } from "@/lib/jobs/load-job-for-detail-route";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
 import { buildJobRouteDebugSnapshot } from "@/lib/jobs/job-route-debug";
@@ -108,15 +109,18 @@ export default async function JobDetailPage({
       const payload = await buildJobRouteDebugSnapshot(supabase, numericId, raw, sessionUserId);
       return <JobRouteDebugPanel payload={payload} />;
     }
-    const listingRow = await loadListingFullForSession(
-      supabase,
-      raw,
-      sessionUserId ?? undefined,
-      null,
-      detailLoadOpts
-    );
-    if (listingRow) {
-      redirect(`/listings/${encodeURIComponent(raw)}`);
+    const listingUuid = await tryResolveListingIdForNumericJobId(numericId);
+    if (listingUuid) {
+      const listingRow = await loadListingFullForSession(
+        supabase,
+        listingUuid,
+        sessionUserId ?? undefined,
+        null,
+        detailLoadOpts
+      );
+      if (listingRow) {
+        redirect(`/listings/${encodeURIComponent(listingUuid)}`);
+      }
     }
     notFound();
   }

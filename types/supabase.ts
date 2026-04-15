@@ -189,6 +189,8 @@ export interface Database {
           /** Lister narrative for cleaners (public); separate from special_instructions. */
           property_description: string | null;
           suburb: string;
+          /** Australian state/territory (e.g. QLD); optional on older rows. */
+          state: string | null;
           postcode: string;
           property_type: string;
           bedrooms: number;
@@ -228,6 +230,7 @@ export interface Database {
           description?: string | null;
           property_description?: string | null;
           suburb: string;
+          state?: string | null;
           postcode: string;
           property_type: string;
           bedrooms: number;
@@ -258,6 +261,7 @@ export interface Database {
           description?: string | null;
           property_description?: string | null;
           suburb?: string;
+          state?: string | null;
           postcode?: string;
           property_type?: string;
           bedrooms?: number;
