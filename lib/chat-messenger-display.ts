@@ -1,6 +1,35 @@
+import type { Database } from "@/types/supabase";
+
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
 /**
  * Shared UI label for the job messenger header status pill.
  */
+
+/** Primary line for messages sidebar / headers: full name, first+last, @cleaner_username, or fallback. */
+export function messengerPeerDisplayName(
+  profile: ProfileRow | null | undefined,
+  fallback: string
+): string {
+  if (!profile) return fallback;
+  const full = String(profile.full_name ?? "").trim();
+  if (full) return full;
+  const first = String(profile.first_name ?? "").trim();
+  const last = String(profile.last_name ?? "").trim();
+  const composed = [first, last].filter(Boolean).join(" ").trim();
+  if (composed) return composed;
+  const raw = String(profile.cleaner_username ?? "").trim().toLowerCase();
+  if (raw) return `@${raw}`;
+  return fallback;
+}
+
+/** Lowercase cleaner marketplace username for “(username)” suffix; null if unset. */
+export function messengerPeerCleanerUsername(
+  profile: ProfileRow | null | undefined
+): string | null {
+  const raw = String(profile?.cleaner_username ?? "").trim().toLowerCase();
+  return raw || null;
+}
 
 export function buildChatStatusPill(opts: {
   status: string | null;

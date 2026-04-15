@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/supabase";
 import { sendJobMessage, markJobMessagesRead } from "@/lib/actions/job-messages";
@@ -38,6 +40,10 @@ export type ChatWindowProps = {
   variant?: "default" | "compact";
   /** After payment released to cleaner — history visible, composer disabled. */
   readOnly?: boolean;
+  /** `/messages` mobile: stretch inside flex parent instead of forcing ~92dvh min-height. */
+  messagesLayout?: boolean;
+  /** Job detail link in header (messages page). */
+  viewJobHref?: string;
 };
 
 function isOptimisticId(id: number): boolean {
@@ -102,6 +108,8 @@ export function ChatWindow({
   statusPillLabel,
   variant = "default",
   readOnly = false,
+  messagesLayout = false,
+  viewJobHref,
 }: ChatWindowProps) {
   const supabase = createBrowserSupabaseClient();
   const { toast } = useToast();
@@ -166,6 +174,15 @@ export function ChatWindow({
         },
         (payload) => {
           const row = payload.new as JobMessageUiRow;
+          if (
+            normalizeChatUid(row.sender_id) !== normalizeChatUid(currentUserId)
+          ) {
+            if (typingTimeoutRef.current) {
+              clearTimeout(typingTimeoutRef.current);
+              typingTimeoutRef.current = null;
+            }
+            setTypingPeerLabel(null);
+          }
           setMessages((prev) => mergeIncomingMessage(prev, row));
         }
       )
@@ -190,7 +207,7 @@ export function ChatWindow({
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [supabase, jobId]);
+  }, [supabase, jobId, currentUserId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -253,6 +270,20 @@ export function ChatWindow({
         setTypingPeerLabel(null);
       }, 2800);
     })
+      .on("broadcast", { event: "chat_message" }, ({ payload }) => {
+        const row = payload as JobMessageUiRow | null;
+        if (!row || row.id == null || Number(row.job_id) !== Number(jobId)) return;
+        if (
+          normalizeChatUid(row.sender_id) !== normalizeChatUid(currentUserId)
+        ) {
+          if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = null;
+          }
+          setTypingPeerLabel(null);
+        }
+        setMessages((prev) => mergeIncomingMessage(prev, row));
+      })
       .subscribe();
 
     return () => {
@@ -323,6 +354,14 @@ export function ChatWindow({
         setText(trimmed);
         setError(res.error);
         return;
+      }
+      const liveCh = typingChannelRef.current;
+      if (res.message && liveCh) {
+        void liveCh.send({
+          type: "broadcast",
+          event: "chat_message",
+          payload: res.message,
+        });
       }
       void markRead();
     })();
@@ -403,6 +442,14 @@ export function ChatWindow({
           setError(res.error);
           return;
         }
+        const liveCh = typingChannelRef.current;
+        if (res.message && liveCh) {
+          void liveCh.send({
+            type: "broadcast",
+            event: "chat_message",
+            payload: res.message,
+          });
+        }
         void markRead();
       })();
     } finally {
@@ -410,8 +457,9 @@ export function ChatWindow({
     }
   };
 
-  const heightClass =
-    variant === "compact"
+  const heightClass = messagesLayout
+    ? "min-h-0 h-full w-full flex-1 max-lg:min-h-0 max-lg:flex-1 lg:flex-none lg:min-h-[min(92dvh,720px)]"
+    : variant === "compact"
       ? "min-h-[260px] max-h-[52vh] sm:max-h-[58vh]"
       : "min-h-[min(92dvh,720px)] sm:min-h-[520px]";
 
@@ -423,10 +471,10 @@ export function ChatWindow({
       ? "bg-gradient-to-b from-emerald-100/85 via-emerald-50/40 to-[#d8f5e5]/90 dark:from-emerald-950/50 dark:via-slate-950 dark:to-emerald-950/20"
       : "bg-[#f0f2f5] dark:bg-[#18191a]";
   const headerBar = isListerRole
-    ? "border-sky-200/90 bg-white/95 dark:border-sky-900/50 dark:bg-slate-900/95"
+    ? "border-sky-200/90 bg-white/95 dark:border-sky-800/40 dark:bg-slate-950/90 dark:backdrop-blur-sm"
     : isCleanerRole
-      ? "border-emerald-200/80 bg-white/95 dark:border-emerald-900/40 dark:bg-emerald-950/35"
-      : "border-[#e5e5e5] bg-white dark:border-slate-800 dark:bg-[#242526]";
+      ? "border-emerald-200/80 bg-white/95 dark:border-emerald-800/35 dark:bg-slate-950/90 dark:backdrop-blur-sm"
+      : "border-[#e5e5e5] bg-white dark:border-slate-800 dark:bg-slate-950/95";
   const priceAccent = isCleanerRole
     ? "text-emerald-700 dark:text-emerald-300"
     : "text-[#0084ff] dark:text-sky-400";
@@ -437,39 +485,80 @@ export function ChatWindow({
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden shadow-lg dark:shadow-black/40",
+        "flex flex-col overflow-hidden",
+        messagesLayout
+          ? "max-lg:shadow-none lg:shadow-lg lg:dark:shadow-black/40"
+          : "shadow-lg dark:shadow-black/40",
         shellBg,
-        "sm:rounded-2xl sm:border dark:sm:border-slate-800",
-        isListerRole && "sm:border-sky-200/70 dark:sm:border-sky-800/60",
-        isCleanerRole && "sm:border-emerald-200/70 dark:sm:border-emerald-800/50",
-        !isListerRole && !isCleanerRole && "sm:border-[#e5e5e5]",
+        messagesLayout
+          ? cn(
+              "max-lg:rounded-xl lg:rounded-2xl lg:border lg:shadow-lg dark:lg:border-slate-800",
+              isListerRole &&
+                "lg:border-sky-200/70 dark:lg:border-sky-800/60",
+              isCleanerRole &&
+                "lg:border-emerald-200/70 dark:lg:border-emerald-800/50",
+              !isListerRole &&
+                !isCleanerRole &&
+                "lg:border-[#e5e5e5] dark:lg:border-slate-800"
+            )
+          : cn(
+              "sm:rounded-2xl sm:border dark:sm:border-slate-800",
+              isListerRole && "sm:border-sky-200/70 dark:sm:border-sky-800/60",
+              isCleanerRole && "sm:border-emerald-200/70 dark:sm:border-emerald-800/50",
+              !isListerRole && !isCleanerRole && "sm:border-[#e5e5e5]"
+            ),
         heightClass
       )}
     >
-      {/* Job header — compact top bar */}
+      {/* Job header — title, price, status, optional View job */}
       <header
         className={cn(
           "sticky top-0 z-10 shrink-0 border-b px-3 py-2 shadow-sm sm:px-4 sm:py-2.5",
           headerBar
         )}
       >
-        <div className="mx-auto flex max-w-3xl items-start justify-between gap-2 sm:gap-3">
-          <div className="min-w-0 flex-1">
-            <h2 className="line-clamp-2 text-[15px] font-bold leading-tight tracking-tight text-[#050505] dark:text-gray-100 sm:text-[17px]">
-              {jobTitle}
-            </h2>
-            <p className={cn("mt-0.5 text-[14px] font-semibold sm:text-[15px]", priceAccent)}>
+        <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:gap-2.5">
+          <div className="flex items-start justify-between gap-2 sm:gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="line-clamp-2 text-[15px] font-bold leading-snug tracking-tight text-[#050505] dark:text-slate-50 sm:text-[17px]">
+                {jobTitle}
+              </h2>
+            </div>
+            <span
+              className={cn(
+                "max-w-[min(46%,11rem)] shrink-0 rounded-full px-2 py-1 text-center text-[9px] font-semibold uppercase leading-tight tracking-wide sm:max-w-none sm:px-2.5 sm:text-[10px] sm:normal-case sm:tracking-normal",
+                pillAccent
+              )}
+            >
+              {statusPillLabel}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <p
+              className={cn(
+                "text-[14px] font-semibold tabular-nums sm:text-[15px]",
+                priceAccent
+              )}
+            >
               {agreedPriceLabel}
             </p>
+            {viewJobHref ? (
+              <Link
+                href={viewJobHref}
+                className={cn(
+                  "inline-flex items-center gap-0.5 text-[12px] font-semibold no-underline transition active:opacity-70 sm:text-[13px]",
+                  isCleanerRole
+                    ? "text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+                    : isListerRole
+                      ? "text-sky-700 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300"
+                      : "text-primary hover:underline"
+                )}
+              >
+                View job
+                <ChevronRight className="h-3.5 w-3.5 opacity-80" aria-hidden />
+              </Link>
+            ) : null}
           </div>
-          <span
-            className={cn(
-              "max-w-[44%] shrink-0 rounded-full px-2 py-1 text-center text-[9px] font-semibold uppercase tracking-wide sm:max-w-none sm:px-2.5 sm:text-[10px] sm:normal-case sm:tracking-normal",
-              pillAccent
-            )}
-          >
-            {statusPillLabel}
-          </span>
         </div>
       </header>
 

@@ -33,6 +33,10 @@ export type JobChatProps = {
   className?: string;
   /** Set when `jobs.payment_released_at` is set — chat history visible, sending disabled. */
   paymentReleasedAt?: string | null;
+  /** `/messages` layout: fill mobile flex column + compact chrome. */
+  messagesLayout?: boolean;
+  /** Shown in chat header (e.g. `/jobs/123`). */
+  viewJobHref?: string | null;
 };
 
 /**
@@ -54,6 +58,8 @@ export function JobChat({
   variant = "default",
   className,
   paymentReleasedAt = null,
+  messagesLayout = false,
+  viewJobHref = null,
 }: JobChatProps) {
   const readOnly = isPaymentReleasedForJob(paymentReleasedAt);
   const m = messenger ?? {
@@ -91,7 +97,14 @@ export function JobChat({
   }
 
   return (
-    <section id="job-chat" className={cn("w-full", className)}>
+    <section
+      id="job-chat"
+      className={cn(
+        "w-full",
+        messagesLayout && "flex min-h-0 flex-1 flex-col overflow-hidden",
+        className
+      )}
+    >
       <ChatWindow
         jobId={jobId}
         currentUserId={currentUserId}
@@ -107,6 +120,8 @@ export function JobChat({
         statusPillLabel={m.statusPillLabel}
         variant={variant}
         readOnly={readOnly}
+        messagesLayout={messagesLayout}
+        viewJobHref={viewJobHref ?? undefined}
       />
     </section>
   );

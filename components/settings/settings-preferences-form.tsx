@@ -114,7 +114,7 @@ export function SettingsPreferencesForm({
         <div>
           <Label className="text-base font-semibold text-foreground dark:text-gray-100">Theme</Label>
           <p className="mt-1 text-sm text-muted-foreground dark:text-gray-400">
-            Applies across the site. You can also use the sun/moon button in the header for a quick toggle (saved to your account when logged in).
+            Applies across the site. You can also use the sun/moon button in the header for a quick toggle (saved to your account when logged in). Your choice here overrides the platform default for new visitors.
           </p>
         </div>
         <RadioGroup

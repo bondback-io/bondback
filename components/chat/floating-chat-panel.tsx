@@ -108,13 +108,19 @@ export function FloatingChatPanel() {
                     ) : (
                       conversations.map((c) => {
                         const isSelected = c.jobId === selectedJobId;
-                        const isOtherCleaner = c.otherPartyRole === "cleaner";
-                        const baseName = isOtherCleaner
-                          ? c.cleanerName ?? c.otherPartyName ?? "Cleaner"
-                          : c.listerName ?? c.otherPartyName ?? "Owner";
-                        const titleLine = `${baseName} ${
-                          isOtherCleaner ? "(Cleaner)" : "(Owner)"
-                        }`;
+                        const isCurrentUserLister =
+                          currentUserId != null && currentUserId === c.listerId;
+                        const activeCleanerTheme =
+                          isCurrentUserLister && c.cleanerId != null;
+
+                        const display = c.otherPartyDisplayName;
+                        const uname = c.otherPartyUsername;
+                        const looksUsernameOnly = display.trim().startsWith("@");
+                        const titleLine =
+                          uname && !looksUsernameOnly
+                            ? `${display} (@${uname})`
+                            : display;
+
                         const baseTitle = c.listingTitle ?? "Bond clean job";
                         const secondLine = baseTitle.split(" in ")[0] ?? baseTitle;
                         return (
@@ -123,9 +129,11 @@ export function FloatingChatPanel() {
                             type="button"
                             onClick={() => selectJob(c.jobId)}
                             className={`w-full rounded-md border px-2 py-1.5 text-left text-[11px] transition dark:border-gray-700 ${
-                              isSelected
-                                ? "border-emerald-400 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-900/40"
-                                : "border-border bg-background hover:bg-muted/70 dark:bg-gray-800 dark:hover:bg-gray-700"
+                              isSelected && activeCleanerTheme
+                                ? "border-emerald-400/85 bg-emerald-50 dark:border-emerald-500/45 dark:bg-emerald-950/45"
+                                : isSelected
+                                  ? "border-sky-400/80 bg-sky-50 dark:border-sky-500/50 dark:bg-sky-950/50"
+                                  : "border-border bg-background hover:bg-muted/70 dark:bg-gray-800 dark:hover:bg-gray-700"
                             }`}
                           >
                             <p className="line-clamp-1 font-semibold text-foreground dark:text-gray-100">

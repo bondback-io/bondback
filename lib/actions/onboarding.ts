@@ -12,6 +12,7 @@ import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 import { clampMaxTravelKm } from "@/lib/max-travel-km";
 import { ACCOUNT_INACTIVE_MESSAGE } from "@/lib/auth/account-errors";
 import { signOutIfAuthUserMissing } from "@/lib/auth/sign-out-if-auth-user-missing";
+import { getGlobalSettings, parseDefaultSiteThemeFromSettings } from "@/lib/actions/global-settings";
 
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 
@@ -183,6 +184,8 @@ export async function upsertMinimalProfileAfterSignup(
   const alreadyReferred = (existing as { referred_by?: string | null } | null)?.referred_by;
 
   const avatar = input.avatar_url?.trim() || null;
+  const globalSettings = await getGlobalSettings();
+  const initialTheme = parseDefaultSiteThemeFromSettings(globalSettings);
   const row: ProfileInsert = {
     id: userId,
     full_name: input.full_name.trim() || null,
@@ -196,6 +199,7 @@ export async function upsertMinimalProfileAfterSignup(
     roles: [],
     /** Until roles are chosen (Lister/Cleaner), do not default to lister — requires nullable `active_role` in DB. */
     active_role: null,
+    theme_preference: initialTheme,
     ...(avatar ? { profile_photo_url: avatar } : {}),
     ...(!alreadyReferred && referredBy ? { referred_by: referredBy } : {}),
   };
@@ -571,6 +575,9 @@ export async function finalizePath2Signup(
       ? clampMaxTravelKm(input.max_travel_km ?? 30)
       : 30;
 
+  const globalSettings = await getGlobalSettings();
+  const initialTheme = parseDefaultSiteThemeFromSettings(globalSettings);
+
   const row: ProfileInsert = {
     id: input.userId,
     full_name: input.full_name.trim() || null,
@@ -581,6 +588,7 @@ export async function finalizePath2Signup(
     roles,
     active_role,
     abn: input.role === "cleaner" ? abn : null,
+    theme_preference: initialTheme,
     ...(!alreadyReferred && referredBy ? { referred_by: referredBy } : {}),
   };
 

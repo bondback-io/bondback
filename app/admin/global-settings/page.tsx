@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminGlobalSettingsForm } from "@/components/admin/admin-global-settings-form";
 import { AdminEmailTemplates } from "@/components/admin/admin-email-templates";
-import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getGlobalSettings, parseDefaultSiteThemeFromSettings } from "@/lib/actions/global-settings";
 import {
   DEFAULT_PRICING_MODIFIERS,
   normalizeBaseRatePerBedroomFromGlobal,
@@ -137,6 +137,7 @@ export default async function AdminGlobalSettingsPage() {
           (existing as { allow_low_amount_listings?: boolean }).allow_low_amount_listings === true,
         allowTwoMinuteAuctionTest:
           (existing as { allow_two_minute_auction_test?: boolean }).allow_two_minute_auction_test === true,
+        defaultSiteTheme: parseDefaultSiteThemeFromSettings(existing),
       }
     : null;
 

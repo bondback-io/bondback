@@ -41,7 +41,8 @@ function tourExcludedPath(pathname: string | null): boolean {
 }
 
 function listerSteps(isDesktop: boolean): Step[] {
-  const createTarget = isDesktop ? "#tour-create-listing-desktop" : "#tour-create-listing-mobile";
+  /** Mobile: no header + button — tour highlights the menu where Create Listing lives. */
+  const createTarget = isDesktop ? "#tour-create-listing-desktop" : "#tour-mobile-main-menu";
   const listingsTarget = isDesktop ? "#tour-user-menu" : "#tour-bottom-listings";
   return [
     {
@@ -62,8 +63,17 @@ function listerSteps(isDesktop: boolean): Step[] {
       spotlightPadding: 10,
       content: (
         <p className="m-0 text-sm leading-relaxed text-popover-foreground">
-          Start here: <strong>Create Listing</strong> walks you through photos, dates, and pricing so
-          cleaners can bid accurately.
+          {isDesktop ? (
+            <>
+              Start here: <strong>Create Listing</strong> walks you through photos, dates, and pricing so cleaners can
+              bid accurately.
+            </>
+          ) : (
+            <>
+              Open the <strong>menu (☰)</strong>, then tap <strong>Create Listing</strong> — it walks you through
+              photos, dates, and pricing so cleaners can bid accurately.
+            </>
+          )}
         </p>
       ),
     },

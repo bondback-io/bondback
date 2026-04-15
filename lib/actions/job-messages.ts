@@ -25,7 +25,13 @@ type JobMessageInsert =
   Database["public"]["Tables"]["job_messages"]["Insert"];
 
 export type SendJobMessageResult =
-  | { ok: true }
+  | {
+      ok: true;
+      /** Persisted row for realtime/broadcast; omit if SELECT returned nothing (RLS edge case). */
+      message?: Database["public"]["Tables"]["job_messages"]["Row"] & {
+        sender_role?: string | null;
+      };
+    }
   | { ok: false; error: string };
 
 // Shared, user-facing moderation error message
@@ -266,20 +272,28 @@ export async function sendJobMessage(
     sender_role: senderRole,
   } as Record<string, unknown>;
 
-  let { error } = await supabase
+  let inserted:
+    | (Database["public"]["Tables"]["job_messages"]["Row"] & {
+        sender_role?: string | null;
+      })
+    | null = null;
+
+  let insErr = await supabase
     .from("job_messages")
-    .insert(rowWithRole as never);
+    .insert(rowWithRole as never)
+    .select("*")
+    .maybeSingle();
   if (
-    error &&
-    /column .*sender_role.* does not exist|schema cache/i.test(error.message ?? "")
+    insErr.error &&
+    /column .*sender_role.* does not exist|schema cache/i.test(insErr.error.message ?? "")
   ) {
-    // Backward-compatible during migration rollout.
-    ({ error } = await supabase.from("job_messages").insert(row as never));
+    insErr = await supabase.from("job_messages").insert(row as never).select("*").maybeSingle();
   }
 
-  if (error) {
-    return { ok: false, error: error.message };
+  if (insErr.error) {
+    return { ok: false, error: insErr.error.message };
   }
+  inserted = insErr.data as typeof inserted;
 
   // Notify only the other party (never the sender). Defer so the client returns immediately after insert.
   const recipientId = isListerParticipant ? j.winner_id : j.lister_id;
@@ -308,7 +322,7 @@ export async function sendJobMessage(
     });
   }
 
-  return { ok: true };
+  return inserted ? { ok: true, message: inserted } : { ok: true };
 }
 
 export type MarkJobMessagesReadResult = { ok: true } | { ok: false; error: string };

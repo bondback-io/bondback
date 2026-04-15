@@ -22,13 +22,20 @@ export function useThemeToggle(persistToServer = false) {
     if (typeof window === "undefined") return;
 
     const raw = window.localStorage.getItem("theme");
+    const srvAttr = document.documentElement.getAttribute("data-bb-theme") || "";
+    const siteAttr = document.documentElement.getAttribute("data-bb-site-default-theme") || "";
+    const siteDef: ThemePreference = siteAttr === "light" ? "light" : "dark";
     const nextTheme: ThemePreference =
-      raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
+      raw === "light" || raw === "dark" || raw === "system"
+        ? raw
+        : srvAttr === "light" || srvAttr === "dark" || srvAttr === "system"
+          ? (srvAttr as ThemePreference)
+          : siteDef;
     setTheme(nextTheme);
     applyThemeToDocument(nextTheme);
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const shouldFollowSystem = !raw || raw === "system";
+    const shouldFollowSystem = nextTheme === "system";
     if (media && typeof media.addEventListener === "function" && shouldFollowSystem) {
       const listener = (event: MediaQueryListEvent) => {
         const explicit = window.localStorage.getItem("theme");

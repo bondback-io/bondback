@@ -104,13 +104,14 @@ const MessagesPage = async () => {
   const profiles = (profilesData ?? []) as ProfileRow[];
 
   return (
-    <section className="page-inner space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl md:text-3xl dark:text-gray-100">
+    <section className="page-inner space-y-3 pb-28 pt-2 sm:space-y-6 sm:py-8 md:pb-8">
+      <div className="space-y-1 sm:space-y-2">
+        <h1 className="text-lg font-semibold tracking-tight sm:text-2xl md:text-3xl dark:text-gray-100">
           Messages
         </h1>
-        <p className="text-xs text-muted-foreground sm:text-sm">
-          Job chats stay on Bond Back for escrow and disputes. Choose a conversation, then message below.
+        <p className="text-[11px] leading-snug text-muted-foreground sm:text-sm sm:leading-normal">
+          Job chats stay on Bond Back for escrow and disputes. Pick a thread — job title, price, status, and{" "}
+          <span className="font-medium text-foreground/80 dark:text-slate-300">View job</span> live in the chat header.
         </p>
       </div>
 

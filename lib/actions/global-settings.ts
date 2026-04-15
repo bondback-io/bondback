@@ -83,7 +83,17 @@ type GlobalSettingsRow = {
   allow_low_amount_listings?: boolean;
   /** When true, new listing form may offer a 2-minute auction (duration_days = 0 sentinel). */
   allow_two_minute_auction_test?: boolean;
+  /** Default light/dark for guests and new signups. */
+  default_site_theme?: string | null;
 };
+
+/** Resolved platform default: `light` or `dark` (column missing → dark). */
+export function parseDefaultSiteThemeFromSettings(
+  row: GlobalSettingsRow | null | undefined
+): "light" | "dark" {
+  const v = row?.default_site_theme;
+  return v === "light" ? "light" : "dark";
+}
 
 /** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
 function normalizeRequireAbn(v: unknown): boolean {
@@ -337,6 +347,8 @@ export type SaveGlobalSettingsInput = {
   allowLowAmountListings?: boolean;
   /** When true, show a 2-minute auction duration on the new listing form (testing). */
   allowTwoMinuteAuctionTest?: boolean;
+  /** Default theme for logged-out users and new signups (`profiles.theme_preference`). */
+  defaultSiteTheme?: "light" | "dark";
 };
 
 export type SaveGlobalSettingsResult =
@@ -458,6 +470,7 @@ export async function saveGlobalSettings(
     admin_notify_dispute: data.adminNotifyDispute !== false,
     allow_low_amount_listings: data.allowLowAmountListings === true,
     allow_two_minute_auction_test: data.allowTwoMinuteAuctionTest === true,
+    default_site_theme: data.defaultSiteTheme === "light" ? "light" : "dark",
   };
 
   const { error } = admin
@@ -468,7 +481,9 @@ export async function saveGlobalSettings(
     const msg = error.message;
     const hint =
       msg.includes("does not exist") || msg.includes("42703")
-        ? " Run the migration: supabase/migrations/20250308120000_global_settings.sql (or create the global_settings table with announcement_text, announcement_active, etc.)."
+        ? msg.includes("default_site_theme")
+          ? " Add column global_settings.default_site_theme (see sql/20260216120000_global_settings_default_site_theme.sql)."
+          : " Run the migration: supabase/migrations/20250308120000_global_settings.sql (or create the global_settings table with announcement_text, announcement_active, etc.)."
         : "";
     return { ok: false, error: msg + hint };
   }
@@ -488,6 +503,7 @@ export async function saveGlobalSettings(
       maintenance_active: data.maintenanceActive,
       allow_low_amount_listings: data.allowLowAmountListings === true,
       allow_two_minute_auction_test: data.allowTwoMinuteAuctionTest === true,
+      default_site_theme: data.defaultSiteTheme === "light" ? "light" : "dark",
     },
   });
 

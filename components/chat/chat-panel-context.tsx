@@ -13,6 +13,10 @@ import type { ReactNode } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/supabase";
 import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
+import {
+  messengerPeerCleanerUsername,
+  messengerPeerDisplayName,
+} from "@/lib/chat-messenger-display";
 
 /** Max job ids per Supabase `in.(...)` realtime filter — keeps URL size safe with many chats. */
 const REALTIME_JOB_ID_CHUNK = 45;
@@ -34,6 +38,10 @@ type Conversation = {
   cleanerId: string | null;
   listerName: string | null;
   cleanerName: string | null;
+  /** Sidebar / list title for the other participant. */
+  otherPartyDisplayName: string;
+  /** Marketplace username when the other party is the cleaner (for “(@username)”). */
+  otherPartyUsername: string | null;
   listerAvatarUrl: string | null;
   cleanerAvatarUrl: string | null;
   lastMessageText: string | null;
@@ -197,21 +205,32 @@ export function ChatPanelProvider({
           payment_intent_id?: string | null;
           payment_released_at?: string | null;
         };
+        const listerDisplay = messengerPeerDisplayName(listerProfile, "Owner");
+        const cleanerDisplay = messengerPeerDisplayName(
+          cleanerProfile,
+          "Cleaner"
+        );
+        const otherPartyDisplayName =
+          otherPartyRole === "cleaner" ? cleanerDisplay : listerDisplay;
+        const otherPartyUsername =
+          otherPartyRole === "cleaner"
+            ? messengerPeerCleanerUsername(cleanerProfile)
+            : messengerPeerCleanerUsername(listerProfile);
+
         return {
           jobId: job.id as number,
           status: job.status ?? null,
           listingTitle: listing?.title ?? null,
           listingSuburb: listing?.suburb ?? null,
           listingPostcode: listing?.postcode ?? null,
-          otherPartyName:
-            otherPartyRole === "cleaner"
-              ? (cleanerProfile?.full_name as string | null) ?? "Cleaner"
-              : (listerProfile?.full_name as string | null) ?? "Owner",
+          otherPartyName: otherPartyDisplayName,
           otherPartyRole,
           listerId: job.lister_id as string | null,
           cleanerId: job.winner_id as string | null,
-          listerName: (listerProfile?.full_name as string | null) ?? null,
-          cleanerName: (cleanerProfile?.full_name as string | null) ?? null,
+          listerName: listerDisplay,
+          cleanerName: cleanerDisplay,
+          otherPartyDisplayName,
+          otherPartyUsername,
           listerAvatarUrl:
             (listerProfile as any)?.profile_photo_url ?? null,
           cleanerAvatarUrl:

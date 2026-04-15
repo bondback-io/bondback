@@ -215,6 +215,8 @@ const ProfilePage = async ({
     profile.full_name?.trim() ||
     session.user.email ||
     "User";
+  const cleanerUsernameRaw = String(profile.cleaner_username ?? "").trim();
+  const cleanerUsernameDisplay = cleanerUsernameRaw.toLowerCase() || null;
   const initials =
     displayName
       .split(" ")
@@ -232,6 +234,14 @@ const ProfilePage = async ({
         <div className="flex flex-col gap-4 md:gap-3">
           <Card className="overflow-hidden border-border bg-card/90 shadow-sm dark:border-gray-800 dark:bg-gray-950/90">
             <CardContent className="flex flex-col gap-4 px-3 py-4 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
+              {isCleanerActive ? (
+                <div className="flex w-full shrink-0 justify-end sm:hidden">
+                  <CleanerExperienceBadge
+                    jobs={cleanerCompletedJobsForHeader}
+                    className="px-3 py-1.5 text-[11px]"
+                  />
+                </div>
+              ) : null}
               <Avatar className="relative h-20 w-20 shrink-0 overflow-hidden border-2 border-border dark:border-gray-700">
                 {avatarUrl ? (
                   <Image
@@ -263,25 +273,32 @@ const ProfilePage = async ({
                     size="lg"
                   />
                 </div>
-                <p className="truncate text-base text-muted-foreground dark:text-gray-400">{displayName}</p>
-                <div className="flex flex-wrap gap-2">
-                  {isCleanerActive && (
-                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-base leading-snug">
+                  <span className="min-w-0 font-medium text-foreground dark:text-gray-200">{displayName}</span>
+                  {isCleanerActive && cleanerUsernameDisplay ? (
+                    <span className="shrink-0 text-muted-foreground dark:text-gray-400">
+                      ({cleanerUsernameDisplay})
+                    </span>
+                  ) : null}
+                  {isCleanerActive ? (
+                    <Badge className="shrink-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
                       Cleaner
                     </Badge>
-                  )}
-                  {isListerActive && (
-                    <Badge className="bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
+                  ) : null}
+                  {isListerActive ? (
+                    <Badge className="shrink-0 bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
                       Lister
                     </Badge>
-                  )}
-                  {!activeRole && (
-                    <Badge variant="secondary">Set a role below</Badge>
-                  )}
+                  ) : null}
+                  {!activeRole ? (
+                    <Badge variant="secondary" className="shrink-0">
+                      Set a role below
+                    </Badge>
+                  ) : null}
                 </div>
               </div>
               {isCleanerActive ? (
-                <div className="flex w-full shrink-0 justify-end sm:w-auto sm:self-center">
+                <div className="hidden w-full shrink-0 justify-end sm:flex sm:w-auto sm:self-center">
                   <CleanerExperienceBadge
                     jobs={cleanerCompletedJobsForHeader}
                     className="px-3 py-1.5 text-[11px] sm:text-xs"

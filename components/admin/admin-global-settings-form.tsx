@@ -120,6 +120,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [allowTwoMinuteAuctionTest, setAllowTwoMinuteAuctionTest] = React.useState(
     initial?.allowTwoMinuteAuctionTest === true
   );
+  const [defaultSiteTheme, setDefaultSiteTheme] = React.useState<"light" | "dark">(
+    initial?.defaultSiteTheme === "light" ? "light" : "dark"
+  );
   const [floatingChatEnabledState, setFloatingChatEnabledState] = React.useState({
     value: initial?.floatingChatEnabled ?? true,
     saving: false,
@@ -319,6 +322,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       pricingAddonBlindsAud: Math.max(0, Number(pricingAddonBlindsAud) || DEFAULT_PRICING_MODIFIERS.addonBlindsAud),
       allowLowAmountListings,
       allowTwoMinuteAuctionTest,
+      defaultSiteTheme,
     };
 
     startTransition(async () => {
@@ -358,6 +362,35 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           Lister pays this on top of job price. Cleaner receives full bid amount. Edit below.
         </p>
       </div>
+
+      <Card className="border-border bg-card dark:border-gray-800 dark:bg-gray-950/50">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold dark:text-gray-100">Default site theme</CardTitle>
+          <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+            Starting appearance for <strong>logged-out visitors</strong> and <strong>new accounts</strong> (initial{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-[10px] dark:bg-gray-800">theme_preference</code>
+            ). Anyone signed in can override in <strong>Account → Preferences</strong> (light, dark, or match device).
+            Changing this does not rewrite existing users&apos; saved preferences.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="default-site-theme" className="text-xs font-medium dark:text-gray-200">
+            Platform default
+          </Label>
+          <Select
+            value={defaultSiteTheme}
+            onValueChange={(v) => setDefaultSiteTheme(v === "light" ? "light" : "dark")}
+          >
+            <SelectTrigger id="default-site-theme" className="max-w-xs dark:border-gray-700">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="light">Light</SelectItem>
+              <SelectItem value="dark">Dark</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
 
       <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30">
         <CardHeader>

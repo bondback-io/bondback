@@ -7,7 +7,7 @@ import { Header } from "@/components/layout/header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { Toaster } from "@/components/ui/toaster";
-import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getGlobalSettings, parseDefaultSiteThemeFromSettings } from "@/lib/actions/global-settings";
 import { SiteAnnouncementBanner } from "@/components/banners/site-announcement-banner";
 import { TestModeBanner } from "@/components/banners/test-mode-banner";
 import { PwaInstallPrompt } from "@/components/pwa/pwa-install-prompt";
@@ -117,9 +117,15 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
   const showFirstJobNudge = await getFirstJobRewardsNudgeVisible(session?.user.id ?? null);
 
   const serverTheme = session?.profile?.theme_preference ?? "";
+  const siteDefaultTheme = parseDefaultSiteThemeFromSettings(settings);
 
   return (
-    <html lang="en" suppressHydrationWarning data-bb-theme={serverTheme}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      data-bb-theme={serverTheme}
+      data-bb-site-default-theme={siteDefaultTheme}
+    >
       <head>
         <link rel="manifest" href="/manifest.json" />
         <Script
@@ -131,6 +137,8 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
     try {
       var stored = window.localStorage.getItem('theme');
       var srv = document.documentElement.getAttribute('data-bb-theme') || '';
+      var siteDef = document.documentElement.getAttribute('data-bb-site-default-theme') || 'dark';
+      if (siteDef !== 'light' && siteDef !== 'dark') siteDef = 'dark';
       var systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       var effective;
       if (stored === 'light' || stored === 'dark' || stored === 'system') {
@@ -138,7 +146,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
       } else if (srv === 'light' || srv === 'dark' || srv === 'system') {
         effective = srv;
       } else {
-        effective = 'system';
+        effective = siteDef;
       }
       var isDark = effective === 'dark' || (effective === 'system' && systemPrefersDark);
       if (isDark) document.documentElement.classList.add('dark');

@@ -8,7 +8,6 @@ import { NotificationBell } from "@/components/layout/notification-bell";
 import { MainNav } from "@/components/layout/main-nav";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PendingBidsBadge } from "@/components/pwa/pending-bids-badge";
-import { ListerMobileCreateListingHeaderButton } from "@/components/layout/lister-mobile-create-header-button";
 import { getInAppNotificationFeedbackPrefs } from "@/lib/notifications/in-app-notification-prefs";
 
 export type HeaderProps = {
@@ -70,7 +69,6 @@ export const Header = async ({
             {/* Mobile: logo + quick create — shrink-0 so bell/role row never clips the brand */}
             <div className="flex min-w-0 shrink-0 items-center gap-2 md:hidden">
               <LogoMark />
-              {isLister && <ListerMobileCreateListingHeaderButton />}
             </div>
             {/* Desktop (md+): logo, tagline, MainNav + menu trigger */}
             <div className="hidden min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] md:flex sm:min-h-0 sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">

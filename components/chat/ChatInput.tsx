@@ -103,8 +103,9 @@ export function ChatInput({
             placeholder={isOffline ? "Reconnect to send…" : placeholder}
             maxLength={500}
             disabled={sending || disabled || isOffline}
+            style={{ fontSize: "16px" }}
             className={cn(
-              "min-h-[46px] w-full rounded-[22px] border-0 bg-[#f0f2f5] px-3.5 py-2.5 text-[16px] leading-tight outline-none ring-0 transition-shadow sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3",
+              "min-h-[46px] w-full rounded-[22px] border-0 bg-[#f0f2f5] px-3.5 py-2.5 leading-tight outline-none ring-0 transition-shadow sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3 sm:text-base",
               "placeholder:text-[#65676b] focus:bg-[#e8eaef] focus:ring-2",
               inputFocus,
               isCleaner &&
