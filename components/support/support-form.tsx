@@ -65,6 +65,7 @@ export function SupportForm({
   const [analyzing, setAnalyzing] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [ticketId, setTicketId] = useState("");
   const [ticketDisplayId, setTicketDisplayId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -194,6 +195,7 @@ export function SupportForm({
     );
     setSubmitting(false);
     if (result.ok) {
+      setTicketId(result.ticketId);
       setTicketDisplayId(result.ticketDisplayId);
       setSubmitSuccess(true);
       setSubject("");
@@ -239,6 +241,11 @@ export function SupportForm({
               <Button asChild size="sm">
                 <Link href="/help">Back to Help</Link>
               </Button>
+              {ticketId ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/support/${ticketId}`}>View ticket</Link>
+                </Button>
+              ) : null}
               <Button asChild variant="secondary" size="sm">
                 <Link href="/dashboard">Dashboard</Link>
               </Button>

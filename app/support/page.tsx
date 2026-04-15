@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { format } from "date-fns";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { SupportForm } from "@/components/support/support-form";
 import { getSupportContactEmail } from "@/lib/support-contact-email";
 import { ChevronLeft } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { listMySupportTickets } from "@/lib/actions/support-thread";
 
 type SupportPageProps = {
   searchParams?: Promise<{ jobId?: string; listingId?: string }>;
@@ -20,6 +24,7 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
   const listingId = params?.listingId ?? "";
   const initialEmail = session.user.email ?? "";
   const supportContactEmail = getSupportContactEmail();
+  const tickets = await listMySupportTickets();
 
   return (
     <section className="page-inner space-y-6">
@@ -35,6 +40,39 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
         initialJobId={jobId}
         initialListingId={listingId}
       />
+      <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold dark:text-gray-100">Your support tickets</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {tickets.length === 0 ? (
+            <p className="text-sm text-muted-foreground dark:text-gray-400">No tickets yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {tickets.map((t) => (
+                <li key={t.id}>
+                  <Link
+                    href={`/support/${t.id}`}
+                    className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 hover:bg-muted/50 dark:border-gray-700 dark:bg-gray-800/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground dark:text-gray-100">
+                        {t.subject}
+                      </p>
+                      <p className="text-xs text-muted-foreground dark:text-gray-400">
+                        {format(new Date(t.created_at), "dd MMM yyyy, HH:mm")}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="ml-3 text-[10px]">
+                      {t.status}
+                    </Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
       <p className="text-center text-xs text-muted-foreground dark:text-gray-500">
         You can also email{" "}
         <a

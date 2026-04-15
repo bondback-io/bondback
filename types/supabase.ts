@@ -969,6 +969,57 @@ export interface Database {
           }
         ];
       };
+      support_ticket_messages: {
+        Row: {
+          id: string;
+          ticket_id: string;
+          author_user_id: string | null;
+          author_role: string;
+          body: string;
+          attachment_urls: string[] | null;
+          email_from: string | null;
+          email_to: string[] | null;
+          external_message_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          author_user_id?: string | null;
+          author_role?: string;
+          body: string;
+          attachment_urls?: string[] | null;
+          email_from?: string | null;
+          email_to?: string[] | null;
+          external_message_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          author_user_id?: string | null;
+          author_role?: string;
+          body?: string;
+          attachment_urls?: string[] | null;
+          email_from?: string | null;
+          email_to?: string[] | null;
+          external_message_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_messages_ticket_id_fkey";
+            columns: ["ticket_id"];
+            isOneToOne: false;
+            referencedRelation: "support_tickets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "support_ticket_messages_author_user_id_fkey";
+            columns: ["author_user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       system_error_log: {
         Row: {
           id: string;

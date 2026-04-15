@@ -161,9 +161,14 @@ export async function uploadSupportAttachments(
   return { ok: true, paths };
 }
 
-function ticketDisplayId(uuid: string): string {
+export function ticketDisplayId(uuid: string): string {
   const hex = uuid.replace(/-/g, "").slice(0, 8).toUpperCase();
   return `TKT-${hex}`;
+}
+
+/** Stable token appended to email subjects so inbound replies map to a ticket reliably. */
+export function supportTicketEmailToken(ticketId: string): string {
+  return `[TICKET:${String(ticketId).trim()}]`;
 }
 
 function supportDescriptionEmailPreview(raw: string, max = 400): string {
@@ -177,6 +182,7 @@ function supportDescriptionEmailPreview(raw: string, max = 400): string {
  * Best-effort only: failures are logged; ticket submit still succeeds.
  */
 async function notifyAdminsNewSupportTicket(params: {
+  ticketId: string;
   ticketDisplayId: string;
   category: string;
   subject: string;
@@ -228,7 +234,7 @@ async function notifyAdminsNewSupportTicket(params: {
   }
   if (!html) return;
 
-  const subject = `[Bond Back] New support ticket ${params.ticketDisplayId} — ${params.subject.slice(0, 60)}${params.subject.length > 60 ? "…" : ""}`;
+  const subject = `[Bond Back] New support ticket ${params.ticketDisplayId} — ${params.subject.slice(0, 60)}${params.subject.length > 60 ? "…" : ""} ${supportTicketEmailToken(params.ticketId)}`;
   const seenEmails = new Set<string>();
 
   for (const userId of adminIds) {
@@ -326,6 +332,24 @@ export async function submitSupportTicket(
   const tid = (data as { id?: string } | null)?.id ?? "";
   const displayId = ticketDisplayId(tid);
 
+  // Seed threaded conversation with the original user message when table exists.
+  try {
+    const admin = createSupabaseAdminClient();
+    const writer = admin ?? supabase;
+    await (writer as any).from("support_ticket_messages").insert({
+      ticket_id: tid,
+      author_user_id: session.user.id,
+      author_role: "user",
+      body: desc,
+      attachment_urls: attachmentUrls,
+      email_from: email || null,
+      email_to: null,
+      external_message_id: null,
+    });
+  } catch (e) {
+    console.warn("[support-ticket] initial thread insert failed (non-fatal)", e);
+  }
+
   if (suggestedCategory != null || confidence != null || aiReason) {
     await logAdminActivity({
       adminId: null,
@@ -358,12 +382,18 @@ export async function submitSupportTicket(
     console.error("[support-ticket-email-render]", e);
   }
   if (email && confirmHtml) {
-    await sendEmail(email, `We’ve received your message — ticket #${displayId} – Bond Back`, confirmHtml, {
+    await sendEmail(
+      email,
+      `We’ve received your message — ticket #${displayId} – Bond Back ${supportTicketEmailToken(tid)}`,
+      confirmHtml,
+      {
       log: { userId: session.user.id, kind: "support_ticket_confirmation" },
-    });
+      }
+    );
   }
 
   void notifyAdminsNewSupportTicket({
+    ticketId: tid,
     ticketDisplayId: displayId,
     category: categoryOption,
     subject: sub,

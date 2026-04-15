@@ -68,6 +68,7 @@ export function AdminSupportFilters({
           <SelectItem value="all">All statuses</SelectItem>
           <SelectItem value="open">Open</SelectItem>
           <SelectItem value="in_progress">In progress</SelectItem>
+          <SelectItem value="completed">Completed</SelectItem>
           <SelectItem value="closed">Closed</SelectItem>
         </SelectContent>
       </Select>

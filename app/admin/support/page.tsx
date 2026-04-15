@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
+import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -120,7 +121,9 @@ export default async function AdminSupportPage({
                   tickets.map((t) => (
                     <TableRow key={t.id} className="dark:border-gray-800">
                       <TableCell className="max-w-[200px] truncate font-medium dark:text-gray-100">
-                        {t.subject}
+                        <Link href={`/admin/support/${t.id}`} className="hover:underline">
+                          {t.subject}
+                        </Link>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground dark:text-gray-400">
                         {profilesMap.get(t.user_id)?.full_name ?? t.user_id.slice(0, 8)}
