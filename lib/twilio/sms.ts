@@ -8,6 +8,16 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const MAX_SMS_PER_USER_PER_DAY = 5;
 
+function isMissingSmsRateLimitTableError(error: unknown): boolean {
+  const e = (error ?? {}) as { code?: string; message?: string; hint?: string };
+  const joined = `${e.message ?? ""} ${e.hint ?? ""}`.toLowerCase();
+  return (
+    e.code === "PGRST205" ||
+    joined.includes("could not find the table") ||
+    joined.includes("sms_daily_sends")
+  );
+}
+
 function getTwilioClient(): Twilio.Twilio | null {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
@@ -56,12 +66,20 @@ export async function checkAndIncrementSmsRateLimit(userId: string): Promise<boo
 
   const dateUtc = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-  const { data: row } = await (admin as any)
+  const { data: row, error: selectError } = await (admin as any)
     .from("sms_daily_sends")
     .select("count")
     .eq("user_id", userId)
     .eq("date_utc", dateUtc)
     .maybeSingle();
+
+  if (selectError) {
+    if (isMissingSmsRateLimitTableError(selectError)) {
+      return true;
+    }
+    console.error("[twilio/sms] rate limit read failed", userId, selectError);
+    return false;
+  }
 
   const current = (row?.count ?? 0) as number;
   if (current >= MAX_SMS_PER_USER_PER_DAY) return false;
@@ -74,6 +92,9 @@ export async function checkAndIncrementSmsRateLimit(userId: string): Promise<boo
     );
 
   if (error) {
+    if (isMissingSmsRateLimitTableError(error)) {
+      return true;
+    }
     console.error("[twilio/sms] rate limit increment failed", userId, error);
     return false;
   }

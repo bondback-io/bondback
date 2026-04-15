@@ -3,7 +3,6 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
-import { fulfillStripeCheckoutReturn } from "@/lib/actions/jobs";
 import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 import { buildJobListingMetadata } from "@/lib/seo/jobs-listings-seo";
 import { BID_FULL_SELECT } from "@/lib/supabase/queries";
@@ -100,10 +99,11 @@ export default async function ListingDetailPage({
   const paymentRedirectBase = `/listings/${encodeURIComponent(raw)}`;
 
   if (paymentSuccessReturn && checkoutSessionId?.startsWith("cs_")) {
-    const result = await fulfillStripeCheckoutReturn(checkoutSessionId);
-    redirect(
-      `${paymentRedirectBase}?payment_notice=${result.ok ? "success" : "error"}`
-    );
+    const qs = new URLSearchParams({
+      session_id: checkoutSessionId,
+      next: paymentRedirectBase,
+    });
+    redirect(`/api/stripe/checkout/return?${qs.toString()}`);
   }
 
   if (paymentParam === "canceled") {

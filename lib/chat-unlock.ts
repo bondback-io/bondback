@@ -12,6 +12,16 @@ export const CHAT_UNLOCK_STATUSES = [
   "in_review",
 ] as const;
 
+/**
+ * Jobs listed in Messages + floating chat picker. Includes `accepted` (lister picked a cleaner, Pay & Start
+ * pending) so threads are not missing right after assignment — chat stays locked until escrow/in_progress
+ * (`isChatUnlockedForJobStatus` / `canSendJobChatMessages`).
+ */
+export const MESSAGES_INBOX_JOB_STATUSES = [
+  ...CHAT_UNLOCK_STATUSES,
+  "accepted",
+] as const;
+
 export type ChatUnlockStatus = (typeof CHAT_UNLOCK_STATUSES)[number];
 
 export function isChatUnlockedForJobStatus(

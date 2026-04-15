@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Briefcase } from "lucide-react";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
-import { ensureJobChecklistIfEmpty, fulfillStripeCheckoutReturn } from "@/lib/actions/jobs";
+import { ensureJobChecklistIfEmpty } from "@/lib/actions/jobs";
 import {
   JobDetail,
   type JobDetailMySubmittedReview,
@@ -95,13 +95,11 @@ export async function JobDetailPageContent({
       : `/listings/${encodeURIComponent(raw)}`;
 
   if (paymentSuccessReturn && checkoutSessionId?.startsWith("cs_")) {
-    const result = await fulfillStripeCheckoutReturn(checkoutSessionId);
-    const noticeParam = !result.ok
-      ? "error"
-      : result.notice === "top_up_success"
-        ? "top_up_success"
-        : "success";
-    redirect(`${paymentRedirectBase}?payment_notice=${noticeParam}`);
+    const qs = new URLSearchParams({
+      session_id: checkoutSessionId,
+      next: paymentRedirectBase,
+    });
+    redirect(`/api/stripe/checkout/return?${qs.toString()}`);
   }
 
   if (paymentParam === "canceled") {

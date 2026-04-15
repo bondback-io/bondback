@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { MessagesPageClient } from "@/components/features/messages-page-client";
-import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
+import { MESSAGES_INBOX_JOB_STATUSES } from "@/lib/chat-unlock";
 import { effectiveMessengerRoleFromProfile } from "@/lib/chat-participant-role";
 import {
   fetchMessengerPeerProfilesByIds,
@@ -55,7 +56,7 @@ const MessagesPage = async () => {
   let jobsQuery = supabase
     .from("jobs")
     .select("*")
-    .in("status", [...CHAT_UNLOCK_STATUSES])
+    .in("status", [...MESSAGES_INBOX_JOB_STATUSES])
     .order("created_at", { ascending: false });
   if (messengerRoleFilter === "lister") {
     jobsQuery = jobsQuery.eq("lister_id", userId);
@@ -157,15 +158,21 @@ const MessagesPage = async () => {
         </p>
       </div>
 
-      <MessagesPageClient
-        currentUserId={userId}
-        activeAppRole={activeAppRole}
-        messengerRoleFilter={messengerRoleFilter}
-        jobs={jobs}
-        listings={listings}
-        messages={messages}
-        profiles={profiles}
-      />
+      <Suspense
+        fallback={
+          <p className="text-sm text-muted-foreground">Loading conversations…</p>
+        }
+      >
+        <MessagesPageClient
+          currentUserId={userId}
+          activeAppRole={activeAppRole}
+          messengerRoleFilter={messengerRoleFilter}
+          jobs={jobs}
+          listings={listings}
+          messages={messages}
+          profiles={profiles}
+        />
+      </Suspense>
     </section>
   );
 };

@@ -12,7 +12,7 @@ import {
 import type { ReactNode } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/supabase";
-import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
+import { MESSAGES_INBOX_JOB_STATUSES } from "@/lib/chat-unlock";
 import { effectiveMessengerRoleFromProfile } from "@/lib/chat-participant-role";
 import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
 import {
@@ -148,12 +148,12 @@ export function ChatPanelProvider({
       });
       if (!cancelled) setMessengerRoleFilter(mr);
 
-      // Only show chat for jobs approved to start (in_progress). Hide chat and cleaner
-      // until lister has approved; cleaners also don't see the panel until then.
+      // Include assigned-but-not-paid jobs (`accepted`) so threads exist after bid acceptance; messaging
+      // stays gated by Pay & Start / escrow (`isChatUnlockedForJobStatus` + server actions).
       let jobsQuery = supabase
         .from("jobs")
         .select("*")
-        .in("status", [...CHAT_UNLOCK_STATUSES] as never[]);
+        .in("status", [...MESSAGES_INBOX_JOB_STATUSES] as never[]);
       if (mr === "lister") {
         jobsQuery = jobsQuery.eq("lister_id", currentUserId as never);
       } else {

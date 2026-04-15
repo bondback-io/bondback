@@ -77,6 +77,7 @@ export function buildChatStatusPill(opts: {
 }): string {
   const st = opts.status;
   if (!st) return "—";
+  if (st === "accepted") return "Awaiting payment";
   if (st === "completed") return "Job completed";
   if (st === "disputed" || st === "dispute_negotiating") return "Dispute active";
   if (st === "in_review") return "Under review";

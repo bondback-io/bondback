@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { CHAT_UNLOCK_STATUSES } from "@/lib/chat-unlock";
+import { MESSAGES_INBOX_JOB_STATUSES } from "@/lib/chat-unlock";
 import { effectiveMessengerRoleFromProfile } from "@/lib/chat-participant-role";
 import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-server";
 
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   let jobsQuery = supabase
     .from("jobs")
     .select("lister_id, winner_id")
-    .in("status", [...CHAT_UNLOCK_STATUSES] as never[]);
+    .in("status", [...MESSAGES_INBOX_JOB_STATUSES] as never[]);
   if (messengerRoleFilter === "lister") {
     jobsQuery = jobsQuery.eq("lister_id", user.id as never);
   } else {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { cn } from "@/lib/utils";
@@ -264,7 +264,7 @@ export function MessagesPageClient({
   const selected = conversations.find((c) => c.jobId === selectedJobId) ?? null;
 
   function threadMeta(c: Conversation) {
-    const display = c.otherPartyDisplayName;
+    const display = String(c.otherPartyDisplayName ?? "");
     const uname = c.otherPartyUsername;
     const looksUsernameOnly = display.trim().startsWith("@");
     const titleLine =

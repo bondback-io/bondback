@@ -57,8 +57,8 @@ CREATE POLICY "support_ticket_messages_select_admin"
     EXISTS (
       SELECT 1 FROM public.profiles p
       WHERE p.id = auth.uid()
-        AND p.is_admin = true
-        AND COALESCE(p.is_deleted, false) = false
+        AND trim(coalesce(p.is_admin::text, '')) IN ('true', 't', 'yes', '1')
+        AND trim(lower(coalesce(p.is_deleted::text, 'false'))) NOT IN ('true', 't', 'yes', '1')
     )
   );
 
@@ -84,7 +84,7 @@ CREATE POLICY "support_ticket_messages_insert_admin"
     EXISTS (
       SELECT 1 FROM public.profiles p
       WHERE p.id = auth.uid()
-        AND p.is_admin = true
-        AND COALESCE(p.is_deleted, false) = false
+        AND trim(coalesce(p.is_admin::text, '')) IN ('true', 't', 'yes', '1')
+        AND trim(lower(coalesce(p.is_deleted::text, 'false'))) NOT IN ('true', 't', 'yes', '1')
     )
   );

@@ -12,6 +12,16 @@ import { listingDetailPath } from "@/lib/marketplace/paths";
 
 const DEFAULT_MAX_SMS_PER_USER_PER_DAY = 5;
 
+function isMissingSmsRateLimitTableError(error: unknown): boolean {
+  const e = (error ?? {}) as { code?: string; message?: string; hint?: string };
+  const joined = `${e.message ?? ""} ${e.hint ?? ""}`.toLowerCase();
+  return (
+    e.code === "PGRST205" ||
+    joined.includes("could not find the table") ||
+    joined.includes("sms_daily_sends")
+  );
+}
+
 async function getMaxSmsPerUserPerDay(): Promise<number> {
   try {
     const { getGlobalSettings } = await import("@/lib/actions/global-settings");
@@ -72,12 +82,21 @@ export async function checkAndIncrementSmsRateLimit(userId: string): Promise<boo
   const maxPerDay = await getMaxSmsPerUserPerDay();
   const dateUtc = new Date().toISOString().slice(0, 10);
 
-  const { data: row } = await (admin as any)
+  const { data: row, error: selectError } = await (admin as any)
     .from("sms_daily_sends")
     .select("count")
     .eq("user_id", userId)
     .eq("date_utc", dateUtc)
     .maybeSingle();
+
+  if (selectError) {
+    if (isMissingSmsRateLimitTableError(selectError)) {
+      // Deploy-safe fallback: allow sends when rate-limit table migration is missing.
+      return true;
+    }
+    console.error("[notifications/sms] rate limit read failed", userId, selectError);
+    return false;
+  }
 
   const current = (row?.count ?? 0) as number;
   if (current >= maxPerDay) return false;
@@ -90,6 +109,10 @@ export async function checkAndIncrementSmsRateLimit(userId: string): Promise<boo
     );
 
   if (error) {
+    if (isMissingSmsRateLimitTableError(error)) {
+      // Deploy-safe fallback: allow sends when rate-limit table migration is missing.
+      return true;
+    }
     console.error("[notifications/sms] rate limit increment failed", userId, error);
     return false;
   }
