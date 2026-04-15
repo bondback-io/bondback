@@ -64,7 +64,8 @@ export function AdminDeleteJobButton({ jobId }: { jobId: number }) {
           <DialogHeader>
             <DialogTitle className="dark:text-gray-100">Permanently delete job?</DialogTitle>
             <DialogDescription className="dark:text-gray-400">
-              This removes the job and its messages. It cannot be undone.
+              This removes the job, its linked listing, and all related jobs/messages/bids for that listing.
+              It cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -95,7 +96,7 @@ export function AdminDeleteJobButton({ jobId }: { jobId: number }) {
           <DialogHeader>
             <DialogTitle className="dark:text-gray-100">Final confirmation</DialogTitle>
             <DialogDescription className="dark:text-gray-400">
-              Type <strong>DELETE</strong> to permanently remove this job and its messages.
+              Type <strong>DELETE</strong> to permanently remove this job and all linked listing data.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

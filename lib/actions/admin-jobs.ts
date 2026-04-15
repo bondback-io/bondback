@@ -11,6 +11,7 @@ import { fetchPlatformFeePercentForListing } from "@/lib/platform-fee";
 import { releaseJobFunds, executeRefund } from "@/lib/actions/jobs";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
+import { adminDeleteListingByIdCascade } from "@/lib/actions/admin-listings";
 
 async function requireAdmin(): Promise<{
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -361,18 +362,24 @@ export async function adminDeleteJob(formData: FormData): Promise<void> {
   }
   const db = admin;
 
-  const { data: job } = await db.from("jobs").select("id").eq("id", jobId).maybeSingle();
+  const { data: job } = await db
+    .from("jobs")
+    .select("id, listing_id")
+    .eq("id", jobId)
+    .maybeSingle();
   if (!job) throw new Error("Job not found");
+  const listingId = String((job as { listing_id?: string | null }).listing_id ?? "").trim();
+  if (!listingId) throw new Error("Job has no linked listing_id");
 
-  const { error: _checklistErr } = await (db as any)
-    .from("job_checklist_items")
-    .delete()
-    .eq("job_id", jobId);
-  await db.from("job_messages").delete().eq("job_id", jobId);
-  const { error } = await db.from("jobs").delete().eq("id", jobId);
-  if (error) throw new Error(error.message);
-
-  await logAdminActivity({ adminId, actionType: "job_deleted", targetType: "job", targetId: String(jobId), details: {} });
+  // Requirement: deleting a job from admin also removes the linked listing and linked jobs.
+  await adminDeleteListingByIdCascade(listingId, adminId);
+  await logAdminActivity({
+    adminId,
+    actionType: "job_deleted",
+    targetType: "job",
+    targetId: String(jobId),
+    details: { cascadeListingId: listingId },
+  });
 
   revalidatePath("/admin/jobs");
   revalidatePath("/dashboard");

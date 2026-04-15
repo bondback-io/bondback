@@ -43,6 +43,22 @@ export async function adminDeleteListing(formData: FormData): Promise<void> {
   if (!listingId) throw new Error("Missing listingId");
   const id = String(listingId);
   const { supabase, adminId } = await requireAdmin();
+  await adminDeleteListingByIdCascade(id, adminId);
+
+  revalidatePath("/admin/listings");
+  revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/my-listings");
+}
+
+/**
+ * Permanent admin delete for one listing id.
+ * Cascades to linked jobs (+ messages/checklists) and bids, then removes the listing.
+ */
+export async function adminDeleteListingByIdCascade(
+  listingId: string,
+  adminId: string
+): Promise<void> {
   const admin = createSupabaseAdminClient();
   if (!admin) {
     throw new Error(
@@ -50,6 +66,7 @@ export async function adminDeleteListing(formData: FormData): Promise<void> {
     );
   }
   const db = admin;
+  const id = String(listingId);
 
   const { data: jobs } = await db.from("jobs").select("id").eq("listing_id", id);
   const jobIds = (jobs ?? []).map((j: { id: number }) => j.id);
@@ -64,11 +81,6 @@ export async function adminDeleteListing(formData: FormData): Promise<void> {
   const { error } = await db.from("listings").delete().eq("id", id);
   if (error) throw new Error(error.message);
   await logAdminActivity({ adminId, actionType: "listing_deleted", targetType: "listing", targetId: id, details: { cascadeJobs: jobIds } });
-
-  revalidatePath("/admin/listings");
-  revalidatePath("/dashboard");
-  revalidatePath("/lister/dashboard");
-  revalidatePath("/my-listings");
 }
 
 export async function adminResetAllListings(formData: FormData): Promise<void> {

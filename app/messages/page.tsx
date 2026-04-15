@@ -111,30 +111,37 @@ const MessagesPage = async () => {
   const listings = (listingsData ?? []) as ListingRow[];
   let profiles = (profilesData ?? []) as ProfileRow[];
 
-  /** If RLS returned only the signed-in user, merge any missing job peers via service role (same as `fetchMessengerPeerProfilesByIds` when admin is available). */
-  const havePeerNorm = new Set(
-    profiles.map((p) => normalizeChatUid(String(p.id ?? ""))).filter(Boolean)
-  );
-  const missingPeerIds = peerUserIds.filter(
-    (id) => id && !havePeerNorm.has(normalizeChatUid(id))
-  );
-  if (missingPeerIds.length > 0) {
-    const admin = createSupabaseAdminClient();
-    if (admin) {
-      const { data: extra } = await admin
-        .from("profiles")
-        .select(MESSENGER_PEER_PROFILE_SELECT)
-        .in("id", missingPeerIds);
-      const seen = new Set(havePeerNorm);
-      for (const row of extra ?? []) {
-        const id = String((row as { id?: string }).id ?? "");
-        const k = normalizeChatUid(id);
-        if (k && !seen.has(k)) {
-          seen.add(k);
-          profiles = [...profiles, row as ProfileRow];
+  try {
+    /** If RLS returned only the signed-in user, merge any missing job peers via service role (same as `fetchMessengerPeerProfilesByIds` when admin is available). */
+    const havePeerNorm = new Set(
+      profiles
+        .map((p) => normalizeChatUid(String((p as { id?: string } | null)?.id ?? "")))
+        .filter(Boolean)
+    );
+    const missingPeerIds = peerUserIds.filter(
+      (id) => id && !havePeerNorm.has(normalizeChatUid(id))
+    );
+    if (missingPeerIds.length > 0) {
+      const admin = createSupabaseAdminClient();
+      if (admin) {
+        const { data: extra } = await admin
+          .from("profiles")
+          .select(MESSENGER_PEER_PROFILE_SELECT)
+          .in("id", missingPeerIds);
+        const seen = new Set(havePeerNorm);
+        for (const row of extra ?? []) {
+          const id = String((row as { id?: string } | null)?.id ?? "");
+          const k = normalizeChatUid(id);
+          if (k && !seen.has(k)) {
+            seen.add(k);
+            profiles = [...profiles, row as ProfileRow];
+          }
         }
       }
     }
+  } catch (e) {
+    // Never fail /messages render because profile enrichment failed.
+    console.error("[messages/page] peer profile merge failed (non-fatal)", e);
   }
 
   return (
