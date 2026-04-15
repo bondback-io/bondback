@@ -9,6 +9,7 @@ import { JobChat } from "@/components/features/job-chat";
 import { isChatUnlockedForJobStatus } from "@/lib/chat-unlock";
 import { formatCents } from "@/lib/listings";
 import { buildChatStatusPill, isJobListerUser } from "@/lib/chat-messenger-display";
+import { trimStr } from "@/lib/utils";
 
 export function FloatingChatPanel() {
   const {
@@ -89,7 +90,7 @@ export function FloatingChatPanel() {
 
                         const display = c.otherPartyDisplayName;
                         const uname = c.otherPartyUsername;
-                        const looksUsernameOnly = display.trim().startsWith("@");
+                        const looksUsernameOnly = trimStr(display).startsWith("@");
                         const titleLine =
                           uname && !looksUsernameOnly
                             ? `${display} (@${uname})`

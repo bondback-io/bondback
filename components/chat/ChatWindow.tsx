@@ -11,7 +11,7 @@ import { useIsOffline } from "@/hooks/use-offline";
 import { useToast } from "@/components/ui/use-toast";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { cn } from "@/lib/utils";
+import { cn, trimStr } from "@/lib/utils";
 import {
   jobParticipantRole,
   messageSenderJobRole,
@@ -69,11 +69,11 @@ function buildMessengerHeaderLines(
   listingState?: string | null,
   listingPostcode?: string | null
 ): { line1: string; locationTail: string | null } {
-  const trimmed = jobTitle.trim();
+  const trimmed = trimStr(jobTitle);
   const parsed = parseListingTitleInLocation(trimmed);
-  const subDb = listingSuburb?.trim() || "";
-  const stDb = listingState?.trim() || "";
-  const pcDb = listingPostcode?.trim() || "";
+  const subDb = trimStr(listingSuburb);
+  const stDb = trimStr(listingState);
+  const pcDb = trimStr(listingPostcode);
   const subFromTitle = parsed?.suburb?.trim() || "";
   const suburb = subDb || subFromTitle;
   const locParts = [suburb, stDb, pcDb].filter(Boolean);
@@ -97,8 +97,8 @@ function mergeIncomingMessage(
     const t2 = new Date(incoming.created_at).getTime();
     if (Math.abs(t1 - t2) > 25_000) return true;
     if (m.message_text !== incoming.message_text) return true;
-    const mImg = m.image_url?.trim() || null;
-    const iImg = incoming.image_url?.trim() || null;
+    const mImg = trimStr(m.image_url) || null;
+    const iImg = trimStr(incoming.image_url) || null;
     if (mImg || iImg) {
       if (mImg !== iImg) return true;
     }
@@ -190,7 +190,7 @@ export function ChatWindow({
   const { line1: headerLine1, locationTail: headerLocationTail } = useMemo(
     () =>
       buildMessengerHeaderLines(
-        jobTitle.trim(),
+        trimStr(jobTitle),
         listingSuburb,
         listingState,
         listingPostcode
@@ -705,8 +705,8 @@ export function ChatWindow({
             const senderRole = persistedRole ?? messageSenderJobRole(m.sender_id, listerId, cleanerId);
             const isListerSender = senderRole === "lister";
             const senderLabel = isListerSender
-              ? (listerName?.trim() || "Lister")
-              : (cleanerName?.trim() || "Cleaner");
+              ? trimStr(listerName) || "Lister"
+              : trimStr(cleanerName) || "Cleaner";
             const avatarUrl = isListerSender ? listerAvatarUrl : cleanerAvatarUrl;
             const prev = messages[i - 1];
             const showAvatar =

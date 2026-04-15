@@ -22,6 +22,7 @@ import {
   messengerPeerCleanerUsername,
   messengerPeerDisplayName,
 } from "@/lib/chat-messenger-display";
+import { trimStr } from "@/lib/utils";
 
 /** Max job ids per Supabase `in.(...)` realtime filter — keeps URL size safe with many chats. */
 const REALTIME_JOB_ID_CHUNK = 45;
@@ -280,8 +281,11 @@ export function ChatPanelProvider({
               : null,
           autoReleaseAt: jr.auto_release_at ?? null,
           cleanerConfirmedComplete: jr.cleaner_confirmed_complete === true,
-          hasPaymentHold: !!jr.payment_intent_id?.trim(),
-          paymentReleasedAt: jr.payment_released_at?.trim() ?? null,
+          hasPaymentHold: !!trimStr(jr.payment_intent_id),
+          paymentReleasedAt:
+            jr.payment_released_at == null
+              ? null
+              : trimStr(jr.payment_released_at) || null,
         };
       });
 

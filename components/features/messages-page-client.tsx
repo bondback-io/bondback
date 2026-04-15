@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { OptimizedImage } from "@/components/ui/optimized-image";
-import { cn } from "@/lib/utils";
+import { cn, trimStr } from "@/lib/utils";
 import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
 import type { Database } from "@/types/supabase";
 import { JobChat } from "@/components/features/job-chat";
@@ -18,12 +18,6 @@ import {
   messengerPeerCleanerUsername,
   messengerPeerDisplayName,
 } from "@/lib/chat-messenger-display";
-
-/** DB/JSON may surface non-strings; `x?.trim()` throws when `x` is truthy but not a string (e.g. number). */
-function safeTrim(v: unknown): string {
-  if (v == null) return "";
-  return String(v).trim();
-}
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -50,7 +44,7 @@ function ConversationPickerAvatar({
   useEffect(() => {
     setImgFailed(false);
   }, [photoUrl]);
-  const photoSrc = safeTrim(photoUrl);
+  const photoSrc = trimStr(photoUrl);
   const showImg = Boolean(photoSrc) && !imgFailed;
   const isDesktop = size === "desktop";
   const px = isDesktop ? 36 : 32;
@@ -254,11 +248,11 @@ export function MessagesPageClient({
               : null,
           autoReleaseAt: jr.auto_release_at ?? null,
           cleanerConfirmedComplete: jr.cleaner_confirmed_complete === true,
-          hasPaymentHold: !!safeTrim(jr.payment_intent_id),
+          hasPaymentHold: !!trimStr(jr.payment_intent_id),
           paymentReleasedAt:
             jr.payment_released_at == null
               ? null
-              : safeTrim(jr.payment_released_at) || null,
+              : trimStr(jr.payment_released_at) || null,
         };
       }),
     [jobs, listingById, latestByJob, profileById, currentUserId]
@@ -321,7 +315,7 @@ export function MessagesPageClient({
       <div className="mt-1 space-y-1">
         {completedConvos.map((c) => {
           const isSelected = c.jobId === selectedJobId;
-          const initial = safeTrim(c.listingTitle ?? "J").charAt(0).toUpperCase();
+          const initial = trimStr(c.listingTitle ?? "J").charAt(0).toUpperCase();
           return (
             <button
               key={c.jobId}
@@ -375,7 +369,7 @@ export function MessagesPageClient({
         <ul className="divide-y divide-slate-100 dark:divide-slate-800/80">
           {completedConvos.map((c) => {
             const isSelected = c.jobId === selectedJobId;
-            const label = safeTrim(c.listingTitle ?? "Bond clean job");
+            const label = trimStr(c.listingTitle ?? "Bond clean job");
             return (
               <li key={c.jobId}>
                 <button

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Avatar } from "@/components/ui/avatar";
 import { Check, CheckCheck } from "lucide-react";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, trimStr } from "@/lib/utils";
 import type { Database } from "@/types/supabase";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import {
@@ -64,7 +64,7 @@ export function MessageBubble({
   isRead,
 }: MessageBubbleProps) {
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
-  const imgUrl = message.image_url?.trim() || null;
+  const imgUrl = trimStr(message.image_url) || null;
   const senderIsLister = senderRole === "lister";
   const timeStr = formatChatMessageTime(message.created_at);
   const roleHint = senderIsLister ? "Lister" : "Cleaner";
