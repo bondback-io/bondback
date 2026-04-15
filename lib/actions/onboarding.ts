@@ -12,7 +12,8 @@ import { validateAbnIfRequired } from "@/lib/actions/validate-abn";
 import { clampMaxTravelKm } from "@/lib/max-travel-km";
 import { ACCOUNT_INACTIVE_MESSAGE } from "@/lib/auth/account-errors";
 import { signOutIfAuthUserMissing } from "@/lib/auth/sign-out-if-auth-user-missing";
-import { getGlobalSettings, parseDefaultSiteThemeFromSettings } from "@/lib/actions/global-settings";
+import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { parseDefaultSiteThemeFromSettings } from "@/lib/global-settings-default-theme";
 
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 

@@ -87,14 +87,6 @@ type GlobalSettingsRow = {
   default_site_theme?: string | null;
 };
 
-/** Resolved platform default: `light` or `dark` (column missing → dark). */
-export function parseDefaultSiteThemeFromSettings(
-  row: GlobalSettingsRow | null | undefined
-): "light" | "dark" {
-  const v = row?.default_site_theme;
-  return v === "light" ? "light" : "dark";
-}
-
 /** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
 function normalizeRequireAbn(v: unknown): boolean {
   return v === true || v === "true" || v === 1;

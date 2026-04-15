@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminGlobalSettingsForm } from "@/components/admin/admin-global-settings-form";
 import { AdminEmailTemplates } from "@/components/admin/admin-email-templates";
-import { getGlobalSettings, parseDefaultSiteThemeFromSettings } from "@/lib/actions/global-settings";
+import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { parseDefaultSiteThemeFromSettings } from "@/lib/global-settings-default-theme";
 import {
   DEFAULT_PRICING_MODIFIERS,
   normalizeBaseRatePerBedroomFromGlobal,
