@@ -148,15 +148,17 @@ export function ListingAuctionDetail({
     return initialBids.some((b) => b.status === "active");
   }, [hasActiveJob, isLive, listing.status, initialBids]);
 
+  /** Winning bid accepted → job row exists even if listing page props briefly miss `hasActiveJob`. */
+  const hasAcceptedWinningBid = initialBids.some((b) => b.status === "accepted");
+  const jobSnapshotForRelistUi =
+    hasActiveJob || hasAcceptedWinningBid ? { status: "accepted" as const } : null;
+
   /** Expired (no bid rows) or ended (no assignable winner) — same pool as My listings → Listings (no bids). */
   const isRelistPoolBanner =
     !pendingAutoAssignWinner &&
-    isListerNoBidsRelistListing(
-      listing,
-      hasActiveJob ? { status: "accepted" } : null
-    );
+    isListerNoBidsRelistListing(listing, jobSnapshotForRelistUi);
   const closedAuctionBidStatus =
-    !isLive && !pendingAutoAssignWinner
+    !isLive && !pendingAutoAssignWinner && !hasAcceptedWinningBid
       ? listing.cancelled_early_at
         ? ("lister_cancelled" as const)
         : ("auction_ended" as const)
@@ -173,10 +175,15 @@ export function ListingAuctionDetail({
         toast({
           title: "Bid accepted — job created",
           description:
-            "The cleaner has been notified. They can proceed when you pay & start the job.",
+            "Opening the job so you can pay & start when you’re ready.",
         });
-        router.refresh();
-        scrollToTopAfterBidAccepted();
+        const jid = Number(result.jobId);
+        if (Number.isFinite(jid) && jid > 0) {
+          router.replace(`/jobs/${jid}`);
+        } else {
+          router.refresh();
+          scrollToTopAfterBidAccepted();
+        }
       } else {
         logClientError("earlyBidAccept", result.error, {
           listingId: listing.id,
@@ -300,8 +307,9 @@ export function ListingAuctionDetail({
 
   const canManageListingAsLister = isListerOwner && isListerSessionActive;
 
-  /** Ended auction with no job: strong “closed” visuals (banner, muted hero, struck-through amounts). */
-  const showEndedListingVisual = !isLive && !hasActiveJob && !pendingAutoAssignWinner;
+  /** Ended auction with no job: strong “closed” visuals — skip when a bid was accepted (job exists). */
+  const showEndedListingVisual =
+    !isLive && !hasActiveJob && !pendingAutoAssignWinner && !hasAcceptedWinningBid;
   const endedListingBannerLabel = listing.cancelled_early_at
     ? "Listing cancelled"
     : "Listing ended";

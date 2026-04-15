@@ -26,7 +26,7 @@ function formatAud(cents: number): string {
 }
 
 export type EarlyBidRequestResult =
-  | { ok: true }
+  | { ok: true; jobId: number | string }
   | { ok: false; error: string };
 
 /**
@@ -140,7 +140,7 @@ export async function requestEarlyBidAcceptance(
     return { ok: false, error: result.error };
   }
 
-  return { ok: true };
+  return { ok: true, jobId: result.jobId };
 }
 
 export type EarlyBidTokenResult =

@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { CleanerReviewCountPreview } from "@/components/features/cleaner-review-count-preview";
 import { CleanerExperienceBadge } from "@/components/shared/cleaner-experience-badge";
 import { fetchCleanerReviewsForPublicProfile } from "@/lib/reviews/fetch-cleaner-reviews-for-profile";
+import { formatReviewerDisplayName } from "@/lib/reviews/reviewer-display-name";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -115,7 +116,7 @@ export default async function CleanerProfilePage({
   const reviewPopoverSnippets = reviewsSafe.slice(0, 10).map((r: any) => ({
     id: String(r.id),
     text: String(r.review_text ?? "").trim(),
-    author: r.reviewer?.full_name ?? null,
+    author: formatReviewerDisplayName(r.reviewer) ?? null,
     createdAt: r.created_at as string,
     rating: Number(r.overall_rating),
     jobId: r.job_id != null ? Number(r.job_id) : null,
@@ -336,7 +337,7 @@ export default async function CleanerProfilePage({
                 </blockquote>
                 <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground dark:text-gray-400">
                   <span>
-                    — {latestWrittenReview.reviewer?.full_name?.trim() || "Lister"}
+                    — {formatReviewerDisplayName(latestWrittenReview.reviewer) ?? "Lister"}
                     {latestWrittenReview.created_at
                       ? (() => {
                           try {
@@ -604,7 +605,7 @@ export default async function CleanerProfilePage({
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground dark:text-gray-100">
-                          {r.reviewer?.full_name ?? "Lister"}
+                          {formatReviewerDisplayName(r.reviewer) ?? "Lister"}
                         </p>
                         <div className="mt-0.5 flex items-center gap-1 text-amber-400">
                           {[1, 2, 3, 4, 5].map((s) => (
@@ -694,7 +695,7 @@ export default async function CleanerProfilePage({
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold">
-                      {r.reviewer?.full_name ?? "Lister"}
+                      {formatReviewerDisplayName(r.reviewer) ?? "Lister"}
                     </p>
                     <div className="flex items-center gap-1 text-amber-400">
                       {[1, 2, 3, 4, 5].map((s) => (

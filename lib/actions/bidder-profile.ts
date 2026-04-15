@@ -8,6 +8,7 @@ import type { Database } from "@/types/supabase";
 import type { BidBidderProfileSummary } from "@/lib/bids/bidder-types";
 import { BIDDER_PROFILE_SUMMARY_SELECT } from "@/lib/bids/enrich-bids-with-bidders";
 import { fetchCleanerReviewsForPublicProfile } from "@/lib/reviews/fetch-cleaner-reviews-for-profile";
+import { formatReviewerDisplayName } from "@/lib/reviews/reviewer-display-name";
 
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
@@ -153,13 +154,10 @@ export async function getBidderProfileForListingBid(
   const recent_reviews_as_cleaner: BidBidderProfileSummary["recent_reviews_as_cleaner"] =
     reviewRows.map((r) => {
       const rev = r.reviewer;
-      const reviewerName = Array.isArray(rev)
-        ? (rev[0]?.full_name ?? null)
-        : (rev?.full_name ?? null);
-      const trimmed =
-        reviewerName != null && String(reviewerName).trim() !== ""
-          ? String(reviewerName).trim()
-          : null;
+      const reviewer = Array.isArray(rev) ? rev[0] : rev;
+      const trimmed = formatReviewerDisplayName(
+        reviewer as { full_name?: string | null; first_name?: string | null; last_name?: string | null }
+      );
       return {
         id: r.id,
         job_id: r.job_id,

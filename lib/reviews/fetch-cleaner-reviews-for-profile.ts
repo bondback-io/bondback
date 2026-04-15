@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import {
-  isMissingRevieweeRoleColumnError,
-  REVIEWEE_IS_CLEANER_OR,
-} from "@/lib/reviews/cleaner-review-filters";
+import { formatReviewerDisplayName } from "@/lib/reviews/reviewer-display-name";
 
-type Reviewer = { full_name: string | null; profile_photo_url: string | null };
+type Reviewer = {
+  full_name: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  profile_photo_url: string | null;
+};
 
 export type CleanerProfileReviewRow = {
   id: number;
@@ -16,7 +18,6 @@ export type CleanerProfileReviewRow = {
   reliability: number | null;
   communication: number | null;
   punctuality: number | null;
-  cleanliness: number | null;
   review_text: string | null;
   review_photos: string[] | null;
   created_at: string;
@@ -24,9 +25,9 @@ export type CleanerProfileReviewRow = {
 };
 
 const REVIEW_CORE_FIELDS =
-  "id, job_id, reviewer_id, overall_rating, quality_of_work, reliability, communication, punctuality, cleanliness, review_text, review_photos, created_at";
+  "id, job_id, reviewer_id, overall_rating, quality_of_work, reliability, communication, punctuality, review_text, review_photos, created_at";
 
-const REVIEW_SELECT_WITH_REVIEWER = `${REVIEW_CORE_FIELDS}, reviewer:reviewer_id(full_name, profile_photo_url)`;
+const REVIEW_SELECT_WITH_REVIEWER = `${REVIEW_CORE_FIELDS}, reviewer:reviewer_id(full_name, first_name, last_name, profile_photo_url)`;
 
 async function enrichReviewerProfiles(
   db: SupabaseClient<Database>,
@@ -43,7 +44,7 @@ async function enrichReviewerProfiles(
 
   const { data: profs } = await db
     .from("profiles")
-    .select("id, full_name, profile_photo_url")
+    .select("id, full_name, first_name, last_name, profile_photo_url")
     .in("id", ids as never);
 
   const map = new Map((profs ?? []).map((p) => [p.id, p]));
@@ -54,19 +55,24 @@ async function enrichReviewerProfiles(
     const p = map.get(rid);
     if (!p) continue;
     const existing = r.reviewer;
-    const hasName = Array.isArray(existing)
-      ? existing[0]?.full_name?.trim()
-      : existing?.full_name?.trim();
-    if (hasName) continue;
-    r.reviewer = { full_name: p.full_name, profile_photo_url: p.profile_photo_url };
+    const single = Array.isArray(existing) ? existing[0] : existing;
+    if (formatReviewerDisplayName(single)) continue;
+    const display = formatReviewerDisplayName(p) ?? (p.full_name as string | null);
+    r.reviewer = {
+      full_name: display,
+      first_name: (p as { first_name?: string | null }).first_name ?? null,
+      last_name: (p as { last_name?: string | null }).last_name ?? null,
+      profile_photo_url: p.profile_photo_url,
+    };
   }
 }
 
 /**
  * Loads reviews left for a cleaner on the public profile. Uses the same DB client as the page
- * (`admin ?? supabase`). If the nested `reviewer` embed fails or returns nothing useful, falls
- * back to a flat select and merges reviewer display names (service role can read lister names
- * where the anon key cannot).
+ * (`admin ?? supabase`). Filter is **reviewee_id only** — older rows may have null `reviewee_type` /
+ * `reviewee_role`; an extra `.or(reviewee_type.eq.cleaner,…)` dropped those and hid written feedback
+ * while `cleaner_total_reviews` still counted them.
+ * If the nested `reviewer` embed fails, falls back to a flat select and merges reviewer names.
  */
 export type FetchCleanerReviewsOptions = {
   /** When set, only the N most recent reviews are loaded (e.g. bidder preview). */
@@ -85,9 +91,8 @@ export async function fetchCleanerReviewsForPublicProfile(
       ? Math.min(100, Math.floor(options.limit))
       : null;
 
-  const queryWithFilter = async (select: string, useRoleOr: boolean) => {
+  const runQuery = async (select: string) => {
     let q = primary.from("reviews").select(select).eq("reviewee_id", cleanerId);
-    q = useRoleOr ? q.or(REVIEWEE_IS_CLEANER_OR) : q.eq("reviewee_type", "cleaner");
     q = q.order("created_at", order);
     if (cap != null) {
       q = q.limit(cap);
@@ -95,40 +100,37 @@ export async function fetchCleanerReviewsForPublicProfile(
     return q;
   };
 
-  let res = await queryWithFilter(REVIEW_SELECT_WITH_REVIEWER, true);
-  if (isMissingRevieweeRoleColumnError(res.error)) {
-    res = await queryWithFilter(REVIEW_SELECT_WITH_REVIEWER, false);
-  }
-
+  let res = await runQuery(REVIEW_SELECT_WITH_REVIEWER);
   let rows = (res.data ?? []) as unknown as CleanerProfileReviewRow[];
 
   if (res.error) {
-    let flat = await queryWithFilter(REVIEW_CORE_FIELDS, true);
-    if (isMissingRevieweeRoleColumnError(flat.error)) {
-      flat = await queryWithFilter(REVIEW_CORE_FIELDS, false);
-    }
+    const flat = await runQuery(REVIEW_CORE_FIELDS);
     if (!flat.error && flat.data) {
       rows = flat.data as unknown as CleanerProfileReviewRow[];
-      const profileDb = admin ?? primary;
-      await enrichReviewerProfiles(profileDb, rows);
+      await enrichReviewerProfiles(admin ?? primary, rows);
     } else {
       rows = [];
     }
-  } else if (rows.length > 0 && admin) {
+  } else if (rows.length > 0) {
     const needsNames = rows.some((r) => {
       const rev = r.reviewer;
-      const name = Array.isArray(rev) ? rev[0]?.full_name : rev?.full_name;
-      return !String(name ?? "").trim();
+      const one = Array.isArray(rev) ? rev[0] : rev;
+      return !formatReviewerDisplayName(one);
     });
     if (needsNames) {
-      await enrichReviewerProfiles(admin, rows);
+      await enrichReviewerProfiles(admin ?? primary, rows);
     }
   }
 
   for (const r of rows) {
-    const rev = r.reviewer;
-    if (Array.isArray(rev)) {
-      r.reviewer = rev[0] ?? null;
+    let single = r.reviewer;
+    if (Array.isArray(single)) {
+      single = single[0] ?? null;
+      r.reviewer = single;
+    }
+    if (single) {
+      const d = formatReviewerDisplayName(single);
+      if (d) single.full_name = d;
     }
   }
 

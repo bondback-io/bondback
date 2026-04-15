@@ -775,10 +775,15 @@ export function JobDetail({
         toast({
           title: "Bid accepted — job created",
           description:
-            "The cleaner has been notified by email and in-app. They can open the job when the lister pays & starts.",
+            "Opening the job so you can pay & start when you’re ready.",
         });
-        scheduleRouterAction(() => router.refresh());
-        scrollToTopAfterBidAccepted();
+        const jid = Number(result.jobId);
+        if (Number.isFinite(jid) && jid > 0) {
+          scheduleRouterAction(() => router.replace(`/jobs/${jid}`));
+        } else {
+          scheduleRouterAction(() => router.refresh());
+          scrollToTopAfterBidAccepted();
+        }
       } else {
         logClientError("earlyBidAccept", result.error, {
           listingId,
@@ -922,13 +927,16 @@ export function JobDetail({
     return bids.some((b) => b.status === "active");
   }, [hasActiveJob, isLive, listing.status, bids]);
 
+  const hasAcceptedWinningBid = bids.some((b) => b.status === "accepted");
+
   /** Ended auction with no job: match listing detail “closed” visuals on boosted layout. */
-  const showEndedListingVisual = !isLive && !hasActiveJob && !pendingAutoAssignWinner;
+  const showEndedListingVisual =
+    !isLive && !hasActiveJob && !pendingAutoAssignWinner && !hasAcceptedWinningBid;
   const endedListingBannerLabel = listing.cancelled_early_at
     ? "Listing cancelled"
     : "Listing ended";
   const closedAuctionBidStatus: ClosedAuctionBidStatus | null =
-    !isLive && !pendingAutoAssignWinner
+    !isLive && !pendingAutoAssignWinner && !hasAcceptedWinningBid
       ? listing.cancelled_early_at
         ? "lister_cancelled"
         : "auction_ended"
