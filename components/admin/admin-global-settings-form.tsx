@@ -583,16 +583,25 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       <Card className="border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30">
         <CardHeader>
           <CardTitle className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-            New job alerts (SMS + push)
+            New job alerts (SMS, push, in-app + email)
           </CardTitle>
           <p className="text-[11px] text-emerald-800/90 dark:text-emerald-200/90">
-            When enabled, cleaners with the <strong>cleaner</strong> role who opted in under Settings → <em>SMS for new jobs</em> / <em>Push for new jobs</em> are notified when a new <strong>live</strong> listing is within their <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">max_travel_km</code> (haversine via suburb/postcode, else postcode distance). SMS uses Twilio; push uses Expo. Per-user daily caps below.
+            When a new <strong>live</strong> listing is published, cleaners with the <strong>cleaner</strong> role who are within range get{" "}
+            <strong>in-app + email</strong> alerts (Resend) if they opted in under Settings → <em>New listings in my area</em>.{" "}
+            <strong>SMS</strong> (Twilio) and <strong>push</strong> (Expo) only apply when the cleaner is within their preferred{" "}
+            <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">max_travel_km</code> (haversine via suburb/postcode, else postcode distance).{" "}
+            The toggle below turns <strong>SMS + push</strong> on or off only — it does not disable in-app or email.{" "}
+            Email copy and per-type on/off live under{" "}
+            <Link href="/admin/emails" className="font-medium underline underline-offset-2">
+              Admin → Emails
+            </Link>{" "}
+            (template key <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">new_job_in_area</code>). Per-user SMS/push daily caps below.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="enable-sms-alerts-new-jobs" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
-              Enable new job alerts
+              Enable SMS + push for new jobs in area
             </Label>
             <Switch
               id="enable-sms-alerts-new-jobs"
@@ -760,6 +769,11 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               disabled={!newChecklistItemDraft.trim()}
             >
               Add task
+            </Button>
+          </div>
+          <div className="flex items-center justify-end pt-1">
+            <Button type="submit" size="sm" disabled={isPending}>
+              {isPending ? "Saving..." : "Save checklist changes"}
             </Button>
           </div>
         </CardContent>

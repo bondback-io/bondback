@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -113,6 +114,13 @@ export async function createListingForPublish(
 
   revalidatePath("/my-listings");
   revalidatePath("/jobs");
+
+  // Guarantee new-listing alerts run server-side even if the client navigates away.
+  after(() => {
+    void triggerNewListingJobAlerts(String(data.id)).catch(() => {});
+    void notifyListerListingLive(String(data.id)).catch(() => {});
+  });
+
   return { ok: true, id: String(data.id) };
 }
 

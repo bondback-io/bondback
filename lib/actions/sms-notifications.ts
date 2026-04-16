@@ -54,10 +54,10 @@ async function notifyNearbyCleanersForListing(
   if (!admin) return { ok: true, sent: 0 };
 
   const settings = await getGlobalSettings();
-  /** Kill switch for both SMS and push new-job alerts (DB column name: enable_sms_alerts_new_jobs). */
+  /** Global switch for SMS/push channels only. In-app + email should still flow. */
   const alertsEnabled = (settings as { enable_sms_alerts_new_jobs?: boolean } | null)
     ?.enable_sms_alerts_new_jobs;
-  if (alertsEnabled === false) return { ok: true, sent: 0 };
+  const smsPushAllowed = alertsEnabled !== false;
   const bufferKmRaw = (settings as { additional_notification_radius_buffer_km?: number | null } | null)
     ?.additional_notification_radius_buffer_km;
   const bufferKm =
@@ -156,7 +156,7 @@ async function notifyNearbyCleanersForListing(
     const bedCount =
       typeof row.bedrooms === "number" && row.bedrooms > 0 ? row.bedrooms : 1;
     if (insidePreferred) {
-      if (options.includeSmsPush) {
+      if (options.includeSmsPush && smsPushAllowed) {
         const smsResult = await sendNewJobAlert(
           cleanerId,
           listingId,
