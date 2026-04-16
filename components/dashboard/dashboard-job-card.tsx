@@ -562,6 +562,14 @@ function DashboardJobCardInner({
                 iconClassName="mr-1.5 h-4 w-4"
               />
             )}
+            {viewerRole === "cleaner" &&
+              (job.status === "in_progress" || job.status === "completed_pending_approval") && (
+                <Button asChild variant="outline" className="min-h-11 rounded-full px-5 text-sm font-semibold">
+                  <Link prefetch href="/disputes" className="no-underline hover:no-underline">
+                    Request Additional Payment
+                  </Link>
+                </Button>
+              )}
           </div>
         </CardContent>
       </div>

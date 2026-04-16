@@ -34,6 +34,7 @@ import {
   Briefcase,
   DollarSign,
   HelpCircle,
+  Scale,
   LogOut,
   List,
   ShieldAlert,
@@ -480,6 +481,16 @@ export function UserMenu({ session }: UserMenuProps) {
                     <span>Help &amp; Support</span>
                   </Link>
                 </SheetClose>
+                <SheetClose asChild>
+                  <Link
+                    href="/disputes"
+                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                    aria-label="Dispute Resolution Center"
+                  >
+                    <Scale className="h-5 w-5 shrink-0" aria-hidden />
+                    <span>Dispute Resolution</span>
+                  </Link>
+                </SheetClose>
 
                 <div
                   role="separator"
@@ -657,6 +668,15 @@ export function UserMenu({ session }: UserMenuProps) {
           >
             <HelpCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span>Help &amp; Support</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              router.push("/disputes");
+            }}
+            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+          >
+            <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>Dispute Resolution</span>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator className="my-1" />

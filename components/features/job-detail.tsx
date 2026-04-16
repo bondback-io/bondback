@@ -3341,9 +3341,14 @@ export function JobDetail({
                     </div>
                   )}
                   {localJobStatus === "completed_pending_approval" && (
-                    <p className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2.5 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
-                      You&apos;ve requested payment. Waiting for the property lister to review and release funds.
-                    </p>
+                    <div className="space-y-2">
+                      <p className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2.5 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
+                        You&apos;ve requested payment. Waiting for the property lister to review and release funds.
+                      </p>
+                      <Button asChild variant="outline" className="w-full min-h-11">
+                        <Link href="/disputes">Request Additional Payment</Link>
+                      </Button>
+                    </div>
                   )}
                 </div>
               )}

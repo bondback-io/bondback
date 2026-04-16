@@ -1,33 +1,23 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { startOfWeek, subDays } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { DisputeRow } from "@/components/admin/dispute-row";
-import { AdminShell } from "@/components/admin/admin-shell";
-import { Sailboat } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { proposeMediation } from "@/lib/actions/disputes";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = { status?: string; range?: string; q?: string };
+type SearchParams = {
+  status?: string;
+  escalated?: string;
+  mediation?: string;
+  q?: string;
+};
 
 export default async function AdminDisputesPage({
   searchParams,
@@ -55,40 +45,33 @@ export default async function AdminDisputesPage({
     redirect("/dashboard");
   }
 
-  const now = new Date();
-  const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-  const sevenDaysAgo = subDays(now, 7);
-  const thirtyDaysAgo = subDays(now, 30);
-
-  // Fetch disputed jobs (open disputes only; resolved/rejected would need a dispute_resolution table for history)
   const { data: disputedData } = await supabase
     .from("jobs")
-    .select("id, listing_id, lister_id, winner_id, status, dispute_reason, dispute_photos, dispute_evidence, dispute_status, dispute_opened_by, disputed_at, dispute_response_reason, dispute_response_evidence, proposed_refund_amount, counter_proposal_amount, payment_intent_id, refund_amount, refund_status, created_at, updated_at")
-    .in("status", ["disputed", "dispute_negotiating", "in_review"])
-    .order("created_at", { ascending: false });
+    .select("id, lister_id, winner_id, status, dispute_status, dispute_opened_by, dispute_reason, dispute_priority, dispute_escalated, dispute_mediation_status, mediation_proposal, proposed_refund_amount, counter_proposal_amount, created_at, updated_at")
+    .in("status", ["disputed", "dispute_negotiating", "in_review", "completed_pending_approval"])
+    .order("updated_at", { ascending: false });
 
   const allJobs = (disputedData ?? []) as any[];
 
   const totalOpen = allJobs.length;
-  const disputesThisWeek = allJobs.filter(
-    (j) => new Date(j.created_at) >= weekStart
-  ).length;
-  const resolvedThisMonth = 0; // Stub: would need dispute resolution log
-  const avgResolutionDays = "—"; // Stub: would need resolution timestamps
+  const escalatedCount = allJobs.filter((j) => Boolean(j.dispute_escalated)).length;
+  const mediationCount = allJobs.filter((j) => String(j.dispute_mediation_status ?? "none") !== "none").length;
 
   const statusFilter = (sp.status ?? "all").toLowerCase();
-  const rangeFilter = sp.range ?? "all";
+  const escalatedFilter = (sp.escalated ?? "all").toLowerCase();
+  const mediationFilter = (sp.mediation ?? "all").toLowerCase();
   const query = (sp.q ?? "").trim().toLowerCase();
 
   let filtered = allJobs;
-  if (statusFilter === "resolved" || statusFilter === "rejected") {
-    filtered = []; // No historical dispute list without resolution table
+  if (statusFilter !== "all") {
+    filtered = filtered.filter((j) => String(j.status).toLowerCase() === statusFilter);
   }
-
-  if (rangeFilter === "7") {
-    filtered = filtered.filter((j) => new Date(j.created_at) >= sevenDaysAgo);
-  } else if (rangeFilter === "30") {
-    filtered = filtered.filter((j) => new Date(j.created_at) >= thirtyDaysAgo);
+  if (escalatedFilter !== "all") {
+    const target = escalatedFilter === "yes";
+    filtered = filtered.filter((j) => Boolean(j.dispute_escalated) === target);
+  }
+  if (mediationFilter !== "all") {
+    filtered = filtered.filter((j) => String(j.dispute_mediation_status ?? "none") === mediationFilter);
   }
 
   const userIds = Array.from(
@@ -130,70 +113,60 @@ export default async function AdminDisputesPage({
     });
   }
 
-  const baseSearchParams = new URLSearchParams();
-  if (sp.status) baseSearchParams.set("status", sp.status);
-  if (sp.range) baseSearchParams.set("range", sp.range);
-  if (sp.q) baseSearchParams.set("q", sp.q);
+  const admin = createSupabaseAdminClient();
+  const byJobMessages = new Map<number, any[]>();
+  if (admin && filtered.length > 0) {
+    const ids = filtered.map((j) => j.id);
+    const { data: msgs } = await (admin as any)
+      .from("dispute_messages")
+      .select("*")
+      .in("job_id", ids)
+      .order("created_at", { ascending: false });
+    for (const m of msgs ?? []) {
+      const key = Number(m.job_id);
+      const arr = byJobMessages.get(key) ?? [];
+      if (arr.length < 4) arr.push(m);
+      byJobMessages.set(key, arr);
+    }
+  }
 
   return (
     <AdminShell activeHref="/admin/disputes">
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl dark:text-gray-100">
-            Dispute overview
-          </h1>
-          <p className="text-sm text-muted-foreground dark:text-gray-400">
-            Review disputed jobs, evidence and resolve outcomes.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl dark:text-gray-100">Dispute & Mediation Console</h1>
+          <p className="text-sm text-muted-foreground dark:text-gray-400">Modern admin workflow aligned with support ticket experience.</p>
         </div>
-      </div>
 
-      {/* Summary cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
           <CardContent className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-              Total open disputes
-            </p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground dark:text-gray-100">
-              {totalOpen}
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">Open disputes</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground dark:text-gray-100">{totalOpen}</p>
           </CardContent>
         </Card>
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
           <CardContent className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-              Disputes this week
-            </p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground dark:text-gray-100">
-              {disputesThisWeek}
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">Escalated</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground dark:text-gray-100">{escalatedCount}</p>
           </CardContent>
         </Card>
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
           <CardContent className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-              Resolved this month
-            </p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground dark:text-gray-100">
-              {resolvedThisMonth}
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">With mediation</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground dark:text-gray-100">{mediationCount}</p>
           </CardContent>
         </Card>
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
           <CardContent className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-              Avg resolution time
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-gray-400">Queue health</p>
             <p className="mt-1 text-2xl font-bold tabular-nums text-foreground dark:text-gray-100">
-              {avgResolutionDays === "—" ? "—" : `${avgResolutionDays} days`}
+              {filtered.length > 0 ? "Active" : "Clear"}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
       <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
         <CardHeader className="pb-3">
           <CardTitle className="text-base dark:text-gray-100">Filters</CardTitle>
@@ -202,144 +175,88 @@ export default async function AdminDisputesPage({
           <form
             action="/admin/disputes"
             method="GET"
-            className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4"
+            className="grid gap-3 md:grid-cols-4"
           >
-            <div className="flex-1 space-y-1.5">
-              <label htmlFor="q" className="text-xs font-medium text-muted-foreground">
-                Search (job ID, name, reason)
-              </label>
-              <Input
-                id="q"
-                name="q"
-                defaultValue={sp.q ?? ""}
-                placeholder="Search..."
-                className="max-w-xs"
-              />
+            <div className="space-y-1.5">
+              <label htmlFor="q" className="text-xs font-medium text-muted-foreground">Search</label>
+              <Input id="q" name="q" defaultValue={sp.q ?? ""} placeholder="job id, user, reason" />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="status" className="text-xs font-medium text-muted-foreground">
-                Status
-              </label>
-              <Select name="status" defaultValue={sp.status ?? "all"}>
-                <SelectTrigger id="status" className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
+              <label htmlFor="status" className="text-xs font-medium text-muted-foreground">Status</label>
+              <Input id="status" name="status" defaultValue={sp.status ?? "all"} placeholder="all / disputed / in_review" />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="range" className="text-xs font-medium text-muted-foreground">
-                Date range
-              </label>
-              <Select name="range" defaultValue={sp.range ?? "all"}>
-                <SelectTrigger id="range" className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All time</SelectItem>
-                  <SelectItem value="7">Last 7 days</SelectItem>
-                  <SelectItem value="30">Last 30 days</SelectItem>
-                </SelectContent>
-              </Select>
+              <label htmlFor="escalated" className="text-xs font-medium text-muted-foreground">Escalated</label>
+              <Input id="escalated" name="escalated" defaultValue={sp.escalated ?? "all"} placeholder="all / yes / no" />
             </div>
-            <Button type="submit" size="sm">
-              Apply
+            <div className="space-y-1.5">
+              <label htmlFor="mediation" className="text-xs font-medium text-muted-foreground">Mediation</label>
+              <Input id="mediation" name="mediation" defaultValue={sp.mediation ?? "all"} placeholder="all / requested / proposed" />
+            </div>
+            <Button type="submit" size="sm" className="md:col-span-4 w-fit">
+              Apply filters
             </Button>
           </form>
         </CardContent>
       </Card>
 
-      {/* Table + empty state */}
       <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
         <CardHeader>
-          <CardTitle className="text-base md:text-lg dark:text-gray-100">
-            Disputed jobs
-          </CardTitle>
+          <CardTitle className="text-base md:text-lg dark:text-gray-100">Disputes queue</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 py-12 text-center dark:border-gray-800 dark:bg-gray-800/30">
-              <Sailboat className="h-12 w-12 text-muted-foreground dark:text-gray-500" aria-hidden />
-              <p className="mt-3 font-medium text-foreground dark:text-gray-100">
-                No open disputes – all jobs are smooth sailing!
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground dark:text-gray-400">
-                When users raise disputes, they will appear here for review.
-              </p>
-              <Button asChild variant="outline" size="sm" className="mt-4">
-                <Link href="/admin/dashboard">Back to dashboard</Link>
-              </Button>
+            <div className="rounded-lg border border-dashed border-border bg-muted/30 py-10 text-center text-sm text-muted-foreground dark:border-gray-800 dark:bg-gray-800/30">
+              No disputes match this filter.
             </div>
           ) : (
-            <>
-              <div className="overflow-x-auto -mx-4 sm:mx-0 hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="dark:border-gray-800">
-                      <TableHead className="dark:text-gray-200">Job ID</TableHead>
-                      <TableHead className="hidden lg:table-cell dark:text-gray-200">Lister</TableHead>
-                      <TableHead className="hidden lg:table-cell dark:text-gray-200">Cleaner</TableHead>
-                      <TableHead className="hidden md:table-cell dark:text-gray-200">Disputed by</TableHead>
-                      <TableHead className="dark:text-gray-200">Proposed refund</TableHead>
-                      <TableHead className="dark:text-gray-200">Reason</TableHead>
-                      <TableHead className="hidden sm:table-cell dark:text-gray-200">Evidence</TableHead>
-                      <TableHead className="dark:text-gray-200">Opened</TableHead>
-                      <TableHead className="dark:text-gray-200">Status</TableHead>
-                      <TableHead className="w-[60px] dark:text-gray-200">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((job) => (
-                      <DisputeRow
-                        key={job.id}
-                        job={job}
-                        lister={profilesMap.get(job.lister_id) ?? null}
-                        cleaner={job.winner_id ? profilesMap.get(job.winner_id) ?? null : null}
-                      />
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {/* Mobile card list (visible only on small screens; table hidden there) */}
-              <div className="grid gap-3 md:hidden">
-                {filtered.map((job) => {
-                  const lister = profilesMap.get(job.lister_id) ?? null;
-                  const cleaner = job.winner_id ? profilesMap.get(job.winner_id) ?? null : null;
-                  const reason = (job.dispute_reason ?? "No reason").slice(0, 80);
-                  return (
-                    <Card key={job.id} className="border-border dark:border-gray-800 dark:bg-gray-900/50">
-                      <CardContent className="p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Link href={`/jobs/${job.id}`} className="font-medium text-primary hover:underline">
-                            Job #{job.id}
-                          </Link>
-                          <Badge variant="outline" className="text-[10px]">
-                            {job.status === "disputed" ? "Pending" : job.status}
-                          </Badge>
+            <div className="space-y-3">
+              {filtered.map((job) => {
+                const lister = profilesMap.get(job.lister_id);
+                const cleaner = profilesMap.get(job.winner_id);
+                const msgPreview = byJobMessages.get(Number(job.id)) ?? [];
+                return (
+                  <Card key={job.id} className="border-border dark:border-gray-800 dark:bg-gray-900/60">
+                    <CardContent className="space-y-3 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold">Job #{job.id}</p>
+                        <Badge variant="outline">{job.status}</Badge>
+                        <Badge variant="secondary">{job.dispute_priority ?? "medium"}</Badge>
+                        {job.dispute_escalated ? <Badge className="bg-red-600 text-white">Escalated</Badge> : null}
+                        {job.dispute_mediation_status && job.dispute_mediation_status !== "none" ? (
+                          <Badge className="bg-violet-600 text-white">Mediation: {job.dispute_mediation_status}</Badge>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {lister?.full_name ?? "Lister"} vs {cleaner?.full_name ?? "Cleaner"} • {String(job.dispute_reason ?? "").slice(0, 180)}
+                      </p>
+                      {msgPreview.length ? (
+                        <ul className="space-y-1 rounded-lg border border-border bg-muted/20 p-2 dark:border-gray-800">
+                          {msgPreview.map((m: any) => (
+                            <li key={m.id} className="text-xs text-muted-foreground">
+                              {m.author_role}: {String(m.body ?? "").slice(0, 120)}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+
+                      <form action={proposeMediation} className="grid gap-2 rounded-lg border border-violet-300/70 bg-violet-50/70 p-3 dark:border-violet-800 dark:bg-violet-950/20">
+                        <input type="hidden" name="jobId" value={job.id} />
+                        <Label className="text-xs">Mediation proposal</Label>
+                        <Textarea name="proposalText" rows={2} required placeholder="Propose a fair settlement..." />
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Input name="refundCents" type="number" min={0} step={50} placeholder="Refund cents (optional)" />
+                          <Input name="additionalPaymentCents" type="number" min={0} step={50} placeholder="Top-up cents (optional)" />
                         </div>
-                        <p className="text-xs text-muted-foreground dark:text-gray-400">
-                          {lister?.full_name ?? "—"} · {cleaner?.full_name ?? "—"}
-                        </p>
-                        <p className="text-xs line-clamp-2 dark:text-gray-300">{reason}</p>
-                        <div className="flex gap-2 pt-1">
-                          <Button asChild size="sm" variant="outline">
-                            <Link href={`/jobs/${job.id}`}>View</Link>
-                          </Button>
-                          <Button asChild size="sm" variant="ghost">
-                            <Link href={`/messages?job=${job.id}`}>Message</Link>
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </>
+                        <Button type="submit" size="sm" className="w-fit">
+                          Send mediation proposal
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

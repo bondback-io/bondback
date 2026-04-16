@@ -2522,10 +2522,27 @@ export async function openDispute(
       : {}),
   };
 
-  const { error: updateError } = await supabase
+  let { error: updateError } = await supabase
     .from("jobs")
     .update(updatePayload as Partial<JobRow> as never)
     .eq("id", jobId);
+
+  // Back-compat for older DBs where `dispute_opened_by` is uuid (not text role).
+  if (
+    updateError &&
+    updateError.code === "22P02" &&
+    String(updateError.message ?? "").toLowerCase().includes("dispute_opened_by")
+  ) {
+    const legacyPayload = {
+      ...updatePayload,
+      dispute_opened_by: session.user.id,
+    };
+    const retry = await supabase
+      .from("jobs")
+      .update(legacyPayload as Partial<JobRow> as never)
+      .eq("id", jobId);
+    updateError = retry.error;
+  }
 
   if (updateError) {
     return { ok: false, error: updateError.message };
