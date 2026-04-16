@@ -21,6 +21,19 @@ let loggedMissingServiceRoleForJobLoad = false;
 let loggedMissingServiceRoleForListingLoad = false;
 let loggedMissingServiceRoleForListingUuidJob = false;
 
+const LEGACY_JOB_DETAIL_PAGE_SELECT = JOB_DETAIL_PAGE_SELECT.replace(
+  "secured_via_buy_now, ",
+  ""
+);
+
+function isMissingSecuredViaBuyNowColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return (
+    error.code === "42703" &&
+    String(error.message ?? "").toLowerCase().includes("secured_via_buy_now")
+  );
+}
+
 function sameUserId(a: unknown, b: unknown): boolean {
   return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
 }
@@ -128,11 +141,21 @@ export async function loadJobByNumericIdForSession(
 ): Promise<JobRow | null> {
   const isAdmin = options?.isAdmin === true;
 
-  const { data: fromUser, error } = await supabase
+  let { data: fromUser, error } = await supabase
     .from("jobs")
     .select(JOB_DETAIL_PAGE_SELECT)
     .eq("id", jobId)
     .maybeSingle();
+
+  if (isMissingSecuredViaBuyNowColumn(error)) {
+    const retry = await supabase
+      .from("jobs")
+      .select(LEGACY_JOB_DETAIL_PAGE_SELECT)
+      .eq("id", jobId)
+      .maybeSingle();
+    fromUser = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     console.warn("[loadJobByNumericIdForSession] user-scoped jobs read error", error.code, error.message);
@@ -154,11 +177,20 @@ export async function loadJobByNumericIdForSession(
     return null;
   }
 
-  const { data: full } = await admin
+  let { data: full, error: adminError } = await admin
     .from("jobs")
     .select(JOB_DETAIL_PAGE_SELECT)
     .eq("id", jobId)
     .maybeSingle();
+
+  if (isMissingSecuredViaBuyNowColumn(adminError)) {
+    const retry = await admin
+      .from("jobs")
+      .select(LEGACY_JOB_DETAIL_PAGE_SELECT)
+      .eq("id", jobId)
+      .maybeSingle();
+    full = retry.data as typeof full;
+  }
 
   if (!full) {
     return null;
@@ -338,7 +370,7 @@ export async function loadJobForListingDetailPage(
 ): Promise<JobRow | null> {
   const isAdmin = options?.isAdmin === true;
 
-  const { data: fromUser, error } = await supabase
+  let { data: fromUser, error } = await supabase
     .from("jobs")
     .select(JOB_DETAIL_PAGE_SELECT)
     .eq("listing_id", listingId)
@@ -346,6 +378,19 @@ export async function loadJobForListingDetailPage(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  if (isMissingSecuredViaBuyNowColumn(error)) {
+    const retry = await supabase
+      .from("jobs")
+      .select(LEGACY_JOB_DETAIL_PAGE_SELECT)
+      .eq("listing_id", listingId)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    fromUser = retry.data;
+    error = retry.error;
+  }
 
   if (!error && fromUser) {
     const j = fromUser as JobRow;
@@ -363,7 +408,7 @@ export async function loadJobForListingDetailPage(
     return null;
   }
 
-  const { data: full } = await admin
+  let { data: full, error: adminError } = await admin
     .from("jobs")
     .select(JOB_DETAIL_PAGE_SELECT)
     .eq("listing_id", listingId)
@@ -371,6 +416,18 @@ export async function loadJobForListingDetailPage(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  if (isMissingSecuredViaBuyNowColumn(adminError)) {
+    const retry = await admin
+      .from("jobs")
+      .select(LEGACY_JOB_DETAIL_PAGE_SELECT)
+      .eq("listing_id", listingId)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    full = retry.data as typeof full;
+  }
 
   if (!full) {
     return null;

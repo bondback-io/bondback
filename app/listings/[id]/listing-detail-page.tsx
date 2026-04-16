@@ -173,7 +173,7 @@ export default async function ListingDetailPage({
     if (admin) {
       const { data: ownerJobFallback } = await admin
         .from("jobs")
-        .select("id, status, agreed_amount_cents, top_up_payments, secured_via_buy_now")
+        .select("id, status, agreed_amount_cents, top_up_payments")
         .eq("listing_id", listingId)
         .neq("status", "cancelled")
         .order("created_at", { ascending: false })
