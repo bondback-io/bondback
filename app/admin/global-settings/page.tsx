@@ -81,6 +81,8 @@ export default async function AdminGlobalSettingsPage() {
         stripeTestMode: (existing as { stripe_test_mode?: boolean }).stripe_test_mode ?? true,
         floatingChatEnabled: (existing as { floating_chat_enabled?: boolean }).floating_chat_enabled ?? true,
         enableSmsAlertsNewJobs: (existing as { enable_sms_alerts_new_jobs?: boolean }).enable_sms_alerts_new_jobs ?? true,
+        additionalNotificationRadiusBufferKm:
+          (existing as { additional_notification_radius_buffer_km?: number | null }).additional_notification_radius_buffer_km ?? 50,
         enableSmsNotifications: (existing as { enable_sms_notifications?: boolean }).enable_sms_notifications ?? true,
         smsTypeEnabled:
           (existing as { sms_type_enabled?: Record<string, boolean> | null }).sms_type_enabled ?? {},

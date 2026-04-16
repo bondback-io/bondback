@@ -39,6 +39,12 @@ export async function notifyNearbyCleanersOfNewListing(
   const alertsEnabled = (settings as { enable_sms_alerts_new_jobs?: boolean } | null)
     ?.enable_sms_alerts_new_jobs;
   if (alertsEnabled === false) return { ok: true, sent: 0 };
+  const bufferKmRaw = (settings as { additional_notification_radius_buffer_km?: number | null } | null)
+    ?.additional_notification_radius_buffer_km;
+  const bufferKm =
+    typeof bufferKmRaw === "number" && Number.isFinite(bufferKmRaw)
+      ? Math.max(0, Math.min(500, Math.round(bufferKmRaw)))
+      : 50;
 
   const { data: listing, error: listError } = await admin
     .from("listings")
@@ -81,7 +87,7 @@ export async function notifyNearbyCleanersOfNewListing(
 
   const { data: profiles } = await admin
     .from("profiles")
-    .select("id, suburb, postcode, roles, max_travel_km");
+    .select("id, suburb, postcode, roles, max_travel_km, notification_preferences");
 
   const cleaners = (profiles ?? []).filter((p: { roles?: string[] | null }) => {
     const roles = Array.isArray(p.roles) ? p.roles : [];
@@ -119,43 +125,54 @@ export async function notifyNearbyCleanersOfNewListing(
       distanceKm = postcodeDistanceKm(listingPostcode, cleanerPostcode);
     }
 
-    if (distanceKm > maxTravelKm) continue;
-
     const cleanerId = (p as { id: string }).id;
+    const notifPrefs = (p as { notification_preferences?: Record<string, boolean> | null })
+      .notification_preferences;
+    const wantsNewListingAlerts = notifPrefs?.new_job_in_area !== false;
+    if (!wantsNewListingAlerts) continue;
+    const insidePreferred = distanceKm <= maxTravelKm;
+    const insideBuffer = !insidePreferred && distanceKm <= maxTravelKm + bufferKm;
+    if (!insidePreferred && !insideBuffer) continue;
 
     const bedCount =
       typeof row.bedrooms === "number" && row.bedrooms > 0 ? row.bedrooms : 1;
-    const smsResult = await sendNewJobAlert(
-      cleanerId,
-      listingId,
-      safeTrim(row.suburb),
-      listingPostcode,
-      minCents,
-      maxCents,
-      bedCount
-    );
-    if (smsResult.sent) sent++;
+    if (insidePreferred) {
+      const smsResult = await sendNewJobAlert(
+        cleanerId,
+        listingId,
+        safeTrim(row.suburb),
+        listingPostcode,
+        minCents,
+        maxCents,
+        bedCount
+      );
+      if (smsResult.sent) sent++;
 
-    const pushResult = await sendNewJobPushAlert(
-      cleanerId,
-      listingId,
-      safeTrim(row.suburb),
-      listingPostcode,
-      minCents,
-      maxCents
-    );
-    if (pushResult.sent) sent++;
+      const pushResult = await sendNewJobPushAlert(
+        cleanerId,
+        listingId,
+        safeTrim(row.suburb),
+        listingPostcode,
+        minCents,
+        maxCents
+      );
+      if (pushResult.sent) sent++;
+    }
 
     const listingTitle = (row.title ?? "").trim() || "Bond clean";
     if (!(await hasRecentNewJobInAreaNotification(cleanerId, listingId, 48))) {
       const loc = listingPostcode
         ? `${safeTrim(row.suburb)} (${listingPostcode})`
         : safeTrim(row.suburb);
+      const outsideMsg =
+        "We have 1 new bond cleans just outside your preferred area. Would you like to view them?";
       await createNotification(
         cleanerId,
         "new_job_in_area",
         null,
-        `New job in ${loc}: ${listingTitle.slice(0, 80)}. Open to review and bid.`,
+        insidePreferred
+          ? `New job in ${loc}: ${listingTitle.slice(0, 80)}. Open to review and bid.`
+          : outsideMsg,
         {
           listingUuid: listingId,
           listingTitle,
@@ -163,6 +180,7 @@ export async function notifyNearbyCleanersOfNewListing(
           postcode: listingPostcode,
           minPriceCents: minCents,
           maxPriceCents: maxCents,
+          persistTitle: insidePreferred ? "New job near you" : "Just outside your preferred area",
         }
       );
     }

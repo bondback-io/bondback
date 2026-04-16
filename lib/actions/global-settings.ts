@@ -50,6 +50,8 @@ type GlobalSettingsRow = {
   daily_digest_enabled?: boolean;
   /** When false, disables new-job SMS and push alerts (cleaner prefs apply when true). */
   enable_sms_alerts_new_jobs?: boolean;
+  /** Extra radius buffer for "just outside preferred area" cleaner notifications. */
+  additional_notification_radius_buffer_km?: number | null;
   /** When false, no Twilio SMS is sent site-wide. */
   enable_sms_notifications?: boolean;
   /** Admin inbox alerts (Resend). */
@@ -311,6 +313,7 @@ export type SaveGlobalSettingsInput = {
   enableSmsNotifications?: boolean;
   /** Keys match notification types / new_job_in_area for area alerts. */
   smsTypeEnabled?: Record<string, boolean>;
+  additionalNotificationRadiusBufferKm?: number;
   maxSmsPerUserPerDay?: number | null;
   maxPushPerUserPerDay?: number | null;
   pricingBaseRatePerBedroomAud?: number;
@@ -380,6 +383,10 @@ export async function saveGlobalSettings(
     stripe_test_mode: typeof data.stripeTestMode === "boolean" ? data.stripeTestMode : true,
     floating_chat_enabled: typeof data.floatingChatEnabled === "boolean" ? data.floatingChatEnabled : true,
     enable_sms_alerts_new_jobs: typeof data.enableSmsAlertsNewJobs === "boolean" ? data.enableSmsAlertsNewJobs : true,
+    additional_notification_radius_buffer_km:
+      typeof data.additionalNotificationRadiusBufferKm === "number" && Number.isFinite(data.additionalNotificationRadiusBufferKm)
+        ? Math.max(0, Math.min(500, Math.round(data.additionalNotificationRadiusBufferKm)))
+        : 50,
     enable_sms_notifications: data.enableSmsNotifications !== false,
     sms_type_enabled:
       data.smsTypeEnabled && typeof data.smsTypeEnabled === "object"

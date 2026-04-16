@@ -237,6 +237,7 @@ const ALL_PREF_KEYS: NotificationPreferenceKey[] = [
   "email_tutorial",
   "sms_enabled",
   "sms_job_alerts",
+  "new_job_in_area",
   "push_enabled",
   "push_new_job",
   "in_app_sound",
@@ -246,7 +247,11 @@ const ALL_PREF_KEYS: NotificationPreferenceKey[] = [
 ];
 
 /** Cleaners only: new-job radius alerts (SMS + push). */
-const CLEANER_NEW_JOB_KEYS = new Set<NotificationPreferenceKey>(["sms_job_alerts", "push_new_job"]);
+const CLEANER_NEW_JOB_KEYS = new Set<NotificationPreferenceKey>([
+  "sms_job_alerts",
+  "push_new_job",
+  "new_job_in_area",
+]);
 
 /** In-app bell chime + vibration (both roles). */
 const IN_APP_FEEDBACK_KEYS = new Set<NotificationPreferenceKey>(["in_app_sound", "in_app_vibrate"]);

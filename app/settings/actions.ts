@@ -206,6 +206,7 @@ const NOTIFICATION_PREF_KEYS = [
   "email_tutorial",
   "sms_enabled",
   "sms_job_alerts",
+  "new_job_in_area",
   "push_enabled",
   "push_new_job",
   "in_app_sound",

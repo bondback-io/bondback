@@ -142,6 +142,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [enableSmsAlertsNewJobs, setEnableSmsAlertsNewJobs] = React.useState(
     initial?.enableSmsAlertsNewJobs ?? true
   );
+  const [additionalNotificationRadiusBufferKm, setAdditionalNotificationRadiusBufferKm] = React.useState(
+    initial?.additionalNotificationRadiusBufferKm ?? 50
+  );
   const [enableSmsNotifications, setEnableSmsNotifications] = React.useState(
     initial?.enableSmsNotifications ?? true
   );
@@ -284,6 +287,10 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       adminNotifyNewListing,
       adminNotifyDispute,
       enableSmsAlertsNewJobs,
+      additionalNotificationRadiusBufferKm: Math.max(
+        0,
+        Math.min(500, Number(additionalNotificationRadiusBufferKm) || 50)
+      ),
       enableSmsNotifications,
       smsTypeEnabled,
       maxSmsPerUserPerDay: maxSmsPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxSmsPerUserPerDay, 10) || 5)) : undefined,
@@ -600,8 +607,27 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               className="h-8 w-20 text-xs dark:bg-gray-900 dark:border-gray-700"
             />
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Label htmlFor="additional-notification-radius-buffer-km" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
+              Additional Notification Radius Buffer (km)
+            </Label>
+            <Input
+              id="additional-notification-radius-buffer-km"
+              type="number"
+              min={0}
+              max={500}
+              step={1}
+              placeholder="50"
+              value={additionalNotificationRadiusBufferKm}
+              onChange={(e) => setAdditionalNotificationRadiusBufferKm(Number(e.target.value))}
+              className="h-8 w-24 text-xs dark:bg-gray-900 dark:border-gray-700"
+            />
+          </div>
           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
             Leave blank for defaults (5 SMS / 5 push). Triggers from listing publish: <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">notifyNearbyCleanersOfNewListing</code>.
+          </p>
+          <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
+            Example: cleaner preferred radius 30km + buffer 50km = outside-radius alerts up to 80km.
           </p>
         </CardContent>
       </Card>

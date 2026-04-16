@@ -24,6 +24,8 @@ export type NotificationPreferenceKey =
   | "sms_new_job"
   /** Cleaners: SMS when a live listing is published in range. */
   | "sms_job_alerts"
+  /** Cleaners: in-app + email alerts for new listings in/near preferred area. */
+  | "new_job_in_area"
   | "push_enabled"
   | "push_new_job"
   | "daily_digest"
@@ -61,6 +63,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: Record<
   sms_enabled: false,
   sms_new_job: false,
   sms_job_alerts: true,
+  new_job_in_area: true,
   push_enabled: false,
   push_new_job: false,
   daily_digest: true,
@@ -109,7 +112,7 @@ export function notificationTypeToPreferenceKey(
     case "job_status_update":
       return "job_completed";
     case "new_job_in_area":
-      return "push_new_job";
+      return "new_job_in_area";
     case "payment_receipt":
       return "receipt_emails";
     case "weekly_tips":
@@ -192,6 +195,7 @@ export const NOTIFICATION_LABELS: Record<NotificationPreferenceKey, string> = {
   sms_enabled: "Receive SMS notifications",
   sms_new_job: "SMS for new jobs (legacy)",
   sms_job_alerts: "Receive SMS for new jobs in my area",
+  new_job_in_area: "New listings in my area (in-app + email)",
   push_enabled: "Receive push notifications",
   push_new_job: "Push for new jobs",
   daily_digest: "Receive daily digest email (summary of the last 24 hours)",
