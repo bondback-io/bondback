@@ -11,6 +11,7 @@ import {
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { JobPaymentReturnAck } from "@/components/features/job-payment-return-ack";
@@ -162,7 +163,27 @@ export default async function ListingDetailPage({
 
   const listingRow = listingLoaded as ListingRow;
   /** Named `jobRow` (not `j`) so fee/amount lines never hit TDZ if declaration order shifts. */
-  const jobRow = job as JobRow | null;
+  let jobRow = job as JobRow | null;
+  if (
+    jobRow == null &&
+    sessionUserId &&
+    (sessionIsAdmin || String(listingRow.lister_id) === String(sessionUserId))
+  ) {
+    const admin = createSupabaseAdminClient();
+    if (admin) {
+      const { data: ownerJobFallback } = await admin
+        .from("jobs")
+        .select("id, status, agreed_amount_cents, top_up_payments, secured_via_buy_now")
+        .eq("listing_id", listingId)
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (ownerJobFallback) {
+        jobRow = ownerJobFallback as JobRow;
+      }
+    }
+  }
 
   const settings = await getCachedGlobalSettingsForPages();
   const stripeTestModeForPayment =

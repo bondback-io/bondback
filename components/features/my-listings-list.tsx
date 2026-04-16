@@ -1109,6 +1109,31 @@ export function MyListingsList({
                 liveBidding && !activeIdSet.has(String(listing.id));
               const canRelistFromNoBidsPool = isListerNoBidsRelistListing(listing, job);
 
+              const directJobHref =
+                job &&
+                job.jobId != null &&
+                String(job.status ?? "") !== "cancelled" &&
+                String(job.jobId).trim() !== ""
+                  ? `/jobs/${encodeURIComponent(String(job.jobId).trim())}`
+                  : null;
+              const cardHref =
+                directJobHref ??
+                hrefListingOrJob(
+                  {
+                    id: String(listing.id),
+                    status: listing.status,
+                    end_time: listing.end_time,
+                  },
+                  job && job.jobId != null
+                    ? {
+                        id: Number(job.jobId),
+                        winner_id: job.winnerId,
+                        cleaner_id: job.winnerId,
+                        status: job.status,
+                      }
+                    : null
+                );
+
               return (
                 <ListerListingCard
                   key={String(listing.id)}
@@ -1123,21 +1148,7 @@ export function MyListingsList({
                   isLiveBidding={liveBidding}
                   cardAccent={cardAccent}
                   showEndEarly={showEndEarly}
-                  href={hrefListingOrJob(
-                    {
-                      id: String(listing.id),
-                      status: listing.status,
-                      end_time: listing.end_time,
-                    },
-                    job && job.jobId != null
-                      ? {
-                          id: Number(job.jobId),
-                          winner_id: job.winnerId,
-                          cleaner_id: job.winnerId,
-                          status: job.status,
-                        }
-                      : null
-                  )}
+                  href={cardHref}
                   onEndEarly={showEndEarly ? () => openCancelListingConfirm(listing) : undefined}
                   onRelist={canRelistFromNoBidsPool ? () => openRelistDialog(listing) : undefined}
                   relistLoading={relistingId === String(listing.id)}
