@@ -83,8 +83,6 @@ export default async function AdminGlobalSettingsPage() {
         enableSmsAlertsNewJobs: (existing as { enable_sms_alerts_new_jobs?: boolean }).enable_sms_alerts_new_jobs ?? true,
         additionalNotificationRadiusBufferKm:
           (existing as { additional_notification_radius_buffer_km?: number | null }).additional_notification_radius_buffer_km ?? 50,
-        newListingReminderIntervalHours:
-          (existing as { new_listing_reminder_interval_hours?: number | null }).new_listing_reminder_interval_hours ?? 6,
         enableNewListingReminders:
           (existing as { enable_new_listing_reminders?: boolean | null }).enable_new_listing_reminders ?? true,
         defaultCleanerChecklistItems:

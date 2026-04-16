@@ -253,12 +253,9 @@ export async function sendNoBidListingReminderNotifications(
   if (!remindersEnabled && options?.force !== true) {
     return { ok: true, listingsConsidered: 0, listingsMatched: 0, notificationsSent: 0 };
   }
-  const intervalRaw = (settings as { new_listing_reminder_interval_hours?: number | null } | null)
-    ?.new_listing_reminder_interval_hours;
-  const intervalHours =
-    typeof intervalRaw === "number" && Number.isFinite(intervalRaw)
-      ? Math.max(1, Math.min(168, Math.round(intervalRaw)))
-      : DEFAULT_NEW_LISTING_REMINDER_INTERVAL_HOURS;
+  // Hobby-compatible schedule: reminders run daily; dedupe matches that cadence.
+  // Manual runs use `force: true` and bypass dedupe.
+  const intervalHours = 24;
 
   const nowIso = new Date().toISOString();
   const { data: listings, error: listingError } = await admin

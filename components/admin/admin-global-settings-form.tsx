@@ -146,9 +146,6 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [additionalNotificationRadiusBufferKm, setAdditionalNotificationRadiusBufferKm] = React.useState(
     initial?.additionalNotificationRadiusBufferKm ?? 50
   );
-  const [newListingReminderIntervalHours, setNewListingReminderIntervalHours] = React.useState(
-    initial?.newListingReminderIntervalHours ?? 6
-  );
   const [enableNewListingReminders, setEnableNewListingReminders] = React.useState(
     initial?.enableNewListingReminders ?? true
   );
@@ -312,10 +309,6 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       additionalNotificationRadiusBufferKm: Math.max(
         0,
         Math.min(500, Number(additionalNotificationRadiusBufferKm) || 50)
-      ),
-      newListingReminderIntervalHours: Math.max(
-        1,
-        Math.min(168, Number(newListingReminderIntervalHours) || 6)
       ),
       enableNewListingReminders,
       defaultCleanerChecklistItems: defaultCleanerChecklistItems
@@ -653,25 +646,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               className="h-8 w-24 text-xs dark:bg-gray-900 dark:border-gray-700"
             />
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Label htmlFor="new-listing-reminder-interval-hours" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
-              No-bid listing reminder interval (hours)
-            </Label>
-            <Input
-              id="new-listing-reminder-interval-hours"
-              type="number"
-              min={1}
-              max={168}
-              step={1}
-              placeholder="6"
-              value={newListingReminderIntervalHours}
-              onChange={(e) => setNewListingReminderIntervalHours(Number(e.target.value))}
-              className="h-8 w-24 text-xs dark:bg-gray-900 dark:border-gray-700"
-            />
-          </div>
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="enable-new-listing-reminders" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
-              Enable scheduled no-bid listing reminders
+              Enable daily no-bid listing reminders
             </Label>
             <Switch
               id="enable-new-listing-reminders"
@@ -681,6 +658,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </div>
           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
             Leave blank for defaults (5 SMS / 5 push). Triggers from listing publish: <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">notifyNearbyCleanersOfNewListing</code>.
+          </p>
+          <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
+            Scheduled reminders run once per day (Vercel Hobby limit). Manual send below is immediate.
           </p>
           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
             Example: cleaner preferred radius 30km + buffer 50km = outside-radius alerts up to 80km.
