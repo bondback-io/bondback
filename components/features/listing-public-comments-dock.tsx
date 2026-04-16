@@ -570,6 +570,22 @@ export function ListingPublicCommentsDock({
     setQaUnread(initialQaUnreadCount);
   }, [initialQaUnreadCount, listingId]);
 
+  /**
+   * Mobile Q&A FAB: replay a short wiggle every 10s so the control reads as “available”.
+   * Paused while the sheet is open; skipped when the user prefers reduced motion.
+   */
+  const [mobileQaFabAttentionGen, setMobileQaFabAttentionGen] = useState(0);
+  useEffect(() => {
+    if (sheetOpen) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const id = window.setInterval(() => {
+      setMobileQaFabAttentionGen((g) => g + 1);
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [sheetOpen]);
+
   useEffect(() => {
     if (!currentUserId) return;
     const viewing = sheetOpen || !desktopCollapsed;
@@ -975,7 +991,14 @@ export function ListingPublicCommentsDock({
               onClick={() => setSheetOpen(true)}
               aria-label="Open Q&A Chat"
             >
-              <MessageSquare className="h-6 w-6" aria-hidden />
+              <MessageSquare
+                key={mobileQaFabAttentionGen}
+                className={cn(
+                  "h-6 w-6",
+                  mobileQaFabAttentionGen > 0 && "motion-safe:animate-qa-fab-attention"
+                )}
+                aria-hidden
+              />
             </Button>
             {unreadBadge}
           </div>

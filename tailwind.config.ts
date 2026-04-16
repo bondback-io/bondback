@@ -70,7 +70,20 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["system-ui", "ui-sans-serif", "system-ui", "sans-serif"]
-      }
+      },
+      keyframes: {
+        /** Listing Q&A mobile FAB — periodic gentle wiggle (see ListingPublicCommentsDock). */
+        "qa-fab-attention": {
+          "0%, 100%": { transform: "rotate(0deg)" },
+          "18%": { transform: "rotate(-14deg)" },
+          "36%": { transform: "rotate(14deg)" },
+          "54%": { transform: "rotate(-8deg)" },
+          "72%": { transform: "rotate(8deg)" },
+        },
+      },
+      animation: {
+        "qa-fab-attention": "qa-fab-attention 0.55s ease-in-out both",
+      },
     }
   },
   plugins: []
