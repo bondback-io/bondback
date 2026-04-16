@@ -10,6 +10,7 @@ import { haversineDistanceKm, postcodeDistanceKm } from "@/lib/geo/haversine";
 import { getSuburbLatLon } from "@/lib/geo/suburb-lat-lon";
 
 const safeTrim = (v: unknown) => String(v ?? "").trim();
+const DEFAULT_NEW_LISTING_REMINDER_INTERVAL_HOURS = 6;
 
 /**
  * When a new listing is published (status = 'live'), find cleaners within max_travel_km
@@ -30,6 +31,24 @@ export async function sendNewListingSmsToNearbyCleaners(
 /** Alias for clarity (SMS + push). */
 export async function notifyNearbyCleanersOfNewListing(
   listingId: string
+): Promise<{ ok: boolean; sent: number; error?: string }> {
+  return notifyNearbyCleanersForListing(listingId, {
+    dedupeHours: 48,
+    includeSmsPush: true,
+    reminderMode: false,
+  });
+}
+
+type NotifyNearbyCleanerOptions = {
+  dedupeHours: number;
+  includeSmsPush: boolean;
+  reminderMode: boolean;
+  force?: boolean;
+};
+
+async function notifyNearbyCleanersForListing(
+  listingId: string,
+  options: NotifyNearbyCleanerOptions
 ): Promise<{ ok: boolean; sent: number; error?: string }> {
   const admin = createSupabaseAdminClient();
   if (!admin) return { ok: true, sent: 0 };
@@ -137,41 +156,54 @@ export async function notifyNearbyCleanersOfNewListing(
     const bedCount =
       typeof row.bedrooms === "number" && row.bedrooms > 0 ? row.bedrooms : 1;
     if (insidePreferred) {
-      const smsResult = await sendNewJobAlert(
-        cleanerId,
-        listingId,
-        safeTrim(row.suburb),
-        listingPostcode,
-        minCents,
-        maxCents,
-        bedCount
-      );
-      if (smsResult.sent) sent++;
+      if (options.includeSmsPush) {
+        const smsResult = await sendNewJobAlert(
+          cleanerId,
+          listingId,
+          safeTrim(row.suburb),
+          listingPostcode,
+          minCents,
+          maxCents,
+          bedCount
+        );
+        if (smsResult.sent) sent++;
 
-      const pushResult = await sendNewJobPushAlert(
-        cleanerId,
-        listingId,
-        safeTrim(row.suburb),
-        listingPostcode,
-        minCents,
-        maxCents
-      );
-      if (pushResult.sent) sent++;
+        const pushResult = await sendNewJobPushAlert(
+          cleanerId,
+          listingId,
+          safeTrim(row.suburb),
+          listingPostcode,
+          minCents,
+          maxCents
+        );
+        if (pushResult.sent) sent++;
+      }
     }
 
     const listingTitle = (row.title ?? "").trim() || "Bond clean";
-    if (!(await hasRecentNewJobInAreaNotification(cleanerId, listingId, 48))) {
+    const shouldSkipForDedupe =
+      !options.force &&
+      (await hasRecentNewJobInAreaNotification(
+        cleanerId,
+        listingId,
+        Math.max(1, options.dedupeHours)
+      ));
+    if (!shouldSkipForDedupe) {
       const loc = listingPostcode
         ? `${safeTrim(row.suburb)} (${listingPostcode})`
         : safeTrim(row.suburb);
       const outsideMsg =
-        "We have 1 new bond cleans just outside your preferred area. Would you like to view them?";
+        options.reminderMode
+          ? "Reminder: we still have bond cleans just outside your preferred area with no bids yet. Would you like to view them?"
+          : "We have 1 new bond cleans just outside your preferred area. Would you like to view them?";
       await createNotification(
         cleanerId,
         "new_job_in_area",
         null,
         insidePreferred
-          ? `New job in ${loc}: ${listingTitle.slice(0, 80)}. Open to review and bid.`
+          ? options.reminderMode
+            ? `Reminder: ${listingTitle.slice(0, 80)} in ${loc} is still live with no bids yet.`
+            : `New job in ${loc}: ${listingTitle.slice(0, 80)}. Open to review and bid.`
           : outsideMsg,
         {
           listingUuid: listingId,
@@ -180,13 +212,181 @@ export async function notifyNearbyCleanersOfNewListing(
           postcode: listingPostcode,
           minPriceCents: minCents,
           maxPriceCents: maxCents,
-          persistTitle: insidePreferred ? "New job near you" : "Just outside your preferred area",
+          persistTitle: insidePreferred
+            ? options.reminderMode
+              ? "Reminder: no-bid job near you"
+              : "New job near you"
+            : options.reminderMode
+              ? "Reminder: outside your preferred area"
+              : "Just outside your preferred area",
         }
       );
+      sent++;
     }
   }
 
   return { ok: true, sent };
+}
+
+/**
+ * Find live listings with zero bids and no assigned cleaner, then remind nearby cleaners.
+ * Sends in-app + email notifications only (no SMS/push), with configurable interval.
+ */
+export async function sendNoBidListingReminderNotifications(
+  options?: { force?: boolean }
+): Promise<{
+  ok: boolean;
+  listingsConsidered: number;
+  listingsMatched: number;
+  notificationsSent: number;
+  error?: string;
+}> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: true, listingsConsidered: 0, listingsMatched: 0, notificationsSent: 0 };
+  }
+
+  const settings = await getGlobalSettings();
+  const remindersEnabled =
+    (settings as { enable_new_listing_reminders?: boolean | null } | null)
+      ?.enable_new_listing_reminders !== false;
+  if (!remindersEnabled && options?.force !== true) {
+    return { ok: true, listingsConsidered: 0, listingsMatched: 0, notificationsSent: 0 };
+  }
+  const intervalRaw = (settings as { new_listing_reminder_interval_hours?: number | null } | null)
+    ?.new_listing_reminder_interval_hours;
+  const intervalHours =
+    typeof intervalRaw === "number" && Number.isFinite(intervalRaw)
+      ? Math.max(1, Math.min(168, Math.round(intervalRaw)))
+      : DEFAULT_NEW_LISTING_REMINDER_INTERVAL_HOURS;
+
+  const nowIso = new Date().toISOString();
+  const { data: listings, error: listingError } = await admin
+    .from("listings")
+    .select(
+      "id, status, end_time, title, suburb, postcode, bedrooms, reserve_cents, buy_now_cents, current_lowest_bid_cents"
+    )
+    .eq("status", "live")
+    .gt("end_time", nowIso);
+
+  if (listingError) {
+    return {
+      ok: false,
+      listingsConsidered: 0,
+      listingsMatched: 0,
+      notificationsSent: 0,
+      error: listingError.message,
+    };
+  }
+
+  const liveListings = (listings ?? []) as { id: string }[];
+  if (liveListings.length === 0) {
+    return { ok: true, listingsConsidered: 0, listingsMatched: 0, notificationsSent: 0 };
+  }
+
+  const listingIds = liveListings.map((l) => l.id);
+  const [bidsRes, jobsRes] = await Promise.all([
+    admin.from("bids").select("listing_id").in("listing_id", listingIds),
+    admin
+      .from("jobs")
+      .select("listing_id, winner_id, status")
+      .in("listing_id", listingIds),
+  ]);
+
+  if (bidsRes.error) {
+    return {
+      ok: false,
+      listingsConsidered: liveListings.length,
+      listingsMatched: 0,
+      notificationsSent: 0,
+      error: bidsRes.error.message,
+    };
+  }
+  if (jobsRes.error) {
+    return {
+      ok: false,
+      listingsConsidered: liveListings.length,
+      listingsMatched: 0,
+      notificationsSent: 0,
+      error: jobsRes.error.message,
+    };
+  }
+
+  const listingIdsWithBids = new Set(
+    ((bidsRes.data ?? []) as { listing_id: string | null }[])
+      .map((b) => safeTrim(b.listing_id))
+      .filter((v) => v.length > 0)
+  );
+  const listingIdsWithAssignedCleaner = new Set(
+    ((jobsRes.data ?? []) as { listing_id: string | null; winner_id: string | null; status: string | null }[])
+      .filter((j) => safeTrim(j.winner_id).length > 0 && safeTrim(j.status).toLowerCase() !== "cancelled")
+      .map((j) => safeTrim(j.listing_id))
+      .filter((v) => v.length > 0)
+  );
+
+  const targetListings = listingIds.filter(
+    (id) => !listingIdsWithBids.has(id) && !listingIdsWithAssignedCleaner.has(id)
+  );
+
+  let notificationsSent = 0;
+  for (const listingId of targetListings) {
+    const res = await notifyNearbyCleanersForListing(listingId, {
+      dedupeHours: intervalHours,
+      includeSmsPush: false,
+      reminderMode: true,
+      force: options?.force === true,
+    });
+    if (res.ok) {
+      notificationsSent += res.sent;
+    }
+  }
+
+  return {
+    ok: true,
+    listingsConsidered: liveListings.length,
+    listingsMatched: targetListings.length,
+    notificationsSent,
+  };
+}
+
+/** Admin-triggered manual reminder run from Global Settings. */
+export async function sendNoBidListingRemindersManual(): Promise<{
+  ok: boolean;
+  listingsConsidered: number;
+  listingsMatched: number;
+  notificationsSent: number;
+  error?: string;
+}> {
+  const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return {
+      ok: false,
+      listingsConsidered: 0,
+      listingsMatched: 0,
+      notificationsSent: 0,
+      error: "You must be logged in.",
+    };
+  }
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  if (!(profile as { is_admin?: boolean } | null)?.is_admin) {
+    return {
+      ok: false,
+      listingsConsidered: 0,
+      listingsMatched: 0,
+      notificationsSent: 0,
+      error: "Admin only.",
+    };
+  }
+
+  return sendNoBidListingReminderNotifications({ force: true });
 }
 
 /**

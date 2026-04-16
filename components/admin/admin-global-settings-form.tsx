@@ -32,6 +32,7 @@ import { playNotificationChimeFromUserGesture } from "@/lib/notifications/notifi
 import { sendAdminSmsFromGlobalSettings } from "@/lib/actions/sms-notifications";
 import { sendTestDailyDigestEmail } from "@/lib/actions/daily-digest";
 import { sendTestAdminNotificationEmail } from "@/lib/actions/admin-notify-email";
+import { sendNoBidListingRemindersManual } from "@/lib/actions/sms-notifications";
 import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
 import { getListingAddonLabel } from "@/lib/listing-addon-prices";
 
@@ -145,6 +146,12 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [additionalNotificationRadiusBufferKm, setAdditionalNotificationRadiusBufferKm] = React.useState(
     initial?.additionalNotificationRadiusBufferKm ?? 50
   );
+  const [newListingReminderIntervalHours, setNewListingReminderIntervalHours] = React.useState(
+    initial?.newListingReminderIntervalHours ?? 6
+  );
+  const [enableNewListingReminders, setEnableNewListingReminders] = React.useState(
+    initial?.enableNewListingReminders ?? true
+  );
   const [enableSmsNotifications, setEnableSmsNotifications] = React.useState(
     initial?.enableSmsNotifications ?? true
   );
@@ -224,6 +231,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [testEmailPending, setTestEmailPending] = React.useState(false);
   const [testNotifPending, setTestNotifPending] = React.useState(false);
   const [digestTestPending, setDigestTestPending] = React.useState(false);
+  const [newListingReminderPending, setNewListingReminderPending] = React.useState(false);
   const [adminTestPending, setAdminTestPending] = React.useState<
     "new_user" | "new_listing" | "dispute_opened" | null
   >(null);
@@ -291,6 +299,11 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
         0,
         Math.min(500, Number(additionalNotificationRadiusBufferKm) || 50)
       ),
+      newListingReminderIntervalHours: Math.max(
+        1,
+        Math.min(168, Number(newListingReminderIntervalHours) || 6)
+      ),
+      enableNewListingReminders,
       enableSmsNotifications,
       smsTypeEnabled,
       maxSmsPerUserPerDay: maxSmsPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxSmsPerUserPerDay, 10) || 5)) : undefined,
@@ -623,12 +636,70 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               className="h-8 w-24 text-xs dark:bg-gray-900 dark:border-gray-700"
             />
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Label htmlFor="new-listing-reminder-interval-hours" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
+              No-bid listing reminder interval (hours)
+            </Label>
+            <Input
+              id="new-listing-reminder-interval-hours"
+              type="number"
+              min={1}
+              max={168}
+              step={1}
+              placeholder="6"
+              value={newListingReminderIntervalHours}
+              onChange={(e) => setNewListingReminderIntervalHours(Number(e.target.value))}
+              className="h-8 w-24 text-xs dark:bg-gray-900 dark:border-gray-700"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="enable-new-listing-reminders" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
+              Enable scheduled no-bid listing reminders
+            </Label>
+            <Switch
+              id="enable-new-listing-reminders"
+              checked={enableNewListingReminders}
+              onCheckedChange={(v) => setEnableNewListingReminders(Boolean(v))}
+            />
+          </div>
           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
             Leave blank for defaults (5 SMS / 5 push). Triggers from listing publish: <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">notifyNearbyCleanersOfNewListing</code>.
           </p>
           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
             Example: cleaner preferred radius 30km + buffer 50km = outside-radius alerts up to 80km.
           </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              disabled={newListingReminderPending}
+              onClick={() => {
+                setNewListingReminderPending(true);
+                void sendNoBidListingRemindersManual().then((r) => {
+                  setNewListingReminderPending(false);
+                  if (r.ok) {
+                    toast({
+                      title: "Reminder run complete",
+                      description: `Listings scanned: ${r.listingsConsidered}. Eligible: ${r.listingsMatched}. Notifications sent: ${r.notificationsSent}.`,
+                    });
+                  } else {
+                    toast({
+                      variant: "destructive",
+                      title: "Manual reminder run failed",
+                      description: r.error ?? "Unknown error",
+                    });
+                  }
+                });
+              }}
+            >
+              {newListingReminderPending ? "Sending…" : "Send listing reminders now"}
+            </Button>
+            <span className="text-[11px] text-muted-foreground dark:text-gray-400">
+              Sends once immediately using live/unassigned/zero-bid filters (manual run works even if the scheduled toggle is off).
+            </span>
+          </div>
         </CardContent>
       </Card>
 

@@ -361,6 +361,16 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                     : user.active_role === "lister"
                       ? "Lister"
                       : String(roles[0] ?? "Lister");
+                const hasLister = roles.includes("lister");
+                const hasCleaner = roles.includes("cleaner");
+                const displayRole =
+                  isAdmin
+                    ? "Admin"
+                    : hasLister && hasCleaner
+                      ? "Lister + Cleaner"
+                      : hasCleaner
+                        ? "Cleaner"
+                        : "Lister";
                 const email = emailsMap.get(user.id) ?? "—";
                 const lastSignInAt = lastSignInMap.get(user.id) ?? null;
                 const lastLoginLabel = lastSignInAt
@@ -378,10 +388,12 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                 const avatarDisplayUrl = effectiveProfilePhotoUrl(user);
 
                 const roleBadge =
-                  primaryRole === "Admin"
+                  displayRole === "Admin"
                     ? "bg-slate-600 text-white dark:bg-slate-500"
-                    : primaryRole === "Cleaner"
+                    : displayRole === "Cleaner"
                       ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                      : displayRole === "Lister + Cleaner"
+                        ? "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200"
                       : "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200";
 
                 return (
@@ -438,7 +450,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                       {email}
                     </TableCell>
                     <TableCell>
-                      <Badge className={`text-[10px] ${roleBadge}`}>{primaryRole}</Badge>
+                      <Badge className={`text-[10px] ${roleBadge}`}>{displayRole}</Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground dark:text-gray-400">
                       {user.created_at

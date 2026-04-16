@@ -52,6 +52,10 @@ type GlobalSettingsRow = {
   enable_sms_alerts_new_jobs?: boolean;
   /** Extra radius buffer for "just outside preferred area" cleaner notifications. */
   additional_notification_radius_buffer_km?: number | null;
+  /** Interval between no-bid listing reminder sends to cleaners. */
+  new_listing_reminder_interval_hours?: number | null;
+  /** Master toggle for scheduled no-bid listing reminder notifications. */
+  enable_new_listing_reminders?: boolean | null;
   /** When false, no Twilio SMS is sent site-wide. */
   enable_sms_notifications?: boolean;
   /** Admin inbox alerts (Resend). */
@@ -314,6 +318,8 @@ export type SaveGlobalSettingsInput = {
   /** Keys match notification types / new_job_in_area for area alerts. */
   smsTypeEnabled?: Record<string, boolean>;
   additionalNotificationRadiusBufferKm?: number;
+  newListingReminderIntervalHours?: number;
+  enableNewListingReminders?: boolean;
   maxSmsPerUserPerDay?: number | null;
   maxPushPerUserPerDay?: number | null;
   pricingBaseRatePerBedroomAud?: number;
@@ -387,6 +393,15 @@ export async function saveGlobalSettings(
       typeof data.additionalNotificationRadiusBufferKm === "number" && Number.isFinite(data.additionalNotificationRadiusBufferKm)
         ? Math.max(0, Math.min(500, Math.round(data.additionalNotificationRadiusBufferKm)))
         : 50,
+    new_listing_reminder_interval_hours:
+      typeof data.newListingReminderIntervalHours === "number" &&
+      Number.isFinite(data.newListingReminderIntervalHours)
+        ? Math.max(1, Math.min(168, Math.round(data.newListingReminderIntervalHours)))
+        : 6,
+    enable_new_listing_reminders:
+      typeof data.enableNewListingReminders === "boolean"
+        ? data.enableNewListingReminders
+        : true,
     enable_sms_notifications: data.enableSmsNotifications !== false,
     sms_type_enabled:
       data.smsTypeEnabled && typeof data.smsTypeEnabled === "object"
