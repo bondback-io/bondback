@@ -9,6 +9,7 @@ import {
   isMissingRevieweeRoleColumnError,
   revieweeTypeOrRoleFilter,
 } from "@/lib/reviews/cleaner-review-filters";
+import { PUBLIC_REVIEW_VISIBLE } from "@/lib/reviews/public-review-visibility";
 
 type ReviewsRow = Database["public"]["Tables"]["reviews"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -263,6 +264,8 @@ async function recomputeProfileAverages(
     .from("reviews")
     .select("overall_rating")
     .eq("reviewee_id", userId as never)
+    .eq("is_approved", PUBLIC_REVIEW_VISIBLE.is_approved as never)
+    .eq("is_hidden", PUBLIC_REVIEW_VISIBLE.is_hidden as never)
     .or(revieweeTypeOrRoleFilter(revieweeType));
 
   if (isMissingRevieweeRoleColumnError(rowsRes.error)) {
@@ -270,7 +273,9 @@ async function recomputeProfileAverages(
       .from("reviews")
       .select("overall_rating")
       .eq("reviewee_id", userId as never)
-      .eq("reviewee_type", revieweeType as never);
+      .eq("reviewee_type", revieweeType as never)
+      .eq("is_approved", PUBLIC_REVIEW_VISIBLE.is_approved as never)
+      .eq("is_hidden", PUBLIC_REVIEW_VISIBLE.is_hidden as never);
   }
 
   if (rowsRes.error) {

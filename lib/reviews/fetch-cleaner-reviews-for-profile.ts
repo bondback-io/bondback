@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { formatReviewerDisplayName } from "@/lib/reviews/reviewer-display-name";
+import { PUBLIC_REVIEW_VISIBLE } from "@/lib/reviews/public-review-visibility";
 
 type Reviewer = {
   full_name: string | null;
@@ -92,7 +93,12 @@ export async function fetchCleanerReviewsForPublicProfile(
       : null;
 
   const runQuery = async (select: string) => {
-    let q = primary.from("reviews").select(select).eq("reviewee_id", cleanerId);
+    let q = primary
+      .from("reviews")
+      .select(select)
+      .eq("reviewee_id", cleanerId)
+      .eq("is_approved", PUBLIC_REVIEW_VISIBLE.is_approved as never)
+      .eq("is_hidden", PUBLIC_REVIEW_VISIBLE.is_hidden as never);
     q = q.order("created_at", order);
     if (cap != null) {
       q = q.limit(cap);

@@ -19,6 +19,7 @@ import {
   Menu,
   Scale,
   Shield,
+  Star,
   UserCog,
   LifeBuoy,
   Database,
@@ -66,6 +67,7 @@ export const ADMIN_NAV_GROUPS: {
     items: [
       { label: "Disputes", href: "/admin/disputes", icon: Scale },
       { label: "Support", href: "/admin/support", icon: LifeBuoy },
+      { label: "Reviews", href: "/admin/reviews", icon: Star },
       { label: "Payments", href: "/admin/payments", icon: CreditCard },
     ],
   },

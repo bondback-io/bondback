@@ -367,6 +367,18 @@ export async function JobDetailPageContent({
     }
   }
 
+  const expandListerReviewOfCleaner =
+    Boolean(
+      user &&
+      job &&
+      job.status === "completed" &&
+      j.payment_released_at &&
+      !hasReviewedCleaner &&
+      sameUserId(user.id, job.lister_id) &&
+      roles.includes("lister") &&
+      isListerActive
+    );
+
   const canonicalJobUrl =
     job?.id != null
       ? `${getSiteUrl().origin}/jobs/${job.id}`
@@ -579,6 +591,7 @@ export async function JobDetailPageContent({
             Boolean((job as JobRow | null)?.secured_via_buy_now) === true
           }
           initialChecklist={initialChecklist}
+          expandListerReviewOfCleaner={expandListerReviewOfCleaner}
         />
       </section>
     </OfflineJobsPrimer>

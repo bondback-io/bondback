@@ -28,6 +28,7 @@ import { CleanerReviewCountPreview } from "@/components/features/cleaner-review-
 import { CleanerExperienceBadge } from "@/components/shared/cleaner-experience-badge";
 import { fetchCleanerReviewsForPublicProfile } from "@/lib/reviews/fetch-cleaner-reviews-for-profile";
 import { formatReviewerDisplayName } from "@/lib/reviews/reviewer-display-name";
+import { recomputeAllProfileReviewAggregates } from "@/lib/actions/reviews";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -82,15 +83,11 @@ export default async function CleanerProfilePage({
   }
 
   const profileRow = profile as ProfileRow & {
-    cleaner_avg_rating?: number | string | null;
     cleaner_total_reviews?: number | string | null;
     verification_badges?: string[] | null;
   };
 
-  const cleanerAvg =
-    profileRow.cleaner_avg_rating != null
-      ? Number(profileRow.cleaner_avg_rating)
-      : null;
+  /** Denormalised profile counter — can lag after admin deletes jobs/reviews. */
   const cleanerCountRaw =
     profileRow.cleaner_total_reviews != null
       ? Number(profileRow.cleaner_total_reviews)
@@ -111,7 +108,20 @@ export default async function CleanerProfilePage({
     id
   )) as any[];
 
-  const reviewLinkCount = Math.max(cleanerCount, reviewsSafe.length);
+  if (cleanerCount > 0 && reviewsSafe.length === 0) {
+    void recomputeAllProfileReviewAggregates(id);
+  }
+
+  const publicReviewCount = reviewsSafe.length;
+  const publicAvg =
+    publicReviewCount > 0
+      ? reviewsSafe.reduce(
+          (sum, r) => sum + Number((r as { overall_rating?: number }).overall_rating ?? 0),
+          0
+        ) / publicReviewCount
+      : null;
+
+  const reviewLinkCount = publicReviewCount;
 
   const reviewPopoverSnippets = reviewsSafe.slice(0, 10).map((r: any) => ({
     id: String(r.id),
@@ -137,14 +147,7 @@ export default async function CleanerProfilePage({
       }
     | undefined;
 
-  const avg = cleanerAvg ?? (() => {
-    if (!reviewsSafe.length) return null;
-    const total = reviewsSafe.reduce(
-      (sum, r) => sum + (r.overall_rating as number),
-      0
-    );
-    return total / reviewsSafe.length;
-  })();
+  const avg = publicAvg;
 
   const fullName = profileRow.full_name as string | null;
   const businessName = profileRow.business_name as string | null;
@@ -292,38 +295,38 @@ export default async function CleanerProfilePage({
               />
             </div>
 
-            {(starValue != null || reviewLinkCount > 0) && (
-              <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
-                {starValue != null ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-semibold tabular-nums text-foreground dark:text-gray-100">
-                      {starValue.toFixed(1)}
-                    </span>
-                    <div className="flex items-center gap-0.5 text-amber-400">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <Star
-                          key={s}
-                          className={`h-4 w-4 ${
-                            avg && s <= Math.round(avg)
-                              ? "fill-amber-400"
-                              : "text-muted-foreground/40"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {reviewLinkCount > 0 ? (
-                  <span className="text-xs text-muted-foreground dark:text-gray-400">
-                    <CleanerReviewCountPreview
-                      count={reviewLinkCount}
-                      snippets={reviewPopoverSnippets}
-                      moreCountHint={reviewPopoverHint}
-                    />
+            <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
+              {publicReviewCount > 0 && starValue != null ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-semibold tabular-nums text-foreground dark:text-gray-100">
+                    {starValue.toFixed(1)}
                   </span>
-                ) : null}
-              </div>
-            )}
+                  <div className="flex items-center gap-0.5 text-amber-400">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star
+                        key={s}
+                        className={`h-4 w-4 ${
+                          avg != null && s <= Math.round(avg)
+                            ? "fill-amber-400"
+                            : "text-muted-foreground/40"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <span className="text-sm font-medium text-muted-foreground dark:text-gray-400">
+                  Not rated yet
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground dark:text-gray-400">
+                <CleanerReviewCountPreview
+                  count={reviewLinkCount}
+                  snippets={reviewPopoverSnippets}
+                  moreCountHint={reviewPopoverHint}
+                />
+              </span>
+            </div>
 
             {latestWrittenReview && String(latestWrittenReview.review_text ?? "").trim() ? (
               <figure className="rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-4 py-3 text-left dark:border-amber-900/40 dark:bg-amber-950/30">

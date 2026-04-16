@@ -457,6 +457,12 @@ export default async function AdminDashboardPage() {
             View Open Disputes
           </Link>
           <Link
+            href="/admin/reviews"
+            className="inline-flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800"
+          >
+            Reviews &amp; ratings
+          </Link>
+          <Link
             href="/admin/activity"
             className="inline-flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800"
           >

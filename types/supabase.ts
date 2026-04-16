@@ -762,6 +762,12 @@ export interface Database {
           review_text: string | null;
           review_photos: string[] | null;
           created_at: string;
+          is_approved: boolean;
+          is_hidden: boolean;
+          is_flagged: boolean;
+          moderation_note: string | null;
+          moderated_at: string | null;
+          moderated_by: string | null;
         };
         Insert: {
           id?: number;
@@ -778,6 +784,12 @@ export interface Database {
           review_text?: string | null;
           review_photos?: string[] | null;
           created_at?: string;
+          is_approved?: boolean;
+          is_hidden?: boolean;
+          is_flagged?: boolean;
+          moderation_note?: string | null;
+          moderated_at?: string | null;
+          moderated_by?: string | null;
         };
         Update: {
           job_id?: number;
@@ -793,6 +805,12 @@ export interface Database {
           review_text?: string | null;
           review_photos?: string[] | null;
           created_at?: string;
+          is_approved?: boolean;
+          is_hidden?: boolean;
+          is_flagged?: boolean;
+          moderation_note?: string | null;
+          moderated_at?: string | null;
+          moderated_by?: string | null;
         };
         Relationships: [
           {

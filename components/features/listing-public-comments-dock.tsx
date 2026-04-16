@@ -991,14 +991,16 @@ export function ListingPublicCommentsDock({
               onClick={() => setSheetOpen(true)}
               aria-label="Open Q&A Chat"
             >
-              <MessageSquare
+              {/* Key + animation on a wrapper (not the SVG): iOS compositor often skips transform keyframes on lucide SVG roots. Reduced motion users skip the interval entirely above. */}
+              <span
                 key={mobileQaFabAttentionGen}
                 className={cn(
-                  "h-6 w-6",
-                  mobileQaFabAttentionGen > 0 && "motion-safe:animate-qa-fab-attention"
+                  "inline-flex shrink-0 items-center justify-center",
+                  mobileQaFabAttentionGen > 0 && "animate-qa-fab-attention"
                 )}
-                aria-hidden
-              />
+              >
+                <MessageSquare className="h-6 w-6" aria-hidden />
+              </span>
             </Button>
             {unreadBadge}
           </div>

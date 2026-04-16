@@ -140,6 +140,8 @@ const ProfilePage = async ({
           "id, job_id, overall_rating, quality_of_work, reliability, communication, punctuality, review_text, review_photos, created_at, reviewer_id"
         )
         .eq("reviewee_id", session.user.id)
+        .eq("is_approved", true as never)
+        .eq("is_hidden", false as never)
         .or(REVIEWEE_IS_CLEANER_OR)
         .order("created_at", { ascending: false })
         .limit(20)

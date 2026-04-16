@@ -9,6 +9,7 @@ import {
   type CleanerBrowseTier,
 } from "@/lib/cleaner-browse-tier";
 import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
+import { fetchVisibleCleanerReviewAggregatesByCleanerIds } from "@/lib/reviews/fetch-visible-cleaner-review-aggregates";
 
 export type BrowseCleanerRow = {
   id: string;
@@ -48,8 +49,6 @@ type RawProfile = {
   /** `text[]` in Postgres, or legacy `text` / JSON string — see `normalizeProfileRoles` */
   roles: unknown;
   is_deleted: boolean | null;
-  cleaner_avg_rating?: number | string | null;
-  cleaner_total_reviews?: number | string | null;
 };
 
 /**
@@ -81,17 +80,6 @@ function normalizeProfileRoles(roles: unknown): string[] {
   return [];
 }
 
-function numOrNull(v: unknown): number | null {
-  if (v == null) return null;
-  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
-  return Number.isFinite(n) ? n : null;
-}
-
-function numOrZero(v: unknown): number {
-  const n = numOrNull(v);
-  return n ?? 0;
-}
-
 export async function loadBrowseCleaners(params: {
   /** Lister/cleaner “search near me” radius (km) */
   radiusKm: number;
@@ -108,7 +96,7 @@ export async function loadBrowseCleaners(params: {
   const { data: profileRows, error } = await client
     .from("profiles")
     .select(
-      "id, full_name, business_name, profile_photo_url, suburb, postcode, state, bio, years_experience, verification_badges, abn, insurance_policy_number, portfolio_photo_urls, roles, is_deleted, cleaner_avg_rating, cleaner_total_reviews"
+      "id, full_name, business_name, profile_photo_url, suburb, postcode, state, bio, years_experience, verification_badges, abn, insurance_policy_number, portfolio_photo_urls, roles, is_deleted"
     );
 
   if (error) {
@@ -121,6 +109,11 @@ export async function loadBrowseCleaners(params: {
     if (p.is_deleted === true) return false;
     return normalizeProfileRoles(p.roles).includes("cleaner");
   });
+
+  const liveReviewAgg = await fetchVisibleCleanerReviewAggregatesByCleanerIds(
+    client,
+    cleanersOnly.map((p) => p.id)
+  );
 
   const winnerIds = cleanersOnly.map((p) => p.id);
   const completedCountByWinner = new Map<string, number>();
@@ -175,8 +168,9 @@ export async function loadBrowseCleaners(params: {
     const hasInsurance = ((p.insurance_policy_number ?? "").trim().length ?? 0) > 0;
 
     const completedJobs = completedCountByWinner.get(p.id) ?? 0;
-    const avgRating = numOrNull(p.cleaner_avg_rating);
-    const reviewCount = Math.round(numOrZero(p.cleaner_total_reviews));
+    const live = liveReviewAgg.get(p.id) ?? { count: 0, avg: null };
+    const reviewCount = live.count;
+    const avgRating = live.count > 0 && live.avg != null ? live.avg : null;
 
     const tier = computeCleanerBrowseTier({
       completedJobs,

@@ -571,6 +571,8 @@ export type JobDetailProps = {
   securedViaBuyNow?: boolean;
   /** Server-hydrated checklist rows for admin/readonly views where client RLS can block reads. */
   initialChecklist?: ChecklistItem[] | null;
+  /** When true, opens the lister→cleaner review form on first paint (completed job + payment released). */
+  expandListerReviewOfCleaner?: boolean;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -655,6 +657,7 @@ export function JobDetail({
   topUpPayments = [],
   securedViaBuyNow = false,
   initialChecklist = null,
+  expandListerReviewOfCleaner = false,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -760,8 +763,12 @@ export function JobDetail({
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [submittedCleanerReview, setSubmittedCleanerReview] = useState(false);
   const [submittedListerReview, setSubmittedListerReview] = useState(false);
-  const [showCleanerReviewForm, setShowCleanerReviewForm] = useState(false);
+  const [showCleanerReviewForm, setShowCleanerReviewForm] = useState(expandListerReviewOfCleaner);
   const [showListerReviewForm, setShowListerReviewForm] = useState(false);
+
+  useEffect(() => {
+    if (expandListerReviewOfCleaner) setShowCleanerReviewForm(true);
+  }, [expandListerReviewOfCleaner]);
   const [showOpenDisputeForm, setShowOpenDisputeForm] = useState(false);
   const [showApproveReleaseConfirm, setShowApproveReleaseConfirm] = useState(false);
   const [disputeResponseReason, setDisputeResponseReason] = useState("");
@@ -3585,6 +3592,15 @@ export function JobDetail({
                   Rate your experience. One review per job — helps others choose with confidence.
                 </p>
               </div>
+              {isJobLister &&
+                canLeaveReview &&
+                !hasReviewedCleaner &&
+                !submittedCleanerReview && (
+                  <div className="rounded-md border border-sky-200/80 bg-sky-50/90 px-3 py-2 text-sm text-sky-950 dark:border-sky-800/60 dark:bg-sky-950/35 dark:text-sky-100">
+                    <span className="font-semibold">How was the clean?</span>{" "}
+                    Your public rating helps reliable cleaners stand out. You can add a short comment and photos.
+                  </div>
+                )}
               {isJobLister && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-foreground dark:text-gray-100">
@@ -3624,7 +3640,10 @@ export function JobDetail({
               {isJobCleaner && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-foreground dark:text-gray-100">
-                    Your review of the owner
+                    Your review of the owner{" "}
+                    <span className="font-normal text-muted-foreground dark:text-gray-500">
+                      (optional, encouraged)
+                    </span>
                   </p>
                   {(hasReviewedLister || submittedListerReview) ? (
                     myReviewOfLister ? (
