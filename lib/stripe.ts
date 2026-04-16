@@ -56,6 +56,7 @@ export async function createBuyNowCheckoutSessionUrl(
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    customer_creation: "always",
     line_items: [
       {
         quantity: 1,
@@ -144,6 +145,7 @@ export async function createJobCheckoutSessionUrl(
     },
     payment_intent_data: {
       capture_method: "manual",
+      setup_future_usage: "off_session",
       metadata: { job_id: jobIdStr },
     },
   });
@@ -168,10 +170,8 @@ export async function createJobTopUpCheckoutSessionUrl(
   const feeCents = Math.round((agreedCents * feePercent) / 100);
   const totalCents = agreedCents + feeCents;
   const jobIdStr = String(job.id);
-  /** Return to listing page so lister sees updated Payment breakdown (top-ups). */
-  const lid = job.listingId != null ? String(job.listingId).trim() : "";
-  const returnNext =
-    lid !== "" ? `/listings/${encodeURIComponent(lid)}` : `/jobs/${jobIdStr}`;
+  /** Always return to the job page after top-up checkout. */
+  const returnNext = `/jobs/${jobIdStr}`;
   const successUrl = `${baseUrl}/api/stripe/checkout/return?session_id={CHECKOUT_SESSION_ID}&next=${encodeURIComponent(returnNext)}`;
   const note = (noteForMetadata ?? "").trim().slice(0, 450);
   const suffix = options?.listingTitleSuffix?.trim() ? ` — ${options.listingTitleSuffix.trim()}` : "";
@@ -179,6 +179,7 @@ export async function createJobTopUpCheckoutSessionUrl(
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    customer_creation: "always",
     line_items: [
       {
         quantity: 1,
@@ -218,6 +219,7 @@ export async function createJobTopUpCheckoutSessionUrl(
     },
     payment_intent_data: {
       capture_method: "manual",
+      setup_future_usage: "off_session",
       metadata: {
         job_id: jobIdStr,
         type: "job_top_up",

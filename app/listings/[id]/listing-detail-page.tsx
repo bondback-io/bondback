@@ -193,6 +193,17 @@ export default async function ListingDetailPage({
 
   const hasActiveJob = !!jobRow && jobRow.status !== "cancelled";
   const numericJobId = jobRow?.id ?? null;
+  const securedViaBuyNow =
+    Boolean(
+      (jobRow as { secured_via_buy_now?: boolean | null } | null)?.secured_via_buy_now
+    ) === true;
+  const buyNowHistoryAmountCents: number | null = securedViaBuyNow
+    ? typeof listingRow.buy_now_cents === "number" && listingRow.buy_now_cents > 0
+      ? listingRow.buy_now_cents
+      : agreedAmountCents > 0
+        ? agreedAmountCents
+        : null
+    : null;
 
   /** You own the listing and have lister on your profile (independent of active role). */
   const ownsListingAsLister =
@@ -295,6 +306,8 @@ export default async function ListingDetailPage({
               hasActiveJob={hasActiveJob}
               numericJobId={numericJobId}
               currentUserId={sessionUserId ?? null}
+              securedViaBuyNow={securedViaBuyNow}
+              buyNowHistoryAmountCents={buyNowHistoryAmountCents}
             />
           </div>
           {showPublicComments ? (

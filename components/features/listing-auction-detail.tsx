@@ -81,6 +81,10 @@ export type ListingAuctionDetailProps = {
   hasActiveJob: boolean;
   numericJobId: number | null;
   currentUserId: string | null;
+  /** From `jobs.secured_via_buy_now` when a job exists. */
+  securedViaBuyNow?: boolean;
+  /** Amount to show in Buy Now bid-history banner (listing buy-now or agreed fallback). */
+  buyNowHistoryAmountCents?: number | null;
 };
 
 export function ListingAuctionDetail({
@@ -92,6 +96,8 @@ export function ListingAuctionDetail({
   hasActiveJob,
   numericJobId,
   currentUserId,
+  securedViaBuyNow = false,
+  buyNowHistoryAmountCents = null,
 }: ListingAuctionDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -940,6 +946,14 @@ export function ListingAuctionDetail({
                 showRevertLastBidInHistory ? handleRevertLastBid : undefined
               }
               largeTouch
+              buyNowJobOutcome={
+                securedViaBuyNow &&
+                hasActiveJob &&
+                buyNowHistoryAmountCents != null &&
+                buyNowHistoryAmountCents > 0
+                  ? { amountCents: buyNowHistoryAmountCents }
+                  : null
+              }
             />
             {canManageListingAsLister && !hasActiveJob && isLive && (
               <p className="text-sm text-muted-foreground">

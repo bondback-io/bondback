@@ -29,6 +29,10 @@ import {
   type BidWithBidder,
   type ClosedAuctionBidStatus,
 } from "@/components/features/bid-history-table";
+import {
+  JobCleaningChecklistPanel,
+  ChecklistHistoryGrid,
+} from "@/components/features/job-cleaning-checklist";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
 import {
   formatCents,
@@ -563,6 +567,8 @@ export type JobDetailProps = {
   myReviewOfLister?: JobDetailMySubmittedReview | null;
   /** Lister top-up escrow rows (separate PaymentIntents linked to this job). */
   topUpPayments?: JobTopUpPaymentRecord[];
+  /** Job row: cleaner secured the listing via Buy Now (not lister accepting an auction bid). */
+  securedViaBuyNow?: boolean;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -645,6 +651,7 @@ export function JobDetail({
   myReviewOfCleaner = null,
   myReviewOfLister = null,
   topUpPayments = [],
+  securedViaBuyNow = false,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -1326,6 +1333,43 @@ export function JobDetail({
     }
   };
 
+  const handleDeleteChecklistItem = async (item: ChecklistItem) => {
+    if (!numericJobId) return;
+    setChecklist((prev) => (prev ?? []).filter((it) => it.id !== item.id));
+    const { error } = await supabase
+      .from("job_checklist_items")
+      .delete()
+      .eq("id", item.id as never)
+      .eq("job_id", numericJobId as never);
+    if (error) {
+      setChecklistError(error.message);
+      setChecklist((prev) =>
+        [...(prev ?? []), item].sort((a, b) => a.id - b.id)
+      );
+    }
+  };
+
+  const handleUpdateChecklistLabel = async (item: ChecklistItem, label: string) => {
+    if (!numericJobId) return;
+    const trimmed = label.trim();
+    if (!trimmed || trimmed === item.label) return;
+    const prevLabel = item.label;
+    setChecklist((prev) =>
+      (prev ?? []).map((it) => (it.id === item.id ? { ...it, label: trimmed } : it))
+    );
+    const { error } = await supabase
+      .from("job_checklist_items")
+      .update({ label: trimmed } as never)
+      .eq("id", item.id as never)
+      .eq("job_id", numericJobId as never);
+    if (error) {
+      setChecklistError(error.message);
+      setChecklist((prev) =>
+        (prev ?? []).map((it) => (it.id === item.id ? { ...it, label: prevLabel } : it))
+      );
+    }
+  };
+
   const allCompleted =
     checklist &&
     checklist.length > 0 &&
@@ -1386,6 +1430,15 @@ export function JobDetail({
   const buyNowCentsJob =
     typeof listing.buy_now_cents === "number" ? listing.buy_now_cents : null;
   const hasBuyNowJob = buyNowCentsJob != null && buyNowCentsJob > 0;
+
+  const buyNowBidHistoryOutcome =
+    hasActiveJob && securedViaBuyNow
+      ? buyNowCentsJob != null && buyNowCentsJob > 0
+        ? { amountCents: buyNowCentsJob }
+        : agreedAmountCents > 0
+          ? { amountCents: agreedAmountCents }
+          : null
+      : null;
 
   const jobHeroStatusLabel = useMemo(() => {
     const s = localJobStatus ?? jobStatus ?? "";
@@ -1830,7 +1883,7 @@ export function JobDetail({
               </Card>
               {showCleanerWonForCallout && (
                 <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
-                  <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
+                  <WonForHeaderWithBuyNowBadge showBuyNow={securedViaBuyNow} />
                   <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
                     {formatCents(agreedAmountCents)}
                   </p>
@@ -2320,9 +2373,7 @@ export function JobDetail({
             !cleanerReviewPendingMinimal &&
             !listerReleaseFundsStep && (
               <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
-                <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">
-                  Won for
-                </p>
+                <WonForHeaderWithBuyNowBadge showBuyNow={securedViaBuyNow} />
                 <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
                   {formatCents(agreedAmountCents)}
                 </p>
@@ -2338,7 +2389,7 @@ export function JobDetail({
             localJobStatus !== "completed" &&
             !listerReleaseFundsStep && (
               <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
-                <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
+                <WonForHeaderWithBuyNowBadge showBuyNow={securedViaBuyNow} />
                 <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
                   {formatCents(agreedAmountCents)}
                 </p>
@@ -2466,9 +2517,7 @@ export function JobDetail({
                   )}
                   {!detailUiBoost && !isJobLister && !isJobCleaner && (
                     <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
-                      <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">
-                        Won for
-                      </p>
+                      <WonForHeaderWithBuyNowBadge showBuyNow={securedViaBuyNow} />
                       <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
                         {formatCents(agreedAmountCents)}
                       </p>
@@ -2482,9 +2531,7 @@ export function JobDetail({
                 !isJobLister &&
                 !detailUiBoost && (
                 <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
-                  <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">
-                    Won for
-                  </p>
+                  <WonForHeaderWithBuyNowBadge showBuyNow={securedViaBuyNow} />
                   <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
                     {formatCents(agreedAmountCents)}
                   </p>
@@ -2932,141 +2979,33 @@ export function JobDetail({
                       "border-emerald-500/30 bg-gradient-to-br from-emerald-500/[0.06] to-transparent px-4 py-4 dark:from-emerald-950/25 sm:px-5"
                   )}
                 >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <div>
-                      <p
-                        className={cn(
-                          "font-semibold dark:text-gray-100",
-                          checklistParty ? "text-lg" : "text-sm font-medium"
-                        )}
-                      >
-                        Cleaning checklist
-                      </p>
-                      <p
-                        className={cn(
-                          "text-muted-foreground dark:text-gray-400",
-                          checklistParty ? "text-sm leading-relaxed" : "text-xs"
-                        )}
-                      >
-                        {isJobLister
-                          ? "Add or adjust tasks, including any extras. Your cleaner will see updates in real time."
-                          : "Work through the agreed tasks and tick them off as you go."}
-                      </p>
-                    </div>
-                  </div>
-
-                  {checklistLoading && (
-                    <p className="text-xs text-muted-foreground dark:text-gray-400">
-                      Loading checklist…
-                    </p>
-                  )}
-                  {checklistError && (
-                    <p className="text-xs text-destructive dark:text-red-400">
-                      {checklistError}
-                    </p>
-                  )}
-
-                  {checklist && checklist.length > 0 && (
-                    <div className="space-y-3">
-                      {checklist.map((item) => (
-                        <div
-                          key={item.id}
-                          className={cn(
-                            "flex items-start justify-between gap-2 dark:text-gray-200",
-                            checklistParty ? "text-base" : "text-xs"
-                          )}
-                        >
-                          <label className="flex min-h-[44px] flex-1 items-start gap-3">
-                            <Checkbox
-                              checked={item.is_completed}
-                              onCheckedChange={(value) =>
-                                handleToggleItem(item, value === true)
-                              }
-                              className={cn(
-                                "mt-0.5",
-                                checklistParty ? "h-5 w-5" : "h-3.5 w-3.5"
-                              )}
-                            />
-                            <span className="leading-snug">{item.label}</span>
-                          </label>
-                          {isJobLister && (
-                            <Button
-                              type="button"
-                              size="xs"
-                              variant="ghost"
-                              className={cn(
-                                "text-muted-foreground hover:text-destructive dark:text-gray-400 dark:hover:text-red-400",
-                                listerDetailUI
-                                  ? "min-h-11 px-2 text-xs font-medium"
-                                  : "px-1 text-[10px]"
-                              )}
-                              onClick={async () => {
-                                if (!numericJobId) return;
-                                const confirmed = window.confirm(
-                                  "Remove this task from the checklist?"
-                                );
-                                if (!confirmed) return;
-                                setChecklist((prev) =>
-                                  (prev ?? []).filter(
-                                    (it) => it.id !== item.id
-                                  )
-                                );
-                                const { error } = await supabase
-                                  .from("job_checklist_items")
-                                  .delete()
-                                  .eq("id", item.id as never)
-                                  .eq("job_id", numericJobId as never);
-                                if (error) {
-                                  setChecklistError(error.message);
-                                }
-                              }}
-                            >
-                              Remove
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {isJobLister && <ChecklistAdder onAdd={handleAddItem} />}
-
-                  {isJobCleaner && checklist && checklist.length > 0 && (
-                    <div className="pt-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          isJobCleaner
-                            ? "min-h-12 rounded-xl px-4 text-sm font-semibold"
-                            : "text-[10px]"
-                        )}
-                        size={isJobCleaner ? "default" : "xs"}
-                        onClick={handleMarkAllComplete}
-                      >
-                        Mark all tasks as complete
-                      </Button>
-                    </div>
-                  )}
-
-                  {allCompleted && (
-                    <p
-                      className={cn(
-                        "mt-1 rounded-md bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-                        checklistParty ? "text-sm leading-relaxed" : "text-[11px]"
-                      )}
-                    >
-                      Congratulations! All tasks have been completed on the
-                      checklist.
-                    </p>
-                  )}
-
-                  {isJobCleaner && !hasAfterPhotos && (
-                    <p className="pt-1 text-[11px] text-amber-700 dark:text-amber-300">
-                      Upload at least 3 after-photos so the owner can review and
-                      release payment.
-                    </p>
-                  )}
+                  <JobCleaningChecklistPanel
+                    items={checklist}
+                    loading={checklistLoading}
+                    error={checklistError}
+                    isJobLister={isJobLister}
+                    isJobCleaner={isJobCleaner}
+                    checklistParty={checklistParty}
+                    emphasize={checklistParty}
+                    subtitle={
+                      isJobLister
+                        ? "Add or adjust tasks, including any extras. Your cleaner will see updates in real time."
+                        : "Work through the agreed tasks and tick them off as you go."
+                    }
+                    onToggle={(item, next) =>
+                      handleToggleItem(item as ChecklistItem, next)
+                    }
+                    onRemove={(item) =>
+                      handleDeleteChecklistItem(item as ChecklistItem)
+                    }
+                    onUpdateLabel={(item, label) =>
+                      handleUpdateChecklistLabel(item as ChecklistItem, label)
+                    }
+                    onAdd={handleAddItem}
+                    onMarkAllComplete={handleMarkAllComplete}
+                    allCompleted={!!allCompleted}
+                    showAfterPhotoHint={isJobCleaner && !hasAfterPhotos}
+                  />
                 </div>
               )}
 
@@ -3093,27 +3032,8 @@ export function JobDetail({
                         ? `(Completed ${completedDateLabel})`
                         : "(Completed)"}
                     </summary>
-                    <div className="mt-2 space-y-2">
-                      {checklist &&
-                        checklist.map((item) => (
-                          <div
-                            key={item.id}
-                            className={cn(
-                              "flex items-start gap-2 dark:text-gray-200",
-                              detailUiBoost ? "text-sm" : "text-xs"
-                            )}
-                          >
-                            <Checkbox
-                              checked={item.is_completed}
-                              className={cn(
-                                "mt-0.5",
-                                detailUiBoost ? "h-4 w-4" : "h-3.5 w-3.5"
-                              )}
-                              disabled
-                            />
-                            <span>{item.label}</span>
-                          </div>
-                        ))}
+                    <div className="mt-2">
+                      <ChecklistHistoryGrid items={checklist} detailUiBoost={detailUiBoost} />
                     </div>
                   </details>
                   )}
@@ -4224,6 +4144,7 @@ export function JobDetail({
                     showRevertLastBidInHistory ? handleRevertLastBid : undefined
                   }
                   largeTouch
+                  buyNowJobOutcome={buyNowBidHistoryOutcome}
                 />
                 {isListingOwner && !hasActiveJob && isLive && (
                   <p className="text-sm text-muted-foreground dark:text-gray-400">
@@ -4263,6 +4184,7 @@ export function JobDetail({
             }
             largeTouch={detailUiBoost}
             defaultOpen={false}
+            buyNowJobOutcome={buyNowBidHistoryOutcome}
             className={cn(
               "mt-4 border-t border-border pt-4 text-muted-foreground dark:border-gray-700 dark:text-gray-500",
               detailUiBoost ? "text-sm" : "text-[11px]"
@@ -4375,7 +4297,7 @@ export function JobDetail({
             </Card>
             {showCleanerWonForCallout && (
               <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
-                <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
+                <WonForHeaderWithBuyNowBadge showBuyNow={securedViaBuyNow} />
                 <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
                   {formatCents(agreedAmountCents)}
                 </p>
@@ -4638,27 +4560,8 @@ export function JobDetail({
                 Cleaning checklist history{" "}
                 {completedDateLabel ? `(Completed ${completedDateLabel})` : "(Completed)"}
               </summary>
-              <div className="mt-2 space-y-2">
-                {checklist &&
-                  checklist.map((item) => (
-                    <div
-                      key={item.id}
-                      className={cn(
-                        "flex items-start gap-2 dark:text-gray-200",
-                        detailUiBoost ? "text-sm" : "text-xs"
-                      )}
-                    >
-                      <Checkbox
-                        checked={item.is_completed}
-                        className={cn(
-                          "mt-0.5",
-                          detailUiBoost ? "h-4 w-4" : "h-3.5 w-3.5"
-                        )}
-                        disabled
-                      />
-                      <span>{item.label}</span>
-                    </div>
-                  ))}
+              <div className="mt-2">
+                <ChecklistHistoryGrid items={checklist} detailUiBoost={detailUiBoost} />
               </div>
             </details>
           )}
@@ -4819,6 +4722,22 @@ export function JobDetail({
   );
 }
 
+function WonForHeaderWithBuyNowBadge({ showBuyNow }: { showBuyNow?: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
+      {showBuyNow ? (
+        <Badge
+          variant="outline"
+          className="border-violet-500/70 bg-violet-500/[0.12] text-[10px] font-semibold uppercase tracking-wide text-violet-800 dark:border-violet-400/60 dark:bg-violet-950/60 dark:text-violet-200"
+        >
+          Buy now
+        </Badge>
+      ) : null}
+    </div>
+  );
+}
+
 function BidHistorySection({
   listingId,
   bids,
@@ -4831,6 +4750,7 @@ function BidHistorySection({
   largeTouch = false,
   /** Collapsed until the user opens the section (job / listing detail). */
   defaultOpen = false,
+  buyNowJobOutcome = null,
 }: {
   listingId: string;
   bids: BidWithBidder[];
@@ -4844,6 +4764,7 @@ function BidHistorySection({
   /** Larger summary + body copy (cleaner or lister job detail). */
   largeTouch?: boolean;
   defaultOpen?: boolean;
+  buyNowJobOutcome?: { amountCents: number } | null;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -4873,69 +4794,20 @@ function BidHistorySection({
           aria-hidden
         />
       </summary>
-      {bids.length > 0 ? (
-        <div className="mt-2 space-y-3">
-          <BidHistoryTable
-            listingId={listingId}
-            bids={bids}
-            onAcceptBid={onAcceptBid}
-            hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
-            closedAuctionBidStatus={closedAuctionBidStatus}
-            showRevertLastBid={showRevertLastBid}
-            onRevertLastBid={onRevertLastBid}
-            largeTouch={largeTouch}
-          />
-        </div>
-      ) : (
-        <p
-          className={cn(
-            "mt-2 text-muted-foreground dark:text-gray-400",
-            largeTouch ? "text-sm" : "text-[11px]"
-          )}
-        >
-          No bids were placed on this listing.
-        </p>
-      )}
+      <div className="mt-2 space-y-3">
+        <BidHistoryTable
+          listingId={listingId}
+          bids={bids}
+          onAcceptBid={onAcceptBid}
+          hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
+          closedAuctionBidStatus={closedAuctionBidStatus}
+          showRevertLastBid={showRevertLastBid}
+          onRevertLastBid={onRevertLastBid}
+          largeTouch={largeTouch}
+          buyNowJobOutcome={buyNowJobOutcome}
+        />
+      </div>
     </details>
   );
 }
 
-type ChecklistAdderProps = {
-  onAdd: (label: string) => Promise<void> | void;
-};
-
-function ChecklistAdder({ onAdd }: ChecklistAdderProps) {
-  const [value, setValue] = useState("");
-  const [pending, startTransition] = useTransition();
-
-  const handleSubmit = () => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    startTransition(async () => {
-      await onAdd(trimmed);
-      setValue("");
-    });
-  };
-
-  return (
-    <div className="flex flex-wrap items-center gap-2 pt-1">
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Add another task (e.g. windows, garage)…"
-        className="flex-1 rounded-md border bg-background px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
-      />
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        disabled={pending || !value.trim()}
-        onClick={handleSubmit}
-        className="text-xs"
-      >
-        {pending ? "Adding…" : "Add task"}
-      </Button>
-    </div>
-  );
-}

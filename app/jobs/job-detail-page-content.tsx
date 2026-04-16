@@ -533,6 +533,9 @@ export async function JobDetailPageContent({
           myReviewOfCleaner={myReviewOfCleaner}
           myReviewOfLister={myReviewOfLister}
           topUpPayments={topUpPayments}
+          securedViaBuyNow={
+            Boolean((job as JobRow | null)?.secured_via_buy_now) === true
+          }
         />
       </section>
     </OfflineJobsPrimer>

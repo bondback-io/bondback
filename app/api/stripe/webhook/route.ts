@@ -204,10 +204,10 @@ export async function POST(request: Request) {
         const mode = session.mode ?? "payment";
         console.log("[stripe/webhook] checkout.session.completed", { session_id: session.id, mode });
         const setupForLister = session.metadata?.setup_for_lister as string | undefined;
+        const stripe = getStripeServerForMode(event.livemode ? "live" : "test");
 
         if (mode === "setup" && setupForLister && admin) {
           logEvent({ setup_for_lister: setupForLister });
-          const stripe = getStripeServerForMode(event.livemode ? "live" : "test");
           const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
             expand: ["setup_intent"],
           });
@@ -234,6 +234,39 @@ export async function POST(request: Request) {
         const listingId = session.metadata?.listing_id ?? (jobIdMeta ? null : (session.client_reference_id ?? session.metadata?.listing_id));
         logEvent({ payment_intent_id: paymentIntentId, job_id: jobIdMeta ?? undefined, listing_id: listingId ?? undefined });
         if (admin && paymentIntentId) {
+          const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
+            expand: ["payment_intent.payment_method"],
+          });
+          const customerId =
+            typeof fullSession.customer === "string"
+              ? fullSession.customer
+              : fullSession.customer?.id ?? null;
+          const piExpanded = fullSession.payment_intent as Stripe.PaymentIntent | null;
+          const paymentMethodRaw = piExpanded?.payment_method;
+          const paymentMethodId =
+            typeof paymentMethodRaw === "string"
+              ? paymentMethodRaw
+              : paymentMethodRaw?.id ?? null;
+
+          const persistListerPaymentMethod = async (listerId: string | null | undefined) => {
+            const uid = String(listerId ?? "").trim();
+            if (!uid || !paymentMethodId) return;
+            const { error: profileUpdateError } = await admin
+              .from("profiles")
+              .update({
+                stripe_payment_method_id: paymentMethodId,
+                stripe_customer_id: customerId,
+                updated_at: new Date().toISOString(),
+              } as never)
+              .eq("id", uid);
+            if (profileUpdateError) {
+              console.error(
+                "[stripe/webhook] failed to save checkout payment method on profile",
+                profileUpdateError
+              );
+            }
+          };
+
           if (jobIdMeta) {
             const nowIso = new Date().toISOString();
             const numericJobId = Number(jobIdMeta);
@@ -257,6 +290,7 @@ export async function POST(request: Request) {
                 lister_id?: string | null;
                 listing_id?: string | null;
               };
+              await persistListerPaymentMethod(jb.lister_id);
               const listingUuid = jb.listing_id?.trim() ? jb.listing_id : undefined;
               const { createNotification } = await import("@/lib/actions/notifications");
               if (jb.winner_id) {
@@ -279,6 +313,16 @@ export async function POST(request: Request) {
               }
             }
           } else if (listingId) {
+            const { data: listingJob } = await admin
+              .from("jobs")
+              .select("lister_id")
+              .eq("listing_id", listingId)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            await persistListerPaymentMethod(
+              (listingJob as { lister_id?: string | null } | null)?.lister_id
+            );
             const { error } = await admin
               .from("jobs")
               .update({ payment_intent_id: paymentIntentId, updated_at: new Date().toISOString() } as never)

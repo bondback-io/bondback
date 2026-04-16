@@ -426,6 +426,7 @@ export interface Database {
           status: string;
           title: string | null;
           agreed_amount_cents: number | null;
+          secured_via_buy_now: boolean;
           payment_intent_id: string | null;
           /** Additional escrow holds (separate PaymentIntents); see `lib/job-top-up.ts`. */
           top_up_payments: Json;
@@ -462,6 +463,7 @@ export interface Database {
           status?: string;
           title?: string | null;
           agreed_amount_cents?: number | null;
+          secured_via_buy_now?: boolean;
           payment_intent_id?: string | null;
           top_up_payments?: Json;
           lister_payment_due_at?: string | null;
@@ -495,6 +497,7 @@ export interface Database {
           status?: string;
           title?: string | null;
           agreed_amount_cents?: number | null;
+          secured_via_buy_now?: boolean;
           payment_intent_id?: string | null;
           top_up_payments?: Json;
           lister_payment_due_at?: string | null;

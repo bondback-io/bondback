@@ -235,6 +235,7 @@ export async function finalizeBidAcceptanceCore(params: {
       winner_id: cleanerId,
       status: "accepted",
       agreed_amount_cents: amountCents,
+      secured_via_buy_now: false,
       lister_payment_due_at: listerPaymentDueAtFromNowIso(),
     } as never)
     .select("id")
@@ -382,6 +383,7 @@ export async function secureJobAtPrice(
       winner_id: session.user.id,
       status: "accepted",
       agreed_amount_cents: listRow.buy_now_cents,
+      secured_via_buy_now: true,
       lister_payment_due_at: dueAt,
     } as never)
     .select("id")
@@ -743,10 +745,6 @@ export async function fulfillJobTopUpFromSession(
     if (cs.mode !== "payment" || cs.metadata?.type !== "job_top_up") {
       return { ok: false, error: "Invalid top-up session." };
     }
-    if (cs.payment_status !== "paid") {
-      return { ok: false, error: "Top-up payment is not complete." };
-    }
-
     const jobIdMeta = cs.metadata?.job_id ?? cs.client_reference_id;
     if (!jobIdMeta) {
       return { ok: false, error: "No job id on session." };
@@ -763,6 +761,12 @@ export async function fulfillJobTopUpFromSession(
         : (cs.payment_intent as Stripe.PaymentIntent | null);
     if (!pi?.id) {
       return { ok: false, error: "No PaymentIntent on session." };
+    }
+    if (pi.status !== "requires_capture" && pi.status !== "succeeded") {
+      return {
+        ok: false,
+        error: `Top-up payment is not complete (status: ${pi.status}).`,
+      };
     }
 
     const admin = createSupabaseAdminClient();

@@ -105,6 +105,8 @@ export type BidHistoryTableProps = {
    * (lister cancelled vs natural end).
    */
   closedAuctionBidStatus?: ClosedAuctionBidStatus | null;
+  /** When the job was secured via Buy Now — shows a clear record even if no bid rows exist. */
+  buyNowJobOutcome?: { amountCents: number } | null;
 };
 
 export function BidHistoryTable({
@@ -116,6 +118,7 @@ export function BidHistoryTable({
   onRevertLastBid,
   largeTouch = false,
   closedAuctionBidStatus = null,
+  buyNowJobOutcome = null,
 }: BidHistoryTableProps) {
   const { toast } = useToast();
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -147,9 +150,30 @@ export function BidHistoryTable({
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
+  const buyNowBanner =
+    buyNowJobOutcome != null ? (
+      <div className="rounded-lg border border-violet-300/90 bg-violet-50/90 px-3 py-2.5 text-sm dark:border-violet-700/70 dark:bg-violet-950/45">
+        <p className="font-semibold text-violet-950 dark:text-violet-100">Buy Now purchase</p>
+        <p className="mt-1 leading-snug text-violet-900/95 dark:text-violet-100/90">
+          This listing was purchased using <span className="font-semibold">Buy Now</span> at{" "}
+          <span className="font-semibold tabular-nums">
+            {formatCents(buyNowJobOutcome.amountCents)}
+          </span>
+          . No auction bid was required to assign this job.
+        </p>
+      </div>
+    ) : null;
+
   if (sorted.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground dark:text-gray-400">No bids yet.</p>
+      <div className="space-y-3">
+        {buyNowBanner}
+        <p className="text-sm text-muted-foreground dark:text-gray-400">
+          {buyNowJobOutcome != null
+            ? "No separate auction bids were recorded on this listing."
+            : "No bids yet."}
+        </p>
+      </div>
     );
   }
 
@@ -238,6 +262,7 @@ export function BidHistoryTable({
 
   return (
     <>
+      {buyNowBanner}
       {/* Mobile: card layout so Accept bid is full-width and readable */}
       <ul className="space-y-3 md:hidden">
         {sorted.map((bid) => {
