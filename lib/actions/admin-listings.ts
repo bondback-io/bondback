@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAdminActivity } from "@/lib/admin-activity-log";
+import { recomputeAllProfileReviewAggregates } from "@/lib/actions/reviews";
 
 async function requireAdmin(): Promise<{
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -72,9 +73,30 @@ export async function adminDeleteListingByIdCascade(
   const jobIds = (jobs ?? []).map((j: { id: number }) => j.id);
 
   if (jobIds.length > 0) {
+    const { data: linkedReviews } = await db
+      .from("reviews")
+      .select("reviewee_id")
+      .in("job_id", jobIds);
+    const impactedRevieweeIds = Array.from(
+      new Set(
+        (linkedReviews ?? [])
+          .map((r: { reviewee_id?: string | null }) => String(r.reviewee_id ?? "").trim())
+          .filter((v) => v.length > 0)
+      )
+    );
+
+    await db.from("reviews").delete().in("job_id", jobIds);
     await (db as any).from("job_checklist_items").delete().in("job_id", jobIds);
     await db.from("job_messages").delete().in("job_id", jobIds);
     await db.from("jobs").delete().in("id", jobIds);
+
+    for (const userId of impactedRevieweeIds) {
+      try {
+        await recomputeAllProfileReviewAggregates(userId);
+      } catch {
+        // Keep delete robust; aggregates can be recalculated later if needed.
+      }
+    }
   }
 
   await db.from("bids").delete().eq("listing_id", id);

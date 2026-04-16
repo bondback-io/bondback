@@ -278,12 +278,8 @@ async function recomputeProfileAverages(
   }
 
   const ratings = (rowsRes.data ?? []).map((r: any) => r.overall_rating as number);
-  if (ratings.length === 0) {
-    return;
-  }
-
   const total = ratings.reduce((sum, v) => sum + v, 0);
-  const avg = total / ratings.length;
+  const avg = ratings.length > 0 ? total / ratings.length : null;
 
   const update: Partial<Database["public"]["Tables"]["profiles"]["Update"]> = {};
   if (revieweeType === "cleaner") {
@@ -297,5 +293,11 @@ async function recomputeProfileAverages(
   }
 
   await db.from("profiles").update(update as never).eq("id", userId as never);
+}
+
+export async function recomputeAllProfileReviewAggregates(userId: string): Promise<void> {
+  await recomputeProfileAverages(userId, "cleaner");
+  await recomputeProfileAverages(userId, "lister");
+  await recomputeVerificationBadgesForUser(userId);
 }
 

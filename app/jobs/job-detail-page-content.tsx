@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -46,6 +47,12 @@ export interface JobDetailPageProps {
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
+type JobChecklistItemRow = {
+  id: number;
+  job_id: number;
+  label: string;
+  is_completed: boolean;
+};
 
 function firstSearchParam(
   v: string | string[] | undefined
@@ -251,6 +258,41 @@ export async function JobDetailPageContent({
         e
       );
     }
+  }
+
+  let initialChecklist: JobChecklistItemRow[] | null = null;
+  if (job?.id != null) {
+    const checklistSelect = "id, job_id, label, is_completed";
+    const [viewerChecklistRes, adminChecklistRes] = await Promise.all([
+      supabase
+        .from("job_checklist_items")
+        .select(checklistSelect)
+        .eq("job_id", job.id)
+        .order("id", { ascending: true }),
+      sessionIsAdmin
+        ? createSupabaseAdminClient()
+            ?.from("job_checklist_items")
+            .select(checklistSelect)
+            .eq("job_id", job.id)
+            .order("id", { ascending: true })
+        : Promise.resolve(null),
+    ]);
+
+    const viewerChecklist =
+      !viewerChecklistRes.error && Array.isArray(viewerChecklistRes.data)
+        ? (viewerChecklistRes.data as JobChecklistItemRow[])
+        : null;
+    const adminChecklist =
+      adminChecklistRes && !adminChecklistRes.error && Array.isArray(adminChecklistRes.data)
+        ? (adminChecklistRes.data as JobChecklistItemRow[])
+        : null;
+
+    initialChecklist = (viewerChecklist ?? adminChecklist ?? null)?.map((item) => ({
+      id: item.id,
+      job_id: item.job_id,
+      label: item.label,
+      is_completed: item.is_completed,
+    })) ?? null;
   }
 
   let listerName: string | null = null;
@@ -536,6 +578,7 @@ export async function JobDetailPageContent({
           securedViaBuyNow={
             Boolean((job as JobRow | null)?.secured_via_buy_now) === true
           }
+          initialChecklist={initialChecklist}
         />
       </section>
     </OfflineJobsPrimer>

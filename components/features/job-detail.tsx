@@ -569,6 +569,8 @@ export type JobDetailProps = {
   topUpPayments?: JobTopUpPaymentRecord[];
   /** Job row: cleaner secured the listing via Buy Now (not lister accepting an auction bid). */
   securedViaBuyNow?: boolean;
+  /** Server-hydrated checklist rows for admin/readonly views where client RLS can block reads. */
+  initialChecklist?: ChecklistItem[] | null;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -652,6 +654,7 @@ export function JobDetail({
   myReviewOfLister = null,
   topUpPayments = [],
   securedViaBuyNow = false,
+  initialChecklist = null,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -721,9 +724,13 @@ export function JobDetail({
   const [cancellingListing, setCancellingListing] = useState(false);
   const [isApproving, startApproving] = useTransition();
   const [isFinalizing, startFinalizing] = useTransition();
-  const [checklist, setChecklist] = useState<ChecklistItem[] | null>(null);
+  const [checklist, setChecklist] = useState<ChecklistItem[] | null>(initialChecklist);
   const [checklistLoading, setChecklistLoading] = useState(false);
   const [checklistError, setChecklistError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setChecklist(initialChecklist);
+  }, [initialChecklist]);
   const [cleanerConfirmed, setCleanerConfirmed] = useState<boolean>(
     cleanerConfirmedComplete
   );
