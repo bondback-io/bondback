@@ -87,6 +87,16 @@ export default async function AdminGlobalSettingsPage() {
           (existing as { new_listing_reminder_interval_hours?: number | null }).new_listing_reminder_interval_hours ?? 6,
         enableNewListingReminders:
           (existing as { enable_new_listing_reminders?: boolean | null }).enable_new_listing_reminders ?? true,
+        defaultCleanerChecklistItems:
+          (existing as { default_cleaner_checklist_items?: string[] | null }).default_cleaner_checklist_items ?? [
+            "Vacuum Apartment/House",
+            "Clean all Bedrooms",
+            "Clean all Bathrooms",
+            "Clean Toilet",
+            "Clean Kitchen",
+            "Clean Laundry",
+            "Mop Floors (if needed)",
+          ],
         enableSmsNotifications: (existing as { enable_sms_notifications?: boolean }).enable_sms_notifications ?? true,
         smsTypeEnabled:
           (existing as { sms_type_enabled?: Record<string, boolean> | null }).sms_type_enabled ?? {},

@@ -54,6 +54,7 @@ export function JobCleaningChecklistPanel({
   showAfterPhotoHint,
 }: JobCleaningChecklistPanelProps) {
   const list = items ?? [];
+  const canManageTasks = isJobLister && !isJobCleaner;
   const total = list.length;
   const done = list.filter((i) => i.is_completed).length;
   const [page, setPage] = useState(0);
@@ -125,7 +126,7 @@ export function JobCleaningChecklistPanel({
                 item={item}
                 emphasize={emphasize}
                 checklistParty={checklistParty}
-                isJobLister={isJobLister}
+                canManageTasks={canManageTasks}
                 onToggle={onToggle}
                 onRemove={onRemove}
                 onUpdateLabel={onUpdateLabel}
@@ -167,7 +168,7 @@ export function JobCleaningChecklistPanel({
         </>
       )}
 
-      {isJobLister && <JobChecklistAddTask onAdd={onAdd} compact={emphasize} />}
+      {canManageTasks && <JobChecklistAddTask onAdd={onAdd} compact={emphasize} />}
 
       {isJobCleaner && total > 0 && (
         <div className="pt-1">
@@ -211,7 +212,7 @@ function ChecklistTaskRow({
   item,
   emphasize,
   checklistParty,
-  isJobLister,
+  canManageTasks,
   onToggle,
   onRemove,
   onUpdateLabel,
@@ -219,7 +220,7 @@ function ChecklistTaskRow({
   item: JobChecklistRow;
   emphasize: boolean;
   checklistParty: boolean;
-  isJobLister: boolean;
+  canManageTasks: boolean;
   onToggle: (item: JobChecklistRow, next: boolean) => void | Promise<void>;
   onRemove: (item: JobChecklistRow) => void | Promise<void>;
   onUpdateLabel: (item: JobChecklistRow, label: string) => void | Promise<void>;
@@ -317,7 +318,7 @@ function ChecklistTaskRow({
           </label>
         )}
       </div>
-      {isJobLister && !editing && (
+      {canManageTasks && !editing && (
         <div className="flex shrink-0 gap-0.5 self-start pt-0.5">
           <Button
             type="button"

@@ -56,6 +56,8 @@ type GlobalSettingsRow = {
   new_listing_reminder_interval_hours?: number | null;
   /** Master toggle for scheduled no-bid listing reminder notifications. */
   enable_new_listing_reminders?: boolean | null;
+  /** Default checklist labels used when a job checklist is first created. */
+  default_cleaner_checklist_items?: string[] | null;
   /** When false, no Twilio SMS is sent site-wide. */
   enable_sms_notifications?: boolean;
   /** Admin inbox alerts (Resend). */
@@ -320,6 +322,7 @@ export type SaveGlobalSettingsInput = {
   additionalNotificationRadiusBufferKm?: number;
   newListingReminderIntervalHours?: number;
   enableNewListingReminders?: boolean;
+  defaultCleanerChecklistItems?: string[];
   maxSmsPerUserPerDay?: number | null;
   maxPushPerUserPerDay?: number | null;
   pricingBaseRatePerBedroomAud?: number;
@@ -402,6 +405,22 @@ export async function saveGlobalSettings(
       typeof data.enableNewListingReminders === "boolean"
         ? data.enableNewListingReminders
         : true,
+    default_cleaner_checklist_items:
+      Array.isArray(data.defaultCleanerChecklistItems) &&
+      data.defaultCleanerChecklistItems.length > 0
+        ? data.defaultCleanerChecklistItems
+            .map((v) => String(v ?? "").trim())
+            .filter((v) => v.length > 0)
+            .slice(0, 64)
+        : [
+            "Vacuum Apartment/House",
+            "Clean all Bedrooms",
+            "Clean all Bathrooms",
+            "Clean Toilet",
+            "Clean Kitchen",
+            "Clean Laundry",
+            "Mop Floors (if needed)",
+          ],
     enable_sms_notifications: data.enableSmsNotifications !== false,
     sms_type_enabled:
       data.smsTypeEnabled && typeof data.smsTypeEnabled === "object"

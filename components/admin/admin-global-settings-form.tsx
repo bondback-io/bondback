@@ -152,6 +152,20 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [enableNewListingReminders, setEnableNewListingReminders] = React.useState(
     initial?.enableNewListingReminders ?? true
   );
+  const [defaultCleanerChecklistItems, setDefaultCleanerChecklistItems] = React.useState<string[]>(
+    initial?.defaultCleanerChecklistItems && initial.defaultCleanerChecklistItems.length > 0
+      ? initial.defaultCleanerChecklistItems
+      : [
+          "Vacuum Apartment/House",
+          "Clean all Bedrooms",
+          "Clean all Bathrooms",
+          "Clean Toilet",
+          "Clean Kitchen",
+          "Clean Laundry",
+          "Mop Floors (if needed)",
+        ]
+  );
+  const [newChecklistItemDraft, setNewChecklistItemDraft] = React.useState("");
   const [enableSmsNotifications, setEnableSmsNotifications] = React.useState(
     initial?.enableSmsNotifications ?? true
   );
@@ -304,6 +318,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
         Math.min(168, Number(newListingReminderIntervalHours) || 6)
       ),
       enableNewListingReminders,
+      defaultCleanerChecklistItems: defaultCleanerChecklistItems
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0),
       enableSmsNotifications,
       smsTypeEnabled,
       maxSmsPerUserPerDay: maxSmsPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxSmsPerUserPerDay, 10) || 5)) : undefined,
@@ -699,6 +716,71 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             <span className="text-[11px] text-muted-foreground dark:text-gray-400">
               Sends once immediately using live/unassigned/zero-bid filters (manual run works even if the scheduled toggle is off).
             </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold dark:text-gray-100">
+            Default cleaner checklist tasks
+          </CardTitle>
+          <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+            These are the default checklist items added when a job checklist is first created. Listers can still adjust per job.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            {defaultCleanerChecklistItems.map((item, idx) => (
+              <div key={`${idx}-${item}`} className="flex items-center gap-2">
+                <Input
+                  value={item}
+                  onChange={(e) =>
+                    setDefaultCleanerChecklistItems((prev) =>
+                      prev.map((x, i) => (i === idx ? e.target.value : x))
+                    )
+                  }
+                  className="h-9 text-xs dark:bg-gray-900 dark:border-gray-700"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 px-2 text-xs"
+                  onClick={() =>
+                    setDefaultCleanerChecklistItems((prev) =>
+                      prev.filter((_, i) => i !== idx)
+                    )
+                  }
+                  disabled={defaultCleanerChecklistItems.length <= 1}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              value={newChecklistItemDraft}
+              onChange={(e) => setNewChecklistItemDraft(e.target.value)}
+              placeholder="Add new default checklist task..."
+              className="h-9 text-xs dark:bg-gray-900 dark:border-gray-700"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() => {
+                const next = newChecklistItemDraft.trim();
+                if (!next) return;
+                setDefaultCleanerChecklistItems((prev) => [...prev, next]);
+                setNewChecklistItemDraft("");
+              }}
+              disabled={!newChecklistItemDraft.trim()}
+            >
+              Add task
+            </Button>
           </div>
         </CardContent>
       </Card>

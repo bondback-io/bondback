@@ -38,6 +38,41 @@ import { sameUuid, trimStr } from "@/lib/utils";
 import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
+const DEFAULT_CLEANER_CHECKLIST_LABELS = [
+  "Vacuum Apartment/House",
+  "Clean all Bedrooms",
+  "Clean all Bathrooms",
+  "Clean Toilet",
+  "Clean Kitchen",
+  "Clean Laundry",
+  "Mop Floors (if needed)",
+];
+
+async function loadDefaultCleanerChecklistLabels(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>
+): Promise<string[]> {
+  const fallback = [...DEFAULT_CLEANER_CHECKLIST_LABELS];
+  const { data, error } = await supabase
+    .from("global_settings")
+    .select("default_cleaner_checklist_items")
+    .eq("id", 1)
+    .maybeSingle();
+
+  const maybeMissingColumn =
+    (error as { code?: string; message?: string } | null)?.code === "42703" ||
+    ((error as { message?: string } | null)?.message ?? "")
+      .toLowerCase()
+      .includes("default_cleaner_checklist_items");
+  if (error && !maybeMissingColumn) return fallback;
+
+  const labels = (data as { default_cleaner_checklist_items?: unknown } | null)
+    ?.default_cleaner_checklist_items;
+  if (!Array.isArray(labels)) return fallback;
+  const cleaned = labels
+    .map((v) => String(v ?? "").trim())
+    .filter((v) => v.length > 0);
+  return cleaned.length > 0 ? cleaned : fallback;
+}
 
 export type CreateJobPaymentResult =
   | { ok: true; paymentIntentId: string }
@@ -1083,15 +1118,7 @@ export async function fulfillJobPaymentFromSession(
       const addons = (listingRow?.addons ?? []) as string[];
       const isSpecialArea = (key: string) =>
         isSpecialAreaForJobChecklist(listingRow, key);
-      const defaultLabels = [
-        "Vacuum Apartment/House",
-        "Clean all Bedrooms",
-        "Clean all Bathrooms",
-        "Clean Toilet",
-        "Clean Kitchen",
-        "Clean Laundry",
-        "Mop Floors (if needed)",
-      ];
+      const defaultLabels = await loadDefaultCleanerChecklistLabels(supabase);
 
       const rows: { job_id: number; label: string }[] = [];
       for (const addon of addons) {
@@ -1281,15 +1308,7 @@ export async function ensureJobChecklistIfEmpty(
   const addons = (listingRow?.addons ?? []) as string[];
   const isSpecialArea = (key: string) =>
     isSpecialAreaForJobChecklist(listingRow, key);
-  const defaultLabels = [
-    "Vacuum Apartment/House",
-    "Clean all Bedrooms",
-    "Clean all Bathrooms",
-    "Clean Toilet",
-    "Clean Kitchen",
-    "Clean Laundry",
-    "Mop Floors (if needed)",
-  ];
+  const defaultLabels = await loadDefaultCleanerChecklistLabels(supabase);
   const rows: { job_id: number; label: string }[] = [];
   for (const addon of addons) {
     const display = formatListingAddonDisplayName(addon);
@@ -1391,15 +1410,7 @@ export async function approveJobStart(
     const isSpecialArea = (key: string) =>
       isSpecialAreaForJobChecklist(listingRow, key);
 
-    const defaultLabels = [
-      "Vacuum Apartment/House",
-      "Clean all Bedrooms",
-      "Clean all Bathrooms",
-      "Clean Toilet",
-      "Clean Kitchen",
-      "Clean Laundry",
-      "Mop Floors (if needed)",
-    ];
+    const defaultLabels = await loadDefaultCleanerChecklistLabels(supabase);
 
     const rows: {
       job_id: number;
