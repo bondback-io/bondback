@@ -81,6 +81,28 @@ export default async function AdminGlobalSettingsPage() {
         stripeTestMode: (existing as { stripe_test_mode?: boolean }).stripe_test_mode ?? true,
         floatingChatEnabled: (existing as { floating_chat_enabled?: boolean }).floating_chat_enabled ?? true,
         enableSmsAlertsNewJobs: (existing as { enable_sms_alerts_new_jobs?: boolean }).enable_sms_alerts_new_jobs ?? true,
+        newListingInRadiusEmail: (existing as { new_listing_in_radius_email?: boolean }).new_listing_in_radius_email !== false,
+        newListingInRadiusInApp: (existing as { new_listing_in_radius_in_app?: boolean }).new_listing_in_radius_in_app !== false,
+        newListingInRadiusSms:
+          typeof (existing as { new_listing_in_radius_sms?: boolean }).new_listing_in_radius_sms === "boolean"
+            ? Boolean((existing as { new_listing_in_radius_sms: boolean }).new_listing_in_radius_sms)
+            : (existing as { enable_sms_alerts_new_jobs?: boolean }).enable_sms_alerts_new_jobs !== false,
+        newListingInRadiusPush:
+          typeof (existing as { new_listing_in_radius_push?: boolean }).new_listing_in_radius_push === "boolean"
+            ? Boolean((existing as { new_listing_in_radius_push: boolean }).new_listing_in_radius_push)
+            : (existing as { enable_sms_alerts_new_jobs?: boolean }).enable_sms_alerts_new_jobs !== false,
+        newListingOutsideEmail: (existing as { new_listing_outside_email?: boolean }).new_listing_outside_email !== false,
+        newListingOutsideInApp: (existing as { new_listing_outside_in_app?: boolean }).new_listing_outside_in_app !== false,
+        newListingOutsideSms:
+          typeof (existing as { new_listing_outside_sms?: boolean }).new_listing_outside_sms === "boolean"
+            ? Boolean((existing as { new_listing_outside_sms: boolean }).new_listing_outside_sms)
+            : (existing as { enable_sms_alerts_new_jobs?: boolean }).enable_sms_alerts_new_jobs !== false,
+        newListingOutsidePush:
+          typeof (existing as { new_listing_outside_push?: boolean }).new_listing_outside_push === "boolean"
+            ? Boolean((existing as { new_listing_outside_push: boolean }).new_listing_outside_push)
+            : (existing as { enable_sms_alerts_new_jobs?: boolean }).enable_sms_alerts_new_jobs !== false,
+        enableDailyBrowseJobsNudge:
+          (existing as { enable_daily_browse_jobs_nudge?: boolean | null }).enable_daily_browse_jobs_nudge !== false,
         additionalNotificationRadiusBufferKm:
           (existing as { additional_notification_radius_buffer_km?: number | null }).additional_notification_radius_buffer_km ?? 50,
         enableNewListingReminders:

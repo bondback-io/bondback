@@ -19,7 +19,9 @@ import {
   parseAdminReviewsPage,
   type AdminReviewsSearchParams,
 } from "@/lib/admin/admin-reviews-filters";
+import { resolveUserIdForReviewAdminSearch } from "@/lib/admin/admin-review-user-resolve";
 import { computeReviewStats } from "@/lib/admin/admin-reviews-stats";
+import { AdminReviewsPurgeCard } from "@/components/admin/admin-reviews-purge-card";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +72,12 @@ export default async function AdminReviewsPage({
   const admin = createSupabaseAdminClient();
   const readOnly = !admin;
 
+  const qTrim = (sp.q ?? "").trim();
+  let participantUserId: string | null = null;
+  if (admin && qTrim && !/^\d+$/.test(qTrim)) {
+    participantUserId = await resolveUserIdForReviewAdminSearch(admin, qTrim);
+  }
+
   let reviews: AdminReviewTableRow[] = [];
   let totalFiltered = 0;
   let profilesById: Record<string, AdminReviewProfileMini> = {};
@@ -79,15 +87,16 @@ export default async function AdminReviewsPage({
     const selectCols =
       "id, job_id, reviewer_id, reviewee_id, reviewee_type, reviewee_role, overall_rating, quality_of_work, reliability, communication, punctuality, review_text, review_photos, created_at, is_approved, is_hidden, is_flagged, moderation_note, moderated_at";
 
+    const filterOpts = { participantUserId };
     let countQ = admin.from("reviews").select("id", { count: "exact", head: true });
-    countQ = applyAdminReviewsFilters(countQ, sp);
+    countQ = applyAdminReviewsFilters(countQ, sp, filterOpts);
     const { count } = await countQ;
     totalFiltered = typeof count === "number" ? count : 0;
 
     const from = (page - 1) * ADMIN_REVIEWS_PAGE_SIZE;
     const to = from + ADMIN_REVIEWS_PAGE_SIZE - 1;
     let dataQ = admin.from("reviews").select(selectCols);
-    dataQ = applyAdminReviewsFilters(dataQ, sp);
+    dataQ = applyAdminReviewsFilters(dataQ, sp, filterOpts);
     const { data: rows, error } = await dataQ
       .order("created_at", { ascending: false })
       .range(from, to);
@@ -128,8 +137,12 @@ export default async function AdminReviewsPage({
           </h1>
           <p className="text-sm text-muted-foreground dark:text-gray-400">
             Moderate job-linked reviews, tied to completed work and released payments on the public site.
+            Search accepts job ID, comment text, email,{" "}
+            <span className="whitespace-nowrap">@cleaner_username</span>, or user UUID.
           </p>
         </div>
+
+        <AdminReviewsPurgeCard readOnly={readOnly} />
 
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
           <CardHeader className="pb-3">
@@ -144,7 +157,7 @@ export default async function AdminReviewsPage({
                 <Input
                   id="q"
                   name="q"
-                  placeholder="Job ID or comment text…"
+                  placeholder="Job ID, text, email, @username, or UUID…"
                   defaultValue={sp.q ?? ""}
                   className="dark:border-gray-700 dark:bg-gray-950"
                 />

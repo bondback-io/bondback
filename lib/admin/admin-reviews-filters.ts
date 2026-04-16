@@ -16,11 +16,26 @@ function escapeIlike(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
+export type ApplyAdminReviewsFiltersOptions = {
+  /** When set (email / @username / UUID resolved server-side), match reviewer or reviewee. */
+  participantUserId?: string | null;
+};
+
 /** Mutates PostgREST-style query builder (admin client). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function applyAdminReviewsFilters(qb: any, sp: AdminReviewsSearchParams): any {
+export function applyAdminReviewsFilters(
+  qb: any,
+  sp: AdminReviewsSearchParams,
+  options?: ApplyAdminReviewsFiltersOptions
+): any {
   const q = (sp.q ?? "").trim();
-  if (q) {
+  const participantUserId = options?.participantUserId?.trim() ?? "";
+
+  if (participantUserId) {
+    qb = qb.or(
+      `reviewee_id.eq.${participantUserId},reviewer_id.eq.${participantUserId}`
+    );
+  } else if (q) {
     if (/^\d+$/.test(q)) {
       qb = qb.eq("job_id", Number(q));
     } else if (q.length > 0) {

@@ -25,6 +25,7 @@ import { CleanerTutorial } from "@/emails/CleanerTutorial";
 import { GenericNotification } from "@/emails/GenericNotification";
 import {
   emailBrowseJobsUrl,
+  emailBrowseJobsWithRadiusKmUrl,
   emailDashboardUrl,
   emailJobUrl,
   emailListingUrl,
@@ -310,6 +311,8 @@ export async function getNotificationEmailContent(
     /** Listing primary key from DB (string UUID or numeric bigint). */
     listingUuid?: string | number | null;
     recipientUserId?: string;
+    /** When set with `new_job_in_area`, CTA links to browse jobs at this radius (km). */
+    browseJobsRadiusKm?: number | null;
   },
   adminOverride?: AdminEmailOverride | null
 ): Promise<{ subject: string; html: string }> {
@@ -350,7 +353,8 @@ export async function getNotificationEmailContent(
     messageText,
     options.senderName,
     options.listingId ?? undefined,
-    options.listingUuid ?? undefined
+    options.listingUuid ?? undefined,
+    options.browseJobsRadiusKm
   );
 }
 
@@ -375,7 +379,8 @@ export async function buildNotificationEmail(
   messageText: string,
   senderName?: string,
   listingId?: number | null,
-  listingUuid?: string | number | null
+  listingUuid?: string | number | null,
+  browseJobsRadiusKm?: number | null
 ): Promise<{ subject: string; html: string }> {
   const id = jobId ?? 0;
   const idStr = String(id);
@@ -384,12 +389,18 @@ export async function buildNotificationEmail(
     (listingUuid != null ? String(listingUuid).trim() : "") ||
     (listingId != null ? String(listingId).trim() : "");
   const messageSnippet = messageText.length > 100 ? `${messageText.slice(0, 97)}…` : messageText;
+  const browseRounded =
+    browseJobsRadiusKm != null && Number.isFinite(browseJobsRadiusKm)
+      ? Math.max(1, Math.min(500, Math.round(browseJobsRadiusKm)))
+      : null;
   const hrefForJob =
-    id > 0
-      ? emailJobUrl(idStr)
-      : listingKeyFromOptions
-        ? emailListingUrl(listingKeyFromOptions)
-        : emailDashboardUrl();
+    type === "new_job_in_area" && browseRounded != null
+      ? emailBrowseJobsWithRadiusKmUrl(browseRounded)
+      : id > 0
+        ? emailJobUrl(idStr)
+        : listingKeyFromOptions
+          ? emailListingUrl(listingKeyFromOptions)
+          : emailDashboardUrl();
 
   const subjects: Record<NotificationType, string> = {
     new_message: `${senderName ?? "Someone"} messaged you — Job #${id} – Bond Back`,
@@ -518,7 +529,10 @@ export async function buildNotificationEmail(
         listing_public_comment: "New public comment",
         new_job_in_area: "New job in your area",
       };
-      const h = headlines[type] ?? "Update";
+      const h =
+        type === "new_job_in_area" && browseRounded != null
+          ? "Bond cleans near you — browse jobs"
+          : headlines[type] ?? "Update";
       templateProps = { headline: h, messageText, hrefForJob };
       element = React.createElement(GenericNotification, {
         headline: h,
@@ -548,7 +562,10 @@ export async function buildNotificationEmail(
     });
     throw e;
   }
-  const subject = subjects[type] ?? `Notification – Bond Back`;
+  const subject =
+    type === "new_job_in_area" && browseRounded != null
+      ? `Browse bond cleans near you (${browseRounded}km radius) – Bond Back`
+      : subjects[type] ?? `Notification – Bond Back`;
   return { subject, html };
 }
 

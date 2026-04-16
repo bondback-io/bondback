@@ -53,6 +53,13 @@ export type NotificationType =
   | "listing_public_comment"
   | "daily_digest";
 
+export type NewJobChannelDelivery = Partial<{
+  email: boolean;
+  inApp: boolean;
+  sms: boolean;
+  push: boolean;
+}>;
+
 export type CreateNotificationOptions = {
   senderName?: string;
   /** Legacy numeric listing id when available (some emails). Prefer listingUuid. */
@@ -68,12 +75,23 @@ export type CreateNotificationOptions = {
   postcode?: string | null;
   minPriceCents?: number;
   maxPriceCents?: number;
+  /** Bedrooms for new_job_in_area SMS copy (listing in radius). */
+  bedroomCount?: number;
   persistTitle?: string;
   persistBody?: string;
   /** When true, only persist in-app row (no email/SMS/push). */
   adminTest?: boolean;
   /** Public listing Q&A notification subtype. */
   qaSubkind?: "question" | "reply";
+  /**
+   * Per-channel send for this notification. Omitted keys default to on.
+   * Used for cleaner new-listing flows (admin global toggles).
+   */
+  channelDelivery?: NewJobChannelDelivery;
+  /** When set (with type new_job_in_area), email/push deep-link to browse jobs at this radius. */
+  browseJobsRadiusKm?: number | null;
+  dedupeListingId?: string | null;
+  nudgeKind?: string | null;
 };
 
 export async function createNotification(
@@ -97,7 +115,23 @@ export async function createNotification(
     persistBody: options?.persistBody,
     adminTest: options?.adminTest,
     qaSubkind: options?.qaSubkind,
+    browseJobsRadiusKm: options?.browseJobsRadiusKm,
+    dedupeListingId: options?.dedupeListingId,
+    nudgeKind: options?.nudgeKind,
   });
+  const cd = options?.channelDelivery;
+  const channelOn = (key: keyof NonNullable<CreateNotificationOptions["channelDelivery"]>): boolean =>
+    cd == null || cd[key] !== false;
+  if (
+    cd &&
+    cd.email === false &&
+    cd.inApp === false &&
+    cd.sms === false &&
+    cd.push === false
+  ) {
+    return true;
+  }
+  const inAppRow = channelOn("inApp");
   const row = {
     user_id: userId,
     type,
@@ -106,6 +140,7 @@ export async function createNotification(
     title: persist.title,
     body: persist.body,
     data: persist.data,
+    is_read: !inAppRow,
   } as NotificationInsert;
 
   // Use admin client so we can insert for any user_id (RLS only allows auth.uid() = user_id for anon)
@@ -146,6 +181,7 @@ export async function createNotification(
 
   // Email: respect global toggle, per-type toggle, then notification_preferences and email_force_disabled
   let sendEmailThisTime = Boolean(
+    channelOn("email") &&
     globalSettings?.emails_enabled !== false &&
     (await getEmailTemplateOverrides()).email_type_enabled?.[type] !== false &&
     prefs.email &&
@@ -171,6 +207,7 @@ export async function createNotification(
         listingId: options?.listingId,
         listingUuid: options?.listingUuid,
         recipientUserId: userId,
+        browseJobsRadiusKm: options?.browseJobsRadiusKm ?? undefined,
       },
       adminOverride
     );
@@ -201,13 +238,17 @@ export async function createNotification(
   }
 
   // SMS: critical, high-value events only; max 5 per user per day (via sendSmsToUser)
+  const smsNewJobEligible =
+    type === "new_job_in_area" ? prefs.shouldSendSmsNewJob() : prefs.shouldSendSms(type);
   if (
+    channelOn("sms") &&
     prefs.phone &&
-    prefs.shouldSendSms(type) &&
+    smsNewJobEligible &&
     isTwilioSmsAllowedForType(globalSettings, type)
   ) {
     const { sendSmsToUser } = await import("@/lib/notifications/sms");
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io";
+    const { listingDetailPath } = await import("@/lib/marketplace/paths");
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://www.bondback.io").replace(/\/$/, "");
     let body: string;
     if (type === "new_bid") {
       const who = (options?.senderName ?? "").trim();
@@ -233,6 +274,32 @@ export async function createNotification(
         : `Payment received for Job #${jobId ?? "?"}. View earnings: ${appUrl}/earnings`;
     } else if (type === "dispute_opened") {
       body = `Dispute on Job #${jobId ?? "?"}. Respond now: ${appUrl}/jobs/${jobId ?? ""}`;
+    } else if (type === "new_job_in_area") {
+      const browseKm =
+        options?.browseJobsRadiusKm != null && Number.isFinite(options.browseJobsRadiusKm)
+          ? Math.max(1, Math.min(500, Math.round(options.browseJobsRadiusKm)))
+          : null;
+      if (browseKm != null) {
+        body = `Bond cleans near you — browse live jobs (${browseKm}km filter): ${appUrl}/jobs?radius_km=${browseKm}`;
+      } else {
+        const listingSeg =
+          options?.listingUuid != null
+            ? String(options.listingUuid).trim()
+            : options?.listingId != null
+              ? String(options.listingId)
+              : "";
+        const suburbDisplay = (options?.suburb ?? "").trim() || "Your area";
+        const rawBeds = options?.bedroomCount;
+        const beds = Math.max(
+          1,
+          Math.min(20, typeof rawBeds === "number" && Number.isFinite(rawBeds) ? Math.floor(rawBeds) : 1)
+        );
+        const minC = options?.minPriceCents ?? 0;
+        const maxC = options?.maxPriceCents ?? minC;
+        const midAud = Math.round((minC + maxC) / 2 / 100);
+        const path = listingSeg ? listingDetailPath(listingSeg) : "/jobs";
+        body = `New bond clean in ${suburbDisplay}: ${beds} bed, $${midAud}. View now: ${appUrl}${path}`;
+      }
     } else {
       body = messageText.slice(0, 100) + (jobId != null ? ` ${appUrl}/jobs/${jobId}` : "");
     }
@@ -241,7 +308,11 @@ export async function createNotification(
   }
 
   // Push (Expo): critical/high-value events; max 5 per user per day
-  let sendPushThisTime = Boolean(prefs.expoPushToken && prefs.shouldSendPush(type));
+  let sendPushThisTime = Boolean(
+    channelOn("push") &&
+    prefs.expoPushToken &&
+    (type === "new_job_in_area" ? prefs.shouldSendPushNewJob() : prefs.shouldSendPush(type))
+  );
   if (sendPushThisTime && type === "new_message" && numericJobId != null) {
     const viewing = await recipientViewedJobRecently(userId, numericJobId);
     if (viewing) sendPushThisTime = false;
@@ -258,6 +329,7 @@ export async function createNotification(
       postcode: options?.postcode ?? undefined,
       minPriceCents: options?.minPriceCents,
       maxPriceCents: options?.maxPriceCents,
+      browseJobsRadiusKm: options?.browseJobsRadiusKm ?? undefined,
     });
     const result = await sendPushToUser(userId, prefs.expoPushToken, payload);
     if (!result.ok) {

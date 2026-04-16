@@ -14,6 +14,12 @@ export type NotificationPersistOptions = {
   adminTest?: boolean;
   /** Public listing Q&A: who should be notified / filter copy. */
   qaSubkind?: "question" | "reply";
+  /** Deep link to `/jobs?radius_km=` (notification #2 / daily browse nudge). */
+  browseJobsRadiusKm?: number | null;
+  /** Dedupe key when `listing_uuid` is omitted from `data` (e.g. browse nudge). */
+  dedupeListingId?: string | null;
+  /** Structured subtype for analytics / dedupe (`outside_preferred`, `daily_browse_jobs`, …). */
+  nudgeKind?: string | null;
 };
 
 /**
@@ -36,6 +42,19 @@ export function buildNotificationPersistFields(
   if (options?.senderName != null) data.sender_name = options.senderName;
   if (options?.adminTest) data.admin_test = true;
   if (options?.qaSubkind != null) data.qa_subkind = options.qaSubkind;
+  if (
+    options?.browseJobsRadiusKm != null &&
+    typeof options.browseJobsRadiusKm === "number" &&
+    Number.isFinite(options.browseJobsRadiusKm)
+  ) {
+    data.browse_jobs_radius_km = Math.max(1, Math.min(500, Math.round(options.browseJobsRadiusKm)));
+  }
+  if (options?.dedupeListingId != null && String(options.dedupeListingId).trim()) {
+    data.dedupe_listing_id = String(options.dedupeListingId).trim();
+  }
+  if (options?.nudgeKind != null && String(options.nudgeKind).trim()) {
+    data.nudge_kind = String(options.nudgeKind).trim();
+  }
 
   let body = messageText ?? "";
 

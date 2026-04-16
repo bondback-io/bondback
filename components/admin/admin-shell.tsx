@@ -112,10 +112,10 @@ function NavLinkRow({
         href={item.href}
         onClick={() => onNavigate?.()}
         className={cn(
-          "flex min-h-[52px] items-center gap-3 rounded-xl px-4 text-base font-medium transition-colors active:scale-[0.99] sm:min-h-12 sm:text-sm",
+          "flex min-h-[52px] items-center gap-3 rounded-xl px-4 text-base font-medium no-underline transition-colors hover:no-underline active:scale-[0.99] sm:min-h-12 sm:text-sm",
           isActive
-            ? "bg-primary text-primary-foreground shadow-sm dark:bg-primary/90"
-            : "text-foreground hover:bg-muted dark:text-gray-100 dark:hover:bg-gray-800"
+            ? "bg-primary text-primary-foreground shadow-sm dark:bg-primary/90 dark:!text-primary-foreground"
+            : "text-foreground hover:bg-muted hover:text-foreground dark:!text-gray-100 dark:hover:!bg-gray-800 dark:hover:!text-gray-100"
         )}
         aria-current={isActive ? "page" : undefined}
       >
@@ -149,15 +149,21 @@ function SidebarLink({
     <Link
       href={item.href}
       className={cn(
-        "flex min-h-11 items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+        "flex min-h-11 items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium no-underline transition-colors hover:no-underline",
         isActive
-          ? "bg-accent text-accent-foreground shadow-sm dark:bg-gray-100 dark:text-gray-900"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+          ? "bg-accent text-accent-foreground shadow-sm dark:!bg-gray-100 dark:!text-gray-900 dark:[&_svg]:!text-gray-900"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground dark:!text-gray-300 dark:hover:!bg-gray-800 dark:hover:!text-gray-100"
       )}
       aria-current={isActive ? "page" : undefined}
     >
       <span className="flex min-w-0 items-center gap-2.5">
-        <Icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+        <Icon
+          className={cn(
+            "h-4 w-4 shrink-0",
+            isActive ? "opacity-100" : "opacity-90"
+          )}
+          aria-hidden
+        />
         <span className="truncate">{item.label}</span>
       </span>
       {isActive && (

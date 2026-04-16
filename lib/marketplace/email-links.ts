@@ -33,6 +33,12 @@ export function emailBrowseJobsUrl(): string {
   return emailAbsoluteUrl("/jobs");
 }
 
+/** Browse jobs with distance filter (matches `/jobs` marketplace `radius_km`). */
+export function emailBrowseJobsWithRadiusKmUrl(radiusKm: number): string {
+  const n = Math.max(1, Math.min(500, Math.round(radiusKm)));
+  return emailAbsoluteUrl(`/jobs?radius_km=${n}`);
+}
+
 export function emailDashboardUrl(): string {
   return emailAbsoluteUrl("/dashboard");
 }

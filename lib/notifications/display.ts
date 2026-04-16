@@ -34,6 +34,12 @@ export function getNotificationHref(row: NotificationRow): string | null {
     return base;
   }
 
+  const browseKm = numFromData(data?.browse_jobs_radius_km);
+  if (browseKm != null && browseKm > 0) {
+    const n = Math.max(1, Math.min(500, Math.round(browseKm)));
+    return `/jobs?radius_km=${n}`;
+  }
+
   const uuidLike = (s: string) =>
     /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(s);
   const listingUuid =

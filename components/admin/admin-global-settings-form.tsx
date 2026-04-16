@@ -140,8 +140,33 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [adminNotifyDispute, setAdminNotifyDispute] = React.useState(
     initial?.adminNotifyDispute ?? true
   );
-  const [enableSmsAlertsNewJobs, setEnableSmsAlertsNewJobs] = React.useState(
-    initial?.enableSmsAlertsNewJobs ?? true
+  const legacySmsPush = initial?.enableSmsAlertsNewJobs !== false;
+  const [newListingInRadiusEmail, setNewListingInRadiusEmail] = React.useState(
+    initial?.newListingInRadiusEmail !== false
+  );
+  const [newListingInRadiusInApp, setNewListingInRadiusInApp] = React.useState(
+    initial?.newListingInRadiusInApp !== false
+  );
+  const [newListingInRadiusSms, setNewListingInRadiusSms] = React.useState(
+    typeof initial?.newListingInRadiusSms === "boolean" ? initial.newListingInRadiusSms : legacySmsPush
+  );
+  const [newListingInRadiusPush, setNewListingInRadiusPush] = React.useState(
+    typeof initial?.newListingInRadiusPush === "boolean" ? initial.newListingInRadiusPush : legacySmsPush
+  );
+  const [newListingOutsideEmail, setNewListingOutsideEmail] = React.useState(
+    initial?.newListingOutsideEmail !== false
+  );
+  const [newListingOutsideInApp, setNewListingOutsideInApp] = React.useState(
+    initial?.newListingOutsideInApp !== false
+  );
+  const [newListingOutsideSms, setNewListingOutsideSms] = React.useState(
+    typeof initial?.newListingOutsideSms === "boolean" ? initial.newListingOutsideSms : legacySmsPush
+  );
+  const [newListingOutsidePush, setNewListingOutsidePush] = React.useState(
+    typeof initial?.newListingOutsidePush === "boolean" ? initial.newListingOutsidePush : legacySmsPush
+  );
+  const [enableDailyBrowseJobsNudge, setEnableDailyBrowseJobsNudge] = React.useState(
+    initial?.enableDailyBrowseJobsNudge !== false
   );
   const [additionalNotificationRadiusBufferKm, setAdditionalNotificationRadiusBufferKm] = React.useState(
     initial?.additionalNotificationRadiusBufferKm ?? 50
@@ -305,7 +330,15 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       adminNotifyNewUser,
       adminNotifyNewListing,
       adminNotifyDispute,
-      enableSmsAlertsNewJobs,
+      newListingInRadiusEmail,
+      newListingInRadiusInApp,
+      newListingInRadiusSms,
+      newListingInRadiusPush,
+      newListingOutsideEmail,
+      newListingOutsideInApp,
+      newListingOutsideSms,
+      newListingOutsidePush,
+      enableDailyBrowseJobsNudge,
       additionalNotificationRadiusBufferKm: Math.max(
         0,
         Math.min(500, Number(additionalNotificationRadiusBufferKm) || 50)
@@ -583,32 +616,70 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       <Card className="border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30">
         <CardHeader>
           <CardTitle className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-            New job alerts (SMS, push, in-app + email)
+            Cleaner new-listing notifications
           </CardTitle>
           <p className="text-[11px] text-emerald-800/90 dark:text-emerald-200/90">
-            When a new <strong>live</strong> listing is published, cleaners with the <strong>cleaner</strong> role who are within range get{" "}
-            <strong>in-app + email</strong> alerts (Resend) if they opted in under Settings → <em>New listings in my area</em>.{" "}
-            <strong>SMS</strong> (Twilio) and <strong>push</strong> (Expo) only apply when the cleaner is within their preferred{" "}
-            <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">max_travel_km</code> (haversine via suburb/postcode, else postcode distance).{" "}
-            The toggle below turns <strong>SMS + push</strong> on or off only — it does not disable in-app or email.{" "}
-            Email copy and per-type on/off live under{" "}
-            <Link href="/admin/emails" className="font-medium underline underline-offset-2">
-              Admin → Emails
-            </Link>{" "}
-            (template key <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">new_job_in_area</code>). Per-user SMS/push daily caps below.
+            Applies to users with the <strong>cleaner</strong> role (including lister+cleaner) who opted in under Settings →{" "}
+            <em>New listings in my area</em>. Distance uses suburb/postcode (haversine when coordinates exist).{" "}
+            <strong>Notification 1</strong> fires when the listing is within the cleaner&apos;s preferred <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">max_travel_km</code>.{" "}
+            <strong>Notification 2</strong> reaches cleaners in the extra buffer ring only; the in-app/email link opens{" "}
+            <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">/jobs?radius_km=preferred+buffer</code> (all live listings). Email template:{" "}
+            <Link href="/admin/emails" className="font-medium underline underline-offset-2">Admin → Emails</Link>{" "}
+            (<code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">new_job_in_area</code>). Purple card above still controls Twilio master + caps.
           </p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="enable-sms-alerts-new-jobs" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
-              Enable SMS + push for new jobs in area
-            </Label>
-            <Switch
-              id="enable-sms-alerts-new-jobs"
-              checked={enableSmsAlertsNewJobs}
-              onCheckedChange={(v) => setEnableSmsAlertsNewJobs(Boolean(v))}
-            />
+        <CardContent className="space-y-6">
+          <div className="space-y-3 rounded-lg border border-emerald-200/80 bg-white/60 p-3 dark:border-emerald-800/60 dark:bg-emerald-950/20">
+            <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">1. New listing within preferred radius</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(
+                [
+                  ["new-listing-r1-email", "Email", newListingInRadiusEmail, setNewListingInRadiusEmail],
+                  ["new-listing-r1-inapp", "In-app", newListingInRadiusInApp, setNewListingInRadiusInApp],
+                  ["new-listing-r1-sms", "SMS (Twilio)", newListingInRadiusSms, setNewListingInRadiusSms],
+                  ["new-listing-r1-push", "Push (Expo)", newListingInRadiusPush, setNewListingInRadiusPush],
+                ] as const
+              ).map(([id, label, checked, set]) => (
+                <div
+                  key={id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/70 bg-emerald-50/40 px-2 py-2 dark:border-emerald-800/50 dark:bg-emerald-950/15"
+                >
+                  <Label htmlFor={id} className="text-[11px] font-normal text-emerald-950 dark:text-emerald-100">
+                    {label}
+                  </Label>
+                  <Switch id={id} checked={checked} onCheckedChange={(v) => set(Boolean(v))} />
+                </div>
+              ))}
+            </div>
           </div>
+
+          <div className="space-y-3 rounded-lg border border-emerald-200/80 bg-white/60 p-3 dark:border-emerald-800/60 dark:bg-emerald-950/20">
+            <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">2. Buffer ring — “just outside” (browse jobs)</p>
+            <p className="text-[11px] text-emerald-800/85 dark:text-emerald-200/85">
+              Cleaners between preferred km and preferred + buffer see a nudge to open Browse jobs at <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">radius_km = max_travel_km + buffer</code>.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(
+                [
+                  ["new-listing-r2-email", "Email", newListingOutsideEmail, setNewListingOutsideEmail],
+                  ["new-listing-r2-inapp", "In-app", newListingOutsideInApp, setNewListingOutsideInApp],
+                  ["new-listing-r2-sms", "SMS (Twilio)", newListingOutsideSms, setNewListingOutsideSms],
+                  ["new-listing-r2-push", "Push (Expo)", newListingOutsidePush, setNewListingOutsidePush],
+                ] as const
+              ).map(([id, label, checked, set]) => (
+                <div
+                  key={id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/70 bg-emerald-50/40 px-2 py-2 dark:border-emerald-800/50 dark:bg-emerald-950/15"
+                >
+                  <Label htmlFor={id} className="text-[11px] font-normal text-emerald-950 dark:text-emerald-100">
+                    {label}
+                  </Label>
+                  <Switch id={id} checked={checked} onCheckedChange={(v) => set(Boolean(v))} />
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Label htmlFor="max-sms-per-user-per-day" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
               Max SMS per cleaner per day (optional)
@@ -641,7 +712,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Label htmlFor="additional-notification-radius-buffer-km" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
-              Additional Notification Radius Buffer (km)
+              Additional notification radius buffer (km)
             </Label>
             <Input
               id="additional-notification-radius-buffer-km"
@@ -665,14 +736,18 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               onCheckedChange={(v) => setEnableNewListingReminders(Boolean(v))}
             />
           </div>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="enable-daily-browse-nudge" className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
+              Enable daily browse-jobs nudge (#2, all cleaners)
+            </Label>
+            <Switch
+              id="enable-daily-browse-nudge"
+              checked={enableDailyBrowseJobsNudge}
+              onCheckedChange={(v) => setEnableDailyBrowseJobsNudge(Boolean(v))}
+            />
+          </div>
           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
-            Leave blank for defaults (5 SMS / 5 push). Triggers from listing publish: <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">notifyNearbyCleanersOfNewListing</code>.
-          </p>
-          <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
-            Scheduled reminders run once per day (Vercel Hobby limit). Manual send below is immediate.
-          </p>
-          <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
-            Example: cleaner preferred radius 30km + buffer 50km = outside-radius alerts up to 80km.
+            Scheduled crons: no-bid reminders (3:00 UTC) and browse nudge (4:00 UTC). Manual button runs both immediately.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -688,7 +763,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                   if (r.ok) {
                     toast({
                       title: "Reminder run complete",
-                      description: `Listings scanned: ${r.listingsConsidered}. Eligible: ${r.listingsMatched}. Notifications sent: ${r.notificationsSent}.`,
+                      description: `No-bid: ${r.listingsConsidered} scanned, ${r.listingsMatched} eligible, ${r.notificationsSent} notifications. Browse nudge rows: ${r.browseJobsNudgeSent}.`,
                     });
                   } else {
                     toast({
@@ -703,7 +778,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               {newListingReminderPending ? "Sending…" : "Send listing reminders now"}
             </Button>
             <span className="text-[11px] text-muted-foreground dark:text-gray-400">
-              Sends once immediately using live/unassigned/zero-bid filters (manual run works even if the scheduled toggle is off).
+              No-bid flow uses your per-channel toggles for notification 1+2; browse nudge uses notification 2 toggles.
             </span>
           </div>
         </CardContent>

@@ -93,6 +93,17 @@ type GlobalSettingsRow = {
   allow_two_minute_auction_test?: boolean;
   /** Default light/dark for guests and new signups. */
   default_site_theme?: string | null;
+  /** Cleaner new listing #1 (within preferred km). Requires sql/20260417100000_global_settings_new_listing_channel_toggles.sql */
+  new_listing_in_radius_email?: boolean;
+  new_listing_in_radius_in_app?: boolean;
+  new_listing_in_radius_sms?: boolean;
+  new_listing_in_radius_push?: boolean;
+  /** Cleaner new listing #2 (buffer / browse jobs). */
+  new_listing_outside_email?: boolean;
+  new_listing_outside_in_app?: boolean;
+  new_listing_outside_sms?: boolean;
+  new_listing_outside_push?: boolean;
+  enable_daily_browse_jobs_nudge?: boolean | null;
 };
 
 /** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
@@ -353,6 +364,18 @@ export type SaveGlobalSettingsInput = {
   allowTwoMinuteAuctionTest?: boolean;
   /** Default theme for logged-out users and new signups (`profiles.theme_preference`). */
   defaultSiteTheme?: "light" | "dark";
+  /** Notification #1 — within preferred travel radius (per channel). */
+  newListingInRadiusEmail?: boolean;
+  newListingInRadiusInApp?: boolean;
+  newListingInRadiusSms?: boolean;
+  newListingInRadiusPush?: boolean;
+  /** Notification #2 — buffer ring / browse Jobs (per channel). */
+  newListingOutsideEmail?: boolean;
+  newListingOutsideInApp?: boolean;
+  newListingOutsideSms?: boolean;
+  newListingOutsidePush?: boolean;
+  /** Scheduled daily browse-jobs nudge (uses #2 channel toggles). */
+  enableDailyBrowseJobsNudge?: boolean;
 };
 
 export type SaveGlobalSettingsResult =
@@ -391,7 +414,12 @@ export async function saveGlobalSettings(
     payout_schedule: data.payoutSchedule ?? "weekly",
     stripe_test_mode: typeof data.stripeTestMode === "boolean" ? data.stripeTestMode : true,
     floating_chat_enabled: typeof data.floatingChatEnabled === "boolean" ? data.floatingChatEnabled : true,
-    enable_sms_alerts_new_jobs: typeof data.enableSmsAlertsNewJobs === "boolean" ? data.enableSmsAlertsNewJobs : true,
+    enable_sms_alerts_new_jobs:
+      typeof data.newListingInRadiusSms === "boolean" && typeof data.newListingOutsideSms === "boolean"
+        ? data.newListingInRadiusSms !== false || data.newListingOutsideSms !== false
+        : typeof data.enableSmsAlertsNewJobs === "boolean"
+          ? data.enableSmsAlertsNewJobs
+          : true,
     additional_notification_radius_buffer_km:
       typeof data.additionalNotificationRadiusBufferKm === "number" && Number.isFinite(data.additionalNotificationRadiusBufferKm)
         ? Math.max(0, Math.min(500, Math.round(data.additionalNotificationRadiusBufferKm)))
@@ -504,6 +532,32 @@ export async function saveGlobalSettings(
     allow_low_amount_listings: data.allowLowAmountListings === true,
     allow_two_minute_auction_test: data.allowTwoMinuteAuctionTest === true,
     default_site_theme: data.defaultSiteTheme === "light" ? "light" : "dark",
+    new_listing_in_radius_email:
+      typeof data.newListingInRadiusEmail === "boolean" ? data.newListingInRadiusEmail : true,
+    new_listing_in_radius_in_app:
+      typeof data.newListingInRadiusInApp === "boolean" ? data.newListingInRadiusInApp : true,
+    new_listing_in_radius_sms:
+      typeof data.newListingInRadiusSms === "boolean"
+        ? data.newListingInRadiusSms
+        : data.enableSmsAlertsNewJobs !== false,
+    new_listing_in_radius_push:
+      typeof data.newListingInRadiusPush === "boolean"
+        ? data.newListingInRadiusPush
+        : data.enableSmsAlertsNewJobs !== false,
+    new_listing_outside_email:
+      typeof data.newListingOutsideEmail === "boolean" ? data.newListingOutsideEmail : true,
+    new_listing_outside_in_app:
+      typeof data.newListingOutsideInApp === "boolean" ? data.newListingOutsideInApp : true,
+    new_listing_outside_sms:
+      typeof data.newListingOutsideSms === "boolean"
+        ? data.newListingOutsideSms
+        : data.enableSmsAlertsNewJobs !== false,
+    new_listing_outside_push:
+      typeof data.newListingOutsidePush === "boolean"
+        ? data.newListingOutsidePush
+        : data.enableSmsAlertsNewJobs !== false,
+    enable_daily_browse_jobs_nudge:
+      typeof data.enableDailyBrowseJobsNudge === "boolean" ? data.enableDailyBrowseJobsNudge : true,
   };
 
   const { error } = admin
@@ -516,6 +570,8 @@ export async function saveGlobalSettings(
       msg.includes("does not exist") || msg.includes("42703")
         ? msg.includes("default_site_theme")
           ? " Add column global_settings.default_site_theme (see sql/20260216120000_global_settings_default_site_theme.sql)."
+          : msg.includes("new_listing_in_radius") || msg.includes("enable_daily_browse")
+            ? " Add cleaner new-listing channel columns (see sql/20260417100000_global_settings_new_listing_channel_toggles.sql)."
           : " Run the migration: supabase/migrations/20250308120000_global_settings.sql (or create the global_settings table with announcement_text, announcement_active, etc.)."
         : "";
     return { ok: false, error: msg + hint };

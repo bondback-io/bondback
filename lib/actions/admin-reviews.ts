@@ -7,6 +7,7 @@ import type { Database } from "@/types/supabase";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { recomputeAllProfileReviewAggregates } from "@/lib/actions/reviews";
+import { resolveUserIdForReviewAdminSearch } from "@/lib/admin/admin-review-user-resolve";
 
 type ReviewsRow = Database["public"]["Tables"]["reviews"]["Row"];
 
@@ -86,6 +87,69 @@ export async function adminUpdateReviewModeration(input: {
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Update failed." };
+  }
+}
+
+export type AdminPurgeRevieweeReviewsResult =
+  | { ok: true; userId: string; deleted: number }
+  | { ok: false; error: string };
+
+/**
+ * Delete every review **received** by this user (where they are the reviewee) and recompute profile
+ * rating counters. Resolves user by UUID, email, or cleaner username (@handle or handle).
+ * Does not remove reviews they wrote as reviewer.
+ */
+export async function adminPurgeReviewsWhereUserIsReviewee(input: {
+  identifier: string;
+}): Promise<AdminPurgeRevieweeReviewsResult> {
+  try {
+    const { adminId } = await requireAdminActor();
+    const admin = createSupabaseAdminClient();
+    if (!admin) return { ok: false, error: "Service role not configured." };
+
+    const raw = (input.identifier ?? "").trim();
+    if (!raw) return { ok: false, error: "Enter email, @username, or user UUID." };
+
+    const userId = await resolveUserIdForReviewAdminSearch(admin, raw);
+    if (!userId) {
+      return { ok: false, error: "No user found for that email, @username, or UUID." };
+    }
+
+    const { data: rows, error: selErr } = await admin
+      .from("reviews")
+      .select("id, reviewee_type, reviewee_role")
+      .eq("reviewee_id", userId as never);
+    if (selErr) return { ok: false, error: selErr.message };
+
+    const ids = (rows ?? []).map((r: { id: number }) => r.id);
+    if (ids.length === 0) {
+      await recomputeAllProfileReviewAggregates(userId);
+      revalidatePath("/admin/reviews");
+      revalidatePath(`/cleaners/${userId}`);
+      revalidatePath("/profile");
+      return { ok: true, userId, deleted: 0 };
+    }
+
+    const { error: delErr } = await admin.from("reviews").delete().in("id", ids as never);
+    if (delErr) return { ok: false, error: delErr.message };
+
+    await recomputeAllProfileReviewAggregates(userId);
+
+    await logAdminActivity({
+      adminId,
+      actionType: "review_purge_reviewee",
+      targetType: "profile",
+      targetId: userId,
+      details: { deleted: ids.length },
+    });
+
+    revalidatePath("/admin/reviews");
+    revalidatePath(`/cleaners/${userId}`);
+    revalidatePath("/profile");
+
+    return { ok: true, userId, deleted: ids.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Purge failed." };
   }
 }
 

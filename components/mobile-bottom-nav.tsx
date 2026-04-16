@@ -29,14 +29,18 @@ const BOTTOM_NAV_ROUTES = [
 
 function isBottomNavRoute(pathname: string): boolean {
   if (!pathname) return false;
+  const p = pathname.replace(/\/$/, "") || "/";
+  /** Marketing home — included so logged-in users get tabs; gated by `userId` in render. */
+  if (p === "/") return true;
   return BOTTOM_NAV_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
+    (route) => p === route || p.startsWith(`${route}/`)
   );
 }
 
 function isItemActive(pathname: string, href: string): boolean {
   if (href === "/dashboard") {
     return (
+      pathname === "/" ||
       pathname === "/dashboard" ||
       pathname === "/lister/dashboard" ||
       pathname === "/cleaner/dashboard"
@@ -181,6 +185,12 @@ export function MobileBottomNav({
   const pathname = usePathname();
   const router = useRouter();
   const currentPath = pathname ?? "";
+  const pathNorm = currentPath.replace(/\/$/, "") || "/";
+  const onMarketingHome = pathNorm === "/";
+  const bottomNavEligible = isBottomNavRoute(currentPath);
+  /** Logged-in users only on `/`: guests keep full-width marketing home (no tab bar). */
+  const showBottomNav =
+    bottomNavEligible && (!onMarketingHome || Boolean(userId?.trim()));
   const [activeRole, setActiveRole] = useState<Role>(null);
   const [storedRoleFallback, setStoredRoleFallback] = useState<Role>(null);
   const roleFetchInFlightRef = useRef(false);
@@ -290,7 +300,7 @@ export function MobileBottomNav({
 
   /** Idle prefetch of common tab targets — cheap wins for tap navigation on slow networks. */
   useEffect(() => {
-    if (!isBottomNavRoute(currentPath)) return;
+    if (!showBottomNav) return;
     const run = () => {
       router.prefetch("/jobs");
       router.prefetch("/messages");
@@ -308,18 +318,17 @@ export function MobileBottomNav({
     }
     const tid = window.setTimeout(run, 2000);
     return () => clearTimeout(tid);
-  }, [currentPath, router]);
+  }, [showBottomNav, router]);
 
   const effectiveRole =
     activeRole ?? storedRoleFallback ?? initialActiveRole ?? null;
-  const bottomNavVisible = isBottomNavRoute(currentPath);
   const { data: notificationUnread = 0 } = useUnreadNotificationCount(
     userId,
     effectiveRole,
-    { enabled: bottomNavVisible }
+    { enabled: showBottomNav }
   );
 
-  if (!bottomNavVisible) return null;
+  if (!showBottomNav) return null;
   const inferred = inferSecondaryTabFromPath(currentPath);
   const secondaryTabHref =
     effectiveRole === "lister"

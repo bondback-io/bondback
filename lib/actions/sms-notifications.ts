@@ -2,10 +2,14 @@
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
-import { sendNewJobAlert } from "@/lib/notifications/sms";
-import { sendNewJobPushAlert } from "@/lib/notifications/push";
 import { createNotification } from "@/lib/actions/notifications";
-import { hasRecentNewJobInAreaNotification } from "@/lib/notifications/notification-dedupe";
+import { hasRecentNewJobInAreaNotification, hasRecentDailyBrowseJobsNudge } from "@/lib/notifications/notification-dedupe";
+import {
+  anyNewListingChannel,
+  newListingInRadiusChannels,
+  newListingOutsideChannels,
+  parseAdditionalNotificationBufferKm,
+} from "@/lib/notifications/new-listing-channel-settings";
 import { haversineDistanceKm, postcodeDistanceKm } from "@/lib/geo/haversine";
 import { getSuburbLatLon } from "@/lib/geo/suburb-lat-lon";
 
@@ -15,10 +19,10 @@ const DEFAULT_NEW_LISTING_REMINDER_INTERVAL_HOURS = 6;
 /**
  * When a new listing is published (status = 'live'), find cleaners within max_travel_km
  * (haversine via suburb/postcode lookup, else postcode distance) and optionally send:
- * - SMS (Twilio) if they opted in (sms_new_job) and global "new job alerts" is on
- * - Push (Expo) if they opted in (push_new_job) and global is on
+ * - Notification #1: within preferred radius — per-channel (email, in-app, SMS, push) from global settings
+ * - Notification #2: in buffer ring only — same per-channel toggles for the "outside" bucket
  *
- * Rate limits: max 5 SMS and max 5 push per cleaner per day (UTC), configurable in global_settings.
+ * Rate limits: max SMS / push per cleaner per day (UTC), configurable in global_settings.
  *
  * @see docs/NEW_JOB_ALERTS.md
  */
@@ -34,14 +38,12 @@ export async function notifyNearbyCleanersOfNewListing(
 ): Promise<{ ok: boolean; sent: number; error?: string }> {
   return notifyNearbyCleanersForListing(listingId, {
     dedupeHours: 48,
-    includeSmsPush: true,
     reminderMode: false,
   });
 }
 
 type NotifyNearbyCleanerOptions = {
   dedupeHours: number;
-  includeSmsPush: boolean;
   reminderMode: boolean;
   force?: boolean;
 };
@@ -54,16 +56,10 @@ async function notifyNearbyCleanersForListing(
   if (!admin) return { ok: true, sent: 0 };
 
   const settings = await getGlobalSettings();
-  /** Global switch for SMS/push channels only. In-app + email should still flow. */
-  const alertsEnabled = (settings as { enable_sms_alerts_new_jobs?: boolean } | null)
-    ?.enable_sms_alerts_new_jobs;
-  const smsPushAllowed = alertsEnabled !== false;
-  const bufferKmRaw = (settings as { additional_notification_radius_buffer_km?: number | null } | null)
-    ?.additional_notification_radius_buffer_km;
-  const bufferKm =
-    typeof bufferKmRaw === "number" && Number.isFinite(bufferKmRaw)
-      ? Math.max(0, Math.min(500, Math.round(bufferKmRaw)))
-      : 50;
+  const gs = settings as Record<string, unknown> | null;
+  const chIn = newListingInRadiusChannels(gs);
+  const chOut = newListingOutsideChannels(gs);
+  const bufferKm = parseAdditionalNotificationBufferKm(gs);
 
   const { data: listing, error: listError } = await admin
     .from("listings")
@@ -153,34 +149,9 @@ async function notifyNearbyCleanersForListing(
     const insideBuffer = !insidePreferred && distanceKm <= maxTravelKm + bufferKm;
     if (!insidePreferred && !insideBuffer) continue;
 
-    const bedCount =
-      typeof row.bedrooms === "number" && row.bedrooms > 0 ? row.bedrooms : 1;
-    if (insidePreferred) {
-      if (options.includeSmsPush && smsPushAllowed) {
-        const smsResult = await sendNewJobAlert(
-          cleanerId,
-          listingId,
-          safeTrim(row.suburb),
-          listingPostcode,
-          minCents,
-          maxCents,
-          bedCount
-        );
-        if (smsResult.sent) sent++;
+    const channels = insidePreferred ? chIn : chOut;
+    if (!anyNewListingChannel(channels)) continue;
 
-        const pushResult = await sendNewJobPushAlert(
-          cleanerId,
-          listingId,
-          safeTrim(row.suburb),
-          listingPostcode,
-          minCents,
-          maxCents
-        );
-        if (pushResult.sent) sent++;
-      }
-    }
-
-    const listingTitle = (row.title ?? "").trim() || "Bond clean";
     const shouldSkipForDedupe =
       !options.force &&
       (await hasRecentNewJobInAreaNotification(
@@ -188,23 +159,24 @@ async function notifyNearbyCleanersForListing(
         listingId,
         Math.max(1, options.dedupeHours)
       ));
-    if (!shouldSkipForDedupe) {
-      const loc = listingPostcode
-        ? `${safeTrim(row.suburb)} (${listingPostcode})`
-        : safeTrim(row.suburb);
-      const outsideMsg =
-        options.reminderMode
-          ? "Reminder: we still have bond cleans just outside your preferred area with no bids yet. Would you like to view them?"
-          : "We have 1 new bond cleans just outside your preferred area. Would you like to view them?";
+    if (shouldSkipForDedupe) continue;
+
+    const bedCount =
+      typeof row.bedrooms === "number" && row.bedrooms > 0 ? row.bedrooms : 1;
+    const listingTitle = (row.title ?? "").trim() || "Bond clean";
+    const loc = listingPostcode
+      ? `${safeTrim(row.suburb)} (${listingPostcode})`
+      : safeTrim(row.suburb);
+    const browseKm = Math.max(1, Math.min(800, Math.round(maxTravelKm + bufferKm)));
+
+    if (insidePreferred) {
       await createNotification(
         cleanerId,
         "new_job_in_area",
         null,
-        insidePreferred
-          ? options.reminderMode
-            ? `Reminder: ${listingTitle.slice(0, 80)} in ${loc} is still live with no bids yet.`
-            : `New job in ${loc}: ${listingTitle.slice(0, 80)}. Open to review and bid.`
-          : outsideMsg,
+        options.reminderMode
+          ? `Reminder: ${listingTitle.slice(0, 80)} in ${loc} is still live with no bids yet.`
+          : `New job in ${loc}: ${listingTitle.slice(0, 80)}. Open to review and bid.`,
         {
           listingUuid: listingId,
           listingTitle,
@@ -212,17 +184,131 @@ async function notifyNearbyCleanersForListing(
           postcode: listingPostcode,
           minPriceCents: minCents,
           maxPriceCents: maxCents,
-          persistTitle: insidePreferred
-            ? options.reminderMode
-              ? "Reminder: no-bid job near you"
-              : "New job near you"
-            : options.reminderMode
-              ? "Reminder: outside your preferred area"
-              : "Just outside your preferred area",
+          bedroomCount: bedCount,
+          channelDelivery: {
+            email: channels.email,
+            inApp: channels.inApp,
+            sms: channels.sms,
+            push: channels.push,
+          },
+          persistTitle: options.reminderMode ? "Reminder: no-bid job near you" : "New job near you",
         }
       );
-      sent++;
+    } else {
+      const outsideMsg = options.reminderMode
+        ? "Reminder: bond cleans just outside your preferred area still need bids. Browse with your expanded radius."
+        : `Bond cleans just outside your preferred area — browse live listings (search radius ${browseKm}km: your ${Math.round(maxTravelKm)}km preference + ${bufferKm}km buffer).`;
+      await createNotification(cleanerId, "new_job_in_area", null, outsideMsg, {
+        listingTitle,
+        suburb: safeTrim(row.suburb),
+        postcode: listingPostcode,
+        minPriceCents: minCents,
+        maxPriceCents: maxCents,
+        browseJobsRadiusKm: browseKm,
+        dedupeListingId: listingId,
+        nudgeKind: options.reminderMode ? "outside_preferred_reminder" : "outside_preferred",
+        channelDelivery: {
+          email: channels.email,
+          inApp: channels.inApp,
+          sms: channels.sms,
+          push: channels.push,
+        },
+        persistTitle: options.reminderMode
+          ? "Reminder: jobs outside your radius"
+          : "Jobs just outside your area",
+      });
     }
+    sent++;
+  }
+
+  return { ok: true, sent };
+}
+
+/**
+ * Daily nudge: all qualifying cleaners/dual-role users — browse live jobs at preferred + buffer (km).
+ * Uses the same per-channel toggles as notification #2 (outside ring).
+ */
+export async function sendDailyBrowseJobsNudge(options?: {
+  force?: boolean;
+}): Promise<{ ok: boolean; sent: number; error?: string }> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { ok: true, sent: 0 };
+
+  const settings = await getGlobalSettings();
+  const gs = settings as Record<string, unknown> | null;
+  if (gs?.enable_daily_browse_jobs_nudge === false && options?.force !== true) {
+    return { ok: true, sent: 0 };
+  }
+
+  const chOut = newListingOutsideChannels(gs);
+  if (!anyNewListingChannel(chOut)) return { ok: true, sent: 0 };
+
+  const bufferKm = parseAdditionalNotificationBufferKm(gs);
+  const nowIso = new Date().toISOString();
+
+  const { data: anyLive, error: liveError } = await admin
+    .from("listings")
+    .select("id")
+    .eq("status", "live")
+    .gt("end_time", nowIso)
+    .limit(1);
+
+  if (liveError) {
+    return { ok: false, sent: 0, error: liveError.message };
+  }
+  if (!anyLive?.length) {
+    return { ok: true, sent: 0 };
+  }
+
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id, roles, max_travel_km, notification_preferences");
+
+  const cleaners = (profiles ?? []).filter((p: { roles?: string[] | null }) => {
+    const roles = Array.isArray(p.roles) ? p.roles : [];
+    return roles.includes("cleaner");
+  });
+
+  let sent = 0;
+  const dedupeHours = 22;
+
+  for (const p of cleaners) {
+    const cleanerId = (p as { id: string }).id;
+    const notifPrefs = (p as { notification_preferences?: Record<string, boolean> | null })
+      .notification_preferences;
+    if (notifPrefs?.new_job_in_area === false) continue;
+
+    if (
+      !options?.force &&
+      (await hasRecentDailyBrowseJobsNudge(cleanerId, dedupeHours))
+    ) {
+      continue;
+    }
+
+    const maxTravelKm =
+      typeof (p as { max_travel_km?: number }).max_travel_km === "number"
+        ? (p as { max_travel_km: number }).max_travel_km
+        : 50;
+    const browseKm = Math.max(1, Math.min(800, Math.round(maxTravelKm + bufferKm)));
+
+    await createNotification(
+      cleanerId,
+      "new_job_in_area",
+      null,
+      `Live bond cleans are on the board — open Browse jobs with your ${browseKm}km radius (your usual ${Math.round(maxTravelKm)}km + ${bufferKm}km buffer).`,
+      {
+        channelDelivery: {
+          email: chOut.email,
+          inApp: chOut.inApp,
+          sms: chOut.sms,
+          push: chOut.push,
+        },
+        browseJobsRadiusKm: browseKm,
+        nudgeKind: "daily_browse_jobs",
+        persistTitle: "Browse live bond cleans",
+      }
+    );
+    sent++;
   }
 
   return { ok: true, sent };
@@ -230,7 +316,7 @@ async function notifyNearbyCleanersForListing(
 
 /**
  * Find live listings with zero bids and no assigned cleaner, then remind nearby cleaners.
- * Sends in-app + email notifications only (no SMS/push), with configurable interval.
+ * Uses the same per-channel toggles as live publish (notification 1 + 2 in `notifyNearbyCleanersForListing`).
  */
 export async function sendNoBidListingReminderNotifications(
   options?: { force?: boolean }
@@ -329,7 +415,6 @@ export async function sendNoBidListingReminderNotifications(
   for (const listingId of targetListings) {
     const res = await notifyNearbyCleanersForListing(listingId, {
       dedupeHours: intervalHours,
-      includeSmsPush: false,
       reminderMode: true,
       force: options?.force === true,
     });
@@ -352,6 +437,7 @@ export async function sendNoBidListingRemindersManual(): Promise<{
   listingsConsidered: number;
   listingsMatched: number;
   notificationsSent: number;
+  browseJobsNudgeSent: number;
   error?: string;
 }> {
   const { createServerSupabaseClient } = await import("@/lib/supabase/server");
@@ -365,6 +451,7 @@ export async function sendNoBidListingRemindersManual(): Promise<{
       listingsConsidered: 0,
       listingsMatched: 0,
       notificationsSent: 0,
+      browseJobsNudgeSent: 0,
       error: "You must be logged in.",
     };
   }
@@ -379,11 +466,25 @@ export async function sendNoBidListingRemindersManual(): Promise<{
       listingsConsidered: 0,
       listingsMatched: 0,
       notificationsSent: 0,
+      browseJobsNudgeSent: 0,
       error: "Admin only.",
     };
   }
 
-  return sendNoBidListingReminderNotifications({ force: true });
+  const noBid = await sendNoBidListingReminderNotifications({ force: true });
+  if (!noBid.ok) {
+    return {
+      ...noBid,
+      browseJobsNudgeSent: 0,
+    };
+  }
+  const nudge = await sendDailyBrowseJobsNudge({ force: true });
+  return {
+    ...noBid,
+    browseJobsNudgeSent: nudge.ok ? nudge.sent : 0,
+    ok: Boolean(noBid.ok && nudge.ok),
+    error: nudge.error,
+  };
 }
 
 /**

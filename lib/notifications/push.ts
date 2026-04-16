@@ -144,7 +144,12 @@ export async function sendSyncPushToUser(
 export type PushPayload = {
   title: string;
   body: string;
-  data?: { jobId?: string; listingId?: string; type: string };
+  data?: {
+    jobId?: string;
+    listingId?: string;
+    type: string;
+    radiusKm?: string;
+  };
 };
 
 /**
@@ -231,6 +236,8 @@ export function buildPushPayload(
     minPriceCents?: number;
     maxPriceCents?: number;
     senderName?: string | null;
+    /** When set, CTA opens browse jobs at this radius (km). */
+    browseJobsRadiusKm?: number | null;
   }
 ): PushPayload {
   const id = jobId != null ? String(jobId) : "";
@@ -310,6 +317,17 @@ export function buildPushPayload(
       };
     case "new_job_near_you":
     case "new_job_in_area": {
+      const browseKm =
+        options?.browseJobsRadiusKm != null && Number.isFinite(options.browseJobsRadiusKm)
+          ? Math.max(1, Math.min(500, Math.round(options.browseJobsRadiusKm)))
+          : null;
+      if (browseKm != null) {
+        return {
+          title: "Browse jobs near you",
+          body: `Live bond cleans on the board — open jobs with your ${browseKm}km filter.`,
+          data: { type: "browse_jobs", radiusKm: String(browseKm) },
+        };
+      }
       const suburb = (options?.suburb ?? "").trim() || "Your area";
       const postcode = (options?.postcode ?? "").trim();
       const loc = postcode ? `${suburb} (${postcode})` : suburb;
