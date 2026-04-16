@@ -94,7 +94,8 @@ export async function createBuyNowCheckoutSessionUrl(
 export async function createJobCheckoutSessionUrl(
   job: { id: number | string; agreed_amount_cents: number },
   listing: { title: string; suburb: string; postcode: string },
-  feePercent: number = PLATFORM_FEE_PERCENT
+  feePercent: number = PLATFORM_FEE_PERCENT,
+  customerId: string | null = null
 ): Promise<string | null> {
   const baseUrl = getStripeCheckoutAppUrl();
   const stripe = await getStripeServer();
@@ -108,6 +109,7 @@ export async function createJobCheckoutSessionUrl(
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    ...(customerId ? { customer: customerId } : {}),
     line_items: [
       {
         quantity: 1,
@@ -162,7 +164,7 @@ export async function createJobTopUpCheckoutSessionUrl(
   topUpAgreedCents: number,
   feePercent: number,
   noteForMetadata: string | null,
-  options?: { listingTitleSuffix?: string }
+  options?: { listingTitleSuffix?: string; customerId?: string | null }
 ): Promise<string | null> {
   const baseUrl = getStripeCheckoutAppUrl();
   const stripe = await getStripeServer();
@@ -179,7 +181,7 @@ export async function createJobTopUpCheckoutSessionUrl(
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
-    customer_creation: "always",
+    ...(options?.customerId ? { customer: options.customerId } : {}),
     line_items: [
       {
         quantity: 1,

@@ -533,10 +533,37 @@ export async function createJobCheckoutSession(
   const pmId = trimStr(
     (listerProfile as { stripe_payment_method_id?: string | null } | null)?.stripe_payment_method_id
   );
-  const customerId =
+  let customerId =
     trimStr(
       (listerProfile as { stripe_customer_id?: string | null } | null)?.stripe_customer_id
     ) || null;
+
+  const ensureStripeCustomerId = async (): Promise<string | null> => {
+    if (customerId) return customerId;
+    let stripe;
+    try {
+      stripe = await getStripeServer();
+    } catch {
+      return null;
+    }
+    try {
+      const customer = await stripe.customers.create({
+        metadata: { user_id: row.lister_id, type: "lister_job_checkout" },
+      });
+      customerId = customer.id;
+      await supabase
+        .from("profiles")
+        .update({
+          stripe_customer_id: customer.id,
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq("id", row.lister_id);
+      return customer.id;
+    } catch (err) {
+      console.error("[createJobCheckoutSession] could not create Stripe customer", err);
+      return null;
+    }
+  };
 
   if (pmId) {
     try {
@@ -580,10 +607,12 @@ export async function createJobCheckoutSession(
   }
 
   try {
+    const checkoutCustomerId = await ensureStripeCustomerId();
     const url = await createJobCheckoutSessionUrl(
       { id: numericJobId, agreed_amount_cents: agreedCents },
       { title: (listing as { title?: string }).title ?? "Bond clean", suburb: (listing as { suburb?: string }).suburb ?? "", postcode: (listing as { postcode?: string }).postcode ?? "" },
-      feePercent
+      feePercent,
+      checkoutCustomerId
     );
     if (!url) {
       console.error("[createJobCheckoutSession] Stripe returned no checkout URL");
@@ -662,6 +691,43 @@ export async function createJobTopUpCheckoutSession(
     top_up_payments?: unknown;
   };
 
+  const { data: listerProfile } = await supabase
+    .from("profiles")
+    .select("stripe_customer_id")
+    .eq("id", row.lister_id)
+    .maybeSingle();
+  let customerId =
+    trimStr(
+      (listerProfile as { stripe_customer_id?: string | null } | null)?.stripe_customer_id
+    ) || null;
+
+  const ensureStripeCustomerId = async (): Promise<string | null> => {
+    if (customerId) return customerId;
+    let stripe;
+    try {
+      stripe = await getStripeServer();
+    } catch {
+      return null;
+    }
+    try {
+      const customer = await stripe.customers.create({
+        metadata: { user_id: row.lister_id, type: "lister_job_top_up" },
+      });
+      customerId = customer.id;
+      await supabase
+        .from("profiles")
+        .update({
+          stripe_customer_id: customer.id,
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq("id", row.lister_id);
+      return customer.id;
+    } catch (err) {
+      console.error("[createJobTopUpCheckoutSession] could not create Stripe customer", err);
+      return null;
+    }
+  };
+
   if (row.lister_id !== session.user.id) {
     return { ok: false, error: "Only the lister can add a top-up for this job." };
   }
@@ -694,6 +760,7 @@ export async function createJobTopUpCheckoutSession(
 
   let url: string | null;
   try {
+    const checkoutCustomerId = await ensureStripeCustomerId();
     url = await createJobTopUpCheckoutSessionUrl(
       { id: numericJobId, listingId: row.listing_id },
       {
@@ -704,7 +771,7 @@ export async function createJobTopUpCheckoutSession(
       topUpAgreedCents,
       feePercent,
       note?.trim() ? note.trim().slice(0, 450) : null,
-      { listingTitleSuffix: "Top-up" }
+      { listingTitleSuffix: "Top-up", customerId: checkoutCustomerId }
     );
   } catch (e) {
     const err = e as Error;
