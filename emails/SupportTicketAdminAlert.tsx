@@ -6,6 +6,7 @@ import { emailAdminSupportUrl } from "@/lib/marketplace/email-links";
 export interface SupportTicketAdminAlertProps {
   ticketDisplayId: string;
   category: string;
+  priority?: string;
   ticketSubject: string;
   descriptionPreview: string;
   contactEmail: string | null;
@@ -19,6 +20,7 @@ export interface SupportTicketAdminAlertProps {
 export function SupportTicketAdminAlert({
   ticketDisplayId,
   category,
+  priority,
   ticketSubject,
   descriptionPreview,
   contactEmail,
@@ -42,6 +44,8 @@ export function SupportTicketAdminAlert({
         <Text style={detailStrong}>#{ticketDisplayId}</Text>
         <Text style={detailLabel}>Category</Text>
         <Text style={detailValue}>{category || "—"}</Text>
+        <Text style={detailLabel}>Priority</Text>
+        <Text style={detailValue}>{priority || "medium"}</Text>
         <Text style={detailLabel}>Subject</Text>
         <Text style={detailValue}>{ticketSubject || "—"}</Text>
         {contactEmail ? (

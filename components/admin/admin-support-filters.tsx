@@ -14,12 +14,14 @@ type Props = {
   suggestedFilter: string;
   categoryFilter: string;
   statusFilter: string;
+  priorityFilter: string;
 };
 
 export function AdminSupportFilters({
   suggestedFilter,
   categoryFilter,
   statusFilter,
+  priorityFilter,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,6 +37,7 @@ export function AdminSupportFilters({
   const handleSuggested = (v: string) => router.push(buildHref("suggested", v));
   const handleCategory = (v: string) => router.push(buildHref("category", v));
   const handleStatus = (v: string) => router.push(buildHref("status", v));
+  const handlePriority = (v: string) => router.push(buildHref("priority", v));
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -70,6 +73,18 @@ export function AdminSupportFilters({
           <SelectItem value="in_progress">In progress</SelectItem>
           <SelectItem value="completed">Completed</SelectItem>
           <SelectItem value="closed">Closed</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={priorityFilter} onValueChange={handlePriority}>
+        <SelectTrigger className="w-[140px]">
+          <SelectValue placeholder="Priority" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All priority</SelectItem>
+          <SelectItem value="low">Low</SelectItem>
+          <SelectItem value="medium">Medium</SelectItem>
+          <SelectItem value="high">High</SelectItem>
+          <SelectItem value="urgent">Urgent</SelectItem>
         </SelectContent>
       </Select>
     </div>

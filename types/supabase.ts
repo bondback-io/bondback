@@ -920,6 +920,7 @@ export interface Database {
           subject: string;
           description: string;
           category: string;
+          priority: string;
           suggested_category: string | null;
           confidence: number | null;
           ai_reason: string | null;
@@ -928,6 +929,10 @@ export interface Database {
           job_id: number | null;
           listing_id: string | null;
           attachment_urls: string[] | null;
+          last_activity_at: string;
+          auto_close_after: string | null;
+          auto_close_warned_at: string | null;
+          closed_reason: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -937,6 +942,7 @@ export interface Database {
           subject: string;
           description: string;
           category?: string;
+          priority?: string;
           suggested_category?: string | null;
           confidence?: number | null;
           ai_reason?: string | null;
@@ -945,6 +951,10 @@ export interface Database {
           job_id?: number | null;
           listing_id?: string | null;
           attachment_urls?: string[] | null;
+          last_activity_at?: string;
+          auto_close_after?: string | null;
+          auto_close_warned_at?: string | null;
+          closed_reason?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -952,6 +962,7 @@ export interface Database {
           subject?: string;
           description?: string;
           category?: string;
+          priority?: string;
           suggested_category?: string | null;
           confidence?: number | null;
           ai_reason?: string | null;
@@ -960,6 +971,10 @@ export interface Database {
           job_id?: number | null;
           listing_id?: string | null;
           attachment_urls?: string[] | null;
+          last_activity_at?: string;
+          auto_close_after?: string | null;
+          auto_close_warned_at?: string | null;
+          closed_reason?: string | null;
           updated_at?: string;
         };
         Relationships: [

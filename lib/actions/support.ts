@@ -176,6 +176,7 @@ async function notifyAdminsNewSupportTicket(params: {
   ticketId: string;
   ticketDisplayId: string;
   category: string;
+  priority: string;
   subject: string;
   description: string;
   contactEmail: string | null;
@@ -209,6 +210,7 @@ async function notifyAdminsNewSupportTicket(params: {
   const element = React.createElement(SupportTicketAdminAlert, {
     ticketDisplayId: params.ticketDisplayId,
     category: params.category,
+    priority: params.priority,
     ticketSubject: params.subject,
     descriptionPreview,
     contactEmail: params.contactEmail,
@@ -252,6 +254,7 @@ export async function submitSupportTicket(
   subject: string,
   description: string,
   category: string,
+  priority: "low" | "medium" | "high" | "urgent",
   suggestedCategory: string | null,
   confidence: number | null,
   options: {
@@ -279,6 +282,10 @@ export async function submitSupportTicket(
   const categoryOption = SUPPORT_CATEGORY_OPTIONS.includes(category as any)
     ? category
     : "Other";
+  const priorityOption =
+    priority === "low" || priority === "medium" || priority === "high" || priority === "urgent"
+      ? priority
+      : "medium";
   const email = ((options.email ?? "").trim() || session.user.email) ?? null;
   const jobId =
     options.jobId != null && options.jobId !== ""
@@ -303,6 +310,7 @@ export async function submitSupportTicket(
       subject: sub,
       description: desc,
       category: categoryOption,
+      priority: priorityOption,
       suggested_category: suggestedCategory || null,
       confidence: confidence != null ? Math.min(100, Math.max(0, confidence)) : null,
       ai_reason: aiReason,
@@ -311,6 +319,8 @@ export async function submitSupportTicket(
       job_id: jobId,
       listing_id: listingId,
       attachment_urls: attachmentUrls,
+      last_activity_at: new Date().toISOString(),
+      auto_close_after: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     } as never)
     .select("id")
     .single();
@@ -387,6 +397,7 @@ export async function submitSupportTicket(
     ticketId: tid,
     ticketDisplayId: displayId,
     category: categoryOption,
+    priority: priorityOption,
     subject: sub,
     description: desc,
     contactEmail: email,

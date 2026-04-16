@@ -13,6 +13,7 @@ import {
   submitSupportTicketReply,
 } from "@/lib/actions/support-thread";
 import { ticketDisplayId } from "@/lib/support/ticket-format";
+import { SupportThreadRealtime } from "@/components/support/support-thread-realtime";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function SupportTicketDetailPage({
 
   return (
     <section className="page-inner mx-auto max-w-3xl space-y-4">
+      <SupportThreadRealtime ticketId={ticket.id} />
       <Link
         href="/support"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-100"
@@ -46,9 +48,14 @@ export default async function SupportTicketDetailPage({
             <CardTitle className="text-xl font-semibold tracking-tight dark:text-gray-100">
               {ticket.subject}
             </CardTitle>
-            <Badge variant="outline" className="text-[10px]">
-              {ticket.status}
-            </Badge>
+            <div className="flex items-center gap-1">
+              <Badge variant="secondary" className="text-[10px] uppercase">
+                {(ticket as any).priority ?? "medium"}
+              </Badge>
+              <Badge variant="outline" className="text-[10px]">
+                {ticket.status}
+              </Badge>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground dark:text-gray-400">
             {ticketDisplayId(ticket.id)} • Created {format(new Date(ticket.created_at), "dd MMM yyyy, HH:mm")}

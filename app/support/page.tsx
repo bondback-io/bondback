@@ -8,6 +8,7 @@ import { ChevronLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { listMySupportTickets } from "@/lib/actions/support-thread";
+import { ticketDisplayId } from "@/lib/support/ticket-format";
 
 type SupportPageProps = {
   searchParams?: Promise<{ jobId?: string; listingId?: string }>;
@@ -46,7 +47,9 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
         </CardHeader>
         <CardContent className="space-y-2">
           {tickets.length === 0 ? (
-            <p className="text-sm text-muted-foreground dark:text-gray-400">No tickets yet.</p>
+            <p className="text-sm text-muted-foreground dark:text-gray-400">
+              You don&apos;t have any support tickets yet. Need help? Create a new ticket.
+            </p>
           ) : (
             <ul className="space-y-2">
               {tickets.map((t) => (
@@ -57,15 +60,20 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground dark:text-gray-100">
-                        {t.subject}
+                        {ticketDisplayId(t.id)} · {t.subject}
                       </p>
                       <p className="text-xs text-muted-foreground dark:text-gray-400">
                         {format(new Date(t.created_at), "dd MMM yyyy, HH:mm")}
                       </p>
                     </div>
-                    <Badge variant="outline" className="ml-3 text-[10px]">
-                      {t.status}
-                    </Badge>
+                    <div className="ml-3 flex items-center gap-1">
+                      <Badge variant="secondary" className="text-[10px]">
+                        {((t as any).priority ?? "medium").toUpperCase()}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px]">
+                        {t.status}
+                      </Badge>
+                    </div>
                   </Link>
                 </li>
               ))}

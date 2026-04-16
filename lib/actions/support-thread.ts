@@ -103,9 +103,15 @@ async function insertSupportMessage(params: {
 async function touchTicket(ticketId: string): Promise<void> {
   const admin = createSupabaseAdminClient();
   if (!admin) return;
+  const nowIso = new Date().toISOString();
   await admin
     .from("support_tickets")
-    .update({ updated_at: new Date().toISOString() } as never)
+    .update({
+      updated_at: nowIso,
+      last_activity_at: nowIso,
+      auto_close_after: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      auto_close_warned_at: null,
+    } as never)
     .eq("id", ticketId);
 }
 
@@ -115,6 +121,7 @@ async function sendSupportReplyEmail(params: {
   body: string;
 }): Promise<void> {
   const t = params.ticket;
+  const messageId = `<support-ticket-${t.id}@bondback.io>`;
   const subject = `Re: ${trimText(t.subject) || "Support ticket"} (${ticketDisplayId(t.id)}) ${supportTicketEmailToken(t.id)}`;
   const baseHtml =
     `<p>${params.fromRole === "admin" ? "Support update from Bond Back:" : "Reply from user on Bond Back support ticket:"}</p>` +
@@ -126,6 +133,11 @@ async function sendSupportReplyEmail(params: {
     if (!to) return;
     await sendEmail(to, subject, baseHtml, {
       log: { userId: t.user_id, kind: "support_ticket_reply_admin" },
+      headers: {
+        "Message-ID": messageId,
+        "In-Reply-To": messageId,
+        References: messageId,
+      },
     });
     return;
   }
@@ -141,6 +153,11 @@ async function sendSupportReplyEmail(params: {
     if (!trimText(to)) continue;
     await sendEmail(trimText(to), subject, baseHtml, {
       log: { userId: row.id, kind: "support_ticket_reply_user" },
+      headers: {
+        "Message-ID": messageId,
+        "In-Reply-To": messageId,
+        References: messageId,
+      },
     });
   }
 }
@@ -255,11 +272,131 @@ export async function adminUpdateSupportTicketStatus(formData: FormData): Promis
   if (!admin) throw new Error("SUPABASE_SERVICE_ROLE_KEY required.");
   const { error } = await admin
     .from("support_tickets")
-    .update({ status, updated_at: new Date().toISOString() } as never)
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+      ...(status === "closed" || status === "completed"
+        ? { closed_reason: "manual", auto_close_after: null as string | null }
+        : {
+            closed_reason: null as string | null,
+            auto_close_after: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          }),
+    } as never)
     .eq("id", ticketId);
   if (error) throw new Error(error.message);
   revalidatePath(`/admin/support/${ticketId}`);
   revalidatePath("/admin/support");
   revalidatePath(`/support/${ticketId}`);
   revalidatePath("/support");
+}
+
+export async function adminUpdateSupportTicketMeta(formData: FormData): Promise<void> {
+  const ticketId = trimText(formData.get("ticketId"));
+  const status = trimText(formData.get("status"));
+  const priority = trimText(formData.get("priority")).toLowerCase();
+  if (!ticketId) throw new Error("Missing ticket.");
+  const { ticket, isAdmin } = await loadSupportTicketForViewer(ticketId);
+  if (!ticket || !isAdmin) throw new Error("Not authorised.");
+  if (status && !["open", "in_progress", "completed", "closed"].includes(status)) {
+    throw new Error("Invalid status.");
+  }
+  if (priority && !["low", "medium", "high", "urgent"].includes(priority)) {
+    throw new Error("Invalid priority.");
+  }
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new Error("SUPABASE_SERVICE_ROLE_KEY required.");
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (status) patch.status = status;
+  if (priority) patch.priority = priority;
+  if (status === "closed" || status === "completed") {
+    patch.closed_reason = "manual";
+    patch.auto_close_after = null;
+  } else if (status) {
+    patch.closed_reason = null;
+    patch.auto_close_after = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  }
+  const { error } = await admin.from("support_tickets").update(patch as never).eq("id", ticketId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/admin/support/${ticketId}`);
+  revalidatePath("/admin/support");
+  revalidatePath(`/support/${ticketId}`);
+  revalidatePath("/support");
+}
+
+export async function autoCloseInactiveSupportTickets(): Promise<{
+  warned: number;
+  closed: number;
+  ids: string[];
+}> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { warned: 0, closed: 0, ids: [] };
+  const now = Date.now();
+  const warnThreshold = new Date(now - 6 * 24 * 60 * 60 * 1000).toISOString();
+  const closeThreshold = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: rows } = await admin
+    .from("support_tickets")
+    .select("id, user_id, email, subject, status, last_activity_at, auto_close_warned_at")
+    .in("status", ["open", "in_progress"]);
+  const tickets = (rows ?? []) as Array<{
+    id: string;
+    user_id: string;
+    email: string | null;
+    subject: string;
+    status: string;
+    last_activity_at: string | null;
+    auto_close_warned_at: string | null;
+  }>;
+  let warned = 0;
+  let closed = 0;
+  const ids: string[] = [];
+  for (const t of tickets) {
+    const last = trimText(t.last_activity_at);
+    if (!last) continue;
+    const isCloseDue = last <= closeThreshold;
+    const isWarnDue = !t.auto_close_warned_at && last <= warnThreshold;
+    const token = supportTicketEmailToken(t.id);
+    const subj = trimText(t.subject) || "Support ticket";
+    const mail = trimText(t.email);
+    if (isWarnDue && mail) {
+      await sendEmail(
+        mail,
+        `Reminder: your support ticket will close soon (${ticketDisplayId(t.id)}) ${token}`,
+        `<p>Your support ticket is inactive and will automatically close after 7 days of no activity.</p><p>Reply to keep it open.</p>`,
+        {
+          log: { userId: t.user_id, kind: "support_ticket_auto_close_warning" },
+        }
+      );
+      await admin
+        .from("support_tickets")
+        .update({ auto_close_warned_at: new Date().toISOString() } as never)
+        .eq("id", t.id);
+      warned += 1;
+    }
+    if (isCloseDue) {
+      await admin
+        .from("support_tickets")
+        .update({
+          status: "closed",
+          closed_reason: "inactive_7_days",
+          auto_close_after: null,
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq("id", t.id);
+      if (mail) {
+        await sendEmail(
+          mail,
+          `Your ticket has been closed due to inactivity (${ticketDisplayId(t.id)}) ${token}`,
+          `<p>Your ticket "${subj.replace(/</g, "&lt;")}" has been closed due to inactivity.</p><p>You can reopen it by replying or contacting support.</p>`,
+          {
+            log: { userId: t.user_id, kind: "support_ticket_auto_closed" },
+          }
+        );
+      }
+      closed += 1;
+      ids.push(t.id);
+    }
+  }
+  revalidatePath("/admin/support");
+  revalidatePath("/support");
+  return { warned, closed, ids };
 }

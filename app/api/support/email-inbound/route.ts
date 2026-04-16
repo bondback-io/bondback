@@ -63,6 +63,8 @@ export async function POST(request: Request) {
   const externalMessageId = trimText(
     payload.message_id ?? payload["Message-Id"] ?? payload.email_id ?? payload.id ?? ""
   );
+  const inReplyTo = trimText(payload["In-Reply-To"] ?? payload.in_reply_to ?? "");
+  const references = trimText(payload["References"] ?? payload.references ?? "");
   const ticketId = readToken(subject, textBody || htmlBody);
 
   if (!ticketId || !sender) {
@@ -111,6 +113,12 @@ export async function POST(request: Request) {
 
   // Relay to the opposite side for true email-thread behavior.
   const emailSubject = `Re: ${trimText(supportTicket.subject) || "Support ticket"} (${ticketDisplayId(ticketId)}) ${supportTicketEmailToken(ticketId)}`;
+  const threadMessageId = `<support-ticket-${ticketId}@bondback.io>`;
+  const threadHeaders = {
+    "Message-ID": threadMessageId,
+    "In-Reply-To": inReplyTo || threadMessageId,
+    References: references || threadMessageId,
+  };
   const html =
     `<p>${fromRole === "user" ? "User replied via email:" : "Support/admin replied via email:"}</p>` +
     `<blockquote style="white-space:pre-wrap;margin:12px 0;padding:10px 12px;border-left:3px solid #94a3b8;background:#0f172a08;">${messageBody
@@ -130,11 +138,13 @@ export async function POST(request: Request) {
       if (!trimText(to)) continue;
       await sendEmail(trimText(to), emailSubject, html, {
         log: { userId: r.id, kind: "support_ticket_inbound_user_reply" },
+        headers: threadHeaders,
       });
     }
   } else if (contactEmail) {
     await sendEmail(contactEmail, emailSubject, html, {
       log: { userId: supportTicket.user_id, kind: "support_ticket_inbound_admin_reply" },
+      headers: threadHeaders,
     });
   }
 

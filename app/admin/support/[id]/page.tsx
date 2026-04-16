@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
-  adminUpdateSupportTicketStatus,
+  adminUpdateSupportTicketMeta,
   listSupportTicketMessagesForViewer,
   loadSupportTicketForViewer,
   submitSupportTicketReply,
@@ -17,6 +17,7 @@ import {
 import { ticketDisplayId } from "@/lib/support/ticket-format";
 import { AdminDeleteSupportTicketButton } from "@/components/admin/admin-delete-support-ticket-button";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
+import { SupportThreadRealtime } from "@/components/support/support-thread-realtime";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ export default async function AdminSupportTicketDetailPage({
   return (
     <AdminShell activeHref="/admin/support">
       <section className="space-y-4">
+        <SupportThreadRealtime ticketId={ticket.id} />
         <Link
           href="/admin/support"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-100"
@@ -64,6 +66,9 @@ export default async function AdminSupportTicketDetailPage({
                 {ticket.subject}
               </CardTitle>
               <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="text-[10px] uppercase">
+                  {(ticket as any).priority ?? "medium"}
+                </Badge>
                 <Badge variant="outline" className="text-[10px]">
                   {ticket.status}
                 </Badge>
@@ -88,11 +93,23 @@ export default async function AdminSupportTicketDetailPage({
               {ticket.description}
             </div>
 
-            <form action={adminUpdateSupportTicketStatus} className="flex flex-wrap items-center gap-2">
+            <form action={adminUpdateSupportTicketMeta} className="flex flex-wrap items-center gap-2">
               <input type="hidden" name="ticketId" value={ticket.id} />
               {(["open", "in_progress", "completed", "closed"] as const).map((st) => (
                 <Button key={st} type="submit" name="status" value={st} variant={ticket.status === st ? "default" : "outline"} size="sm">
                   {st}
+                </Button>
+              ))}
+              {(["low", "medium", "high", "urgent"] as const).map((prio) => (
+                <Button
+                  key={prio}
+                  type="submit"
+                  name="priority"
+                  value={prio}
+                  variant={(ticket as any).priority === prio ? "default" : "outline"}
+                  size="sm"
+                >
+                  {prio}
                 </Button>
               ))}
             </form>

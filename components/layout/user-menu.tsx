@@ -34,6 +34,7 @@ import {
   Briefcase,
   DollarSign,
   HelpCircle,
+  LifeBuoy,
   Scale,
   LogOut,
   List,
@@ -483,6 +484,16 @@ export function UserMenu({ session }: UserMenuProps) {
                 </SheetClose>
                 <SheetClose asChild>
                   <Link
+                    href="/support"
+                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                    aria-label="Support Tickets"
+                  >
+                    <LifeBuoy className="h-5 w-5 shrink-0" aria-hidden />
+                    <span>Support Tickets</span>
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Link
                     href="/disputes"
                     className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
                     aria-label="Dispute Resolution Center"
@@ -668,6 +679,15 @@ export function UserMenu({ session }: UserMenuProps) {
           >
             <HelpCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span>Help &amp; Support</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              router.push("/support");
+            }}
+            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+          >
+            <LifeBuoy className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>Support Tickets</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {

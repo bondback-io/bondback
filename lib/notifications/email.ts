@@ -115,6 +115,8 @@ export type NotificationType =
 export type SendEmailOptions = {
   /** When set, logs to email_logs (and always logs a masked line to console). */
   log?: { userId: string; kind: string };
+  /** Optional raw email headers (e.g. In-Reply-To, References) for threading. */
+  headers?: Record<string, string>;
 };
 
 /**
@@ -179,6 +181,7 @@ export async function sendEmail(
       subject: string;
       html: string;
       reply_to?: string;
+      headers?: Record<string, string>;
     } = {
       from: FROM,
       to: [to],
@@ -186,6 +189,9 @@ export async function sendEmail(
       html: htmlContent,
     };
     if (REPLY_TO) payload.reply_to = REPLY_TO;
+    if (options?.headers && Object.keys(options.headers).length > 0) {
+      payload.headers = options.headers;
+    }
 
     const { data, error } = await resend.emails.send(payload);
     if (error) {

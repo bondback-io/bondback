@@ -34,6 +34,12 @@ const ANALYZE_DEBOUNCE_MS = 700;
 const MIN_DESCRIPTION_LENGTH = 50;
 const MAX_ATTACHMENTS = 5;
 const ACCEPT_FILES = "image/jpeg,image/png,image/webp,image/gif,application/pdf";
+const PRIORITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "urgent", label: "Urgent" },
+] as const;
 
 export type SupportFormProps = {
   /** Pre-filled from user profile */
@@ -53,6 +59,7 @@ export function SupportForm({
   const [category, setCategory] = useState<string>(
     SUPPORT_CATEGORY_OPTIONS.at(-1) ?? "Other"
   );
+  const [priority, setPriority] = useState<(typeof PRIORITY_OPTIONS)[number]["value"]>("medium");
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [email, setEmail] = useState(initialEmail);
@@ -76,8 +83,10 @@ export function SupportForm({
   }, [initialEmail, initialJobId, initialListingId]);
 
   useEffect(() => {
-    setSubject(SUPPORT_CATEGORY_DEFAULT_SUBJECTS[category] ?? "Support request");
-  }, [category]);
+    const base = SUPPORT_CATEGORY_DEFAULT_SUBJECTS[category] ?? `${category} support request`;
+    const prettyPriority = PRIORITY_OPTIONS.find((p) => p.value === priority)?.label ?? "Medium";
+    setSubject(`${base} [${prettyPriority}]`);
+  }, [category, priority]);
 
   const canAnalyze =
     (subject.trim().length > 0 || description.trim().length > 0) &&
@@ -183,6 +192,7 @@ export function SupportForm({
       subject.trim(),
       description.trim(),
       category,
+      priority,
       suggestedCategory,
       suggestedConfidence,
       {
@@ -201,6 +211,7 @@ export function SupportForm({
       setSubject("");
       setDescription("");
       setCategory("Other");
+      setPriority("medium");
       setSuggestedCategory(null);
       setSuggestedConfidence(null);
       setSuggestedReason(null);
@@ -269,7 +280,7 @@ export function SupportForm({
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="support-category">Category</Label>
+            <Label htmlFor="support-category">Issue Type</Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger
                 id="support-category"
@@ -286,8 +297,24 @@ export function SupportForm({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground dark:text-gray-500">
-              Choose the option that best fits your request.
+              Choose the option that best describes your issue.
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="support-priority">Priority Level</Label>
+            <Select value={priority} onValueChange={(v) => setPriority(v as (typeof PRIORITY_OPTIONS)[number]["value"])}>
+              <SelectTrigger id="support-priority" className="min-h-11 w-full dark:bg-gray-800 dark:border-gray-700">
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                {PRIORITY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -301,7 +328,7 @@ export function SupportForm({
               className="min-h-11 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
             />
             <p className="text-xs text-muted-foreground dark:text-gray-500">
-              Auto-filled from category; you can edit it.
+              Auto-filled from issue type + priority; you can edit it.
             </p>
           </div>
 
