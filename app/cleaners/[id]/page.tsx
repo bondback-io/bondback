@@ -20,6 +20,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OptimizedImage } from "@/components/ui/optimized-image";
+import { ProfilePhotoAvatar } from "@/components/shared/profile-photo-avatar";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
@@ -29,6 +30,9 @@ import { CleanerExperienceBadge } from "@/components/shared/cleaner-experience-b
 import { fetchCleanerReviewsForPublicProfile } from "@/lib/reviews/fetch-cleaner-reviews-for-profile";
 import { formatReviewerDisplayName } from "@/lib/reviews/reviewer-display-name";
 import { recomputeAllProfileReviewAggregates } from "@/lib/actions/reviews";
+import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
+import { computeCleanerBrowseTier } from "@/lib/cleaner-browse-tier";
+import { CleanerTierBadge } from "@/components/features/cleaner-tier-badge";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -166,7 +170,10 @@ export default async function CleanerProfilePage({
         (u): u is string => typeof u === "string" && u.length > 0
       )
     : [];
-  const profilePhotoUrl = profileRow.profile_photo_url?.trim() || null;
+  const profilePhotoUrl = effectiveProfilePhotoUrl({
+    profile_photo_url: profileRow.profile_photo_url,
+    avatar_url: profileRow.avatar_url,
+  });
   const verificationBadges = profileRow.verification_badges;
   const abnDigits = (profileRow.abn ?? "").replace(/\D/g, "");
   const hasAbn = abnDigits.length === 11;
@@ -176,6 +183,16 @@ export default async function CleanerProfilePage({
   const displayName =
     fullName?.trim() || businessName?.trim() || "Cleaner";
   const starValue = avg ? Math.round(avg * 10) / 10 : null;
+
+  const browseTier = computeCleanerBrowseTier({
+    completedJobs: completedJobsCount ?? 0,
+    avgRating: avg,
+    reviewCount: publicReviewCount,
+    badges: verificationBadges,
+    hasAbn,
+    hasInsurance,
+    portfolioPhotoCount: portfolioUrls.length,
+  });
 
   const avgSubScore = (key: string): number | null => {
     const vals = reviewsSafe
@@ -253,14 +270,15 @@ export default async function CleanerProfilePage({
                 "ring-4 ring-emerald-500/10 dark:border-emerald-600/40 dark:bg-gray-900"
               )}
             >
-              <OptimizedImage
-                src={profilePhotoUrl ?? "/placeholder-listing.png"}
-                alt=""
+              <ProfilePhotoAvatar
+                photoUrl={profilePhotoUrl}
+                displayName={displayName}
                 width={176}
                 height={176}
                 sizes="(max-width: 768px) 144px, 176px"
-                className="h-full w-full object-cover"
                 priority
+                className="h-full w-full"
+                initialsClassName="text-3xl font-bold sm:text-4xl text-muted-foreground/90 dark:text-gray-400"
               />
             </div>
             <div className="mt-3 flex justify-center">
@@ -269,7 +287,7 @@ export default async function CleanerProfilePage({
           </div>
 
           <div className="min-w-0 flex-1 space-y-4 text-center md:text-left">
-            <div className="space-y-1">
+            <div className="space-y-2">
               <h1 className="text-2xl font-bold tracking-tight text-foreground dark:text-gray-50 sm:text-3xl">
                 {displayName}
               </h1>
@@ -278,6 +296,9 @@ export default async function CleanerProfilePage({
                   {businessName}
                 </p>
               )}
+              <div className="flex justify-center md:justify-start">
+                <CleanerTierBadge tier={browseTier} />
+              </div>
             </div>
 
             {locationFull && (

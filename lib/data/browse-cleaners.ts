@@ -10,6 +10,7 @@ import {
 } from "@/lib/cleaner-browse-tier";
 import { MAX_TRAVEL_KM } from "@/lib/max-travel-km";
 import { fetchVisibleCleanerReviewAggregatesByCleanerIds } from "@/lib/reviews/fetch-visible-cleaner-review-aggregates";
+import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 
 export type BrowseCleanerRow = {
   id: string;
@@ -37,6 +38,7 @@ type RawProfile = {
   full_name: string | null;
   business_name: string | null;
   profile_photo_url: string | null;
+  avatar_url: string | null;
   suburb: string | null;
   postcode: string | null;
   state: string | null;
@@ -96,7 +98,7 @@ export async function loadBrowseCleaners(params: {
   const { data: profileRows, error } = await client
     .from("profiles")
     .select(
-      "id, full_name, business_name, profile_photo_url, suburb, postcode, state, bio, years_experience, verification_badges, abn, insurance_policy_number, portfolio_photo_urls, roles, is_deleted"
+      "id, full_name, business_name, profile_photo_url, avatar_url, suburb, postcode, state, bio, years_experience, verification_badges, abn, insurance_policy_number, portfolio_photo_urls, roles, is_deleted"
     );
 
   if (error) {
@@ -194,7 +196,10 @@ export async function loadBrowseCleaners(params: {
       id: p.id,
       fullName: p.full_name,
       businessName: p.business_name,
-      profilePhotoUrl: p.profile_photo_url,
+      profilePhotoUrl: effectiveProfilePhotoUrl({
+        profile_photo_url: p.profile_photo_url,
+        avatar_url: p.avatar_url,
+      }),
       suburb: p.suburb,
       postcode: p.postcode,
       state: p.state,

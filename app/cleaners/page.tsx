@@ -6,8 +6,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { resolveBrowseCleanersSearchCenter } from "@/lib/geo/suburb-lat-lon";
 import { loadBrowseCleaners } from "@/lib/data/browse-cleaners";
-import { CLEANER_TIER_META } from "@/lib/cleaner-browse-tier";
 import { BrowseCleanerCard } from "@/components/features/browse-cleaner-card";
+import { CleanerBrowseTierLegend } from "@/components/features/cleaner-tier-badge";
 import {
   Card,
   CardContent,
@@ -15,12 +15,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Info, SearchX } from "lucide-react";
 import { JobsPageMobileShell } from "@/components/features/jobs-page-mobile-shell";
 import { CleanersPageMobileChrome } from "@/components/mobile-job-search";
-import { cn } from "@/lib/utils";
 import { clampMaxTravelKm, nextSearchRadiusKm } from "@/lib/max-travel-km";
 
 export const dynamic = "force-dynamic";
@@ -213,36 +211,14 @@ export default async function BrowseCleanersPage({
               </p>
             )}
 
-            <section aria-labelledby="tier-legend-heading">
+            <section aria-labelledby="tier-legend-heading" className="space-y-1.5">
               <h2 id="tier-legend-heading" className="sr-only">
-                Cleaner levels
+                Cleaner status levels
               </h2>
-              <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-row sm:flex-wrap sm:gap-3">
-                {(Object.keys(CLEANER_TIER_META) as Array<keyof typeof CLEANER_TIER_META>).map(
-                  (key) => {
-                    const m = CLEANER_TIER_META[key];
-                    return (
-                      <Badge
-                        key={key}
-                        variant="outline"
-                        className={cn(
-                          "flex min-h-[4.5rem] flex-col items-stretch justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-center text-[10px] font-semibold leading-tight sm:min-h-0 sm:flex-row sm:items-center sm:justify-center sm:gap-0 sm:rounded-md sm:px-3 sm:py-1.5 sm:text-sm",
-                          m.className
-                        )}
-                      >
-                        <span className="flex flex-col gap-0.5 sm:hidden">
-                          <span className="font-bold">{m.short}</span>
-                          <span className="font-normal opacity-90">{m.compactLine}</span>
-                        </span>
-                        <span className="hidden text-center font-normal opacity-90 sm:inline">
-                          <span className="font-bold">{m.short}: </span>
-                          {m.description}
-                        </span>
-                      </Badge>
-                    );
-                  }
-                )}
-              </div>
+              <p className="text-[11px] leading-snug text-muted-foreground dark:text-gray-500 sm:text-xs">
+                Quick guide — tap a level for how we weigh jobs and average ratings.
+              </p>
+              <CleanerBrowseTierLegend />
             </section>
 
             {cleaners.length === 0 ? (
@@ -288,8 +264,8 @@ export default async function BrowseCleanersPage({
             )}
 
             <p className="text-center text-xs text-muted-foreground dark:text-gray-500 sm:text-sm">
-              Levels are based on completed jobs, ratings, verification badges, and profile completeness
-              (ABN, insurance, portfolio).{" "}
+              Status reflects completed job count, average rating, verification (e.g. Trusted), and profile
+              cues (ABN, insurance, portfolio).{" "}
               <Link
                 href="/help"
                 className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"

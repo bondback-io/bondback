@@ -7,9 +7,11 @@ import { Star, Shield, FileCheck, Briefcase, Camera, MapPin } from "lucide-react
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/optimized-image";
+import { ProfilePhotoAvatar } from "@/components/shared/profile-photo-avatar";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { cn } from "@/lib/utils";
 import { CLEANER_TIER_META } from "@/lib/cleaner-browse-tier";
+import { CleanerTierBadge } from "@/components/features/cleaner-tier-badge";
 import type { BrowseCleanerRow } from "@/lib/data/browse-cleaners";
 import { NEXT_IMAGE_SIZES_AVATAR_80 } from "@/lib/next-image-sizes";
 
@@ -43,23 +45,21 @@ function BrowseCleanerCardInner({
   return (
     <article
       className={cn(
-        "flex flex-col overflow-hidden rounded-2xl border-2 bg-card shadow-sm transition-shadow hover:shadow-md dark:bg-gray-950",
-        tierMeta.ringClass,
-        "ring-2"
+        "flex flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition-shadow hover:shadow-md dark:border-gray-800 dark:bg-gray-950",
+        tierMeta.cardRingClass,
+        "ring-1"
       )}
     >
       <div className="flex flex-1 flex-col gap-3 p-4 sm:p-5">
         <div className="flex gap-3">
-          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-border bg-muted dark:border-gray-700">
-            <OptimizedImage
-              src={cleaner.profilePhotoUrl ?? "/placeholder-listing.png"}
-              alt=""
-              width={64}
-              height={64}
-              sizes={NEXT_IMAGE_SIZES_AVATAR_80}
-              className="h-full w-full object-cover"
-            />
-          </div>
+          <ProfilePhotoAvatar
+            photoUrl={cleaner.profilePhotoUrl}
+            displayName={name}
+            width={64}
+            height={64}
+            sizes={NEXT_IMAGE_SIZES_AVATAR_80}
+            className="h-16 w-16 shrink-0 rounded-2xl border border-border dark:border-gray-700"
+          />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               {viewerUserId && cleaner.id === viewerUserId && (
@@ -70,14 +70,7 @@ function BrowseCleanerCardInner({
                   You
                 </Badge>
               )}
-              <span
-                className={cn(
-                  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold tracking-wide",
-                  tierMeta.className
-                )}
-              >
-                {tierMeta.short}
-              </span>
+              <CleanerTierBadge tier={cleaner.tier} />
               {cleaner.distanceKm != null && (
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground dark:text-gray-400">
                   <MapPin className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />

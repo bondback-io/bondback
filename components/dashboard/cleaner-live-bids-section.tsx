@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { Gavel, ArrowRight, Clock } from "lucide-react";
+import { Gavel, ArrowRight, Clock, Home } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCents, listingTitleWithoutSuburbSuffix } from "@/lib/listings";
 import { OptimizedImage } from "@/components/ui/optimized-image";
@@ -70,14 +70,23 @@ export function CleanerLiveBidsSection({ items }: { items: CleanerLiveBidItem[] 
               )}
             >
               <div className="relative h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border border-border bg-muted dark:border-gray-800 sm:h-24 sm:w-24">
-                <OptimizedImage
-                  src={item.coverUrl ?? "/placeholder-listing.png"}
-                  alt=""
-                  fill
-                  sizes="(max-width: 640px) 96px, 96px"
-                  className="object-cover"
-                  containerClassName="absolute inset-0 size-full"
-                />
+                {item.coverUrl ? (
+                  <OptimizedImage
+                    src={item.coverUrl}
+                    alt=""
+                    fill
+                    sizes="(max-width: 640px) 96px, 96px"
+                    className="object-cover"
+                    containerClassName="absolute inset-0 size-full"
+                  />
+                ) : (
+                  <div
+                    className="flex h-full w-full items-center justify-center text-muted-foreground dark:text-gray-500"
+                    aria-hidden
+                  >
+                    <Home className="h-8 w-8 sm:h-10 sm:w-10" />
+                  </div>
+                )}
               </div>
               <div className="flex min-w-0 flex-1 flex-col justify-between gap-1.5">
                 <div className="min-w-0">
