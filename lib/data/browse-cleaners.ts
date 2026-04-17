@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeProfileRoles } from "@/lib/profile-roles";
 import { getLatLonForCleanerProfile } from "@/lib/geo/suburb-lat-lon";
 import { haversineKm } from "@/lib/geo/haversine-km";
 import {
@@ -52,35 +53,6 @@ type RawProfile = {
   roles: unknown;
   is_deleted: boolean | null;
 };
-
-/**
- * Normalize `profiles.roles` whether the DB column is `text[]`, `text` holding JSON, or comma-separated text.
- * (`.contains("roles", …)` requires `text[]` and fails with `text @> unknown` on a plain `text` column.)
- */
-function normalizeProfileRoles(roles: unknown): string[] {
-  if (Array.isArray(roles)) {
-    return roles.filter((r): r is string => typeof r === "string");
-  }
-  if (typeof roles === "string") {
-    const t = roles.trim();
-    if (!t) return [];
-    if (t.startsWith("[")) {
-      try {
-        const parsed = JSON.parse(t) as unknown;
-        if (Array.isArray(parsed)) {
-          return parsed.filter((r): r is string => typeof r === "string");
-        }
-      } catch {
-        /* fall through */
-      }
-    }
-    return t
-      .split(/[,]+/)
-      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-      .filter(Boolean);
-  }
-  return [];
-}
 
 export async function loadBrowseCleaners(params: {
   /** Lister/cleaner “search near me” radius (km) */

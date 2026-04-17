@@ -69,3 +69,32 @@ export function normalizeProfileRolesFromDb(
   }
   return out;
 }
+
+/**
+ * Parse `profiles.roles` for **membership checks** (e.g. “is this user a cleaner?” for SMS/geo alerts).
+ * Handles `text[]`, JSON string, comma-separated text, and mixed legacy formats — same as browse-cleaners.
+ */
+export function normalizeProfileRoles(roles: unknown): string[] {
+  if (Array.isArray(roles)) {
+    return roles.filter((r): r is string => typeof r === "string");
+  }
+  if (typeof roles === "string") {
+    const t = roles.trim();
+    if (!t) return [];
+    if (t.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(t) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((r): r is string => typeof r === "string");
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    return t
+      .split(/[,]+/)
+      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+  }
+  return [];
+}

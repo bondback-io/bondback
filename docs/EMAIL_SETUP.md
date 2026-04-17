@@ -60,6 +60,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 CRON_SECRET=your-secret-here
 ```
 
+- **`SUPABASE_SERVICE_ROLE_KEY`:** Required on the **server** (Vercel env) so the app can (1) insert in-app `notifications` rows for **other users** (RLS has no INSERT policy for authenticated clients), and (2) look up each recipient’s email via Auth when sending cleaner alerts. Without it, new-job-in-area emails and in-app rows for cleaners will silently fail.
 - **RESEND_API_KEY:** From [Resend Dashboard](https://resend.com/api-keys). Without it, `sendEmail` no-ops (no error; emails simply don’t send).
 - **RESEND_FROM:** Production uses `Bond Back <noreply@bondback.io>` after verifying `bondback.io` in Resend. For local dev without a verified domain, use `Bond Back <onboarding@resend.dev>`.
 - **NEXT_PUBLIC_APP_URL:** Used in email links (e.g. “View listing”, “View Job”). Use your real app URL in production.

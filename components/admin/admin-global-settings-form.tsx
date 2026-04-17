@@ -747,7 +747,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             />
           </div>
           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
-            Scheduled crons: no-bid reminders (3:00 UTC) and browse nudge (4:00 UTC). Manual button runs both immediately.
+            Scheduled crons: no-bid reminders (3:00 UTC) and browse nudge (4:00 UTC). Manual button re-sends new-listing radius alerts for every live listing (per your toggles), then runs the browse-jobs nudge.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -762,8 +762,8 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                   setNewListingReminderPending(false);
                   if (r.ok) {
                     toast({
-                      title: "Reminder run complete",
-                      description: `No-bid: ${r.listingsConsidered} scanned, ${r.listingsMatched} eligible, ${r.notificationsSent} notifications. Browse nudge rows: ${r.browseJobsNudgeSent}.`,
+                      title: "Manual notification run complete",
+                      description: `Live listings processed: ${r.listingsConsidered}. Cleaner notifications sent (in-app + channels per toggles): ${r.notificationsSent}. Browse nudge rows: ${r.browseJobsNudgeSent}.`,
                     });
                   } else {
                     toast({
@@ -778,7 +778,8 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               {newListingReminderPending ? "Sending…" : "Send listing reminders now"}
             </Button>
             <span className="text-[11px] text-muted-foreground dark:text-gray-400">
-              No-bid flow uses your per-channel toggles for notification 1+2; browse nudge uses notification 2 toggles.
+              Fan-out uses notification #1 + #2 channel toggles; browse nudge uses notification #2 toggles. Requires{" "}
+              <code className="rounded bg-muted px-1">SUPABASE_SERVICE_ROLE_KEY</code> on the server.
             </span>
           </div>
         </CardContent>

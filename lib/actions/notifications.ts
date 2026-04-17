@@ -101,10 +101,7 @@ export async function createNotification(
   messageText: string,
   options?: CreateNotificationOptions
 ): Promise<boolean> {
-  const supabase = await createServerSupabaseClient();
   // Do not require a browser session: webhooks and background jobs call this with no auth cookie.
-  // Inserts use the service role client when configured (see below).
-
   const persist = buildNotificationPersistFields(type, jobId, messageText, {
     senderName: options?.senderName,
     listingId: options?.listingId,
@@ -143,10 +140,15 @@ export async function createNotification(
     is_read: !inAppRow,
   } as NotificationInsert;
 
-  // Use admin client so we can insert for any user_id (RLS only allows auth.uid() = user_id for anon)
+  // Inserts require service role: `notifications` has no INSERT policy for authenticated users.
   const admin = createSupabaseAdminClient();
-  const client = (admin ?? supabase) as SupabaseClient<Database>;
-  const { error } = await client.from("notifications").insert(row as never);
+  if (!admin) {
+    console.error(
+      "[notifications] failed to insert notification: SUPABASE_SERVICE_ROLE_KEY is not set. In-app/email fan-out to other users cannot be stored. Set the key in Vercel → Environment Variables."
+    );
+    return false;
+  }
+  const { error } = await admin.from("notifications").insert(row as never);
 
   if (error) {
     console.error("[notifications] failed to insert notification", {

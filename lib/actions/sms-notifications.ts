@@ -12,6 +12,7 @@ import {
 } from "@/lib/notifications/new-listing-channel-settings";
 import { haversineDistanceKm, postcodeDistanceKm } from "@/lib/geo/haversine";
 import { getSuburbLatLon } from "@/lib/geo/suburb-lat-lon";
+import { normalizeProfileRoles } from "@/lib/profile-roles";
 
 const safeTrim = (v: unknown) => String(v ?? "").trim();
 const DEFAULT_NEW_LISTING_REMINDER_INTERVAL_HOURS = 6;
@@ -53,7 +54,14 @@ async function notifyNearbyCleanersForListing(
   options: NotifyNearbyCleanerOptions
 ): Promise<{ ok: boolean; sent: number; error?: string }> {
   const admin = createSupabaseAdminClient();
-  if (!admin) return { ok: true, sent: 0 };
+  if (!admin) {
+    return {
+      ok: false,
+      sent: 0,
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is not set on the server. Cleaner alerts need the service role to save notifications and load recipient emails.",
+    };
+  }
 
   const settings = await getGlobalSettings();
   const gs = settings as Record<string, unknown> | null;
@@ -104,9 +112,8 @@ async function notifyNearbyCleanersForListing(
     .from("profiles")
     .select("id, suburb, postcode, roles, max_travel_km, notification_preferences");
 
-  const cleaners = (profiles ?? []).filter((p: { roles?: string[] | null }) => {
-    const roles = Array.isArray(p.roles) ? p.roles : [];
-    return roles.includes("cleaner");
+  const cleaners = (profiles ?? []).filter((p: { roles?: unknown }) => {
+    return normalizeProfileRoles(p.roles).includes("cleaner");
   });
 
   let sent = 0;
@@ -170,7 +177,7 @@ async function notifyNearbyCleanersForListing(
     const browseKm = Math.max(1, Math.min(800, Math.round(maxTravelKm + bufferKm)));
 
     if (insidePreferred) {
-      await createNotification(
+      const ok = await createNotification(
         cleanerId,
         "new_job_in_area",
         null,
@@ -194,11 +201,12 @@ async function notifyNearbyCleanersForListing(
           persistTitle: options.reminderMode ? "Reminder: no-bid job near you" : "New job near you",
         }
       );
+      if (ok) sent += 1;
     } else {
       const outsideMsg = options.reminderMode
         ? "Reminder: bond cleans just outside your preferred area still need bids. Browse with your expanded radius."
         : `Bond cleans just outside your preferred area — browse live listings (search radius ${browseKm}km: your ${Math.round(maxTravelKm)}km preference + ${bufferKm}km buffer).`;
-      await createNotification(cleanerId, "new_job_in_area", null, outsideMsg, {
+      const ok = await createNotification(cleanerId, "new_job_in_area", null, outsideMsg, {
         listingTitle,
         suburb: safeTrim(row.suburb),
         postcode: listingPostcode,
@@ -217,8 +225,8 @@ async function notifyNearbyCleanersForListing(
           ? "Reminder: jobs outside your radius"
           : "Jobs just outside your area",
       });
+      if (ok) sent += 1;
     }
-    sent++;
   }
 
   return { ok: true, sent };
@@ -232,7 +240,14 @@ export async function sendDailyBrowseJobsNudge(options?: {
   force?: boolean;
 }): Promise<{ ok: boolean; sent: number; error?: string }> {
   const admin = createSupabaseAdminClient();
-  if (!admin) return { ok: true, sent: 0 };
+  if (!admin) {
+    return {
+      ok: false,
+      sent: 0,
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is not set. Daily browse nudge cannot insert notifications or send emails.",
+    };
+  }
 
   const settings = await getGlobalSettings();
   const gs = settings as Record<string, unknown> | null;
@@ -264,9 +279,8 @@ export async function sendDailyBrowseJobsNudge(options?: {
     .from("profiles")
     .select("id, roles, max_travel_km, notification_preferences");
 
-  const cleaners = (profiles ?? []).filter((p: { roles?: string[] | null }) => {
-    const roles = Array.isArray(p.roles) ? p.roles : [];
-    return roles.includes("cleaner");
+  const cleaners = (profiles ?? []).filter((p: { roles?: unknown }) => {
+    return normalizeProfileRoles(p.roles).includes("cleaner");
   });
 
   let sent = 0;
@@ -291,7 +305,7 @@ export async function sendDailyBrowseJobsNudge(options?: {
         : 50;
     const browseKm = Math.max(1, Math.min(800, Math.round(maxTravelKm + bufferKm)));
 
-    await createNotification(
+    const created = await createNotification(
       cleanerId,
       "new_job_in_area",
       null,
@@ -308,7 +322,7 @@ export async function sendDailyBrowseJobsNudge(options?: {
         persistTitle: "Browse live bond cleans",
       }
     );
-    sent++;
+    if (created) sent += 1;
   }
 
   return { ok: true, sent };
@@ -431,7 +445,55 @@ export async function sendNoBidListingReminderNotifications(
   };
 }
 
-/** Admin-triggered manual reminder run from Global Settings. */
+/**
+ * Re-run “new listing published” radius + buffer alerts for **every** currently live listing.
+ * Uses the same paths as `notifyNearbyCleanersOfNewListing` (`reminderMode: false`).
+ * `force` bypasses per-listing dedupe so admins can re-notify after fixing config.
+ */
+export async function notifyAllLiveListingsNearbyCleaners(options: {
+  force: boolean;
+}): Promise<{ ok: boolean; sent: number; listingsProcessed: number; error?: string }> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      sent: 0,
+      listingsProcessed: 0,
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is not set. Cannot fan out listing alerts without the service role.",
+    };
+  }
+  const nowIso = new Date().toISOString();
+  const { data: listings, error } = await admin
+    .from("listings")
+    .select("id")
+    .eq("status", "live")
+    .gt("end_time", nowIso);
+  if (error) {
+    return { ok: false, sent: 0, listingsProcessed: 0, error: error.message };
+  }
+  const rows = (listings ?? []) as { id: string }[];
+  let sent = 0;
+  for (const { id } of rows) {
+    const r = await notifyNearbyCleanersForListing(id, {
+      dedupeHours: 48,
+      reminderMode: false,
+      force: options.force,
+    });
+    if (!r.ok) {
+      return {
+        ok: false,
+        sent,
+        listingsProcessed: rows.length,
+        error: r.error,
+      };
+    }
+    sent += r.sent;
+  }
+  return { ok: true, sent, listingsProcessed: rows.length };
+}
+
+/** Admin-triggered manual run from Global Settings: full live-listing fan-out + daily browse nudge. */
 export async function sendNoBidListingRemindersManual(): Promise<{
   ok: boolean;
   listingsConsidered: number;
@@ -471,18 +533,24 @@ export async function sendNoBidListingRemindersManual(): Promise<{
     };
   }
 
-  const noBid = await sendNoBidListingReminderNotifications({ force: true });
-  if (!noBid.ok) {
+  const fan = await notifyAllLiveListingsNearbyCleaners({ force: true });
+  if (!fan.ok) {
     return {
-      ...noBid,
+      ok: false,
+      listingsConsidered: fan.listingsProcessed,
+      listingsMatched: fan.listingsProcessed,
+      notificationsSent: fan.sent,
       browseJobsNudgeSent: 0,
+      error: fan.error,
     };
   }
   const nudge = await sendDailyBrowseJobsNudge({ force: true });
   return {
-    ...noBid,
+    ok: Boolean(nudge.ok),
+    listingsConsidered: fan.listingsProcessed,
+    listingsMatched: fan.listingsProcessed,
+    notificationsSent: fan.sent,
     browseJobsNudgeSent: nudge.ok ? nudge.sent : 0,
-    ok: Boolean(noBid.ok && nudge.ok),
     error: nudge.error,
   };
 }
