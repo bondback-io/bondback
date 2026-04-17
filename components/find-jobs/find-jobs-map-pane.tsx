@@ -14,10 +14,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { cn } from "@/lib/utils";
 import type { FindJobsMapPoint } from "@/lib/find-jobs/map-types";
-import {
-  useFindJobsMap,
-  type FindJobsMapFocusRequest,
-} from "@/components/find-jobs/find-jobs-map-context";
+import { useFindJobsMap, type FindJobsMapFocusRequest } from "@/components/find-jobs/find-jobs-map-context";
 import { FindJobsMapRadiusControl } from "@/components/find-jobs/find-jobs-map-radius-control";
 
 function makeBondBackIcon(selected: boolean): L.DivIcon {
@@ -126,16 +123,7 @@ function VisibleMarkers({
             if (instance) markerRefs.current.set(p.id, instance);
             else markerRefs.current.delete(p.id);
           }}
-        >
-          <Popup>
-            <div className="min-w-[160px] space-y-1 p-0.5">
-              <p className="text-sm font-semibold leading-snug text-foreground">{p.title}</p>
-              <p className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                {p.priceLabel}
-              </p>
-            </div>
-          </Popup>
-        </Marker>
+        />
       ))}
     </>
   );
@@ -169,7 +157,6 @@ function MapFocusSync({
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const finish = () => {
-      markerRefs.current.get(focusId)?.openPopup();
       onConsumed();
     };
 
@@ -207,7 +194,13 @@ export type FindJobsMapPaneProps = {
 };
 
 export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: FindJobsMapPaneProps) {
-  const { setHighlightedListingId, mapFocusRequest, clearMapFocusRequest } = useFindJobsMap();
+  const {
+    setHighlightedListingId,
+    mapFocusRequest,
+    clearMapFocusRequest,
+    setDetailListing,
+    getListingById,
+  } = useFindJobsMap();
 
   const markerRefs = React.useRef<Map<string, L.Marker>>(new Map());
 
@@ -227,10 +220,12 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
   const onPinSelect = React.useCallback(
     (id: string) => {
       setHighlightedListingId(id);
+      const row = getListingById(id);
+      if (row) setDetailListing(row);
       const el = document.querySelector(`[data-find-job-card="${CSS.escape(id)}"]`);
       el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     },
-    [setHighlightedListingId]
+    [setHighlightedListingId, getListingById, setDetailListing]
   );
 
   const radiusM = Math.max(1000, radiusKm * 1000);
@@ -245,8 +240,8 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
         aria-label="Job locations map"
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
         <Circle
           center={[centerLat, centerLon]}
@@ -254,8 +249,8 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
           pathOptions={{
             color: "#10b981",
             fillColor: "#10b981",
-            fillOpacity: 0.08,
-            weight: 2,
+            fillOpacity: 0.06,
+            weight: 1,
           }}
         />
         <FitInitialBounds points={points} centerLat={centerLat} centerLon={centerLon} />

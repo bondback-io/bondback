@@ -24,6 +24,7 @@ import { OfflineJobsPrimer } from "@/components/offline/offline-jobs-primer";
 import { JobsPageMobileChrome } from "@/components/mobile-job-search";
 import { clampMaxTravelKm, nextSearchRadiusKm } from "@/lib/max-travel-km";
 import { FindJobsBrowseShell } from "@/components/find-jobs/find-jobs-browse-shell";
+import type { FindJobsViewerActiveRole } from "@/components/find-jobs/find-jobs-map-context";
 import { haversineKm } from "@/lib/geo/haversine-km";
 import { resolveListingCoordinatesById } from "@/lib/find-jobs/resolve-listing-coordinates";
 import {
@@ -102,12 +103,14 @@ async function FindJobsPageContent({
   }
 
   const roles = Array.isArray(profile?.roles) ? profile!.roles! : [];
-  const activeRole =
+  const activeRoleRaw =
     profile?.active_role === "lister" || profile?.active_role === "cleaner"
       ? profile!.active_role
       : (roles[0] ?? null);
+  const viewerActiveRole: FindJobsViewerActiveRole =
+    activeRoleRaw === "lister" || activeRoleRaw === "cleaner" ? activeRoleRaw : null;
   const viewerIsCleaner = Boolean(
-    profile && roles.includes("cleaner") && activeRole === "cleaner"
+    profile && roles.includes("cleaner") && viewerActiveRole === "cleaner"
   );
 
   const defaultRadiusKm = clampMaxTravelKm(
@@ -355,8 +358,11 @@ async function FindJobsPageContent({
                 centerLat={effectiveCenterLat}
                 centerLon={effectiveCenterLon}
                 radiusKm={activeRadiusKm}
+                viewerIsCleaner={viewerIsCleaner}
+                viewerUserId={session?.user?.id ?? null}
+                viewerActiveRole={viewerActiveRole}
               >
-                <div className="space-y-5 lg:space-y-6">{listSection}</div>
+                <div className="space-y-3 lg:space-y-4">{listSection}</div>
               </FindJobsBrowseShell>
             </div>
           </JobsPageMobileChrome>

@@ -52,23 +52,23 @@ export function FindJobsSplitLayout({
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       <div
         className={cn(
-          "flex min-h-0 flex-1 flex-col gap-0 lg:flex-row lg:items-stretch",
-          "lg:min-h-[calc(100dvh-7.5rem)]"
+          "mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-0 lg:flex-row lg:items-stretch",
+          "lg:max-h-[min(720px,calc(100dvh-10rem))] lg:min-h-[min(560px,calc(100dvh-11rem))]"
         )}
       >
         <aside
           className={cn(
-            "flex min-h-0 w-full min-w-0 flex-col lg:w-[40%] lg:max-w-none lg:shrink-0",
+            "flex min-h-0 w-full min-w-0 flex-col lg:w-[min(420px,36%)] lg:max-w-[440px] lg:shrink-0",
             "border-border lg:border-r lg:border-border/80 dark:lg:border-gray-800"
           )}
         >
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-28 pt-1 sm:px-4 sm:pb-8 lg:px-5 lg:pb-10 lg:pt-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 pb-28 pt-0 sm:pb-8 lg:px-0 lg:pb-6 lg:pt-0">
             {list}
           </div>
         </aside>
 
         <section
-          className="relative hidden min-h-0 flex-1 flex-col lg:flex"
+          className="relative hidden min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-muted/20 shadow-sm dark:border-gray-800 dark:bg-gray-950/40 lg:flex"
           aria-label="Map"
         >
           <div className="min-h-0 flex-1 overflow-hidden">{map}</div>

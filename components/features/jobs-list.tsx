@@ -40,6 +40,7 @@ import {
   useJobsSearchCountSetter,
 } from "@/components/mobile-job-search";
 import { useFindJobsMapOptional } from "@/components/find-jobs/find-jobs-map-context";
+import { FindJobsCompactRow } from "@/components/find-jobs/find-jobs-compact-row";
 import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 function haversineKm(
@@ -70,6 +71,8 @@ const MOBILE_VIRTUALIZE_MIN = 10;
 const ESTIMATED_CARD_HEIGHT = 600;
 /** Compact mobile row cards (/jobs) — tuned for cleaner card layout + title/price blocks. */
 const ESTIMATED_CARD_HEIGHT_MOBILE_COMPACT = 340;
+/** Find Jobs map split: compact rows (desktop + virtualized mobile). */
+const ESTIMATED_FIND_JOBS_COMPACT_ROW = 132;
 
 export type JobsListProps = {
   initialListings: ListingRow[];
@@ -326,6 +329,11 @@ export function JobsList({
     setJobsSearchCount?.(displayListings.length);
   }, [displayListings.length, setJobsSearchCount]);
 
+  useEffect(() => {
+    if (!mapSync || !findJobsPublicBrowse || !findJobsMap) return;
+    findJobsMap.registerListings(displayListings);
+  }, [mapSync, findJobsPublicBrowse, findJobsMap, displayListings]);
+
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMarginTop, setScrollMarginTop] = useState(0);
   const useVirtualList =
@@ -338,9 +346,12 @@ export function JobsList({
     }
   }, [displayListings.length, useVirtualList]);
 
-  const estimatedCardHeight = isMobile
-    ? ESTIMATED_CARD_HEIGHT_MOBILE_COMPACT
-    : ESTIMATED_CARD_HEIGHT;
+  const estimatedCardHeight =
+    isMobile && mapSync && findJobsPublicBrowse
+      ? ESTIMATED_FIND_JOBS_COMPACT_ROW
+      : isMobile
+        ? ESTIMATED_CARD_HEIGHT_MOBILE_COMPACT
+        : ESTIMATED_CARD_HEIGHT;
 
   const rowVirtualizer = useWindowVirtualizer({
     count: useVirtualList ? displayListings.length : 0,
@@ -397,6 +408,27 @@ export function JobsList({
           )
         );
       };
+      if (findJobsPublicBrowse) {
+        const selected = findJobsMap.highlightedListingId === String(listing.id);
+        return (
+          <FindJobsCompactRow
+            key={listing.id}
+            listing={listing}
+            bidCount={bidCount}
+            distanceKm={distanceKm}
+            selected={selected}
+            listerName={listerCard?.listerName ?? null}
+            onSelect={() => {
+              prefetchListingDetail();
+              flushSync(() => {
+                findJobsMap.setHighlightedListingId(String(listing.id));
+              });
+              findJobsMap.setDetailListing(listing);
+              findJobsMap.requestMapFocus(String(listing.id));
+            }}
+          />
+        );
+      }
       return (
         <div
           key={listing.id}

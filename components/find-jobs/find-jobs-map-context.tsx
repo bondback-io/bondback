@@ -2,10 +2,13 @@
 
 import * as React from "react";
 import type { FindJobsMapPoint } from "@/lib/find-jobs/map-types";
+import type { ListingRow } from "@/lib/listings";
 
 export type { FindJobsMapPoint };
 
 export type FindJobsMapFocusRequest = { id: string; seq: number };
+
+export type FindJobsViewerActiveRole = "lister" | "cleaner" | null;
 
 type FindJobsMapContextValue = {
   /** Listing id highlighted from map pin click (scroll list + ring card). */
@@ -15,13 +18,45 @@ type FindJobsMapContextValue = {
   mapFocusRequest: FindJobsMapFocusRequest | null;
   requestMapFocus: (listingId: string) => void;
   clearMapFocusRequest: () => void;
+  /** Slide-in detail panel (Airtasker-style). */
+  detailListing: ListingRow | null;
+  setDetailListing: (listing: ListingRow | null) => void;
+  registerListings: (listings: ListingRow[]) => void;
+  getListingById: (id: string) => ListingRow | undefined;
+  viewerIsCleaner: boolean;
+  viewerUserId: string | null;
+  viewerActiveRole: FindJobsViewerActiveRole;
 };
 
 const FindJobsMapContext = React.createContext<FindJobsMapContextValue | null>(null);
 
-export function FindJobsMapProvider({ children }: { children: React.ReactNode }) {
+type FindJobsMapProviderProps = {
+  children: React.ReactNode;
+  viewerIsCleaner?: boolean;
+  viewerUserId?: string | null;
+  viewerActiveRole?: FindJobsViewerActiveRole;
+};
+
+export function FindJobsMapProvider({
+  children,
+  viewerIsCleaner = false,
+  viewerUserId = null,
+  viewerActiveRole = null,
+}: FindJobsMapProviderProps) {
   const [highlightedListingId, setHighlightedListingId] = React.useState<string | null>(null);
   const [mapFocusRequest, setMapFocusRequest] = React.useState<FindJobsMapFocusRequest | null>(null);
+  const [detailListing, setDetailListing] = React.useState<ListingRow | null>(null);
+  const listingsByIdRef = React.useRef<Map<string, ListingRow>>(new Map());
+
+  const registerListings = React.useCallback((listings: ListingRow[]) => {
+    const m = listingsByIdRef.current;
+    m.clear();
+    for (const row of listings) {
+      m.set(String(row.id), row);
+    }
+  }, []);
+
+  const getListingById = React.useCallback((id: string) => listingsByIdRef.current.get(id), []);
 
   const requestMapFocus = React.useCallback((listingId: string) => {
     setMapFocusRequest((prev) => ({
@@ -42,8 +77,26 @@ export function FindJobsMapProvider({ children }: { children: React.ReactNode })
       mapFocusRequest,
       requestMapFocus,
       clearMapFocusRequest,
+      detailListing,
+      setDetailListing,
+      registerListings,
+      getListingById,
+      viewerIsCleaner,
+      viewerUserId,
+      viewerActiveRole,
     }),
-    [highlightedListingId, mapFocusRequest, requestMapFocus, clearMapFocusRequest]
+    [
+      highlightedListingId,
+      mapFocusRequest,
+      requestMapFocus,
+      clearMapFocusRequest,
+      detailListing,
+      registerListings,
+      getListingById,
+      viewerIsCleaner,
+      viewerUserId,
+      viewerActiveRole,
+    ]
   );
 
   return <FindJobsMapContext.Provider value={value}>{children}</FindJobsMapContext.Provider>;

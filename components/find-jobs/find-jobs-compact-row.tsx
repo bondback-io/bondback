@@ -1,0 +1,141 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { Calendar, Gavel, MapPin } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import {
+  formatCents,
+  getListingCoverUrl,
+  type ListingRow,
+} from "@/lib/listings";
+import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
+import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
+import { parseUtcTimestamp } from "@/lib/utils";
+export type FindJobsCompactRowProps = {
+  listing: ListingRow;
+  bidCount: number;
+  distanceKm?: number;
+  selected: boolean;
+  listerName?: string | null;
+  onSelect: () => void;
+};
+
+function formatEndsShort(endTime: string | null | undefined): string {
+  if (!endTime) return "";
+  const end = parseUtcTimestamp(String(endTime));
+  if (!Number.isFinite(end)) return "";
+  const ms = end - Date.now();
+  if (ms <= 0) return "Ended";
+  const h = Math.floor(ms / 3600000);
+  const d = Math.floor(h / 24);
+  if (d >= 1) return `${d}d left`;
+  if (h >= 1) return `${h}h left`;
+  const m = Math.floor((ms % 3600000) / 60000);
+  return `${m}m left`;
+}
+
+/**
+ * Airtasker-style compact row: title + price, meta lines, small thumb, avatar.
+ */
+export function FindJobsCompactRow({
+  listing,
+  bidCount,
+  distanceKm,
+  selected,
+  listerName,
+  onSelect,
+}: FindJobsCompactRowProps) {
+  const title = listing.title?.trim() || "Bond clean";
+  const href = hrefListingOrJob(
+    { id: listing.id, status: listing.status, end_time: listing.end_time },
+    undefined
+  );
+  const thumb = getListingCoverUrl(listing);
+  const price = formatCents(listing.current_lowest_bid_cents ?? 0);
+  const loc = [listing.suburb, listing.postcode].filter(Boolean).join(" ") || "—";
+  const ends = formatEndsShort(listing.end_time);
+
+  return (
+    <div
+      data-find-job-card={listing.id}
+      className={cn(
+        "group border-b border-border/80 bg-card/40 transition-colors dark:border-gray-800 dark:bg-gray-950/30",
+        selected && "bg-primary/[0.06] ring-1 ring-inset ring-primary/25 dark:bg-primary/10"
+      )}
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex w-full gap-3 px-3 py-3 text-left sm:px-4"
+      >
+        <div className="relative h-[72px] w-[88px] shrink-0 overflow-hidden rounded-lg bg-muted dark:bg-gray-800">
+          {thumb ? (
+            <Image
+              src={thumb}
+              alt=""
+              fill
+              sizes="88px"
+              className="object-cover"
+              placeholder="blur"
+              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
+              No photo
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground dark:text-gray-100">
+              {title}
+            </p>
+            <span className="shrink-0 text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {price}
+            </span>
+          </div>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground dark:text-gray-400">
+            <MapPin className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+            <span className="truncate">{loc}</span>
+            {distanceKm != null && !Number.isNaN(distanceKm) && (
+              <span className="shrink-0 text-muted-foreground/90">· ~{distanceKm.toFixed(0)} km</span>
+            )}
+          </p>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground dark:text-gray-500">
+            <Calendar className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+            <span>{ends}</span>
+          </p>
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <Badge
+              variant="secondary"
+              className="h-5 gap-1 px-1.5 text-[10px] font-medium text-emerald-900 dark:text-emerald-100"
+            >
+              <Gavel className="h-3 w-3" aria-hidden />
+              Live
+            </Badge>
+            <span className="text-[11px] text-muted-foreground dark:text-gray-500">
+              {bidCount} bid{bidCount !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+        <div className="hidden shrink-0 flex-col items-end justify-center gap-1 sm:flex">
+          <Avatar className="h-9 w-9 border border-border/80 dark:border-gray-700">
+            <AvatarFallback className="text-[10px] font-semibold">
+              {(listerName ?? "?").slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <Link
+            href={href}
+            onClick={(e) => e.stopPropagation()}
+            className="text-[10px] font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Open
+          </Link>
+        </div>
+      </button>
+    </div>
+  );
+}
