@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useFindJobsMap } from "@/components/find-jobs/find-jobs-map-context";
 import { ListingPublicCommentsDock } from "@/components/features/listing-public-comments-dock";
 import { ListingAuctionDetail } from "@/components/features/listing-auction-detail";
@@ -117,18 +117,8 @@ export function FindJobsDetailPanelBody({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5 dark:border-gray-800">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="gap-1 text-primary"
-          onClick={onBack}
-        >
-          <ChevronLeft className="h-4 w-4" aria-hidden />
-          {backLabel}
-        </Button>
-        <Button variant="outline" size="sm" className="ml-auto text-xs" asChild>
+      <div className="flex shrink-0 items-center justify-end border-b border-border px-3 py-2 dark:border-gray-800">
+        <Button variant="outline" size="sm" className="text-xs" asChild>
           <Link href={fullHref}>Open full page</Link>
         </Button>
       </div>
@@ -151,6 +141,8 @@ export function FindJobsDetailPanelBody({
               numericJobId={null}
               currentUserId={viewerUserId}
               embedInFindJobs
+              embedOnBackToMap={onBack}
+              embedBackLinkLabel={backLabel}
             />
 
             <div className="mx-auto mt-8 w-full max-w-none border-t border-border pt-6 dark:border-gray-800">

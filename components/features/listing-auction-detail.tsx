@@ -87,6 +87,10 @@ export type ListingAuctionDetailProps = {
   buyNowHistoryAmountCents?: number | null;
   /** Find Jobs inline panel: hide page-level “Back” link; full width. */
   embedInFindJobs?: boolean;
+  /** Find Jobs: compact top link (e.g. return to map) — shown under the title in the embed layout. */
+  embedOnBackToMap?: () => void;
+  /** Label for {@link embedOnBackToMap} (e.g. “Back to map”, “Close”). */
+  embedBackLinkLabel?: string;
 };
 
 export function ListingAuctionDetail({
@@ -101,6 +105,8 @@ export function ListingAuctionDetail({
   securedViaBuyNow = false,
   buyNowHistoryAmountCents = null,
   embedInFindJobs = false,
+  embedOnBackToMap,
+  embedBackLinkLabel = "Return to map",
 }: ListingAuctionDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -176,6 +182,10 @@ export function ListingAuctionDetail({
     String(listing.status ?? "").toLowerCase() === "cancelled";
   const showCleanerBidUi =
     isCleaner && isLive && !hasActiveJob && !isListingCancelled;
+
+  /** Find Jobs embed: show bid form in the top-right card for everyone (guests see login / CTA copy). */
+  const showEmbedBidForm =
+    embedInFindJobs && isLive && !hasActiveJob && !isListingCancelled;
 
   const handleAcceptBid = useCallback(
     async (bid: BidWithBidder) => {
@@ -371,19 +381,19 @@ export function ListingAuctionDetail({
         </div>
       ) : null}
 
-      {/* Hero + title */}
-      <div
-        className={cn(
-          "overflow-hidden rounded-2xl border bg-card shadow-sm dark:bg-gray-950",
-          showEndedListingVisual
-            ? "border-red-900/50 ring-1 ring-red-500/25 dark:border-red-900/60"
-            : "border-border dark:border-gray-800"
-        )}
-      >
-        <div className="relative aspect-[16/10] max-h-[min(52vh,420px)] w-full bg-muted dark:bg-gray-900 md:aspect-[21/9] md:max-h-[380px]">
+      {/* Hero + title — full listing page only; Find Jobs embed uses a compact two-column top (no hero image). */}
+      {embedInFindJobs ? (
+        <div
+          className={cn(
+            "overflow-hidden rounded-2xl border bg-card shadow-sm dark:bg-gray-950",
+            showEndedListingVisual
+              ? "border-red-900/50 ring-1 ring-red-500/25 dark:border-red-900/60"
+              : "border-border dark:border-gray-800"
+          )}
+        >
           {showEndedListingVisual && (
             <div
-              className="absolute inset-x-0 top-0 z-20 border-b border-red-900/50 bg-red-600 px-3 py-2.5 text-center shadow-[0_4px_24px_rgba(0,0,0,0.35)] sm:py-3"
+              className="border-b border-red-900/50 bg-red-600 px-3 py-2.5 text-center sm:py-3"
               role="status"
             >
               <p className="text-sm font-black uppercase tracking-[0.14em] text-white sm:text-base md:text-lg">
@@ -391,101 +401,275 @@ export function ListingAuctionDetail({
               </p>
             </div>
           )}
-          {heroSrc ? (
-            <Image
-              src={heroSrc}
-              alt=""
-              fill
-              priority
-              className={cn(
-                "object-cover",
-                showEndedListingVisual && "opacity-[0.72] saturate-[0.65]"
-              )}
-              sizes="(max-width: 896px) 100vw, 896px"
-              placeholder="blur"
-              blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
-            />
-          ) : (
-            <div className="flex h-full min-h-[200px] w-full items-center justify-center text-muted-foreground">
-              <Images className="h-16 w-16 opacity-40" aria-hidden />
-            </div>
-          )}
-          {showEndedListingVisual && (
-            <div className="absolute inset-0 bg-red-950/25 mix-blend-multiply dark:bg-red-950/35" aria-hidden />
-          )}
-          {/* Image wash: mobile uses a shorter band so the title strip feels less cramped */}
-          <div
-            className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/48 to-transparent sm:via-black/38 md:from-black/75 md:via-black/25 md:to-transparent"
-            aria-hidden
-          />
-          <div
-            className="absolute inset-x-0 bottom-0 h-[40%] bg-gradient-to-t from-black/60 to-transparent max-md:h-[36%] md:hidden"
-            aria-hidden
-          />
-          <div className="absolute bottom-0 left-0 right-0 p-2.5 sm:p-4 md:p-6">
-            <div className="flex flex-wrap items-end justify-between gap-2 sm:gap-3 max-md:rounded-xl max-md:border max-md:border-white/12 max-md:bg-black/40 max-md:p-2.5 max-md:shadow-[0_8px_28px_rgba(0,0,0,0.45)] max-md:backdrop-blur-md md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
-              <div className="min-w-0 flex-1">
-                <h1 className="text-balance text-[1.0625rem] font-bold leading-tight tracking-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_3px_16px_rgba(0,0,0,0.55)] sm:text-xl sm:leading-snug md:text-2xl md:leading-tight lg:text-3xl md:[text-shadow:0_2px_12px_rgba(0,0,0,0.55)]">
-                  {listing.title ?? "Bond clean"}
-                </h1>
-                <p className="mt-0.5 flex items-start gap-1.5 text-xs font-medium text-white/95 [text-shadow:0_1px_3px_rgba(0,0,0,0.95)] sm:mt-1 sm:items-center sm:gap-2 sm:text-sm md:[text-shadow:0_1px_8px_rgba(0,0,0,0.65)]">
-                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0 sm:h-4 sm:w-4" aria-hidden />
-                  <span className="min-w-0 leading-snug">{address}</span>
-                </p>
+          <div className="grid gap-6 p-4 md:grid-cols-[minmax(0,1fr)_min(260px,38%)] md:gap-8 md:p-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-w-0 space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {isLive ? (
+                  <Badge className="border-0 bg-emerald-600 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-white hover:bg-emerald-600">
+                    Live
+                  </Badge>
+                ) : pendingAutoAssignWinner ? (
+                  <Badge className="border-0 bg-sky-600 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-white">
+                    Finalising
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "font-bold uppercase tracking-wide",
+                      showEndedListingVisual &&
+                        "border-0 bg-red-950/90 text-white dark:bg-red-950/95"
+                    )}
+                  >
+                    Not live
+                  </Badge>
+                )}
               </div>
-              {isLive ? (
-                <Badge className="shrink-0 border-0 bg-emerald-500/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md [box-shadow:0_2px_10px_rgba(0,0,0,0.4)] sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
-                  Live auction
-                </Badge>
-              ) : pendingAutoAssignWinner ? (
-                <Badge className="shrink-0 border-0 bg-sky-600/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md sm:px-2.5 sm:py-1.5 sm:text-xs">
-                  Finalising
-                </Badge>
-              ) : (
-                <Badge
-                  variant="secondary"
+              {embedOnBackToMap ? (
+                <button
+                  type="button"
+                  onClick={embedOnBackToMap}
+                  className="text-left text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  ‹ {embedBackLinkLabel}
+                </button>
+              ) : null}
+              <h1 className="text-balance text-2xl font-bold leading-tight tracking-tight text-foreground dark:text-gray-100 md:text-3xl">
+                {listing.title ?? "Bond clean"}
+              </h1>
+              <dl className="space-y-4 text-sm">
+                <div>
+                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-500">
+                    Location
+                  </dt>
+                  <dd className="mt-1.5 flex items-start gap-2 text-foreground dark:text-gray-200">
+                    <MapPin
+                      className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
+                    <span className="min-w-0 leading-snug">{address}</span>
+                  </dd>
+                </div>
+                {(beds != null || baths != null || propertyType) && (
+                  <div>
+                    <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-500">
+                      Property
+                    </dt>
+                    <dd className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-foreground dark:text-gray-200">
+                      {beds != null && (
+                        <span className="inline-flex items-center gap-1.5 font-medium">
+                          <Bed className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                          {beds} bed{beds === 1 ? "" : "s"}
+                        </span>
+                      )}
+                      {baths != null && (
+                        <span className="inline-flex items-center gap-1.5 font-medium">
+                          <Bath className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                          {baths} bath{baths === 1 ? "" : "s"}
+                        </span>
+                      )}
+                      {propertyType ? (
+                        <Badge variant="secondary" className="capitalize">
+                          {propertyType.replace(/_/g, " ")}
+                        </Badge>
+                      ) : null}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+            <div className="min-w-0 md:self-start">
+              <div
+                className={cn(
+                  "rounded-xl border bg-background p-5 shadow-md ring-1 ring-black/[0.04] dark:border-gray-700 dark:bg-gray-900/90 dark:ring-white/10",
+                  showEndedListingVisual && "opacity-95"
+                )}
+              >
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                  Current lowest bid
+                </p>
+                <p
                   className={cn(
-                    "shrink-0 font-bold uppercase tracking-wide",
+                    "mt-1 text-3xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400",
                     showEndedListingVisual &&
-                      "border-0 bg-red-950/90 text-white dark:bg-red-950/95"
+                      "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
                   )}
                 >
-                  Not live
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Live countdown strip */}
-        {isLive && (
-          <div className="border-t border-border bg-gradient-to-r from-emerald-500/10 via-card to-sky-500/10 px-4 py-4 dark:border-gray-800 dark:from-emerald-950/40 dark:to-sky-950/30 md:px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
-                  <Clock className="h-6 w-6" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                    Time left
+                  {formatCents(currentLowCents)}
+                </p>
+                <div className="mt-3 space-y-1 text-xs text-muted-foreground dark:text-gray-400">
+                  <p>
+                    <span className="font-medium text-foreground/80 dark:text-gray-300">
+                      Starting bid{" "}
+                    </span>
+                    {formatCents(startingCents)}
                   </p>
-                  <CountdownTimer
-                    endTime={listing.end_time}
-                    expiredLabel="Auction ended"
-                    className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 md:text-2xl"
-                    urgentBelowHours={24}
-                    onExpired={handleAuctionTimerExpired}
-                  />
+                  {hasBuyNow ? (
+                    <p>
+                      <span className="font-medium text-foreground/80 dark:text-gray-300">
+                        Buy now{" "}
+                      </span>
+                      {formatCents(buyNowCents!)}
+                    </p>
+                  ) : null}
                 </div>
-              </div>
-              <div className="text-sm text-muted-foreground dark:text-gray-400">
-                <span className="font-medium text-foreground dark:text-gray-200">Ends: </span>
-                <ListingEndsAtLocal endTime={listing.end_time} />
+                {showEmbedBidForm ? (
+                  <div className="mt-4 border-t border-border pt-4 dark:border-gray-700">
+                    <PlaceBidForm
+                      listingId={String(listing.id)}
+                      listing={listing}
+                      isCleaner={isCleaner}
+                      currentUserId={currentUserId}
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
-        )}
-      </div>
+          {isLive && (
+            <div className="border-t border-border bg-gradient-to-r from-emerald-500/10 via-card to-sky-500/10 px-4 py-4 dark:border-gray-800 dark:from-emerald-950/40 dark:to-sky-950/30 md:px-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                    <Clock className="h-6 w-6" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                      Time left
+                    </p>
+                    <CountdownTimer
+                      endTime={listing.end_time}
+                      expiredLabel="Auction ended"
+                      className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 md:text-2xl"
+                      urgentBelowHours={24}
+                      onExpired={handleAuctionTimerExpired}
+                    />
+                  </div>
+                </div>
+                <div className="text-sm text-muted-foreground dark:text-gray-400">
+                  <span className="font-medium text-foreground dark:text-gray-200">Ends: </span>
+                  <ListingEndsAtLocal endTime={listing.end_time} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            "overflow-hidden rounded-2xl border bg-card shadow-sm dark:bg-gray-950",
+            showEndedListingVisual
+              ? "border-red-900/50 ring-1 ring-red-500/25 dark:border-red-900/60"
+              : "border-border dark:border-gray-800"
+          )}
+        >
+          <div className="relative aspect-[16/10] max-h-[min(52vh,420px)] w-full bg-muted dark:bg-gray-900 md:aspect-[21/9] md:max-h-[380px]">
+            {showEndedListingVisual && (
+              <div
+                className="absolute inset-x-0 top-0 z-20 border-b border-red-900/50 bg-red-600 px-3 py-2.5 text-center shadow-[0_4px_24px_rgba(0,0,0,0.35)] sm:py-3"
+                role="status"
+              >
+                <p className="text-sm font-black uppercase tracking-[0.14em] text-white sm:text-base md:text-lg">
+                  {endedListingBannerLabel}
+                </p>
+              </div>
+            )}
+            {heroSrc ? (
+              <Image
+                src={heroSrc}
+                alt=""
+                fill
+                priority
+                className={cn(
+                  "object-cover",
+                  showEndedListingVisual && "opacity-[0.72] saturate-[0.65]"
+                )}
+                sizes="(max-width: 896px) 100vw, 896px"
+                placeholder="blur"
+                blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+              />
+            ) : (
+              <div className="flex h-full min-h-[200px] w-full items-center justify-center text-muted-foreground">
+                <Images className="h-16 w-16 opacity-40" aria-hidden />
+              </div>
+            )}
+            {showEndedListingVisual && (
+              <div className="absolute inset-0 bg-red-950/25 mix-blend-multiply dark:bg-red-950/35" aria-hidden />
+            )}
+            {/* Image wash: mobile uses a shorter band so the title strip feels less cramped */}
+            <div
+              className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/48 to-transparent sm:via-black/38 md:from-black/75 md:via-black/25 md:to-transparent"
+              aria-hidden
+            />
+            <div
+              className="absolute inset-x-0 bottom-0 h-[40%] bg-gradient-to-t from-black/60 to-transparent max-md:h-[36%] md:hidden"
+              aria-hidden
+            />
+            <div className="absolute bottom-0 left-0 right-0 p-2.5 sm:p-4 md:p-6">
+              <div className="flex flex-wrap items-end justify-between gap-2 sm:gap-3 max-md:rounded-xl max-md:border max-md:border-white/12 max-md:bg-black/40 max-md:p-2.5 max-md:shadow-[0_8px_28px_rgba(0,0,0,0.45)] max-md:backdrop-blur-md md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-balance text-[1.0625rem] font-bold leading-tight tracking-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_3px_16px_rgba(0,0,0,0.55)] sm:text-xl sm:leading-snug md:text-2xl md:leading-tight lg:text-3xl md:[text-shadow:0_2px_12px_rgba(0,0,0,0.55)]">
+                    {listing.title ?? "Bond clean"}
+                  </h1>
+                  <p className="mt-0.5 flex items-start gap-1.5 text-xs font-medium text-white/95 [text-shadow:0_1px_3px_rgba(0,0,0,0.95)] sm:mt-1 sm:items-center sm:gap-2 sm:text-sm md:[text-shadow:0_1px_8px_rgba(0,0,0,0.65)]">
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0 sm:h-4 sm:w-4" aria-hidden />
+                    <span className="min-w-0 leading-snug">{address}</span>
+                  </p>
+                </div>
+                {isLive ? (
+                  <Badge className="shrink-0 border-0 bg-emerald-500/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md [box-shadow:0_2px_10px_rgba(0,0,0,0.4)] sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
+                    Live auction
+                  </Badge>
+                ) : pendingAutoAssignWinner ? (
+                  <Badge className="shrink-0 border-0 bg-sky-600/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md sm:px-2.5 sm:py-1.5 sm:text-xs">
+                    Finalising
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "shrink-0 font-bold uppercase tracking-wide",
+                      showEndedListingVisual &&
+                        "border-0 bg-red-950/90 text-white dark:bg-red-950/95"
+                    )}
+                  >
+                    Not live
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Live countdown strip */}
+          {isLive && (
+            <div className="border-t border-border bg-gradient-to-r from-emerald-500/10 via-card to-sky-500/10 px-4 py-4 dark:border-gray-800 dark:from-emerald-950/40 dark:to-sky-950/30 md:px-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                    <Clock className="h-6 w-6" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                      Time left
+                    </p>
+                    <CountdownTimer
+                      endTime={listing.end_time}
+                      expiredLabel="Auction ended"
+                      className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 md:text-2xl"
+                      urgentBelowHours={24}
+                      onExpired={handleAuctionTimerExpired}
+                    />
+                  </div>
+                </div>
+                <div className="text-sm text-muted-foreground dark:text-gray-400">
+                  <span className="font-medium text-foreground dark:text-gray-200">Ends: </span>
+                  <ListingEndsAtLocal endTime={listing.end_time} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {pendingAutoAssignWinner && (
         <div
@@ -564,92 +748,94 @@ export function ListingAuctionDetail({
         </CardContent>
       </Card>
 
-      {/* Pricing — full-width strip on desktop; stacked on small screens */}
-      <Card
-        className={cn(
-          "overflow-hidden shadow-sm dark:border-gray-800",
-          showEndedListingVisual
-            ? "border-red-900/50 ring-1 ring-red-500/20 dark:border-red-900/60"
-            : "border-border/90"
-        )}
-      >
-        <CardContent className="p-0">
-          <div
-            className={cn(
-              "grid grid-cols-1 divide-y divide-border dark:divide-gray-800",
-              "md:divide-y-0 md:divide-x md:divide-border/80",
-              hasBuyNow ? "md:grid-cols-3" : "md:grid-cols-2"
-            )}
-          >
+      {/* Pricing strip — full listing page only (Find Jobs embed shows pricing in the top-right card). */}
+      {!embedInFindJobs && (
+        <Card
+          className={cn(
+            "overflow-hidden shadow-sm dark:border-gray-800",
+            showEndedListingVisual
+              ? "border-red-900/50 ring-1 ring-red-500/20 dark:border-red-900/60"
+              : "border-border/90"
+          )}
+        >
+          <CardContent className="p-0">
             <div
               className={cn(
-                "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
-                showEndedListingVisual
-                  ? "bg-red-950/20 dark:bg-red-950/35"
-                  : "bg-emerald-500/[0.06] dark:bg-emerald-950/30"
+                "grid grid-cols-1 divide-y divide-border dark:divide-gray-800",
+                "md:divide-y-0 md:divide-x md:divide-border/80",
+                hasBuyNow ? "md:grid-cols-3" : "md:grid-cols-2"
               )}
             >
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                Current lowest bid
-              </p>
-              <p
-                className={cn(
-                  "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
-                  showEndedListingVisual
-                    ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
-                    : "text-emerald-600 dark:text-emerald-400"
-                )}
-              >
-                {formatCents(currentLowCents)}
-              </p>
-            </div>
-            <div
-              className={cn(
-                "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
-                showEndedListingVisual ? "bg-muted/50 dark:bg-red-950/30" : "bg-card dark:bg-gray-950/40"
-              )}
-            >
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                Starting bid
-              </p>
-              <p
-                className={cn(
-                  "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
-                  showEndedListingVisual
-                    ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
-                    : "text-foreground dark:text-gray-100"
-                )}
-              >
-                {formatCents(startingCents)}
-              </p>
-            </div>
-            {hasBuyNow && (
               <div
                 className={cn(
                   "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
                   showEndedListingVisual
-                    ? "bg-red-950/15 dark:bg-red-950/40"
-                    : "bg-violet-500/[0.07] dark:bg-violet-950/35"
+                    ? "bg-red-950/20 dark:bg-red-950/35"
+                    : "bg-emerald-500/[0.06] dark:bg-emerald-950/30"
                 )}
               >
                 <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                  Buy now
+                  Current lowest bid
                 </p>
                 <p
                   className={cn(
                     "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
                     showEndedListingVisual
                       ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
-                      : "text-violet-700 dark:text-violet-300"
+                      : "text-emerald-600 dark:text-emerald-400"
                   )}
                 >
-                  {formatCents(buyNowCents!)}
+                  {formatCents(currentLowCents)}
                 </p>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              <div
+                className={cn(
+                  "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
+                  showEndedListingVisual ? "bg-muted/50 dark:bg-red-950/30" : "bg-card dark:bg-gray-950/40"
+                )}
+              >
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                  Starting bid
+                </p>
+                <p
+                  className={cn(
+                    "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
+                    showEndedListingVisual
+                      ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
+                      : "text-foreground dark:text-gray-100"
+                  )}
+                >
+                  {formatCents(startingCents)}
+                </p>
+              </div>
+              {hasBuyNow && (
+                <div
+                  className={cn(
+                    "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
+                    showEndedListingVisual
+                      ? "bg-red-950/15 dark:bg-red-950/40"
+                      : "bg-violet-500/[0.07] dark:bg-violet-950/35"
+                  )}
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                    Buy now
+                  </p>
+                  <p
+                    className={cn(
+                      "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
+                      showEndedListingVisual
+                        ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
+                        : "text-violet-700 dark:text-violet-300"
+                    )}
+                  >
+                    {formatCents(buyNowCents!)}
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Property summary */}
       <Card>
@@ -917,7 +1103,7 @@ export function ListingAuctionDetail({
         ariaLabel="Initial condition photos"
       />
 
-      {showCleanerBidUi && (
+      {showCleanerBidUi && !embedInFindJobs && (
         <Card id="place-bid">
           <CardHeader>
             <CardTitle className="text-lg">Place a bid</CardTitle>
@@ -999,7 +1185,7 @@ export function ListingAuctionDetail({
         </details>
       </Card>
 
-      {!isCleaner && !isListerOwner && (
+      {!embedInFindJobs && !isCleaner && !isListerOwner && (
         <p className="text-center text-sm text-muted-foreground">
           Sign in as a cleaner to bid, or as the lister for this property to accept bids.
         </p>
