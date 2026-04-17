@@ -63,10 +63,6 @@ export function FindJobsMapProvider({
   const listingsByIdRef = React.useRef<Map<string, ListingRow>>(new Map());
   const listerCardByListingIdRef = React.useRef<Record<string, ListerCardData>>({});
 
-  React.useEffect(() => {
-    setMapPoints(initialMapPoints);
-  }, [initialMapPoints]);
-
   const registerListings = React.useCallback(
     (listings: ListingRow[], listerCardByListingId?: Record<string, ListerCardData>) => {
       const m = listingsByIdRef.current;

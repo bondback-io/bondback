@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import type { FindJobsMapPoint } from "@/lib/find-jobs/map-types";
 import { useFindJobsMap, type FindJobsMapFocusRequest } from "@/components/find-jobs/find-jobs-map-context";
 import { FindJobsMapRadiusControl } from "@/components/find-jobs/find-jobs-map-radius-control";
-import { useMapFollowsDarkClass } from "@/hooks/use-map-follows-dark-class";
 
 function makeBondBackIcon(selected: boolean): L.DivIcon {
   const color = selected ? "rgb(5 150 105)" : "rgb(16 185 129)";
@@ -183,11 +182,6 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
     getListingById,
   } = useFindJobsMap();
 
-  const mapDark = useMapFollowsDarkClass();
-  const tileUrl = mapDark
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-
   const markerRefs = React.useRef<Map<string, L.Marker>>(new Map());
 
   const [userLoc, setUserLoc] = React.useState<{ lat: number; lon: number } | null>(null);
@@ -230,9 +224,8 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
         aria-label="Job locations map"
       >
         <TileLayer
-          key={mapDark ? "dark" : "light"}
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url={tileUrl}
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
         <Circle
           center={[centerLat, centerLon]}

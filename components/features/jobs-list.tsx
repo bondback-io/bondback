@@ -470,7 +470,7 @@ export function JobsList({
             listerName={listerCard?.listerName ?? null}
             onSelect={() => {
               prefetchListingDetail();
-              if (findJobsMap.detailListing?.id === listing.id) {
+              if (String(findJobsMap.detailListing?.id) === String(listing.id)) {
                 findJobsMap.setDetailListing(null);
                 findJobsMap.setHighlightedListingId(null);
                 return;
