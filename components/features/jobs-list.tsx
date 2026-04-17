@@ -351,10 +351,13 @@ export function JobsList({
     return () => window.removeEventListener(JOBS_RADIUS_CHANGED_EVENT, onRadius);
   }, []);
 
-  const nowMs = Date.now();
-  const live = listings.filter(
-    (l) => l.status === "live" && parseUtcTimestamp(l.end_time) > nowMs
-  );
+  /** Memoize so downstream useMemo/effects do not see a new array every render (was causing infinite registerListings → mapPoints → context → re-render loops). */
+  const live = useMemo(() => {
+    const nowMs = Date.now();
+    return listings.filter(
+      (l) => l.status === "live" && parseUtcTimestamp(l.end_time) > nowMs
+    );
+  }, [listings]);
 
   const displayListings = useMemo(() => {
     if (centerLat == null || centerLon == null) return live;
@@ -379,10 +382,17 @@ export function JobsList({
     setJobsSearchCount?.(displayListings.length);
   }, [displayListings.length, setJobsSearchCount]);
 
+  const registerListingsForMap = findJobsMap?.registerListings;
   useEffect(() => {
-    if (!mapSync || !findJobsPublicBrowse || !findJobsMap) return;
-    findJobsMap.registerListings(displayListings, listerCardDataByListingId);
-  }, [mapSync, findJobsPublicBrowse, findJobsMap, displayListings, listerCardDataByListingId]);
+    if (!mapSync || !findJobsPublicBrowse || !registerListingsForMap) return;
+    registerListingsForMap(displayListings, listerCardDataByListingId);
+  }, [
+    mapSync,
+    findJobsPublicBrowse,
+    registerListingsForMap,
+    displayListings,
+    listerCardDataByListingId,
+  ]);
 
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMarginTop, setScrollMarginTop] = useState(0);
