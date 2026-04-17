@@ -40,6 +40,8 @@ export type PlaceBidFormProps = {
   listing: ListingRow;
   isCleaner: boolean;
   currentUserId?: string | null;
+  /** Hide bid-range hint + decimal hint (e.g. Find Jobs embed where context is shown above). */
+  compactHelpText?: boolean;
 };
 
 const CONNECT_ERROR_MARKER = "connect your bank account";
@@ -49,6 +51,7 @@ export function PlaceBidForm({
   listing,
   isCleaner,
   currentUserId = null,
+  compactHelpText = false,
 }: PlaceBidFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -236,30 +239,32 @@ export function PlaceBidForm({
               >
                 {formatCents(currentLowest)}
               </p>
-              <p
-                className={cn(
-                  "mt-1 leading-snug text-muted-foreground dark:text-gray-500",
-                  isCleaner ? "text-sm" : "text-xs"
-                )}
-              >
-                Your new bid must be{" "}
-                <span className="font-medium text-foreground dark:text-gray-300">lower</span> than this
-                {maxAllowedBidDollars > 0 ? (
-                  <>
-                    {" "}
-                    (max ${(MAX_BID_DROP_PER_BID_CENTS / 100).toFixed(0)} drop per bid; between{" "}
-                    <span className="tabular-nums font-medium text-foreground dark:text-gray-200">
-                      ${minAllowedBidDollars.toFixed(2)}
-                    </span>{" "}
-                    and{" "}
-                    <span className="tabular-nums font-medium text-foreground dark:text-gray-200">
-                      ${maxAllowedBidDollars.toFixed(2)}
-                    </span>
-                    )
-                  </>
-                ) : null}
-                .
-              </p>
+              {!compactHelpText ? (
+                <p
+                  className={cn(
+                    "mt-1 leading-snug text-muted-foreground dark:text-gray-500",
+                    isCleaner ? "text-sm" : "text-xs"
+                  )}
+                >
+                  Your new bid must be{" "}
+                  <span className="font-medium text-foreground dark:text-gray-300">lower</span> than this
+                  {maxAllowedBidDollars > 0 ? (
+                    <>
+                      {" "}
+                      (max ${(MAX_BID_DROP_PER_BID_CENTS / 100).toFixed(0)} drop per bid; between{" "}
+                      <span className="tabular-nums font-medium text-foreground dark:text-gray-200">
+                        ${minAllowedBidDollars.toFixed(2)}
+                      </span>{" "}
+                      and{" "}
+                      <span className="tabular-nums font-medium text-foreground dark:text-gray-200">
+                        ${maxAllowedBidDollars.toFixed(2)}
+                      </span>
+                      )
+                    </>
+                  ) : null}
+                  .
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -300,19 +305,21 @@ export function PlaceBidForm({
                   "dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-100"
                 )}
                 autoComplete="off"
-                aria-describedby="bid-amount-hint"
+                aria-describedby={compactHelpText ? undefined : "bid-amount-hint"}
               />
             </div>
-            <p
-              id="bid-amount-hint"
-              className={cn(
-                "max-w-md leading-relaxed text-muted-foreground dark:text-gray-500",
-                isCleaner ? "text-sm" : "text-[11px]"
-              )}
-            >
-              Enter dollars with up to two decimal places (e.g. 250.50). We&apos;ll validate against the
-              live lowest bid when you submit.
-            </p>
+            {!compactHelpText ? (
+              <p
+                id="bid-amount-hint"
+                className={cn(
+                  "max-w-md leading-relaxed text-muted-foreground dark:text-gray-500",
+                  isCleaner ? "text-sm" : "text-[11px]"
+                )}
+              >
+                Enter dollars with up to two decimal places (e.g. 250.50). We&apos;ll validate against the
+                live lowest bid when you submit.
+              </p>
+            ) : null}
 
             <Button
               type="submit"

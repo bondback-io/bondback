@@ -450,33 +450,100 @@ export function ListingAuctionDetail({
                     <span className="min-w-0 leading-snug">{address}</span>
                   </dd>
                 </div>
-                {(beds != null || baths != null || propertyType) && (
-                  <div>
-                    <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-500">
-                      Property
-                    </dt>
-                    <dd className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-foreground dark:text-gray-200">
-                      {beds != null && (
-                        <span className="inline-flex items-center gap-1.5 font-medium">
-                          <Bed className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                          {beds} bed{beds === 1 ? "" : "s"}
-                        </span>
-                      )}
-                      {baths != null && (
-                        <span className="inline-flex items-center gap-1.5 font-medium">
-                          <Bath className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                          {baths} bath{baths === 1 ? "" : "s"}
-                        </span>
-                      )}
-                      {propertyType ? (
-                        <Badge variant="secondary" className="capitalize">
-                          {propertyType.replace(/_/g, " ")}
+              </dl>
+
+              <div className="mt-4 space-y-5 border-t border-border pt-4 dark:border-gray-800">
+                <div className="flex items-center gap-2 text-lg font-semibold leading-tight text-foreground dark:text-gray-100">
+                  <Info className="h-5 w-5 shrink-0" aria-hidden />
+                  Property
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground dark:text-gray-400">
+                  {beds != null && (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                      <Bed className="h-4 w-4 shrink-0" aria-hidden />
+                      {beds} bed
+                    </span>
+                  )}
+                  {baths != null && (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                      <Bath className="h-4 w-4 shrink-0" aria-hidden />
+                      {baths} bath
+                    </span>
+                  )}
+                  {propertyType && (
+                    <Badge variant="secondary" className="capitalize">
+                      {propertyType.replace(/_/g, " ")}
+                    </Badge>
+                  )}
+                </div>
+                {(conditionLabel ||
+                  levelsLabel ||
+                  (typeof listing.duration_days === "number" && listing.duration_days > 0)) && (
+                  <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {conditionLabel && (
+                      <div className="min-w-0 space-y-1">
+                        <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                          Condition
+                        </dt>
+                        <dd className="text-sm leading-snug text-foreground dark:text-gray-100">
+                          {conditionLabel}
+                        </dd>
+                      </div>
+                    )}
+                    {levelsLabel && (
+                      <div className="min-w-0 space-y-1">
+                        <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                          Levels
+                        </dt>
+                        <dd className="text-sm leading-snug text-foreground dark:text-gray-100">
+                          {levelsLabel}
+                        </dd>
+                      </div>
+                    )}
+                    {typeof listing.duration_days === "number" && listing.duration_days > 0 && (
+                      <div className="min-w-0 space-y-1">
+                        <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                          Auction listing period
+                        </dt>
+                        <dd className="text-sm font-semibold tabular-nums text-foreground dark:text-gray-100">
+                          {listing.duration_days} days
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+                {addons.length > 0 && (
+                  <div className="border-t border-border pt-4 dark:border-gray-800">
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                      Add-ons
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {addons.map((a) => (
+                        <Badge
+                          key={a}
+                          variant="outline"
+                          title={
+                            isListingAddonSpecialArea(listing, a)
+                              ? "Special area (from listing)"
+                              : "Paid add-on"
+                          }
+                          className={cn(
+                            "font-normal",
+                            isListingAddonSpecialArea(listing, a)
+                              ? "border-amber-500/75 bg-amber-500/[0.14] text-amber-950 shadow-sm dark:border-amber-400/55 dark:bg-amber-950/45 dark:text-amber-50"
+                              : "capitalize"
+                          )}
+                        >
+                          {isListingAddonSpecialArea(listing, a) ? (
+                            <span className="font-semibold tracking-wide">Special area · </span>
+                          ) : null}
+                          <span className="capitalize">{formatListingAddonDisplayName(a)}</span>
                         </Badge>
-                      ) : null}
-                    </dd>
+                      ))}
+                    </div>
                   </div>
                 )}
-              </dl>
+              </div>
             </div>
             <div className="min-w-0 md:self-start">
               <div
@@ -497,22 +564,6 @@ export function ListingAuctionDetail({
                 >
                   {formatCents(currentLowCents)}
                 </p>
-                <div className="mt-3 space-y-1 text-xs text-muted-foreground dark:text-gray-400">
-                  <p>
-                    <span className="font-medium text-foreground/80 dark:text-gray-300">
-                      Starting bid{" "}
-                    </span>
-                    {formatCents(startingCents)}
-                  </p>
-                  {hasBuyNow ? (
-                    <p>
-                      <span className="font-medium text-foreground/80 dark:text-gray-300">
-                        Buy now{" "}
-                      </span>
-                      {formatCents(buyNowCents!)}
-                    </p>
-                  ) : null}
-                </div>
                 {showEmbedBidForm ? (
                   <div className="mt-4 border-t border-border pt-4 dark:border-gray-700">
                     <PlaceBidForm
@@ -520,6 +571,7 @@ export function ListingAuctionDetail({
                       listing={listing}
                       isCleaner={isCleaner}
                       currentUserId={currentUserId}
+                      compactHelpText
                     />
                   </div>
                 ) : null}
@@ -837,99 +889,101 @@ export function ListingAuctionDetail({
         </Card>
       )}
 
-      {/* Property summary */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Info className="h-5 w-5 shrink-0" aria-hidden />
-            Property
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground dark:text-gray-400">
-            {beds != null && (
-              <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
-                <Bed className="h-4 w-4 shrink-0" aria-hidden />
-                {beds} bed
-              </span>
-            )}
-            {baths != null && (
-              <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
-                <Bath className="h-4 w-4 shrink-0" aria-hidden />
-                {baths} bath
-              </span>
-            )}
-            {propertyType && (
-              <Badge variant="secondary" className="capitalize">
-                {propertyType.replace(/_/g, " ")}
-              </Badge>
-            )}
-          </div>
-          {(conditionLabel ||
-            levelsLabel ||
-            (typeof listing.duration_days === "number" && listing.duration_days > 0)) && (
-            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {conditionLabel && (
-                <div className="min-w-0 space-y-1">
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                    Condition
-                  </dt>
-                  <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{conditionLabel}</dd>
-                </div>
+      {/* Property summary — full listing page only (Find Jobs embed shows this in the top-left column). */}
+      {!embedInFindJobs && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Info className="h-5 w-5 shrink-0" aria-hidden />
+              Property
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground dark:text-gray-400">
+              {beds != null && (
+                <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                  <Bed className="h-4 w-4 shrink-0" aria-hidden />
+                  {beds} bed
+                </span>
               )}
-              {levelsLabel && (
-                <div className="min-w-0 space-y-1">
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                    Levels
-                  </dt>
-                  <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{levelsLabel}</dd>
-                </div>
+              {baths != null && (
+                <span className="inline-flex items-center gap-1.5 font-medium text-foreground dark:text-gray-200">
+                  <Bath className="h-4 w-4 shrink-0" aria-hidden />
+                  {baths} bath
+                </span>
               )}
-              {typeof listing.duration_days === "number" && listing.duration_days > 0 && (
-                <div className="min-w-0 space-y-1">
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                    Auction listing period
-                  </dt>
-                  <dd className="text-sm font-semibold tabular-nums text-foreground dark:text-gray-100">
-                    {listing.duration_days} days
-                  </dd>
-                </div>
+              {propertyType && (
+                <Badge variant="secondary" className="capitalize">
+                  {propertyType.replace(/_/g, " ")}
+                </Badge>
               )}
-            </dl>
-          )}
-          {addons.length > 0 && (
-            <div className="border-t border-border pt-4 dark:border-gray-800">
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                Add-ons
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {addons.map((a) => (
-                  <Badge
-                    key={a}
-                    variant="outline"
-                    title={
-                      isListingAddonSpecialArea(listing, a)
-                        ? "Special area (from listing)"
-                        : "Paid add-on"
-                    }
-                    className={cn(
-                      "font-normal",
-                      isListingAddonSpecialArea(listing, a)
-                        ? "border-amber-500/75 bg-amber-500/[0.14] text-amber-950 shadow-sm dark:border-amber-400/55 dark:bg-amber-950/45 dark:text-amber-50"
-                        : "capitalize"
-                    )}
-                  >
-                    {isListingAddonSpecialArea(listing, a) ? (
-                      <span className="font-semibold tracking-wide">Special area · </span>
-                    ) : null}
-                    <span className="capitalize">{formatListingAddonDisplayName(a)}</span>
-                  </Badge>
-                ))}
-              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            {(conditionLabel ||
+              levelsLabel ||
+              (typeof listing.duration_days === "number" && listing.duration_days > 0)) && (
+              <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {conditionLabel && (
+                  <div className="min-w-0 space-y-1">
+                    <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                      Condition
+                    </dt>
+                    <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{conditionLabel}</dd>
+                  </div>
+                )}
+                {levelsLabel && (
+                  <div className="min-w-0 space-y-1">
+                    <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                      Levels
+                    </dt>
+                    <dd className="text-sm leading-snug text-foreground dark:text-gray-100">{levelsLabel}</dd>
+                  </div>
+                )}
+                {typeof listing.duration_days === "number" && listing.duration_days > 0 && (
+                  <div className="min-w-0 space-y-1">
+                    <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                      Auction listing period
+                    </dt>
+                    <dd className="text-sm font-semibold tabular-nums text-foreground dark:text-gray-100">
+                      {listing.duration_days} days
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            )}
+            {addons.length > 0 && (
+              <div className="border-t border-border pt-4 dark:border-gray-800">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                  Add-ons
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {addons.map((a) => (
+                    <Badge
+                      key={a}
+                      variant="outline"
+                      title={
+                        isListingAddonSpecialArea(listing, a)
+                          ? "Special area (from listing)"
+                          : "Paid add-on"
+                      }
+                      className={cn(
+                        "font-normal",
+                        isListingAddonSpecialArea(listing, a)
+                          ? "border-amber-500/75 bg-amber-500/[0.14] text-amber-950 shadow-sm dark:border-amber-400/55 dark:bg-amber-950/45 dark:text-amber-50"
+                          : "capitalize"
+                      )}
+                    >
+                      {isListingAddonSpecialArea(listing, a) ? (
+                        <span className="font-semibold tracking-wide">Special area · </span>
+                      ) : null}
+                      <span className="capitalize">{formatListingAddonDisplayName(a)}</span>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dates */}
       {(moveOut || showPreferredFallbackList) && (
