@@ -33,7 +33,6 @@ import {
   DEFAULT_FIND_JOBS_RADIUS_KM,
 } from "@/lib/find-jobs/map-constants";
 import { listingsToFindJobsMapPoints } from "@/lib/find-jobs/map-points-from-listings";
-import FindJobsLoading from "./loading";
 
 export const metadata: Metadata = {
   title: "Find bond cleaning jobs",
@@ -356,11 +355,10 @@ export default async function FindJobsPage({
 }: {
   searchParams?: Promise<FindJobsPageSearchParams>;
 }) {
-  const resolvedSearchParams = (await searchParams) ?? {};
-  const suspenseKey = JSON.stringify(resolvedSearchParams);
-  return (
-    <Suspense key={suspenseKey} fallback={<FindJobsLoading />}>
-      <FindJobsPageContent searchParams={Promise.resolve(resolvedSearchParams)} />
-    </Suspense>
-  );
+  /**
+   * Do not wrap in `<Suspense key={searchParams}>` — a key tied to query params remounts the whole
+   * segment on every radius/filter change, flashes `loading.tsx`, and tears down the Leaflet map
+   * (search circle disappears). Route-level `loading.tsx` still covers initial navigations to /find-jobs.
+   */
+  return <FindJobsPageContent searchParams={searchParams} />;
 }

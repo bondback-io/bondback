@@ -246,7 +246,24 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
     [detailListing, setHighlightedListingId, getListingById, setDetailListing]
   );
 
-  const radiusM = Math.max(1000, radiusKm * 1000);
+  /** Live preview while the radius slider moves — keeps the green circle visible without waiting for RSC. */
+  const [previewRadiusKm, setPreviewRadiusKm] = React.useState(radiusKm);
+  React.useEffect(() => {
+    setPreviewRadiusKm(radiusKm);
+  }, [radiusKm]);
+
+  const displayRadiusKm = previewRadiusKm;
+  const radiusM = Math.max(1000, displayRadiusKm * 1000);
+
+  const circlePathOptions = React.useMemo(
+    () => ({
+      color: "#10b981",
+      fillColor: "#10b981",
+      fillOpacity: 0.1,
+      weight: 2,
+    }),
+    []
+  );
 
   return (
     <div className="relative h-full min-h-[280px] w-full bg-muted/30 dark:bg-gray-900/50">
@@ -264,12 +281,7 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
         <Circle
           center={[centerLat, centerLon]}
           radius={radiusM}
-          pathOptions={{
-            color: "#10b981",
-            fillColor: "#10b981",
-            fillOpacity: 0.06,
-            weight: 1,
-          }}
+          pathOptions={circlePathOptions}
         />
         <FitInitialBounds points={points} centerLat={centerLat} centerLon={centerLon} />
         <JobMarkers points={points} onPinSelect={onPinSelect} markerRefs={markerRefs} />
@@ -286,10 +298,13 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
         ) : null}
       </MapContainer>
       <div className="pointer-events-none absolute left-3 top-3 z-[1000] rounded-lg bg-background/90 px-2.5 py-1.5 text-xs font-medium text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur dark:bg-gray-950/90 dark:text-gray-400 dark:ring-gray-800">
-        {radiusKm} km search · {points.length} job{points.length === 1 ? "" : "s"} on map
+        {displayRadiusKm} km search · {points.length} job{points.length === 1 ? "" : "s"} on map
       </div>
       <React.Suspense fallback={null}>
-        <FindJobsMapRadiusControl radiusKm={radiusKm} />
+        <FindJobsMapRadiusControl
+          radiusKm={radiusKm}
+          onPreviewKmChange={setPreviewRadiusKm}
+        />
       </React.Suspense>
     </div>
   );
