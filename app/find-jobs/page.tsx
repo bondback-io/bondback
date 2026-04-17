@@ -79,8 +79,11 @@ async function FindJobsPageContent({
 
   await applyListingAuctionOutcomes();
 
-  /** Same role resolution as the site header (`getSessionWithProfile` + `normalizeProfileRolesFromDb`). */
-  const session = await getSessionWithProfile();
+  /** Parallel: session + taken listing ids (independent I/O). */
+  const [session, takenIds] = await Promise.all([
+    getSessionWithProfile(),
+    getCachedTakenListingIds(),
+  ]);
   const sessionUserId = session?.user.id ?? null;
 
   const viewerActiveRole: FindJobsViewerActiveRole =
@@ -120,8 +123,6 @@ async function FindJobsPageContent({
   const bedroomsFilter = (sp.bedrooms ?? "").trim();
   const bathroomsFilter = (sp.bathrooms ?? "").trim();
   const propertyTypeFilter = (sp.property_type ?? "").trim();
-
-  const takenIds = await getCachedTakenListingIds();
 
   const filters = {
     suburb: suburbFilter || undefined,
@@ -181,18 +182,17 @@ async function FindJobsPageContent({
   });
 
   const listingIds = listingsWithCoords.map((l) => l.id);
-  const bidCountByListingId =
-    listingIds.length > 0 ? await bidCountsForListingIds(listingIds) : {};
+  const listerRowsForCards = listingsWithCoords.map((l) => ({
+    id: String(l.id),
+    lister_id: String(l.lister_id),
+  }));
+
+  const [bidCountByListingId, listerCardDataByListingId] = await Promise.all([
+    listingIds.length > 0 ? bidCountsForListingIds(listingIds) : Promise.resolve({} as Record<string, number>),
+    buildListerCardDataByListingId(supabase, listerRowsForCards),
+  ]);
 
   const mapPoints = listingsToFindJobsMapPoints(listingsWithCoords, bidCountByListingId);
-
-  const listerCardDataByListingId = await buildListerCardDataByListingId(
-    supabase,
-    listingsWithCoords.map((l) => ({
-      id: String(l.id),
-      lister_id: String(l.lister_id),
-    }))
-  );
 
   const baseParams = new URLSearchParams();
   if (suburbFilter) baseParams.set("suburb", suburbFilter);

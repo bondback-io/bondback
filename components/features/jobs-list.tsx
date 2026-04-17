@@ -484,6 +484,8 @@ export function JobsList({
             distanceKm={distanceKm}
             selected={selected}
             listerName={listerCard?.listerName ?? null}
+            onPrefetchEnter={prefetchListingDetail}
+            imagePriority={index < 4}
             onSelect={() => {
               prefetchListingDetail();
               if (String(findJobsMap.detailListing?.id) === String(listing.id)) {
@@ -495,7 +497,9 @@ export function JobsList({
                 findJobsMap.setHighlightedListingId(String(listing.id));
               });
               findJobsMap.setDetailListing(listing);
-              findJobsMap.requestMapFocus(String(listing.id));
+              requestAnimationFrame(() => {
+                findJobsMap.requestMapFocus(String(listing.id));
+              });
             }}
           />
         );

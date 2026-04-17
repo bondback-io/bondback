@@ -1,13 +1,14 @@
-import { JobCardSkeletonGrid } from "@/components/features/job-card-skeleton";
 import { FindJobsMapPaneSkeleton } from "@/components/find-jobs/find-jobs-map-skeleton";
+import { FindJobsCompactRowSkeletonList } from "@/components/find-jobs/find-jobs-compact-skeleton";
 import { PrimaryPageHeaderSkeleton } from "@/components/skeletons/navigation-chrome-skeleton";
 import { PageLoadingShell } from "@/components/skeletons/page-loading-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 
+/** Shown the moment navigation starts — matches split list + map layout (not generic job cards). */
 export default function FindJobsLoading() {
   return (
     <PageLoadingShell className="flex min-h-[70dvh] flex-col gap-0 lg:flex-row lg:min-h-[calc(100dvh-7.5rem)]">
-      <div className="flex min-h-0 w-full flex-1 flex-col border-border lg:w-[40%] lg:max-w-none lg:border-r lg:border-border/80 dark:lg:border-gray-800">
+      <div className="flex min-h-0 w-full flex-1 flex-col border-border lg:w-[min(420px,36%)] lg:max-w-[440px] lg:shrink-0 lg:border-r lg:border-border/80 dark:lg:border-gray-800">
         <div className="mx-auto w-full max-w-6xl px-3 pt-2 md:px-4 md:pt-4">
           <PrimaryPageHeaderSkeleton showMeta showFilterRow filterSlots={4} />
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -21,11 +22,11 @@ export default function FindJobsLoading() {
             <Skeleton className="h-9 w-24 rounded-lg bg-muted/60 dark:bg-gray-800/80" />
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-hidden px-3 pb-8 pt-4 sm:px-4 lg:px-5">
-          <JobCardSkeletonGrid count={8} className="grid-cols-1 lg:grid-cols-1" />
+        <div className="min-h-0 flex-1 overflow-hidden px-0 pb-8 pt-4 sm:px-4 lg:px-5">
+          <FindJobsCompactRowSkeletonList count={8} />
         </div>
       </div>
-      <div className="hidden min-h-0 flex-1 flex-col lg:flex">
+      <div className="hidden min-h-0 min-w-0 flex-1 flex-col lg:flex">
         <FindJobsMapPaneSkeleton className="min-h-[320px] flex-1" />
       </div>
     </PageLoadingShell>

@@ -240,14 +240,14 @@ export default async function ListingDetailPage({
     !!sessionUserId && !ownsThisListing && isListerActive;
 
   const showPublicComments = shouldShowPublicListingComments(listingRow, hasActiveJob);
-  const initialPublicComments = showPublicComments
-    ? await fetchListingCommentsPublic(listingId, String(listingRow.lister_id))
-    : [];
-
-  const initialQaUnreadCount =
+  const [initialPublicComments, initialQaUnreadCount] = await Promise.all([
+    showPublicComments
+      ? fetchListingCommentsPublic(listingId, String(listingRow.lister_id))
+      : Promise.resolve([]),
     showPublicComments && sessionUserId
-      ? await countUnreadListingQaNotifications(listingId)
-      : 0;
+      ? countUnreadListingQaNotifications(listingId)
+      : Promise.resolve(0),
+  ]);
 
   return (
     <section

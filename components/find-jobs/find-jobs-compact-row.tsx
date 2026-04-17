@@ -21,6 +21,10 @@ export type FindJobsCompactRowProps = {
   selected: boolean;
   listerName?: string | null;
   onSelect: () => void;
+  /** Prefetch listing detail route on hover for faster navigation. */
+  onPrefetchEnter?: () => void;
+  /** First rows: eager-load hero thumbnail (LCP). */
+  imagePriority?: boolean;
 };
 
 function formatEndsShort(endTime: string | null | undefined): string {
@@ -47,6 +51,8 @@ export function FindJobsCompactRow({
   selected,
   listerName,
   onSelect,
+  onPrefetchEnter,
+  imagePriority = false,
 }: FindJobsCompactRowProps) {
   const title = listing.title?.trim() || "Bond clean";
   const href = hrefListingOrJob(
@@ -61,6 +67,7 @@ export function FindJobsCompactRow({
   return (
     <div
       data-find-job-card={listing.id}
+      onPointerEnter={onPrefetchEnter}
       className={cn(
         "group border-b border-border/80 bg-card/40 transition-colors dark:border-gray-800 dark:bg-gray-950/30",
         selected && "bg-primary/[0.06] ring-1 ring-inset ring-primary/25 dark:bg-primary/10"
@@ -81,6 +88,7 @@ export function FindJobsCompactRow({
               className="object-cover"
               placeholder="blur"
               blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+              priority={imagePriority}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
@@ -129,6 +137,7 @@ export function FindJobsCompactRow({
           </Avatar>
           <Link
             href={href}
+            prefetch
             onClick={(e) => e.stopPropagation()}
             className="text-[10px] font-medium text-primary underline-offset-2 hover:underline"
           >
