@@ -41,6 +41,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
 import { PlaceBidForm } from "@/components/features/place-bid-form";
+import { ListingLocationMapDialog } from "@/components/features/listing-location-map-dialog";
 import {
   BidHistoryTable,
   type BidWithBidder,
@@ -119,6 +120,7 @@ export function ListingAuctionDetail({
   } | null>(null);
   const [showCancelListingDialog, setShowCancelListingDialog] = useState(false);
   const [cancellingListing, setCancellingListing] = useState(false);
+  const [locationMapOpen, setLocationMapOpen] = useState(false);
   /** Same source as job detail: list storage so we show every file even if DB arrays are incomplete. */
   const [storageInitialUrls, setStorageInitialUrls] = useState<string[] | null>(null);
 
@@ -450,7 +452,18 @@ export function ListingAuctionDetail({
                       className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
                       aria-hidden
                     />
-                    <span className="min-w-0 leading-snug">{address}</span>
+                    {embedInFindJobs ? (
+                      <button
+                        type="button"
+                        onClick={() => setLocationMapOpen(true)}
+                        aria-label="View approximate area on map"
+                        className="min-w-0 rounded-md text-left text-sm leading-snug underline-offset-4 transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:ring-offset-gray-950"
+                      >
+                        {address}
+                      </button>
+                    ) : (
+                      <span className="min-w-0 leading-snug">{address}</span>
+                    )}
                   </dd>
                 </div>
               </dl>
@@ -551,7 +564,7 @@ export function ListingAuctionDetail({
             <div className="min-w-0 md:self-start">
               <div
                 className={cn(
-                  "rounded-xl border bg-background p-5 shadow-md ring-1 ring-black/[0.04] dark:border-gray-700 dark:bg-gray-900/90 dark:ring-white/10",
+                  "rounded-xl border bg-background p-5 text-center shadow-md ring-1 ring-black/[0.04] dark:border-gray-700 dark:bg-gray-900/90 dark:ring-white/10",
                   showEndedListingVisual && "opacity-95"
                 )}
               >
@@ -560,7 +573,7 @@ export function ListingAuctionDetail({
                 </p>
                 <p
                   className={cn(
-                    "mt-1 text-3xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400",
+                    "mt-2 text-4xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 md:text-5xl",
                     showEndedListingVisual &&
                       "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
                   )}
@@ -1249,6 +1262,16 @@ export function ListingAuctionDetail({
           Sign in as a cleaner to bid, or as the lister for this property to accept bids.
         </p>
       )}
+
+      {embedInFindJobs ? (
+        <ListingLocationMapDialog
+          open={locationMapOpen}
+          onOpenChange={setLocationMapOpen}
+          addressLabel={address}
+          postcode={String(listing.postcode ?? "")}
+          suburb={listing.suburb ?? ""}
+        />
+      ) : null}
     </div>
   );
 }

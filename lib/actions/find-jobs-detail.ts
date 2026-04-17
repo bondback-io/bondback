@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { BID_FULL_SELECT } from "@/lib/supabase/queries";
 import { enrichBidsWithBidderProfiles } from "@/lib/bids/enrich-bids-with-bidders";
+import { getSuburbLatLonForPostcodeAndSuburb } from "@/lib/geo/suburb-lat-lon";
 import type { BidWithBidder } from "@/components/features/bid-history-table";
 
 /** Bids + bidder summaries for the Find Jobs inline detail panel (same shape as listing page). */
@@ -20,4 +21,13 @@ export async function fetchListingBidsForFindJobsPanel(
     return [];
   }
   return (await enrichBidsWithBidderProfiles(data ?? [])) as BidWithBidder[];
+}
+
+/** Suburb centre for map preview (same source as Find Jobs distance filtering). */
+export async function fetchSuburbLatLonForListingMap(
+  postcode: string,
+  suburb: string
+): Promise<{ lat: number; lon: number } | null> {
+  const supabase = await createServerSupabaseClient();
+  return getSuburbLatLonForPostcodeAndSuburb(supabase as any, postcode, suburb);
 }

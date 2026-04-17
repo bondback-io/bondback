@@ -1,13 +1,11 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { useFindJobsMap } from "@/components/find-jobs/find-jobs-map-context";
 import { ListingPublicCommentsDock } from "@/components/features/listing-public-comments-dock";
 import { ListingAuctionDetail } from "@/components/features/listing-auction-detail";
 import type { BidWithBidder } from "@/components/features/bid-history-table";
-import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -17,7 +15,6 @@ import { fetchListingCommentsPublic } from "@/lib/actions/listing-comments";
 import type { ListingCommentPublic } from "@/lib/actions/listing-comments";
 import { fetchListingBidsForFindJobsPanel } from "@/lib/actions/find-jobs-detail";
 import { shouldShowPublicListingComments } from "@/lib/listing-public-comments-visibility";
-import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 import type { ListingRow } from "@/lib/listings";
 
 function useLgUp() {
@@ -109,21 +106,10 @@ export function FindJobsDetailPanelBody({
     uid && viewerActiveRole === "lister" && String(uid) !== listerId
   );
 
-  const fullHref = hrefListingOrJob(
-    { id: listing.id, status: listing.status, end_time: listing.end_time },
-    undefined
-  );
-
   const isListerSessionActive = viewerActiveRole === "lister";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-end border-b border-border px-3 py-2 dark:border-gray-800">
-        <Button variant="outline" size="sm" className="text-xs" asChild>
-          <Link href={fullHref}>Open full page</Link>
-        </Button>
-      </div>
-
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {bidsLoading || bids === null ? (
           <div className="flex items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
@@ -176,8 +162,7 @@ export function FindJobsDetailPanelBody({
               )}
               {!commentsLoading && listing && !shouldShowPublicListingComments(listing, false) && (
                 <p className="mt-2 text-sm text-muted-foreground dark:text-gray-500">
-                  Public Q&amp;A isn&apos;t open for this listing. Use the full page link above if you
-                  need more.
+                  Public Q&amp;A isn&apos;t open for this listing.
                 </p>
               )}
             </div>
