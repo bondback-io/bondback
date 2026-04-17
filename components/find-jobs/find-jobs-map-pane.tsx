@@ -7,6 +7,7 @@ import {
   Marker,
   Popup,
   TileLayer,
+  Tooltip,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
@@ -17,7 +18,8 @@ import { useFindJobsMap, type FindJobsMapFocusRequest } from "@/components/find-
 import { FindJobsMapRadiusControl } from "@/components/find-jobs/find-jobs-map-radius-control";
 
 function makeBondBackIcon(selected: boolean): L.DivIcon {
-  const color = selected ? "rgb(5 150 105)" : "rgb(16 185 129)";
+  /** Selected listing (matches left column): red; default: emerald. */
+  const color = selected ? "rgb(220 38 38)" : "rgb(16 185 129)";
   const ring = selected
     ? "0 0 0 3px rgba(255,255,255,0.95), 0 2px 8px rgba(0,0,0,0.35)"
     : "0 2px 8px rgba(0,0,0,0.3)";
@@ -90,20 +92,52 @@ function JobMarkers({
 
   return (
     <>
-      {points.map((p) => (
-        <Marker
-          key={`${p.id}-${highlightedListingId === p.id ? "1" : "0"}`}
-          position={[p.lat, p.lon]}
-          icon={highlightedListingId === p.id ? ICON_SELECTED : ICON_NORMAL}
-          eventHandlers={{
-            click: () => onPinSelect(p.id),
-          }}
-          ref={(instance) => {
-            if (instance) markerRefs.current.set(p.id, instance);
-            else markerRefs.current.delete(p.id);
-          }}
-        />
-      ))}
+      {points.map((p) => {
+        const selected = highlightedListingId === p.id;
+        return (
+          <Marker
+            key={p.id}
+            position={[p.lat, p.lon]}
+            icon={selected ? ICON_SELECTED : ICON_NORMAL}
+            eventHandlers={{
+              click: () => onPinSelect(p.id),
+            }}
+            ref={(instance) => {
+              if (instance) markerRefs.current.set(p.id, instance);
+              else markerRefs.current.delete(p.id);
+            }}
+          >
+            <Tooltip
+              direction="top"
+              offset={[0, -36]}
+              opacity={1}
+              className="!rounded-lg !border !border-border !bg-card !px-3 !py-2 !text-foreground !shadow-lg dark:!border-gray-700 dark:!bg-gray-950"
+            >
+              <div className="max-w-[240px] space-y-1 text-left text-xs leading-snug">
+                <p className="line-clamp-2 font-semibold text-foreground">{p.title}</p>
+                <p className="text-muted-foreground">{p.locationLabel}</p>
+                <div className="space-y-0.5 border-t border-border/80 pt-1.5 text-[11px] dark:border-gray-700">
+                  <p>
+                    <span className="text-muted-foreground">Current bid: </span>
+                    <span className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                      {p.currentBidLabel}
+                    </span>
+                  </p>
+                  {p.buyNowLabel ? (
+                    <p>
+                      <span className="text-muted-foreground">Buy now: </span>
+                      <span className="font-medium tabular-nums">{p.buyNowLabel}</span>
+                    </p>
+                  ) : null}
+                  <p className="text-muted-foreground">
+                    {p.bidCount} bid{p.bidCount === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+            </Tooltip>
+          </Marker>
+        );
+      })}
     </>
   );
 }

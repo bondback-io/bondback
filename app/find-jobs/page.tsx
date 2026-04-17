@@ -180,11 +180,11 @@ async function FindJobsPageContent({
     return { ...l, lat: c.lat, lon: c.lon } as ListingRow;
   });
 
-  const mapPoints = listingsToFindJobsMapPoints(listingsWithCoords);
-
   const listingIds = listingsWithCoords.map((l) => l.id);
   const bidCountByListingId =
     listingIds.length > 0 ? await bidCountsForListingIds(listingIds) : {};
+
+  const mapPoints = listingsToFindJobsMapPoints(listingsWithCoords, bidCountByListingId);
 
   const listerCardDataByListingId = await buildListerCardDataByListingId(
     supabase,

@@ -20,7 +20,15 @@ type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type ListingCommentRow = Database["public"]["Tables"]["listing_comments"]["Row"];
 type ProfileMiniRow = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
-  "id" | "full_name" | "roles" | "cleaner_username" | "profile_photo_url"
+  | "id"
+  | "full_name"
+  | "roles"
+  | "cleaner_username"
+  | "profile_photo_url"
+  | "abn"
+  | "cleaner_avg_rating"
+  | "cleaner_total_reviews"
+  | "verification_badges"
 >;
 
 export type ListingCommentPublic = {
@@ -37,6 +45,11 @@ export type ListingCommentPublic = {
   posted_as_role?: ListingCommentPostedAsRole | null;
   /** True when this author is banned from further Q&A participation on this listing. */
   author_banned?: boolean;
+  /** Cleaner reputation (from profiles); only meaningful for cleaners. */
+  author_cleaner_avg_rating?: number | null;
+  author_cleaner_total_reviews?: number | null;
+  author_abn?: string | null;
+  author_verification_badges?: string[] | null;
 };
 
 function normalizeRoles(raw: unknown): string[] {
@@ -184,7 +197,9 @@ export async function fetchListingCommentsPublic(
   const userIds = [...new Set(typedRows.map((r) => r.user_id))];
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, full_name, roles, cleaner_username, profile_photo_url")
+    .select(
+      "id, full_name, roles, cleaner_username, profile_photo_url, abn, cleaner_avg_rating, cleaner_total_reviews, verification_badges"
+    )
     .in("id", userIds);
   const profileRows = ((profiles ?? []) as ProfileMiniRow[]).slice();
   const missingUserIds = userIds.filter(
@@ -195,7 +210,9 @@ export async function fetchListingCommentsPublic(
     if (admin) {
       const { data: adminProfiles, error: adminErr } = await admin
         .from("profiles")
-        .select("id, full_name, roles, cleaner_username, profile_photo_url")
+        .select(
+          "id, full_name, roles, cleaner_username, profile_photo_url, abn, cleaner_avg_rating, cleaner_total_reviews, verification_badges"
+        )
         .in("id", missingUserIds);
       if (adminErr) {
         console.warn("[fetchListingCommentsPublic admin profile fallback]", adminErr.message);
@@ -208,10 +225,14 @@ export async function fetchListingCommentsPublic(
     profileRows.map((p) => [
       p.id,
       {
-        full_name: p.full_name as string | null,
-        roles: p.roles as string[] | null,
-        cleaner_username: p.cleaner_username as string | null,
-        profile_photo_url: p.profile_photo_url as string | null,
+        full_name: p.full_name,
+        roles: p.roles,
+        cleaner_username: p.cleaner_username,
+        profile_photo_url: p.profile_photo_url,
+        abn: p.abn,
+        cleaner_avg_rating: p.cleaner_avg_rating,
+        cleaner_total_reviews: p.cleaner_total_reviews,
+        verification_badges: p.verification_badges?.length ? p.verification_badges : null,
       },
     ])
   );
@@ -249,6 +270,10 @@ export async function fetchListingCommentsPublic(
       }),
       posted_as_role: postedAs,
       author_banned: banMap.has(String(r.user_id)),
+      author_cleaner_avg_rating: p?.cleaner_avg_rating ?? null,
+      author_cleaner_total_reviews: p?.cleaner_total_reviews ?? null,
+      author_abn: p?.abn ?? null,
+      author_verification_badges: p?.verification_badges ?? null,
     };
   });
 }
@@ -309,7 +334,9 @@ export async function postListingComment(params: {
 
     const { data: posterProfile } = await readClient
       .from("profiles")
-      .select("roles, full_name, active_role, cleaner_username, profile_photo_url")
+      .select(
+        "roles, full_name, active_role, cleaner_username, profile_photo_url, abn, cleaner_avg_rating, cleaner_total_reviews, verification_badges"
+      )
       .eq("id", session.user.id)
       .maybeSingle();
 
@@ -460,6 +487,10 @@ export async function postListingComment(params: {
       roles?: string[] | null;
       cleaner_username?: string | null;
       profile_photo_url?: string | null;
+      abn?: string | null;
+      cleaner_avg_rating?: number | null;
+      cleaner_total_reviews?: number | null;
+      verification_badges?: string[] | null;
     } | null;
     const postedPersisted = parsePostedAsRole(ins.posted_as_role) ?? postedAsRoleForInsert;
     const comment: ListingCommentPublic = {
@@ -486,6 +517,10 @@ export async function postListingComment(params: {
       }),
       posted_as_role: postedPersisted,
       author_banned: false,
+      author_cleaner_avg_rating: prof?.cleaner_avg_rating ?? null,
+      author_cleaner_total_reviews: prof?.cleaner_total_reviews ?? null,
+      author_abn: prof?.abn ?? null,
+      author_verification_badges: prof?.verification_badges?.length ? prof.verification_badges : null,
     };
 
     revalidatePath(`/listings/${params.listingId}`);

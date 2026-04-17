@@ -4,5 +4,8 @@ export const DEFAULT_FIND_JOBS_CENTER = {
   lon: 153.081,
 } as const;
 
-/** Default radius (km) for find-jobs map + list when `radius_km` is absent from the URL. */
-export const DEFAULT_FIND_JOBS_RADIUS_KM = 50;
+/**
+ * Default radius (km) for find-jobs map + list when `radius_km` is absent from the URL.
+ * 50 km was too tight: e.g. Gympie QLD (~66 km from the default Sunshine Coast center) was hidden.
+ */
+export const DEFAULT_FIND_JOBS_RADIUS_KM = 100;

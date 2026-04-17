@@ -27,7 +27,8 @@ type FindJobsMapContextValue = {
   setDetailListing: (listing: ListingRow | null) => void;
   registerListings: (
     listings: ListingRow[],
-    listerCardByListingId?: Record<string, ListerCardData>
+    listerCardByListingId?: Record<string, ListerCardData>,
+    bidCountByListingId?: Record<string, number>
   ) => void;
   getListingById: (id: string) => ListingRow | undefined;
   getListerCardData: (listingId: string) => ListerCardData | undefined;
@@ -64,14 +65,18 @@ export function FindJobsMapProvider({
   const listerCardByListingIdRef = React.useRef<Record<string, ListerCardData>>({});
 
   const registerListings = React.useCallback(
-    (listings: ListingRow[], listerCardByListingId?: Record<string, ListerCardData>) => {
+    (
+      listings: ListingRow[],
+      listerCardByListingId?: Record<string, ListerCardData>,
+      bidCountByListingId?: Record<string, number>
+    ) => {
       const m = listingsByIdRef.current;
       m.clear();
       for (const row of listings) {
         m.set(String(row.id), row);
       }
       listerCardByListingIdRef.current = { ...(listerCardByListingId ?? {}) };
-      setMapPoints(listingsToFindJobsMapPoints(listings));
+      setMapPoints(listingsToFindJobsMapPoints(listings, bidCountByListingId));
     },
     []
   );

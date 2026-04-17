@@ -9,6 +9,9 @@ import {
   Loader2,
   CornerDownRight,
   ChevronDown,
+  Star,
+  BadgeCheck,
+  MoreHorizontal,
 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -17,6 +20,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
   banCleanerFromListingQa,
@@ -59,31 +68,79 @@ export type ListingPublicCommentsDockProps = {
 
 type UiComment = ListingCommentPublic & { optimistic?: boolean };
 
+/** Long Q&A bodies collapse like Airtasker “More”. */
+const QA_MESSAGE_PREVIEW_CHARS = 280;
+
 function sortByCreated(a: UiComment, b: UiComment) {
   return a.created_at.localeCompare(b.created_at);
 }
 
-function CommentAvatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
+function CommentAvatar({
+  name,
+  photoUrl,
+  size = "md",
+}: {
+  name: string;
+  photoUrl?: string | null;
+  size?: "md" | "lg";
+}) {
+  const dim = size === "lg" ? "h-11 w-11 text-[12px]" : "h-9 w-9 text-[11px]";
   const src = String(photoUrl ?? "").trim();
-  const initials = String(name || "M")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("") || "M";
+  const initials =
+    String(name || "M")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? "")
+      .join("") || "M";
   if (src) {
     return (
       <img
         src={src}
         alt={name || "Member"}
-        className="h-7 w-7 rounded-full border border-border/70 object-cover dark:border-gray-700"
+        className={cn(
+          "shrink-0 rounded-full border border-border/70 object-cover dark:border-gray-700",
+          dim
+        )}
         loading="lazy"
       />
     );
   }
   return (
-    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-muted text-[11px] font-semibold text-muted-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+    <div
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted font-semibold text-muted-foreground dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300",
+        dim
+      )}
+    >
       {initials}
+    </div>
+  );
+}
+
+function QaMessageBody({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const shouldTruncate = text.length > QA_MESSAGE_PREVIEW_CHARS;
+  const display =
+    expanded || !shouldTruncate
+      ? text
+      : `${text.slice(0, QA_MESSAGE_PREVIEW_CHARS).trimEnd()}…`;
+
+  return (
+    <div className="rounded-lg bg-muted/50 px-3.5 py-3 dark:bg-gray-800/45">
+      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/95 dark:text-gray-200">
+        {display}
+      </p>
+      {shouldTruncate && !expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-2 inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline"
+        >
+          More
+          <ChevronDown className="h-4 w-4" aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -118,91 +175,147 @@ function CommentBlock({
   const canReply = showReplyButton || canReplyAsThreadOwner;
   const canModerate = ownerListerSession && String(c.user_id) !== String(currentUserId);
   const canBan = canModerate && String(c.author_role_label).toLowerCase() === "cleaner";
+  const hasActions = canReply || canModerate;
+
+  const isCleaner = c.author_role_label === "Cleaner";
+  const verified =
+    Array.isArray(c.author_verification_badges) && c.author_verification_badges.length > 0;
+  const ratingAvg = c.author_cleaner_avg_rating;
+  const ratingN = c.author_cleaner_total_reviews;
+  const hasRating =
+    typeof ratingAvg === "number" && Number.isFinite(ratingAvg) && ratingAvg > 0;
+  const abnTrim = String(c.author_abn ?? "").trim();
 
   return (
-    <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-900/40">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <CommentAvatar name={c.author_display_name} photoUrl={c.author_avatar_url} />
-          <span className="truncate text-sm font-semibold text-foreground dark:text-gray-100">
-            {c.author_display_name}
-          </span>
+    <div className="flex gap-3">
+      <CommentAvatar
+        name={c.author_display_name}
+        photoUrl={c.author_avatar_url}
+        size="lg"
+      />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="truncate text-sm font-semibold text-foreground dark:text-gray-100">
+              {c.author_display_name}
+            </span>
+            {verified ? (
+              <BadgeCheck
+                className="h-4 w-4 shrink-0 text-primary"
+                aria-label="Verified"
+              />
+            ) : null}
+          </div>
           <Badge
             variant="secondary"
-            className="shrink-0 text-[10px] font-semibold uppercase tracking-wide"
+            className={cn(
+              "text-[10px] font-semibold uppercase tracking-wide",
+              isCleaner &&
+                "border border-emerald-500/35 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200"
+            )}
           >
             {c.author_role_label}
           </Badge>
+          {isCleaner ? (
+            <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground dark:text-gray-400">
+              <Star
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0",
+                  hasRating ? "fill-amber-400 text-amber-500" : "text-muted-foreground/60"
+                )}
+                aria-hidden
+              />
+              {hasRating ? (
+                <>
+                  <span className="font-medium text-foreground/90 dark:text-gray-200">
+                    {ratingAvg.toFixed(1)}
+                  </span>
+                  <span className="text-muted-foreground">
+                    ({typeof ratingN === "number" && ratingN > 0 ? ratingN : 0})
+                  </span>
+                </>
+              ) : (
+                <span>No reviews yet</span>
+              )}
+            </div>
+          ) : null}
+          {isCleaner ? (
+            <p className="text-xs text-muted-foreground dark:text-gray-500">
+              {abnTrim ? `ABN on file` : `No ABN on profile`}
+            </p>
+          ) : null}
           {c.author_banned ? (
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-destructive">
-              user was banned for misconduct
-            </span>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-destructive">
+              Banned from Q&amp;A
+            </p>
           ) : null}
         </div>
-        <time
-          className="shrink-0 text-[11px] text-muted-foreground dark:text-gray-500"
-          dateTime={c.created_at}
-        >
-          {rel}
-        </time>
+
+        <QaMessageBody text={c.message_text} />
+
+        <div className="flex items-center justify-between gap-2">
+          <time
+            className="text-[11px] text-muted-foreground dark:text-gray-500"
+            dateTime={c.created_at}
+          >
+            {rel}
+          </time>
+          {hasActions ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                  aria-label="Message actions"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[10rem] dark:border-gray-800 dark:bg-gray-900">
+                {canReply ? (
+                  <DropdownMenuItem
+                    onClick={() => onReply(c.id)}
+                    disabled={c.author_banned && !commenterIsCurrentUser}
+                  >
+                    Reply
+                  </DropdownMenuItem>
+                ) : null}
+                {canBan ? (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => onBan(c.user_id)}
+                  >
+                    Ban cleaner
+                  </DropdownMenuItem>
+                ) : null}
+                {canModerate ? (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => onRemoveComment(c.id)}
+                  >
+                    Remove post
+                  </DropdownMenuItem>
+                ) : null}
+                {canModerate && c.parent_comment_id == null ? (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => onRemoveThread(c.id)}
+                  >
+                    Remove thread
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </div>
+        {c.optimistic ? (
+          <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-500">
+            Sending...
+          </p>
+        ) : null}
       </div>
-      <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/95 dark:text-gray-200">
-        {c.message_text}
-      </p>
-      {c.optimistic ? (
-        <p className="mt-1 text-[11px] font-medium text-muted-foreground dark:text-gray-500">
-          Sending...
-        </p>
-      ) : null}
-      {canReply || canModerate ? (
-        <div className="mt-2 flex flex-wrap justify-end gap-1.5">
-          {canReply ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => onReply(c.id)}
-              disabled={c.author_banned && !commenterIsCurrentUser}
-            >
-              Reply
-            </Button>
-          ) : null}
-          {canBan ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-destructive hover:text-destructive"
-              onClick={() => onBan(c.user_id)}
-            >
-              Ban cleaner
-            </Button>
-          ) : null}
-          {canModerate ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-destructive hover:text-destructive"
-              onClick={() => onRemoveComment(c.id)}
-            >
-              Remove post
-            </Button>
-          ) : null}
-          {canModerate && c.parent_comment_id == null ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-destructive hover:text-destructive"
-              onClick={() => onRemoveThread(c.id)}
-            >
-              Remove thread
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -250,7 +363,7 @@ function GroupedCommentThreads({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {roots.map((root) => {
         const replies = byParent.get(root.id) ?? [];
         const canListerReply =
@@ -268,35 +381,15 @@ function GroupedCommentThreads({
               : `${replies.length} replies`;
 
         return (
-          <details
+          <section
             key={root.id}
-            className="group rounded-lg border border-border/80 bg-card/30 dark:border-gray-800 dark:bg-gray-950/40"
+            className="rounded-xl border border-border/70 bg-card/50 p-3 shadow-sm dark:border-gray-800 dark:bg-gray-950/35"
+            aria-label={`Thread from ${root.author_display_name}, ${replyLabel}.`}
           >
-            <summary
-              className="cursor-pointer list-none px-3 py-2.5 [&::-webkit-details-marker]:hidden"
-              aria-label={`Thread from ${root.author_display_name}, ${replyLabel}. Expand to read the question and replies.`}
-            >
-              <div className="flex items-start gap-2">
-                <ChevronDown
-                  className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
-                  aria-hidden
-                />
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-semibold text-foreground dark:text-gray-100">
-                      {root.author_display_name}
-                    </span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground dark:text-gray-500">
-                      {formatDistanceToNow(new Date(root.created_at), { addSuffix: true })}
-                    </span>
-                  </div>
-                  <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-500">
-                    {replyLabel}
-                  </p>
-                </div>
-              </div>
-            </summary>
-            <div className="space-y-2 border-t border-border/60 px-3 py-3 dark:border-gray-800">
+            <p className="mb-3 text-[11px] font-medium text-muted-foreground dark:text-gray-500">
+              {replyLabel}
+            </p>
+            <div className="space-y-4">
               <CommentBlock
                 c={root}
                 root={root}
@@ -311,7 +404,7 @@ function GroupedCommentThreads({
               {replies.map((r) => (
                 <div
                   key={r.id}
-                  className="border-l-2 border-primary/25 pl-3 dark:border-primary/35"
+                  className="border-l-2 border-primary/20 pl-3 dark:border-primary/30"
                 >
                   <CommentBlock
                     c={r}
@@ -327,7 +420,7 @@ function GroupedCommentThreads({
                 </div>
               ))}
             </div>
-          </details>
+          </section>
         );
       })}
     </div>
@@ -454,7 +547,7 @@ function CommentsPanelInner({
           </p>
         ) : composerDisabledForListerOwner ? (
           <p className="text-center text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
-            To respond, expand a question above and tap{" "}
+            To respond, choose a question above and tap{" "}
             <span className="font-medium text-foreground dark:text-gray-200">Reply</span> — you can&apos;t
             post a new thread as the lister.
           </p>
@@ -647,13 +740,20 @@ export function ListingPublicCommentsDock({
       const supabase = createBrowserSupabaseClient();
       const { data: p } = await supabase
         .from("profiles")
-        .select("full_name, roles, active_role, cleaner_username, profile_photo_url")
+        .select(
+          "full_name, roles, active_role, cleaner_username, profile_photo_url, abn, cleaner_avg_rating, cleaner_total_reviews, verification_badges"
+        )
         .eq("id", row.user_id)
         .maybeSingle();
       const fullName = (p as { full_name?: string | null } | null)?.full_name;
       const cleanerUsername = (p as { cleaner_username?: string | null } | null)?.cleaner_username;
       const roles = (p as { roles?: string[] | null } | null)?.roles;
       const avatarUrl = (p as { profile_photo_url?: string | null } | null)?.profile_photo_url;
+      const abn = (p as { abn?: string | null } | null)?.abn ?? null;
+      const cleanerAvgRating = (p as { cleaner_avg_rating?: number | null } | null)?.cleaner_avg_rating ?? null;
+      const cleanerTotalReviews =
+        (p as { cleaner_total_reviews?: number | null } | null)?.cleaner_total_reviews ?? null;
+      const verificationBadges = (p as { verification_badges?: string[] | null } | null)?.verification_badges;
       const name = qaAuthorDisplayName({
         userId: String(row.user_id),
         listerId,
@@ -686,6 +786,10 @@ export function ListingPublicCommentsDock({
         author_avatar_url: avatarUrl ?? null,
         author_role_label: roleLabel,
         posted_as_role: posted,
+        author_cleaner_avg_rating: cleanerAvgRating,
+        author_cleaner_total_reviews: cleanerTotalReviews,
+        author_abn: abn,
+        author_verification_badges: verificationBadges?.length ? verificationBadges : null,
       };
     },
     [listerId]
@@ -731,6 +835,13 @@ export function ListingPublicCommentsDock({
                       ? knownAuthor.author_display_name
                       : enriched.author_display_name,
                   author_avatar_url: enriched.author_avatar_url ?? knownAuthor.author_avatar_url ?? null,
+                  author_cleaner_avg_rating:
+                    enriched.author_cleaner_avg_rating ?? knownAuthor.author_cleaner_avg_rating ?? null,
+                  author_cleaner_total_reviews:
+                    enriched.author_cleaner_total_reviews ?? knownAuthor.author_cleaner_total_reviews ?? null,
+                  author_abn: enriched.author_abn ?? knownAuthor.author_abn ?? null,
+                  author_verification_badges:
+                    enriched.author_verification_badges ?? knownAuthor.author_verification_badges ?? null,
                 }
               : enriched;
             if (prev.some((c) => c.id === row.id)) return prev;
@@ -802,6 +913,10 @@ export function ListingPublicCommentsDock({
       author_role_label: optimisticRoleLabel,
       posted_as_role: optimisticPostedRole,
       author_banned: false,
+      author_cleaner_avg_rating: existingSelf?.author_cleaner_avg_rating ?? null,
+      author_cleaner_total_reviews: existingSelf?.author_cleaner_total_reviews ?? null,
+      author_abn: existingSelf?.author_abn ?? null,
+      author_verification_badges: existingSelf?.author_verification_badges ?? null,
       optimistic: true,
     };
     setComments((prev) => [...prev, optimisticComment].sort(sortByCreated));

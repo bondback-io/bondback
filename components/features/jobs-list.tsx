@@ -152,8 +152,13 @@ export function JobsList({
   }, []);
 
   useEffect(() => {
-    setMobileRadiusKm(getStoredRadiusKm(_radiusKm));
-  }, [_radiusKm]);
+    /** Find Jobs: follow server/URL radius so list matches SSR + map; do not override with localStorage. */
+    if (findJobsPublicBrowse) {
+      setMobileRadiusKm(clampRadiusKm(_radiusKm));
+    } else {
+      setMobileRadiusKm(getStoredRadiusKm(_radiusKm));
+    }
+  }, [_radiusKm, findJobsPublicBrowse]);
 
   const loadMore = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -364,7 +369,7 @@ export function JobsList({
     if (findJobsPublicBrowse) {
       return live.filter((l) => {
         const row = l as ListingRow & { lat?: number; lon?: number };
-        if (typeof row.lat !== "number" || typeof row.lon !== "number") return false;
+        if (typeof row.lat !== "number" || typeof row.lon !== "number") return true;
         return haversineKm(centerLat, centerLon, row.lat, row.lon) <= mobileRadiusKm;
       });
     }
@@ -385,13 +390,14 @@ export function JobsList({
   const registerListingsForMap = findJobsMap?.registerListings;
   useEffect(() => {
     if (!mapSync || !findJobsPublicBrowse || !registerListingsForMap) return;
-    registerListingsForMap(displayListings, listerCardDataByListingId);
+    registerListingsForMap(displayListings, listerCardDataByListingId, bidCountByListingId);
   }, [
     mapSync,
     findJobsPublicBrowse,
     registerListingsForMap,
     displayListings,
     listerCardDataByListingId,
+    bidCountByListingId,
   ]);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -489,6 +495,7 @@ export function JobsList({
                 findJobsMap.setHighlightedListingId(String(listing.id));
               });
               findJobsMap.setDetailListing(listing);
+              findJobsMap.requestMapFocus(String(listing.id));
             }}
           />
         );
