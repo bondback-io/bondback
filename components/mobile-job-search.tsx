@@ -1165,6 +1165,123 @@ export function MobileJobSearchBar({
         </Sheet>
       </div>
 
+      {variant === "jobs" && mdUp && (
+        <div
+          className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/35 px-2 py-2 dark:border-gray-700/80 dark:bg-gray-900/50"
+          role="group"
+          aria-label="Quick filters"
+        >
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-[1_1_auto]">
+            <span className="sr-only">Sort by</span>
+            <Select
+              value={sort}
+              onValueChange={(v) => {
+                setSort(v);
+                navigateSearch({
+                  sort: v === "ending-soon" ? undefined : v,
+                });
+              }}
+            >
+              <SelectTrigger
+                className="h-9 w-[min(100%,11rem)] min-w-[9rem] rounded-full border-border/90 bg-background text-xs font-medium shadow-sm dark:border-gray-600 dark:bg-gray-950"
+                aria-label="Sort by"
+              >
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ending-soon">Ending soon</SelectItem>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="price-asc">Reserve low → high</SelectItem>
+                <SelectItem value="price-desc">Reserve high → low</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={propertyType}
+              onValueChange={(v) => {
+                setPropertyType(v);
+                navigateSearch({
+                  property_type: v === "any" ? undefined : v,
+                });
+              }}
+            >
+              <SelectTrigger
+                className="h-9 w-[min(100%,10rem)] min-w-[8rem] rounded-full border-border/90 bg-background text-xs font-medium shadow-sm dark:border-gray-600 dark:bg-gray-950"
+                aria-label="Property type"
+              >
+                <SelectValue placeholder="Property" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Any property</SelectItem>
+                <SelectItem value="apartment">Apartment</SelectItem>
+                <SelectItem value="house">House</SelectItem>
+                <SelectItem value="townhouse">Townhouse</SelectItem>
+                <SelectItem value="studio">Studio</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={bedrooms}
+              onValueChange={(v) => {
+                setBedrooms(v);
+                navigateSearch({
+                  bedrooms: v === "any" ? undefined : v,
+                });
+              }}
+            >
+              <SelectTrigger
+                className="h-9 w-[min(100%,7.5rem)] min-w-[6.5rem] rounded-full border-border/90 bg-background text-xs font-medium shadow-sm dark:border-gray-600 dark:bg-gray-950"
+                aria-label="Bedrooms"
+              >
+                <SelectValue placeholder="Beds" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Any beds</SelectItem>
+                <SelectItem value="1">1 bed</SelectItem>
+                <SelectItem value="2">2 beds</SelectItem>
+                <SelectItem value="3">3 beds</SelectItem>
+                <SelectItem value="4">4 beds</SelectItem>
+                <SelectItem value="5">5+ beds</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={bathrooms}
+              onValueChange={(v) => {
+                setBathrooms(v);
+                navigateSearch({
+                  bathrooms: v === "any" ? undefined : v,
+                });
+              }}
+            >
+              <SelectTrigger
+                className="h-9 w-[min(100%,7.5rem)] min-w-[6.5rem] rounded-full border-border/90 bg-background text-xs font-medium shadow-sm dark:border-gray-600 dark:bg-gray-950"
+                aria-label="Bathrooms"
+              >
+                <SelectValue placeholder="Baths" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Any baths</SelectItem>
+                <SelectItem value="1">1 bath</SelectItem>
+                <SelectItem value="2">2 baths</SelectItem>
+                <SelectItem value="3">3 baths</SelectItem>
+                <SelectItem value="4">4+ baths</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 shrink-0 rounded-full border-dashed px-3 text-xs font-semibold"
+            onClick={() => setSheetOpen(true)}
+          >
+            Area, price &amp; more
+          </Button>
+        </div>
+      )}
+
       {(variant === "jobs" || variant === "cleaners") && (
         <p
           className={cn(
