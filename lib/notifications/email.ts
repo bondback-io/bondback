@@ -564,7 +564,7 @@ export async function buildNotificationEmail(
   }
   const subject =
     type === "new_job_in_area" && browseRounded != null
-      ? `Browse bond cleans near you (${browseRounded}km radius) – Bond Back`
+      ? `Browse bond cleans near you – Bond Back`
       : subjects[type] ?? `Notification – Bond Back`;
   return { subject, html };
 }

@@ -20,7 +20,7 @@ export function MobileDashboardFab({
 }) {
   const router = useRouter();
   const isLister = variant === "lister";
-  const href = isLister ? "/listings/new" : "/jobs";
+  const href = isLister ? "/listings/new" : "/find-jobs";
   const label = isLister ? "Create New Listing" : "Find Jobs";
 
   return (

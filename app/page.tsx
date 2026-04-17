@@ -104,7 +104,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
                   "dark:border-emerald-500/45 dark:bg-gray-900/70 dark:text-gray-50 dark:hover:border-emerald-400/55 dark:hover:bg-emerald-950/40"
                 )}
               >
-                <Link href="/jobs">
+                <Link href="/find-jobs">
                   Find Cleaning Jobs
                   <ArrowRight className="ml-2 h-5 w-5 shrink-0 opacity-90" aria-hidden />
                 </Link>

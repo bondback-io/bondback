@@ -21,20 +21,14 @@ export type GetJobsPageResult =
   | { ok: false; error: string };
 
 /**
- * Fetch a page of live listings for the /jobs list (infinite scroll).
- * Uses same filters as the jobs page. Requires auth.
+ * Fetch a page of live listings for the jobs / find-jobs list (infinite scroll).
+ * Uses same filters as the browse page. Public (no session required).
  */
 export async function getJobsPage(
   page: number,
   filters: JobsListFilters
 ): Promise<GetJobsPageResult> {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) {
-    return { ok: false, error: "You must be logged in." };
-  }
 
   const takenIds = await getCachedTakenListingIds();
 

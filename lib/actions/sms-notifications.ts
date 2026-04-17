@@ -108,6 +108,24 @@ async function notifyNearbyCleanersForListing(
     ? await getSuburbLatLon(admin, listingPostcode, safeTrim(row.suburb))
     : null;
 
+  /** No-bid reminders must never go to cleaners who already have an active bid on this listing. */
+  let cleanerIdsWithActiveBidOnListing: Set<string> | null = null;
+  if (options.reminderMode) {
+    const { data: bidRows, error: bidErr } = await admin
+      .from("bids")
+      .select("cleaner_id")
+      .eq("listing_id", listingId)
+      .eq("status", "active");
+    if (bidErr) {
+      return { ok: false, sent: 0, error: bidErr.message };
+    }
+    cleanerIdsWithActiveBidOnListing = new Set<string>();
+    for (const br of bidRows ?? []) {
+      const cid = safeTrim((br as { cleaner_id?: string }).cleaner_id);
+      if (cid) cleanerIdsWithActiveBidOnListing.add(cid);
+    }
+  }
+
   const { data: profiles } = await admin
     .from("profiles")
     .select("id, suburb, postcode, roles, max_travel_km, notification_preferences");
@@ -152,6 +170,7 @@ async function notifyNearbyCleanersForListing(
       .notification_preferences;
     const wantsNewListingAlerts = notifPrefs?.new_job_in_area !== false;
     if (!wantsNewListingAlerts) continue;
+    if (cleanerIdsWithActiveBidOnListing?.has(cleanerId)) continue;
     const insidePreferred = distanceKm <= maxTravelKm;
     const insideBuffer = !insidePreferred && distanceKm <= maxTravelKm + bufferKm;
     if (!insidePreferred && !insideBuffer) continue;
@@ -204,8 +223,8 @@ async function notifyNearbyCleanersForListing(
       if (ok) sent += 1;
     } else {
       const outsideMsg = options.reminderMode
-        ? "Reminder: bond cleans just outside your preferred area still need bids. Browse with your expanded radius."
-        : `Bond cleans just outside your preferred area — browse live listings (search radius ${browseKm}km: your ${Math.round(maxTravelKm)}km preference + ${bufferKm}km buffer).`;
+        ? "Reminder: bond cleans just outside your preferred area still need bids — browse jobs to see listings in your area and nearby."
+        : "Bond cleans just outside your preferred area — browse live listings on Bond Back to see work in your area and nearby.";
       const ok = await createNotification(cleanerId, "new_job_in_area", null, outsideMsg, {
         listingTitle,
         suburb: safeTrim(row.suburb),
@@ -222,7 +241,7 @@ async function notifyNearbyCleanersForListing(
           push: channels.push,
         },
         persistTitle: options.reminderMode
-          ? "Reminder: jobs outside your radius"
+          ? "Reminder: jobs outside your area"
           : "Jobs just outside your area",
       });
       if (ok) sent += 1;
@@ -309,7 +328,7 @@ export async function sendDailyBrowseJobsNudge(options?: {
       cleanerId,
       "new_job_in_area",
       null,
-      `Live bond cleans are on the board — open Browse jobs with your ${browseKm}km radius (your usual ${Math.round(maxTravelKm)}km + ${bufferKm}km buffer).`,
+      "Live bond cleans are on the board — open Browse jobs to see work in your area and nearby.",
       {
         channelDelivery: {
           email: chOut.email,
@@ -382,23 +401,37 @@ export async function sendNoBidListingReminderNotifications(
   }
 
   const listingIds = liveListings.map((l) => l.id);
-  const [bidsRes, jobsRes] = await Promise.all([
-    admin.from("bids").select("listing_id").in("listing_id", listingIds),
-    admin
-      .from("jobs")
-      .select("listing_id, winner_id, status")
-      .in("listing_id", listingIds),
-  ]);
-
-  if (bidsRes.error) {
-    return {
-      ok: false,
-      listingsConsidered: liveListings.length,
-      listingsMatched: 0,
-      notificationsSent: 0,
-      error: bidsRes.error.message,
-    };
+  const listingIdsWithBids = new Set<string>();
+  const BIDS_PAGE = 1000;
+  for (let offset = 0; ; offset += BIDS_PAGE) {
+    const { data: bidPage, error: bidPageErr } = await admin
+      .from("bids")
+      .select("listing_id")
+      .in("listing_id", listingIds)
+      .eq("status", "active")
+      .range(offset, offset + BIDS_PAGE - 1);
+    if (bidPageErr) {
+      return {
+        ok: false,
+        listingsConsidered: liveListings.length,
+        listingsMatched: 0,
+        notificationsSent: 0,
+        error: bidPageErr.message,
+      };
+    }
+    const rows = (bidPage ?? []) as { listing_id: string | null }[];
+    for (const b of rows) {
+      const id = safeTrim(b.listing_id);
+      if (id.length > 0) listingIdsWithBids.add(id);
+    }
+    if (rows.length < BIDS_PAGE) break;
   }
+
+  const jobsRes = await admin
+    .from("jobs")
+    .select("listing_id, winner_id, status")
+    .in("listing_id", listingIds);
+
   if (jobsRes.error) {
     return {
       ok: false,
@@ -409,11 +442,6 @@ export async function sendNoBidListingReminderNotifications(
     };
   }
 
-  const listingIdsWithBids = new Set(
-    ((bidsRes.data ?? []) as { listing_id: string | null }[])
-      .map((b) => safeTrim(b.listing_id))
-      .filter((v) => v.length > 0)
-  );
   const listingIdsWithAssignedCleaner = new Set(
     ((jobsRes.data ?? []) as { listing_id: string | null; winner_id: string | null; status: string | null }[])
       .filter((j) => safeTrim(j.winner_id).length > 0 && safeTrim(j.status).toLowerCase() !== "cancelled")

@@ -33,6 +33,7 @@ import { sendAdminSmsFromGlobalSettings } from "@/lib/actions/sms-notifications"
 import { sendTestDailyDigestEmail } from "@/lib/actions/daily-digest";
 import { sendTestAdminNotificationEmail } from "@/lib/actions/admin-notify-email";
 import { sendNoBidListingRemindersManual } from "@/lib/actions/sms-notifications";
+import { NotificationCronStatusButton } from "@/components/admin/notification-cron-status-dialog";
 import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
 import { getListingAddonLabel } from "@/lib/listing-addon-prices";
 
@@ -747,7 +748,8 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             />
           </div>
           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
-            Scheduled crons: no-bid reminders (3:00 UTC) and browse nudge (4:00 UTC). Manual button re-sends new-listing radius alerts for every live listing (per your toggles), then runs the browse-jobs nudge.
+            Scheduled crons: no-bid reminders (3:00 UTC) and browse nudge (4:00 UTC). Manual button re-sends new-listing radius alerts for every live listing (per your toggles), then runs the browse-jobs nudge. Use{" "}
+            <strong className="font-semibold">Cron status report</strong> for next run times, last run, and errors.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -777,6 +779,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             >
               {newListingReminderPending ? "Sending…" : "Send listing reminders now"}
             </Button>
+            <NotificationCronStatusButton />
             <span className="text-[11px] text-muted-foreground dark:text-gray-400">
               Fan-out uses notification #1 + #2 channel toggles; browse nudge uses notification #2 toggles. Requires{" "}
               <code className="rounded bg-muted px-1">SUPABASE_SERVICE_ROLE_KEY</code> on the server.

@@ -21,7 +21,6 @@ const PROTECTED_PATHS = [
   "/cleaner",
   "/lister",
   "/listings/new",
-  "/jobs",
   "/profile",
   "/settings",
   "/my-listings",
@@ -42,6 +41,9 @@ const PUBLIC_ONBOARDING = [
 
 function isProtected(pathname: string): boolean {
   if (pathname === "/") return false;
+  /** `/jobs` browse redirects to public `/find-jobs`; job detail `/jobs/[id]` stays protected. */
+  if (pathname === "/jobs") return false;
+  if (pathname.startsWith("/jobs/")) return true;
   if (pathname.startsWith("/auth/")) return false;
   if (pathname.startsWith("/api/")) return false;
   if (PUBLIC_ONBOARDING.some((p) => pathname === p)) return false;

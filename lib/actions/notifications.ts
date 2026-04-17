@@ -282,7 +282,7 @@ export async function createNotification(
           ? Math.max(1, Math.min(500, Math.round(options.browseJobsRadiusKm)))
           : null;
       if (browseKm != null) {
-        body = `Bond cleans near you — browse live jobs (${browseKm}km filter): ${appUrl}/jobs?radius_km=${browseKm}`;
+        body = `Bond cleans near you — browse live jobs: ${appUrl}/jobs?radius_km=${browseKm}`;
       } else {
         const listingSeg =
           options?.listingUuid != null

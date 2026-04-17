@@ -8,7 +8,9 @@ export function getNavigationLoadingLabel(pathname: string, search: string): str
   if (path === "/dashboard") return "Opening Dashboard…";
   if (path === "/lister/dashboard") return "Opening Lister dashboard…";
   if (path === "/cleaner/dashboard") return "Opening Cleaner dashboard…";
-  if (path === "/jobs" || path.startsWith("/jobs/browse")) return "Opening Find jobs…";
+  if (path === "/find-jobs" || path === "/jobs" || path.startsWith("/jobs/browse")) {
+    return "Opening Find jobs…";
+  }
   if (path.startsWith("/jobs/") && path !== "/jobs") return "Opening job…";
   if (path === "/my-listings") return "Opening My listings…";
   if (path.startsWith("/my-listings")) return "Opening My listings…";

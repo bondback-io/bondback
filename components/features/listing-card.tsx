@@ -94,6 +94,13 @@ export type ListingCardProps = {
   hasAssignedCleaner?: boolean;
   /** Tighter mobile marketplace row (e.g. /jobs list on small screens). */
   compactMobileMarketplace?: boolean;
+  /** Logged-in user id when known (e.g. Connect modal for Buy Now). */
+  currentUserId?: string | null;
+  /**
+   * Find Jobs public browse: show bid/buy row for everyone — enabled for cleaners, disabled + sign-in
+   * for visitors, view-details for signed-in non-cleaners.
+   */
+  publicMarketplaceBidCTAs?: boolean;
 };
 
 function getStatus(listing: ListingRow): "live" | "ending_soon" | "expired" {
@@ -300,12 +307,15 @@ function ListingCardInner({
   hasAssignedCleaner = false,
   compactMobileMarketplace = false,
   job = null,
+  currentUserId = null,
+  publicMarketplaceBidCTAs = false,
 }: ListingCardProps) {
   const distanceUnit = useDistanceUnit();
   const jobHref = hrefListingOrJob(
     { id: listing.id, status: listing.status, end_time: listing.end_time },
     job ?? undefined
   );
+  const signInToBidHref = `/login?next=${encodeURIComponent(jobHref)}`;
 
   const handleShare = () => {
     const url = typeof window !== "undefined" ? `${window.location.origin}${jobHref}` : jobHref;
@@ -461,6 +471,9 @@ function ListingCardInner({
           hasAssignedCleaner={hasAssignedCleaner}
           hideCleanerCancelledAuctionUi={hideCleanerCancelledAuctionUi}
           layout={compactMobileMarketplace ? "compact" : "default"}
+          publicMarketplaceBidCTAs={publicMarketplaceBidCTAs}
+          currentUserId={currentUserId}
+          signInToBidHref={signInToBidHref}
         />
       </div>
 
@@ -710,57 +723,107 @@ function ListingCardInner({
         {/* Primary CTAs — desktop */}
         <div className="mt-auto flex flex-col gap-2 pt-1">
           <div className="flex flex-col gap-2">
-            {isCleaner && isLive && hasBuyNow && !hideCleanerCancelledAuctionUi && (
-              <BuyNowButton
-                listingId={listing.id}
-                buyNowCents={listing.buy_now_cents as number}
-                disabled={!isLive}
-              />
-            )}
-            {showPlaceBid && isLive && !hideCleanerCancelledAuctionUi ? (
-              <Button
-                asChild
-                className={cn(
-                  "w-full rounded-xl font-semibold transition-transform active:scale-[0.98]",
-                  isCleaner ? "min-h-12 text-base md:min-h-12" : "min-h-10 rounded-lg md:min-h-10"
-                )}
-                size="default"
-              >
-                <Link
-                  href={jobHref}
-                  prefetch
+            {(() => {
+              const bidCtaVisible =
+                showPlaceBid && isLive && !hideCleanerCancelledAuctionUi;
+              const showAnonymousBidPrompt =
+                publicMarketplaceBidCTAs && bidCtaVisible && !currentUserId;
+              const viewDetailsButton = (
+                <Button
+                  asChild
+                  variant="outline"
                   className={cn(
-                    "flex items-center justify-center no-underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                    isCleaner ? "min-h-12" : "min-h-10"
+                    "w-full rounded-xl transition-transform active:scale-[0.98] dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700",
+                    isCleaner ? "min-h-12 text-base font-semibold md:min-h-12" : "min-h-10 rounded-lg md:min-h-10"
                   )}
-                  aria-label={`Bid on ${title}`}
+                  size="default"
                 >
-                  Bid now
-                </Link>
-              </Button>
-            ) : (
-              <Button
-                asChild
-                variant="outline"
-                className={cn(
-                  "w-full rounded-xl transition-transform active:scale-[0.98] dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700",
-                  isCleaner ? "min-h-12 text-base font-semibold md:min-h-12" : "min-h-10 rounded-lg md:min-h-10"
-                )}
-                size="default"
-              >
-                <Link
-                  href={jobHref}
-                  prefetch
-                  className={cn(
-                    "flex items-center justify-center no-underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                    isCleaner ? "min-h-12" : "min-h-10"
-                  )}
-                  aria-label={`View details for ${title}`}
-                >
-                  View details
-                </Link>
-              </Button>
-            )}
+                  <Link
+                    href={jobHref}
+                    prefetch
+                    className={cn(
+                      "flex items-center justify-center no-underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      isCleaner ? "min-h-12" : "min-h-10"
+                    )}
+                    aria-label={`View details for ${title}`}
+                  >
+                    View details
+                  </Link>
+                </Button>
+              );
+              if (!bidCtaVisible) {
+                return viewDetailsButton;
+              }
+              if (showAnonymousBidPrompt) {
+                return (
+                  <>
+                    {hasBuyNow && (
+                      <BuyNowButton
+                        listingId={listing.id}
+                        buyNowCents={listing.buy_now_cents as number}
+                        disabled
+                        className="pointer-events-none opacity-70"
+                      />
+                    )}
+                    <Button
+                      type="button"
+                      disabled
+                      className={cn(
+                        "w-full cursor-not-allowed rounded-xl font-semibold opacity-70",
+                        "min-h-12 text-base md:min-h-12"
+                      )}
+                      aria-disabled
+                    >
+                      Bid now
+                    </Button>
+                    <p className="text-center text-xs text-muted-foreground dark:text-gray-400">
+                      <Link
+                        href={signInToBidHref}
+                        className="font-semibold text-primary underline-offset-4 hover:underline"
+                      >
+                        Sign in to bid
+                      </Link>{" "}
+                      or open the listing to read more.
+                    </p>
+                  </>
+                );
+              }
+              if (isCleaner) {
+                return (
+                  <>
+                    {isLive && hasBuyNow && !hideCleanerCancelledAuctionUi && (
+                      <BuyNowButton
+                        listingId={listing.id}
+                        buyNowCents={listing.buy_now_cents as number}
+                        disabled={!isLive}
+                        currentUserId={currentUserId}
+                      />
+                    )}
+                    <Button
+                      asChild
+                      className={cn(
+                        "w-full rounded-xl font-semibold transition-transform active:scale-[0.98]",
+                        "min-h-12 text-base md:min-h-12"
+                      )}
+                      size="default"
+                    >
+                      <Link
+                        href={jobHref}
+                        prefetch
+                        className={cn(
+                          "flex items-center justify-center no-underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                          "min-h-12"
+                        )}
+                        aria-label={`Bid on ${title}`}
+                      >
+                        Bid now
+                      </Link>
+                    </Button>
+                  </>
+                );
+              }
+              return viewDetailsButton;
+            })()}
           </div>
         </div>
       </CardContent>

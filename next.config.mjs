@@ -31,6 +31,8 @@ function supabaseStorageRemotePattern() {
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: [
+    "leaflet",
+    "react-leaflet",
     "expo",
     "expo-modules-core",
     "expo-notifications",

@@ -75,12 +75,12 @@ function DesktopNavLinks({
           {isCleaner && (
             <Link
               id="tour-find-jobs-desktop"
-              href="/jobs"
+              href="/find-jobs"
               prefetch
-              className={linkClass("/jobs")}
+              className={linkClass("/find-jobs")}
               title="Find jobs"
               aria-label="Find jobs"
-              onMouseEnter={() => router.prefetch("/jobs")}
+              onMouseEnter={() => router.prefetch("/find-jobs")}
             >
               <Search className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
               <span>Find Jobs</span>
@@ -226,10 +226,10 @@ function MobileNavContent({
           <SheetClose asChild>
             <Link
               id="tour-find-jobs-mobile"
-              href="/jobs"
+              href="/find-jobs"
               prefetch
-              className={linkClass("/jobs")}
-              onPointerDown={() => router.prefetch("/jobs")}
+              className={linkClass("/find-jobs")}
+              onPointerDown={() => router.prefetch("/find-jobs")}
               onClick={onNavigate}
               title="Find jobs"
               aria-label="Find jobs"

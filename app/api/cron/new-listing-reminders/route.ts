@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendNoBidListingReminderNotifications } from "@/lib/actions/sms-notifications";
+import { recordNotificationCronRun } from "@/lib/cron/record-notification-cron-run";
 
 /**
  * Cron: remind cleaners about live no-bid listings in/near their area.
@@ -18,8 +19,27 @@ export async function GET(request: Request) {
     }
   }
 
-  const result = await sendNoBidListingReminderNotifications();
-  return NextResponse.json(result);
+  try {
+    const result = await sendNoBidListingReminderNotifications();
+    await recordNotificationCronRun("new_listing_reminders", {
+      ok: result.ok,
+      error: result.error ?? null,
+      result: {
+        listingsConsidered: result.listingsConsidered,
+        listingsMatched: result.listingsMatched,
+        notificationsSent: result.notificationsSent,
+      },
+    });
+    return NextResponse.json(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordNotificationCronRun("new_listing_reminders", {
+      ok: false,
+      error: msg,
+      result: null,
+    });
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {

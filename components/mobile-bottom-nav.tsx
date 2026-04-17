@@ -20,6 +20,7 @@ const BOTTOM_NAV_ROUTES = [
   "/lister/dashboard",
   "/cleaner/dashboard",
   "/jobs",
+  "/find-jobs",
   "/messages",
   "/profile",
   "/my-listings",
@@ -302,7 +303,7 @@ export function MobileBottomNav({
   useEffect(() => {
     if (!showBottomNav) return;
     const run = () => {
-      router.prefetch("/jobs");
+      router.prefetch("/find-jobs");
       router.prefetch("/messages");
       router.prefetch("/dashboard");
       router.prefetch("/profile");
@@ -340,7 +341,7 @@ export function MobileBottomNav({
               ? "/my-listings"
               : storedRoleFallback === "cleaner"
                 ? "/earnings"
-                : "/jobs"));
+                : "/find-jobs"));
   const secondaryTabLabel =
     effectiveRole === "lister"
       ? "Listings"

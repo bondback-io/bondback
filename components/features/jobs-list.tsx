@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { flushSync } from "react-dom";
+import { useRouter } from "next/navigation";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { AnimatedListingCard } from "@/components/ui/ListingCard";
@@ -11,7 +13,7 @@ import {
 } from "@/lib/jobs-radius-local";
 import { getListingCoverUrl } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp } from "@/lib/utils";
 import {
   type JobsListFilters,
   isListingLiveForJobsBrowse,
@@ -37,6 +39,8 @@ import {
   JOBS_RADIUS_CHANGED_EVENT,
   useJobsSearchCountSetter,
 } from "@/components/mobile-job-search";
+import { useFindJobsMapOptional } from "@/components/find-jobs/find-jobs-map-context";
+import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 function haversineKm(
   lat1: number,
@@ -86,6 +90,15 @@ export type JobsListProps = {
   filters?: JobsListFilters;
   /** When false, hide the mobile-only radius strip (e.g. when using MobileJobSearchBar). Default true. */
   showMobileRadiusStrip?: boolean;
+  /** Narrow single column for split layouts (e.g. /find-jobs). */
+  listLayout?: "default" | "sidebar";
+  /** When true (inside Find Jobs map provider), list cards sync selection with the map. */
+  mapSync?: boolean;
+  /**
+   * Find Jobs: show bid / buy CTAs for everyone — cleaners get full actions; signed-out users see
+   * disabled buttons with a sign-in prompt; signed-in non-cleaners see view-details only.
+   */
+  findJobsPublicBrowse?: boolean;
 };
 
 export function JobsList({
@@ -100,7 +113,12 @@ export function JobsList({
   showListerActions,
   filters = {},
   showMobileRadiusStrip = true,
+  listLayout = "default",
+  mapSync = false,
+  findJobsPublicBrowse = false,
 }: JobsListProps) {
+  const findJobsMap = useFindJobsMapOptional();
+  const router = useRouter();
   const showListerActionsResolved = showListerActions !== undefined ? showListerActions : !isCleaner;
   const [listings, setListings] = useState<ListingRow[]>(initialListings);
   const [bidCountByListingId, setBidCountByListingId] = useState<Record<string, number>>(initialBidCounts);
@@ -369,11 +387,66 @@ export function JobsList({
     const bidCount = bidCountByListingId[String(listing.id)] ?? 0;
     const isListerOwner = Boolean(currentUserId && (listing as { lister_id?: string }).lister_id === currentUserId);
     const listerCard = listerCardDataByListingId[String(listing.id)];
+    const showPlaceBidResolved = findJobsPublicBrowse ? true : isCleaner;
+    if (mapSync && findJobsMap) {
+      const prefetchListingDetail = () => {
+        router.prefetch(
+          hrefListingOrJob(
+            { id: listing.id, status: listing.status, end_time: listing.end_time },
+            undefined
+          )
+        );
+      };
+      return (
+        <div
+          key={listing.id}
+          data-find-job-card={listing.id}
+          className={cn(
+            "rounded-xl transition-[box-shadow,ring-color] duration-150 ease-out",
+            findJobsMap.highlightedListingId === String(listing.id) &&
+              "ring-2 ring-primary ring-offset-2 ring-offset-background dark:ring-offset-gray-950"
+          )}
+          onPointerEnter={prefetchListingDetail}
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            const t = e.target as HTMLElement;
+            if (t.closest("a[href]")) return;
+            prefetchListingDetail();
+            flushSync(() => {
+              findJobsMap.setHighlightedListingId(String(listing.id));
+            });
+          }}
+          onClick={(e) => {
+            const t = e.target as HTMLElement;
+            if (t.closest("a[href]")) return;
+            findJobsMap.requestMapFocus(String(listing.id));
+          }}
+        >
+          <AnimatedListingCard
+            listing={listing}
+            showPlaceBid={showPlaceBidResolved}
+            publicMarketplaceBidCTAs={findJobsPublicBrowse}
+            currentUserId={currentUserId}
+            isCleaner={isCleaner}
+            isListerOwner={isListerOwner}
+            showListerActions={showListerActionsResolved}
+            distanceKm={distanceKm}
+            bidCount={bidCount}
+            priority={index < PRELOAD_IMAGE_COUNT}
+            listerName={listerCard?.listerName ?? null}
+            listerVerificationBadges={listerCard?.listerVerificationBadges ?? null}
+            compactMobileMarketplace={false}
+          />
+        </div>
+      );
+    }
     return (
       <AnimatedListingCard
         key={listing.id}
         listing={listing}
-        showPlaceBid
+        showPlaceBid={showPlaceBidResolved}
+        publicMarketplaceBidCTAs={findJobsPublicBrowse}
+        currentUserId={currentUserId}
         isCleaner={isCleaner}
         isListerOwner={isListerOwner}
         showListerActions={showListerActionsResolved}
@@ -419,15 +492,33 @@ export function JobsList({
   );
 
   const listContent = displayListings.length === 0 ? (
-    <p className="px-2 py-8 text-center text-base font-medium leading-relaxed text-muted-foreground md:text-sm">
-      {live.length === 0 ? (
-        <>No live jobs right now. Check back later or adjust your search filters.</>
-      ) : (
-        <>
-          No jobs in this area yet — try increasing radius or broadening your suburb search.
-        </>
+    <div
+      className={cn(
+        "mx-auto flex max-w-lg flex-col items-center gap-4 rounded-2xl border border-dashed border-border/80 bg-muted/30 px-5 py-10 text-center dark:border-gray-700 dark:bg-gray-950/40",
+        mapSync && "lg:max-w-none"
       )}
-    </p>
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-background shadow-sm ring-1 ring-border dark:bg-gray-900 dark:ring-gray-800">
+        <MapPin className="h-7 w-7 text-muted-foreground dark:text-gray-500" aria-hidden />
+      </div>
+      <div className="space-y-2">
+        <p className="text-base font-semibold text-foreground dark:text-gray-100">
+          {live.length === 0 ? "No live jobs match your filters" : "No jobs in this map area"}
+        </p>
+        <p className="text-sm leading-relaxed text-muted-foreground dark:text-gray-400">
+          {live.length === 0 ? (
+            <>Try clearing a filter, widening your search, or check back soon for new listings.</>
+          ) : (
+            <>
+              Nothing in view for your current radius and location — try increasing the search radius
+              or moving the map.
+            </>
+          )}
+        </p>
+      </div>
+    </div>
   ) : useVirtualList ? (
     <div ref={listRef} className="w-full">
       <div
@@ -460,7 +551,13 @@ export function JobsList({
     </div>
   ) : (
     <div className="w-full">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-6">
+      <div
+        className={
+          listLayout === "sidebar"
+            ? "flex flex-col gap-4 lg:gap-5"
+            : "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-6"
+        }
+      >
         {displayListings.map((listing, index) => renderCard(listing, index))}
       </div>
       {infiniteScrollFooter}

@@ -11,7 +11,7 @@ const PREFETCH_ROUTES = [
   "/help",
   "/support",
   "/listings/new",
-  "/jobs",
+  "/find-jobs",
   "/lister/dashboard",
   "/cleaner/dashboard",
   "/earnings",

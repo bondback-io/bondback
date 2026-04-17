@@ -208,7 +208,7 @@ export function UserMenu({ session }: UserMenuProps) {
       "/help",
       "/support",
       "/my-listings",
-      "/jobs",
+      "/find-jobs",
       "/earnings",
       "/listings/new",
       LISTER_DASHBOARD_HREF,
@@ -435,7 +435,7 @@ export function UserMenu({ session }: UserMenuProps) {
                 {isCleaner && (
                   <SheetClose asChild>
                     <Link
-                      href="/jobs"
+                      href="/find-jobs"
                       className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
                       aria-label="Browse jobs near me"
                     >
@@ -635,7 +635,7 @@ export function UserMenu({ session }: UserMenuProps) {
           {isCleaner && (
             <DropdownMenuItem
               onSelect={() => {
-                router.push("/jobs");
+                router.push("/find-jobs");
               }}
               className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
               aria-label="Browse jobs near me"

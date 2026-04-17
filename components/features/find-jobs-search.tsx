@@ -271,13 +271,13 @@ export function FindJobsSearch({
     const params = new URLSearchParams();
     appendFormToSearchParams(fd, params);
     const qs = params.toString();
-    onNavigate(qs ? `/jobs?${qs}` : "/jobs");
+    onNavigate(qs ? `/find-jobs?${qs}` : "/find-jobs");
   };
 
   return (
     <form
       id={formHtmlId}
-      action={onNavigate ? undefined : "/jobs"}
+      action={onNavigate ? undefined : "/find-jobs"}
       method="GET"
       onSubmit={onNavigate ? handleClientSubmit : undefined}
       className={cn("space-y-3", className)}

@@ -65,6 +65,11 @@ export type JobCardMarketplaceMobileProps = {
   hideCleanerCancelledAuctionUi: boolean;
   /** Tighter horizontal row layout (e.g. /jobs mobile list). */
   layout?: "default" | "compact";
+  /** Find Jobs: signed-out users see disabled bid/buy + sign-in line. */
+  publicMarketplaceBidCTAs?: boolean;
+  currentUserId?: string | null;
+  /** Defaults to `/login?next=<jobHref>`. */
+  signInToBidHref?: string;
   /** Bid count for marketplace trust row. */
   bidCount?: number;
   /** e.g. "$120" — shown when no bids yet as starting price. */
@@ -106,8 +111,14 @@ function JobCardMarketplaceMobileInner({
   startingBidDisplay,
   secondaryThumb,
   propertyType,
+  publicMarketplaceBidCTAs = false,
+  currentUserId = null,
+  signInToBidHref,
 }: JobCardMarketplaceMobileProps) {
   const { toast } = useToast();
+  const signInHref = signInToBidHref ?? `/login?next=${encodeURIComponent(jobHref)}`;
+  const showAnonymousBidPrompt =
+    publicMarketplaceBidCTAs && !currentUserId && isLive && !hideCleanerCancelledAuctionUi;
 
   const handleSave = () => {
     addSavedListingId(String(listingId));
@@ -326,6 +337,43 @@ function JobCardMarketplaceMobileInner({
                 </Button>
               )}
             </div>
+
+            {showAnonymousBidPrompt && (
+              <div className="mt-2 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {hasBuyNow && buyNowCents != null && (
+                    <BuyNowButton
+                      listingId={listingId}
+                      buyNowCents={buyNowCents}
+                      disabled
+                      className={cn(
+                        "flex-1 opacity-70",
+                        "rounded-xl border-0 bg-violet-600 px-3 font-semibold text-white dark:bg-violet-600",
+                        cleanerBoost ? "min-h-12 text-sm" : "h-9 min-h-9 rounded-lg text-xs"
+                      )}
+                    />
+                  )}
+                  <Button
+                    type="button"
+                    disabled
+                    size="sm"
+                    className={cn(
+                      "flex-1 rounded-xl border-0 bg-sky-600 px-3 font-semibold text-white opacity-70 dark:bg-sky-600",
+                      cleanerBoost ? "min-h-12 text-sm" : "h-9 min-h-9 rounded-lg text-xs"
+                    )}
+                  >
+                    <Gavel className={cn("mr-1 shrink-0", cleanerBoost ? "h-5 w-5" : "h-4 w-4")} aria-hidden />
+                    Bid
+                  </Button>
+                </div>
+                <Link
+                  href={signInHref}
+                  className="text-center text-xs font-semibold text-primary underline-offset-4 hover:underline"
+                >
+                  Sign in to bid
+                </Link>
+              </div>
+            )}
 
             {showCleanerMobileActions && !hideCleanerCancelledAuctionUi && (
               <div className="flex gap-2">
@@ -581,11 +629,49 @@ function JobCardMarketplaceMobileInner({
             </Link>
           </Button>
 
+          {showAnonymousBidPrompt && (
+            <>
+              {hasBuyNow && buyNowCents != null && (
+                <BuyNowButton
+                  listingId={listingId}
+                  buyNowCents={buyNowCents}
+                  disabled
+                  className={cn(
+                    "w-full cursor-not-allowed rounded-xl border-0 bg-violet-600 font-semibold text-white opacity-70 dark:bg-violet-600",
+                    cleanerBoost ? "min-h-14 text-lg" : "min-h-12 text-base"
+                  )}
+                />
+              )}
+              <Button
+                type="button"
+                disabled
+                size="lg"
+                className={cn(
+                  "w-full cursor-not-allowed rounded-xl border-0 bg-sky-600 font-semibold text-white opacity-70 dark:bg-sky-600",
+                  cleanerBoost ? "min-h-14 text-lg" : "min-h-12 text-base"
+                )}
+              >
+                <Gavel className={cn("shrink-0", cleanerBoost ? "h-6 w-6" : "h-5 w-5")} aria-hidden />
+                Bid Now
+              </Button>
+              <p className="text-center text-xs text-muted-foreground dark:text-gray-400">
+                <Link
+                  href={signInHref}
+                  className="font-semibold text-primary underline-offset-4 hover:underline"
+                >
+                  Sign in to bid
+                </Link>{" "}
+                to place bids or buy now.
+              </p>
+            </>
+          )}
+
           {showCleanerMobileActions && hasBuyNow && buyNowCents != null && !hideCleanerCancelledAuctionUi && (
             <BuyNowButton
               listingId={listingId}
               buyNowCents={buyNowCents}
               disabled={!isLive}
+              currentUserId={currentUserId}
               className={cn(
                 "w-full rounded-xl border-0 bg-violet-600 font-semibold text-white hover:bg-violet-700 active:scale-[0.98] dark:bg-violet-600 dark:hover:bg-violet-500",
                 cleanerBoost ? "min-h-14 text-lg" : "min-h-12 text-base"

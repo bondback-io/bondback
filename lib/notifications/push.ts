@@ -324,7 +324,7 @@ export function buildPushPayload(
       if (browseKm != null) {
         return {
           title: "Browse jobs near you",
-          body: `Live bond cleans on the board — open jobs with your ${browseKm}km filter.`,
+          body: "Live bond cleans on the board — tap to browse jobs in your area and nearby.",
           data: { type: "browse_jobs", radiusKm: String(browseKm) },
         };
       }

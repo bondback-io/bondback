@@ -24,7 +24,7 @@ export const LandingHero = () => {
           </p>
           <div className="flex flex-wrap gap-3">
             <Button size="lg" asChild className="rounded-full px-8 text-base font-semibold">
-              <Link href="/jobs">Browse Jobs</Link>
+              <Link href="/find-jobs">Browse Jobs</Link>
             </Button>
             <Button
               size="lg"

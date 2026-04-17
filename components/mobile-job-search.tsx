@@ -141,7 +141,7 @@ const CLEANERS_URL_PARAMS = new Set([
 ]);
 
 function buildSearchHref(
-  path: "/jobs" | "/cleaners",
+  path: "/find-jobs" | "/cleaners",
   base: URLSearchParams,
   patch: Record<string, string | undefined | null>
 ): string {
@@ -391,10 +391,10 @@ export function MobileJobSearchBar({
           if (v != null && v !== "") sp.set(k, v);
         });
         const qs = sp.toString();
-        router.push(qs ? `/jobs?${qs}` : "/jobs");
+        router.push(qs ? `/find-jobs?${qs}` : "/find-jobs");
         return;
       }
-      const path = variant === "cleaners" ? "/cleaners" : "/jobs";
+      const path = variant === "cleaners" ? "/cleaners" : "/find-jobs";
       const href = buildSearchHref(
         path,
         new URLSearchParams(searchParams?.toString() ?? ""),

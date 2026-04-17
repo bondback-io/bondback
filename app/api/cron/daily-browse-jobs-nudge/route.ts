@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendDailyBrowseJobsNudge } from "@/lib/actions/sms-notifications";
+import { recordNotificationCronRun } from "@/lib/cron/record-notification-cron-run";
 
 /**
  * Cron: daily browse-jobs nudge for all qualifying cleaners (notification #2 toggles).
@@ -18,8 +19,23 @@ export async function GET(request: Request) {
     }
   }
 
-  const result = await sendDailyBrowseJobsNudge();
-  return NextResponse.json(result);
+  try {
+    const result = await sendDailyBrowseJobsNudge();
+    await recordNotificationCronRun("daily_browse_jobs_nudge", {
+      ok: result.ok,
+      error: result.error ?? null,
+      result: { sent: result.sent },
+    });
+    return NextResponse.json(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordNotificationCronRun("daily_browse_jobs_nudge", {
+      ok: false,
+      error: msg,
+      result: null,
+    });
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
