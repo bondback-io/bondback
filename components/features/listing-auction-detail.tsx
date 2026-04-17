@@ -85,6 +85,8 @@ export type ListingAuctionDetailProps = {
   securedViaBuyNow?: boolean;
   /** Amount to show in Buy Now bid-history banner (listing buy-now or agreed fallback). */
   buyNowHistoryAmountCents?: number | null;
+  /** Find Jobs inline panel: hide page-level “Back” link; full width. */
+  embedInFindJobs?: boolean;
 };
 
 export function ListingAuctionDetail({
@@ -98,6 +100,7 @@ export function ListingAuctionDetail({
   currentUserId,
   securedViaBuyNow = false,
   buyNowHistoryAmountCents = null,
+  embedInFindJobs = false,
 }: ListingAuctionDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -320,24 +323,41 @@ export function ListingAuctionDetail({
     ? "Listing cancelled"
     : "Listing ended";
 
+  const showListerTopBar =
+    canManageListingAsLister && !hasActiveJob && isLive && embedInFindJobs;
+
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-4 pb-10 max-md:space-y-3 sm:space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button variant="ghost" asChild className="-ml-2 w-fit">
-          <Link
-            href={
-              canManageListingAsLister ? "/my-listings" : isCleaner ? "/dashboard" : "/jobs"
-            }
-          >
-            ← Back
-          </Link>
-        </Button>
-        {canManageListingAsLister && !hasActiveJob && isLive && (
-          <ListerEndAuctionControl
-            onRequestCancel={() => setShowCancelListingDialog(true)}
-          />
-        )}
-      </div>
+    <div
+      className={cn(
+        "mx-auto w-full space-y-4 pb-10 max-md:space-y-3 sm:space-y-6",
+        embedInFindJobs ? "max-w-none" : "max-w-4xl"
+      )}
+    >
+      {!embedInFindJobs || showListerTopBar ? (
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-2",
+            embedInFindJobs ? "justify-end" : "justify-between"
+          )}
+        >
+          {!embedInFindJobs && (
+            <Button variant="ghost" asChild className="-ml-2 w-fit">
+              <Link
+                href={
+                  canManageListingAsLister ? "/my-listings" : isCleaner ? "/dashboard" : "/jobs"
+                }
+              >
+                ← Back
+              </Link>
+            </Button>
+          )}
+          {canManageListingAsLister && !hasActiveJob && isLive && (
+            <ListerEndAuctionControl
+              onRequestCancel={() => setShowCancelListingDialog(true)}
+            />
+          )}
+        </div>
+      ) : null}
 
       {hasActiveJob && numericJobId != null ? (
         <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm dark:bg-primary/10">

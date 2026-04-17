@@ -420,11 +420,15 @@ export function JobsList({
             listerName={listerCard?.listerName ?? null}
             onSelect={() => {
               prefetchListingDetail();
+              if (findJobsMap.detailListing?.id === listing.id) {
+                findJobsMap.setDetailListing(null);
+                findJobsMap.setHighlightedListingId(null);
+                return;
+              }
               flushSync(() => {
                 findJobsMap.setHighlightedListingId(String(listing.id));
               });
               findJobsMap.setDetailListing(listing);
-              findJobsMap.requestMapFocus(String(listing.id));
             }}
           />
         );

@@ -195,6 +195,7 @@ export type FindJobsMapPaneProps = {
 
 export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: FindJobsMapPaneProps) {
   const {
+    detailListing,
     setHighlightedListingId,
     mapFocusRequest,
     clearMapFocusRequest,
@@ -219,13 +220,17 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
 
   const onPinSelect = React.useCallback(
     (id: string) => {
+      if (detailListing && String(detailListing.id) === id) {
+        setDetailListing(null);
+        return;
+      }
       setHighlightedListingId(id);
       const row = getListingById(id);
       if (row) setDetailListing(row);
       const el = document.querySelector(`[data-find-job-card="${CSS.escape(id)}"]`);
       el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     },
-    [setHighlightedListingId, getListingById, setDetailListing]
+    [detailListing, setHighlightedListingId, getListingById, setDetailListing]
   );
 
   const radiusM = Math.max(1000, radiusKm * 1000);

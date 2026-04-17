@@ -52,7 +52,7 @@ export function FindJobsSplitLayout({
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       <div
         className={cn(
-          "mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-0 lg:flex-row lg:items-stretch",
+          "mx-auto flex min-h-0 w-full max-w-full flex-1 flex-col gap-0 lg:flex-row lg:items-stretch",
           "lg:max-h-[min(720px,calc(100dvh-10rem))] lg:min-h-[min(560px,calc(100dvh-11rem))]"
         )}
       >

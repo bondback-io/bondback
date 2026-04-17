@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getSessionWithProfile } from "@/lib/supabase/session";
 import { getCachedTakenListingIds } from "@/lib/cached-taken-listing-ids";
 import { jobsBrowsePageRange } from "@/lib/supabase/queries";
 import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
@@ -77,47 +78,36 @@ async function FindJobsPageContent({
   const sp = (await searchParams) ?? {};
   const supabase = await createServerSupabaseClient();
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
   await applyListingAuctionOutcomes();
 
-  type ProfileSlice = {
-    roles?: string[] | null;
-    active_role?: string | null;
-    max_travel_km?: number | null;
-    suburb?: string | null;
-  };
+  /** Same role resolution as the site header (`getSessionWithProfile` + `normalizeProfileRolesFromDb`). */
+  const session = await getSessionWithProfile();
+  const sessionUserId = session?.user.id ?? null;
 
-  let profile: ProfileSlice | null = null;
-  if (session) {
-    const { data } = await supabase
+  const viewerActiveRole: FindJobsViewerActiveRole =
+    session?.activeRole === "lister" || session?.activeRole === "cleaner"
+      ? session.activeRole
+      : null;
+  const viewerIsCleaner = Boolean(
+    session && session.roles.includes("cleaner") && session.activeRole === "cleaner"
+  );
+
+  let profileSuburb: string | null = null;
+  let defaultRadiusKm = clampMaxTravelKm(30);
+  if (sessionUserId) {
+    const { data: travelRow } = await supabase
       .from("profiles")
-      .select("roles, active_role, max_travel_km, suburb")
-      .eq("id", session.user.id)
+      .select("max_travel_km, suburb")
+      .eq("id", sessionUserId)
       .maybeSingle();
-    if (data) {
-      profile = data as ProfileSlice;
+    const row = travelRow as { max_travel_km?: number | null; suburb?: string | null } | null;
+    if (row) {
+      profileSuburb = row.suburb ?? null;
+      defaultRadiusKm = clampMaxTravelKm(
+        typeof row.max_travel_km === "number" && row.max_travel_km > 0 ? row.max_travel_km : 30
+      );
     }
   }
-
-  const roles = Array.isArray(profile?.roles) ? profile!.roles! : [];
-  const activeRoleRaw =
-    profile?.active_role === "lister" || profile?.active_role === "cleaner"
-      ? profile!.active_role
-      : (roles[0] ?? null);
-  const viewerActiveRole: FindJobsViewerActiveRole =
-    activeRoleRaw === "lister" || activeRoleRaw === "cleaner" ? activeRoleRaw : null;
-  const viewerIsCleaner = Boolean(
-    profile && roles.includes("cleaner") && viewerActiveRole === "cleaner"
-  );
-
-  const defaultRadiusKm = clampMaxTravelKm(
-    typeof profile?.max_travel_km === "number" && profile.max_travel_km > 0
-      ? profile.max_travel_km
-      : 30
-  );
 
   const suburbFilter = (sp.suburb ?? "").trim();
   const postcodeFilter = (sp.postcode ?? "").trim();
@@ -303,7 +293,7 @@ async function FindJobsPageContent({
         initialListings={listingsWithCoords}
         radiusKm={activeRadiusKm}
         isCleaner={viewerIsCleaner}
-        currentUserId={session?.user?.id ?? null}
+        currentUserId={sessionUserId}
         centerLat={effectiveCenterLat}
         centerLon={effectiveCenterLon}
         bidCountByListingId={bidCountByListingId}
@@ -336,7 +326,7 @@ async function FindJobsPageContent({
           <JobsPageMobileChrome
             initialResultCount={listingsWithCoords.length}
             defaultRadiusKm={defaultRadiusKm}
-            profileSuburb={profile?.suburb ?? null}
+            profileSuburb={profileSuburb}
             initialSuburb={suburbFilter}
             initialPostcode={postcodeFilter}
             initialRadiusKm={activeRadiusKm}
@@ -352,14 +342,14 @@ async function FindJobsPageContent({
             initialBathrooms={bathroomsFilter}
             initialPropertyType={propertyTypeFilter}
           >
-            <div className="flex min-h-0 flex-1 flex-col pb-2 lg:pb-0">
+            <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 pb-2 md:px-4 lg:pb-0">
               <FindJobsBrowseShell
                 mapPoints={mapPoints}
                 centerLat={effectiveCenterLat}
                 centerLon={effectiveCenterLon}
                 radiusKm={activeRadiusKm}
                 viewerIsCleaner={viewerIsCleaner}
-                viewerUserId={session?.user?.id ?? null}
+                viewerUserId={sessionUserId}
                 viewerActiveRole={viewerActiveRole}
               >
                 <div className="space-y-3 lg:space-y-4">{listSection}</div>

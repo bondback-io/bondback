@@ -173,8 +173,12 @@ export function PlaceBidForm({
           <>
             <Link href="/login" className="font-medium text-primary underline underline-offset-2">
               Log in
-            </Link>
-            , then switch to Cleaner mode to place a bid.
+            </Link>{" "}
+            or{" "}
+            <Link href="/signup" className="font-medium text-primary underline underline-offset-2">
+              sign up
+            </Link>{" "}
+            to place a bid and win the job.
           </>
         )}
       </div>
