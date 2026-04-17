@@ -50,6 +50,11 @@ export type ListingPublicCommentsDockProps = {
   listerActiveViewingOthersListing: boolean;
   /** Unread in-app Q&A notifications for this listing (server count). */
   initialQaUnreadCount?: number;
+  /**
+   * Desktop (`xl+`): default `sidebar` caps width (~320px) for the listing two-column layout.
+   * Use `fullWidth` when the dock is the main content in a wide panel (e.g. Find Jobs detail column).
+   */
+  desktopLayout?: "sidebar" | "fullWidth";
 };
 
 type UiComment = ListingCommentPublic & { optimistic?: boolean };
@@ -540,6 +545,7 @@ export function ListingPublicCommentsDock({
   ownerListerSession,
   listerActiveViewingOthersListing,
   initialQaUnreadCount = 0,
+  desktopLayout = "sidebar",
 }: ListingPublicCommentsDockProps) {
   const { toast } = useToast();
   const [comments, setComments] = useState<UiComment[]>(initialComments);
@@ -906,13 +912,26 @@ export function ListingPublicCommentsDock({
   const qaStickyTop =
     "top-[calc(3.75rem+env(safe-area-inset-top,0px)+1rem)]";
 
+  const desktopDockNarrow =
+    desktopLayout === "sidebar"
+      ? "xl:max-w-[min(100%,320px)] xl:justify-end xl:justify-self-end"
+      : "xl:max-w-none xl:justify-stretch";
+
   return (
     <>
       {/* Desktop: column stretches with grid row so sticky can ride full listing scroll */}
-      <aside className="hidden xl:flex xl:h-full xl:min-h-0 xl:w-full xl:max-w-[min(100%,320px)] xl:items-start xl:justify-end xl:justify-self-end">
+      <aside
+        className={cn(
+          "hidden xl:flex xl:h-full xl:min-h-0 xl:w-full xl:items-start",
+          desktopDockNarrow
+        )}
+      >
         <div
           className={cn(
-            "xl:sticky xl:z-10 xl:w-full xl:max-w-[min(100%,320px)] xl:self-start",
+            "xl:sticky xl:z-10 xl:w-full xl:self-start",
+            desktopLayout === "sidebar"
+              ? "xl:max-w-[min(100%,320px)]"
+              : "xl:max-w-none",
             qaStickyTop
           )}
         >
@@ -932,7 +951,12 @@ export function ListingPublicCommentsDock({
             <ChevronLeft className="h-4 w-4 text-muted-foreground" aria-hidden />
           </button>
         ) : (
-          <Card className="flex max-h-[min(560px,calc(100dvh-5rem-env(safe-area-inset-top,0px)))] flex-col overflow-hidden border-border shadow-sm dark:border-gray-800 dark:bg-gray-950">
+          <Card
+            className={cn(
+              "flex max-h-[min(560px,calc(100dvh-5rem-env(safe-area-inset-top,0px)))] flex-col overflow-hidden border-border shadow-sm dark:border-gray-800 dark:bg-gray-950",
+              desktopLayout === "fullWidth" && "w-full"
+            )}
+          >
             <CardHeader className="flex shrink-0 flex-row items-center justify-between space-y-0 border-b border-border py-3 dark:border-gray-800">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                 <span className="relative inline-flex">

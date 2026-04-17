@@ -47,7 +47,8 @@ export function FindJobsDetailPanelBody({
   onBack,
   backLabel,
 }: FindJobsDetailPanelBodyProps) {
-  const { viewerIsCleaner, viewerUserId, viewerActiveRole } = useFindJobsMap();
+  const { viewerIsCleaner, viewerUserId, viewerActiveRole, patchDetailListingRow } =
+    useFindJobsMap();
 
   const [bids, setBids] = React.useState<BidWithBidder[] | null>(null);
   const [bidsLoading, setBidsLoading] = React.useState(true);
@@ -143,6 +144,11 @@ export function FindJobsDetailPanelBody({
               embedInFindJobs
               embedOnBackToMap={onBack}
               embedBackLinkLabel={backLabel}
+              onBidPlaced={(cents) =>
+                patchDetailListingRow(String(listing.id), {
+                  current_lowest_bid_cents: cents,
+                })
+              }
             />
 
             <div className="mx-auto mt-8 w-full max-w-none border-t border-border pt-6 dark:border-gray-800">
@@ -164,6 +170,7 @@ export function FindJobsDetailPanelBody({
                     currentUserId={viewerUserId}
                     ownerListerSession={ownerListerSession}
                     listerActiveViewingOthersListing={listerActiveViewingOthersListing}
+                    desktopLayout="fullWidth"
                   />
                 </div>
               )}

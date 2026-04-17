@@ -320,45 +320,47 @@ async function FindJobsPageContent({
     );
 
   return (
-    <JobsPageMobileShell>
-      <OfflineJobsPrimer jobsListQuery={jobsListQuery}>
-        <Suspense fallback={null}>
-          <JobsPageMobileChrome
-            initialResultCount={listingsWithCoords.length}
-            defaultRadiusKm={defaultRadiusKm}
-            profileSuburb={profileSuburb}
-            initialSuburb={suburbFilter}
-            initialPostcode={postcodeFilter}
-            initialRadiusKm={activeRadiusKm}
-            initialCenterLat={urlCenterLat ?? DEFAULT_FIND_JOBS_CENTER.lat}
-            initialCenterLon={urlCenterLon ?? DEFAULT_FIND_JOBS_CENTER.lon}
-            initialMinBidPrice={minBidPriceFilter}
-            initialMaxBidPrice={maxBidPriceFilter}
-            initialBuyNowOnly={buyNowOnlyFilter === "1"}
-            initialSort={sort}
-            initialMinPrice={minPriceFilter}
-            initialMaxPrice={maxPriceFilter}
-            initialBedrooms={bedroomsFilter}
-            initialBathrooms={bathroomsFilter}
-            initialPropertyType={propertyTypeFilter}
-          >
-            <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 pb-2 md:px-4 lg:pb-0">
-              <FindJobsBrowseShell
-                mapPoints={mapPoints}
-                centerLat={effectiveCenterLat}
-                centerLon={effectiveCenterLon}
-                radiusKm={activeRadiusKm}
-                viewerIsCleaner={viewerIsCleaner}
-                viewerUserId={sessionUserId}
-                viewerActiveRole={viewerActiveRole}
-              >
-                <div className="space-y-3 lg:space-y-4">{listSection}</div>
-              </FindJobsBrowseShell>
-            </div>
-          </JobsPageMobileChrome>
-        </Suspense>
-      </OfflineJobsPrimer>
-    </JobsPageMobileShell>
+    <div className="flex w-full flex-col bg-emerald-50/90 pb-4 dark:bg-transparent md:pb-6">
+      <JobsPageMobileShell>
+        <OfflineJobsPrimer jobsListQuery={jobsListQuery}>
+          <Suspense fallback={null}>
+            <JobsPageMobileChrome
+              initialResultCount={listingsWithCoords.length}
+              defaultRadiusKm={defaultRadiusKm}
+              profileSuburb={profileSuburb}
+              initialSuburb={suburbFilter}
+              initialPostcode={postcodeFilter}
+              initialRadiusKm={activeRadiusKm}
+              initialCenterLat={urlCenterLat ?? DEFAULT_FIND_JOBS_CENTER.lat}
+              initialCenterLon={urlCenterLon ?? DEFAULT_FIND_JOBS_CENTER.lon}
+              initialMinBidPrice={minBidPriceFilter}
+              initialMaxBidPrice={maxBidPriceFilter}
+              initialBuyNowOnly={buyNowOnlyFilter === "1"}
+              initialSort={sort}
+              initialMinPrice={minPriceFilter}
+              initialMaxPrice={maxPriceFilter}
+              initialBedrooms={bedroomsFilter}
+              initialBathrooms={bathroomsFilter}
+              initialPropertyType={propertyTypeFilter}
+            >
+              <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 pb-2 md:px-4 lg:pb-0">
+                <FindJobsBrowseShell
+                  mapPoints={mapPoints}
+                  centerLat={effectiveCenterLat}
+                  centerLon={effectiveCenterLon}
+                  radiusKm={activeRadiusKm}
+                  viewerIsCleaner={viewerIsCleaner}
+                  viewerUserId={sessionUserId}
+                  viewerActiveRole={viewerActiveRole}
+                >
+                  <div className="space-y-3 lg:space-y-4">{listSection}</div>
+                </FindJobsBrowseShell>
+              </div>
+            </JobsPageMobileChrome>
+          </Suspense>
+        </OfflineJobsPrimer>
+      </JobsPageMobileShell>
+    </div>
   );
 }
 

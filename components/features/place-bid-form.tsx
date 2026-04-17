@@ -42,9 +42,29 @@ export type PlaceBidFormProps = {
   currentUserId?: string | null;
   /** Hide bid-range hint + decimal hint (e.g. Find Jobs embed where context is shown above). */
   compactHelpText?: boolean;
+  /** After a successful bid — use to sync local listing state (e.g. Find Jobs detail panel). */
+  onBidPlaced?: (newLowestBidCents: number) => void;
 };
 
 const CONNECT_ERROR_MARKER = "connect your bank account";
+
+/** Matches server `placeBid` spam-guard message. */
+const SPAM_BID_WAIT_MESSAGE =
+  "Please wait for another bidder before placing another lower bid (reduces spam bids).";
+
+function setBidErrorFromServer(errMsg: string, setError: (s: string | null) => void) {
+  const t = errMsg.trim();
+  if (
+    t === SPAM_BID_WAIT_MESSAGE ||
+    t.includes("wait for another cleaner") ||
+    t.includes("another bidder before placing")
+  ) {
+    setError(SPAM_BID_WAIT_MESSAGE);
+    return;
+  }
+  const friendly = getFriendlyError("bid", new Error(errMsg));
+  setError(`${friendly.description} — ${friendly.nextAction}`);
+}
 
 export function PlaceBidForm({
   listingId,
@@ -52,6 +72,7 @@ export function PlaceBidForm({
   isCleaner,
   currentUserId = null,
   compactHelpText = false,
+  onBidPlaced,
 }: PlaceBidFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -109,6 +130,7 @@ export function PlaceBidForm({
       setAmountDollars("");
       setConfirmOpen(false);
       setPendingAmountCents(null);
+      onBidPlaced?.(amount);
       toast({
         title: "Bid sent",
         description: "Your bid was placed successfully.",
@@ -122,8 +144,7 @@ export function PlaceBidForm({
       if (errMsg.toLowerCase().includes(CONNECT_ERROR_MARKER) && currentUserId) {
         setConnectModalOpen(true);
       } else {
-        const friendly = getFriendlyError("bid", new Error(errMsg));
-        setError(`${friendly.description} — ${friendly.nextAction}`);
+        setBidErrorFromServer(errMsg, setError);
       }
     }
   };
@@ -213,33 +234,33 @@ export function PlaceBidForm({
               </div>
             )}
 
-          <div className="flex items-start gap-3 border-b border-border/80 px-4 py-4 dark:border-gray-800 sm:px-5 sm:py-4">
-            <div
-              className={cn(
-                "flex shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-primary/15",
-                isCleaner ? "h-12 w-12" : "h-10 w-10"
-              )}
-            >
-              <TrendingDown className={cn(isCleaner ? "h-6 w-6" : "h-5 w-5")} aria-hidden />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p
+          {!compactHelpText ? (
+            <div className="flex items-start gap-3 border-b border-border/80 px-4 py-4 dark:border-gray-800 sm:px-5 sm:py-4">
+              <div
                 className={cn(
-                  "font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400",
-                  isCleaner ? "text-xs" : "text-[11px]"
+                  "flex shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-primary/15",
+                  isCleaner ? "h-12 w-12" : "h-10 w-10"
                 )}
               >
-                Current lowest bid
-              </p>
-              <p
-                className={cn(
-                  "mt-0.5 font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100",
-                  isCleaner ? "text-3xl sm:text-4xl" : "text-2xl"
-                )}
-              >
-                {formatCents(currentLowest)}
-              </p>
-              {!compactHelpText ? (
+                <TrendingDown className={cn(isCleaner ? "h-6 w-6" : "h-5 w-5")} aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p
+                  className={cn(
+                    "font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400",
+                    isCleaner ? "text-xs" : "text-[11px]"
+                  )}
+                >
+                  Current lowest bid
+                </p>
+                <p
+                  className={cn(
+                    "mt-0.5 font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100",
+                    isCleaner ? "text-3xl sm:text-4xl" : "text-2xl"
+                  )}
+                >
+                  {formatCents(currentLowest)}
+                </p>
                 <p
                   className={cn(
                     "mt-1 leading-snug text-muted-foreground dark:text-gray-500",
@@ -264,9 +285,9 @@ export function PlaceBidForm({
                   ) : null}
                   .
                 </p>
-              ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="space-y-3 px-4 py-4 sm:px-5">
             <Label
@@ -333,6 +354,15 @@ export function PlaceBidForm({
               <Gavel className={cn("shrink-0 opacity-90", isCleaner ? "h-5 w-5" : "h-4 w-4")} aria-hidden />
               {isSubmitting ? "Placing bid…" : "Place lower bid"}
             </Button>
+
+            {error ? (
+              <div
+                role="alert"
+                className="max-w-md rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-sm text-destructive dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+              >
+                {error}
+              </div>
+            ) : null}
           </div>
 
           {isCleaner &&
@@ -355,15 +385,6 @@ export function PlaceBidForm({
               </div>
             )}
         </div>
-
-        {error ? (
-          <div
-            role="alert"
-            className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-sm text-destructive dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
-          >
-            {error}
-          </div>
-        ) : null}
       </form>
 
       <Dialog

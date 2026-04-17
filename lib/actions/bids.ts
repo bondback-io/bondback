@@ -204,7 +204,7 @@ export async function placeBid(
       return {
         ok: false,
         error:
-          "Wait for another cleaner to place a bid before you can bid again (reduces spam bidding).",
+          "Please wait for another bidder before placing another lower bid (reduces spam bids).",
       };
     }
   } else if (allowAfterRevert) {
@@ -305,6 +305,7 @@ export async function placeBid(
   revalidatePath("/my-listings");
   revalidatePath("/cleaner/dashboard");
   revalidatePath("/lister/dashboard");
+  revalidatePath("/find-jobs");
   return { ok: true };
 }
 

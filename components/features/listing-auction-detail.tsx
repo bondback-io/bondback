@@ -91,6 +91,8 @@ export type ListingAuctionDetailProps = {
   embedOnBackToMap?: () => void;
   /** Label for {@link embedOnBackToMap} (e.g. “Back to map”, “Close”). */
   embedBackLinkLabel?: string;
+  /** After a successful bid (e.g. Find Jobs panel): update parent listing state so “current lowest” refreshes before router refresh. */
+  onBidPlaced?: (newLowestBidCents: number) => void;
 };
 
 export function ListingAuctionDetail({
@@ -107,6 +109,7 @@ export function ListingAuctionDetail({
   embedInFindJobs = false,
   embedOnBackToMap,
   embedBackLinkLabel = "Return to map",
+  onBidPlaced,
 }: ListingAuctionDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -572,6 +575,7 @@ export function ListingAuctionDetail({
                       isCleaner={isCleaner}
                       currentUserId={currentUserId}
                       compactHelpText
+                      onBidPlaced={onBidPlaced}
                     />
                   </div>
                 ) : null}
@@ -1168,6 +1172,7 @@ export function ListingAuctionDetail({
               listing={listing}
               isCleaner={isCleaner}
               currentUserId={currentUserId}
+              onBidPlaced={onBidPlaced}
             />
           </CardContent>
         </Card>

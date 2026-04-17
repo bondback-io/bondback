@@ -23,6 +23,8 @@ type FindJobsMapContextValue = {
   setDetailListing: (listing: ListingRow | null) => void;
   registerListings: (listings: ListingRow[]) => void;
   getListingById: (id: string) => ListingRow | undefined;
+  /** Merge fields into open detail listing + list registry (e.g. after a successful bid). */
+  patchDetailListingRow: (listingId: string, patch: Partial<ListingRow>) => void;
   viewerIsCleaner: boolean;
   viewerUserId: string | null;
   viewerActiveRole: FindJobsViewerActiveRole;
@@ -58,6 +60,19 @@ export function FindJobsMapProvider({
 
   const getListingById = React.useCallback((id: string) => listingsByIdRef.current.get(id), []);
 
+  const patchDetailListingRow = React.useCallback((listingId: string, patch: Partial<ListingRow>) => {
+    const sid = String(listingId);
+    setDetailListing((prev) => {
+      if (!prev || String(prev.id) !== sid) return prev;
+      return { ...prev, ...patch } as ListingRow;
+    });
+    const m = listingsByIdRef.current;
+    const row = m.get(sid);
+    if (row) {
+      m.set(sid, { ...row, ...patch } as ListingRow);
+    }
+  }, []);
+
   const requestMapFocus = React.useCallback((listingId: string) => {
     setMapFocusRequest((prev) => ({
       id: listingId,
@@ -81,6 +96,7 @@ export function FindJobsMapProvider({
       setDetailListing,
       registerListings,
       getListingById,
+      patchDetailListingRow,
       viewerIsCleaner,
       viewerUserId,
       viewerActiveRole,
@@ -93,6 +109,7 @@ export function FindJobsMapProvider({
       detailListing,
       registerListings,
       getListingById,
+      patchDetailListingRow,
       viewerIsCleaner,
       viewerUserId,
       viewerActiveRole,
