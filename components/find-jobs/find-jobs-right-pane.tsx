@@ -6,7 +6,6 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useFindJobsMap } from "@/components/find-jobs/find-jobs-map-context";
 import { FindJobsMapPaneSkeleton } from "@/components/find-jobs/find-jobs-map-skeleton";
 import { FindJobsDetailPanelBody } from "@/components/find-jobs/find-jobs-detail-slide-panel";
-import type { FindJobsMapPoint } from "@/lib/find-jobs/map-types";
 
 function useLgUp() {
   const [lgUp, setLgUp] = React.useState(false);
@@ -29,7 +28,6 @@ const FindJobsMapDynamic = dynamic(
 );
 
 export type FindJobsRightPaneProps = {
-  points: FindJobsMapPoint[];
   centerLat: number;
   centerLon: number;
   radiusKm: number;
@@ -38,10 +36,10 @@ export type FindJobsRightPaneProps = {
 /**
  * Desktop: toggles between full-width map and full-width job detail (same click on list toggles back).
  */
-export function FindJobsRightPane({ points, centerLat, centerLon, radiusKm }: FindJobsRightPaneProps) {
+export function FindJobsRightPane({ centerLat, centerLon, radiusKm }: FindJobsRightPaneProps) {
   const reduceMotion = useReducedMotion();
   const lgUp = useLgUp();
-  const { detailListing, setDetailListing } = useFindJobsMap();
+  const { detailListing, setDetailListing, mapPoints } = useFindJobsMap();
 
   /** Mobile map sheet always shows the map; job details use {@link FindJobsMobileDetailSheet}. */
   const showDetailReplacingMap = Boolean(detailListing && lgUp);
@@ -59,7 +57,7 @@ export function FindJobsRightPane({ points, centerLat, centerLon, radiusKm }: Fi
             className="absolute inset-0"
           >
             <FindJobsMapDynamic
-              points={points}
+              points={mapPoints}
               centerLat={centerLat}
               centerLon={centerLon}
               radiusKm={radiusKm}

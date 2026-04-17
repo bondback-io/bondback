@@ -33,6 +33,7 @@ export function FindJobsBrowseShell({
 }: FindJobsBrowseShellProps) {
   return (
     <FindJobsMapProvider
+      initialMapPoints={mapPoints}
       viewerIsCleaner={viewerIsCleaner}
       viewerUserId={viewerUserId}
       viewerActiveRole={viewerActiveRole}
@@ -40,12 +41,7 @@ export function FindJobsBrowseShell({
       <FindJobsSplitLayout
         list={children}
         mapPlaceholder={
-          <FindJobsRightPane
-            points={mapPoints}
-            centerLat={centerLat}
-            centerLon={centerLon}
-            radiusKm={radiusKm}
-          />
+          <FindJobsRightPane centerLat={centerLat} centerLon={centerLon} radiusKm={radiusKm} />
         }
       />
       <FindJobsMobileDetailSheet />

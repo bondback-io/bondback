@@ -93,7 +93,7 @@ export function FindJobsCompactRow({
             <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground dark:text-gray-100">
               {title}
             </p>
-            <span className="shrink-0 text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+            <span className="shrink-0 text-lg font-bold tabular-nums leading-none text-emerald-600 dark:text-emerald-400 md:text-xl">
               {price}
             </span>
           </div>

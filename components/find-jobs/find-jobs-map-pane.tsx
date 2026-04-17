@@ -8,7 +8,6 @@ import {
   Popup,
   TileLayer,
   useMap,
-  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -16,6 +15,7 @@ import { cn } from "@/lib/utils";
 import type { FindJobsMapPoint } from "@/lib/find-jobs/map-types";
 import { useFindJobsMap, type FindJobsMapFocusRequest } from "@/components/find-jobs/find-jobs-map-context";
 import { FindJobsMapRadiusControl } from "@/components/find-jobs/find-jobs-map-radius-control";
+import { useMapFollowsDarkClass } from "@/hooks/use-map-follows-dark-class";
 
 function makeBondBackIcon(selected: boolean): L.DivIcon {
   const color = selected ? "rgb(5 150 105)" : "rgb(16 185 129)";
@@ -77,7 +77,8 @@ function FitInitialBounds({
   return null;
 }
 
-function VisibleMarkers({
+/** Renders all job pins (list is already radius-filtered; viewport culling hid valid pins after pan/zoom). */
+function JobMarkers({
   points,
   onPinSelect,
   markerRefs,
@@ -86,32 +87,11 @@ function VisibleMarkers({
   onPinSelect: (id: string) => void;
   markerRefs: React.MutableRefObject<Map<string, L.Marker>>;
 }) {
-  const map = useMap();
-  const [bounds, setBounds] = React.useState(() => map.getBounds());
-  useMapEvents({
-    moveend() {
-      setBounds(map.getBounds());
-    },
-    zoomend() {
-      setBounds(map.getBounds());
-    },
-  });
-
-  const pad = 0.08;
-  const extended = L.latLngBounds(
-    [bounds.getSouth() - pad, bounds.getWest() - pad],
-    [bounds.getNorth() + pad, bounds.getEast() + pad]
-  );
-
   const { highlightedListingId } = useFindJobsMap();
-
-  const visible = React.useMemo(() => {
-    return points.filter((p) => extended.contains([p.lat, p.lon]));
-  }, [points, extended]);
 
   return (
     <>
-      {visible.map((p) => (
+      {points.map((p) => (
         <Marker
           key={`${p.id}-${highlightedListingId === p.id ? "1" : "0"}`}
           position={[p.lat, p.lon]}
@@ -203,6 +183,11 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
     getListingById,
   } = useFindJobsMap();
 
+  const mapDark = useMapFollowsDarkClass();
+  const tileUrl = mapDark
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+
   const markerRefs = React.useRef<Map<string, L.Marker>>(new Map());
 
   const [userLoc, setUserLoc] = React.useState<{ lat: number; lon: number } | null>(null);
@@ -245,8 +230,9 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
         aria-label="Job locations map"
       >
         <TileLayer
+          key={mapDark ? "dark" : "light"}
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          url={tileUrl}
         />
         <Circle
           center={[centerLat, centerLon]}
@@ -259,11 +245,7 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
           }}
         />
         <FitInitialBounds points={points} centerLat={centerLat} centerLon={centerLon} />
-        <VisibleMarkers
-          points={points}
-          onPinSelect={onPinSelect}
-          markerRefs={markerRefs}
-        />
+        <JobMarkers points={points} onPinSelect={onPinSelect} markerRefs={markerRefs} />
         <MapFocusSync
           focusRequest={mapFocusRequest}
           points={points}

@@ -20,6 +20,7 @@ import {
   listingMatchesJobsListFilters,
 } from "@/lib/jobs-query";
 import { getJobsPage } from "@/lib/actions/jobs-list";
+import { resolveListingCoordinatesForFindJobs } from "@/lib/actions/find-jobs-detail";
 import type { ListerCardData } from "@/lib/lister-card-data";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -129,7 +130,9 @@ export function JobsList({
     useState<Record<string, ListerCardData>>(initialListerCard);
   const [page, setPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(initialListings.length >= INITIAL_PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(
+    () => !findJobsPublicBrowse && initialListings.length >= INITIAL_PAGE_SIZE
+  );
   /** Mobile-only radius (5–150 km); client filter when center lat/lon exist; persisted locally */
   const [mobileRadiusKm, setMobileRadiusKm] = useState(() =>
     clampRadiusKm(_radiusKm)
@@ -162,8 +165,26 @@ export function JobsList({
       const result = await getJobsPage(page + 1, filters);
       setLoadingMore(false);
       if (result.ok && result.listings.length > 0) {
+        const rawRows = result.listings as ListingRow[];
+        const coords = findJobsPublicBrowse
+            ? await resolveListingCoordinatesForFindJobs(
+                rawRows.map((r) => ({
+                  id: String(r.id),
+                  suburb: String(r.suburb ?? ""),
+                  postcode: r.postcode,
+                }))
+              )
+            : null;
+        const rowsWithCoords =
+          coords != null
+            ? rawRows.map((r) => {
+                const c = coords[String(r.id)];
+                if (!c) return r;
+                return { ...r, lat: c.lat, lon: c.lon } as ListingRow;
+              })
+            : rawRows;
         setListings((prev) => {
-          const merged = [...prev, ...(result.listings as ListingRow[])];
+          const merged = [...prev, ...rowsWithCoords];
           const seen = new Set<string>();
           return merged.filter((l) => {
             const id = String(l.id);
@@ -186,7 +207,7 @@ export function JobsList({
         setHasMore(false);
       }
     },
-    [filters, hasMore, loadingMore, page, toast]
+    [filters, findJobsPublicBrowse, hasMore, loadingMore, page, toast]
   );
 
   // Infinite scroll: when sentinel is visible, load next page (silent)
@@ -209,6 +230,8 @@ export function JobsList({
 
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+  const findJobsBrowseRef = useRef(findJobsPublicBrowse);
+  findJobsBrowseRef.current = findJobsPublicBrowse;
 
   /** Unsubscribe while tab is hidden to cut idle realtime traffic; resubscribe on focus. */
   useEffect(() => {
@@ -237,6 +260,23 @@ export function JobsList({
             if (prev.some((l) => String(l.id) === String(row.id))) return prev;
             return [row, ...prev];
           });
+          if (findJobsBrowseRef.current) {
+            void resolveListingCoordinatesForFindJobs([
+              {
+                id: String(row.id),
+                suburb: String(row.suburb ?? ""),
+                postcode: row.postcode,
+              },
+            ]).then((coords) => {
+              const c = coords[String(row.id)];
+              if (!c) return;
+              setListings((prev) =>
+                prev.map((l) =>
+                  String(l.id) === String(row.id) ? { ...l, lat: c.lat, lon: c.lon } : l
+                )
+              );
+            });
+          }
         }
       } else if (payload.eventType === "UPDATE") {
         const row = payload.new as ListingRow & { cancelled_early_at?: string | null };
@@ -317,13 +357,23 @@ export function JobsList({
   );
 
   const displayListings = useMemo(() => {
-    if (!isMobile || centerLat == null || centerLon == null) return live;
-    return live.filter((l) => {
-      const row = l as ListingRow & { lat?: number; lon?: number };
-      if (typeof row.lat !== "number" || typeof row.lon !== "number") return true;
-      return haversineKm(centerLat, centerLon, row.lat, row.lon) <= mobileRadiusKm;
-    });
-  }, [live, isMobile, centerLat, centerLon, mobileRadiusKm]);
+    if (centerLat == null || centerLon == null) return live;
+    if (findJobsPublicBrowse) {
+      return live.filter((l) => {
+        const row = l as ListingRow & { lat?: number; lon?: number };
+        if (typeof row.lat !== "number" || typeof row.lon !== "number") return false;
+        return haversineKm(centerLat, centerLon, row.lat, row.lon) <= mobileRadiusKm;
+      });
+    }
+    if (isMobile) {
+      return live.filter((l) => {
+        const row = l as ListingRow & { lat?: number; lon?: number };
+        if (typeof row.lat !== "number" || typeof row.lon !== "number") return true;
+        return haversineKm(centerLat, centerLon, row.lat, row.lon) <= mobileRadiusKm;
+      });
+    }
+    return live;
+  }, [live, isMobile, centerLat, centerLon, mobileRadiusKm, findJobsPublicBrowse]);
 
   useEffect(() => {
     setJobsSearchCount?.(displayListings.length);
@@ -331,8 +381,8 @@ export function JobsList({
 
   useEffect(() => {
     if (!mapSync || !findJobsPublicBrowse || !findJobsMap) return;
-    findJobsMap.registerListings(displayListings);
-  }, [mapSync, findJobsPublicBrowse, findJobsMap, displayListings]);
+    findJobsMap.registerListings(displayListings, listerCardDataByListingId);
+  }, [mapSync, findJobsPublicBrowse, findJobsMap, displayListings, listerCardDataByListingId]);
 
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMarginTop, setScrollMarginTop] = useState(0);

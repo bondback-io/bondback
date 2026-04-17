@@ -8,6 +8,12 @@
 /** Browse `/jobs` first page + `getJobsPage` — matches existing UI (20 cards per page). */
 export const JOBS_BROWSE_PAGE_SIZE = 20;
 
+/**
+ * Find Jobs (`/find-jobs`): fetch enough live rows before suburb-centre + radius filtering so
+ * in-range jobs are not missed (geo filter runs after `range` in application code).
+ */
+export const FIND_JOBS_LISTINGS_CAP = 500;
+
 /** PostgREST `.range(from, to)` bounds for a 1-based page (inclusive). */
 export function jobsBrowsePageRange(page: number): { from: number; to: number } {
   const pageSize = JOBS_BROWSE_PAGE_SIZE;

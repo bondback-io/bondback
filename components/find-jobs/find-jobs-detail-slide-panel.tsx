@@ -44,8 +44,13 @@ export function FindJobsDetailPanelBody({
   onBack,
   backLabel,
 }: FindJobsDetailPanelBodyProps) {
-  const { viewerIsCleaner, viewerUserId, viewerActiveRole, patchDetailListingRow } =
-    useFindJobsMap();
+  const {
+    viewerIsCleaner,
+    viewerUserId,
+    viewerActiveRole,
+    patchDetailListingRow,
+    getListerCardData,
+  } = useFindJobsMap();
 
   const [bids, setBids] = React.useState<BidWithBidder[] | null>(null);
   const [bidsLoading, setBidsLoading] = React.useState(true);
@@ -108,6 +113,8 @@ export function FindJobsDetailPanelBody({
 
   const isListerSessionActive = viewerActiveRole === "lister";
 
+  const listerDisplayName = getListerCardData(String(listing.id))?.listerName ?? null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -135,6 +142,7 @@ export function FindJobsDetailPanelBody({
                   current_lowest_bid_cents: cents,
                 })
               }
+              embedListerDisplayName={listerDisplayName}
             />
 
             <div className="mx-auto mt-8 w-full max-w-none border-t border-border pt-6 dark:border-gray-800">

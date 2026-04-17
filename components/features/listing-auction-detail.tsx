@@ -94,6 +94,8 @@ export type ListingAuctionDetailProps = {
   embedBackLinkLabel?: string;
   /** After a successful bid (e.g. Find Jobs panel): update parent listing state so “current lowest” refreshes before router refresh. */
   onBidPlaced?: (newLowestBidCents: number) => void;
+  /** Find Jobs embed: lister display name (from profile). */
+  embedListerDisplayName?: string | null;
 };
 
 export function ListingAuctionDetail({
@@ -111,6 +113,7 @@ export function ListingAuctionDetail({
   embedOnBackToMap,
   embedBackLinkLabel = "Return to map",
   onBidPlaced,
+  embedListerDisplayName = null,
 }: ListingAuctionDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -442,6 +445,14 @@ export function ListingAuctionDetail({
               <h1 className="text-balance text-2xl font-bold leading-tight tracking-tight text-foreground dark:text-gray-100 md:text-3xl">
                 {listing.title ?? "Bond clean"}
               </h1>
+              {embedInFindJobs && embedListerDisplayName?.trim() ? (
+                <p className="text-sm text-muted-foreground dark:text-gray-400">
+                  Job by{" "}
+                  <span className="font-medium text-foreground dark:text-gray-200">
+                    {embedListerDisplayName.trim()}
+                  </span>
+                </p>
+              ) : null}
               <dl className="space-y-4 text-sm">
                 <div>
                   <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-500">

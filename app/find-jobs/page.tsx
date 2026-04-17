@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { getCachedTakenListingIds } from "@/lib/cached-taken-listing-ids";
-import { jobsBrowsePageRange } from "@/lib/supabase/queries";
+import { FIND_JOBS_LISTINGS_CAP } from "@/lib/supabase/queries";
 import { applyListingAuctionOutcomes } from "@/lib/actions/listings";
 import type { Database } from "@/types/supabase";
 import { buildLiveListingsQuery } from "@/lib/jobs-query";
@@ -32,8 +32,7 @@ import {
   DEFAULT_FIND_JOBS_CENTER,
   DEFAULT_FIND_JOBS_RADIUS_KM,
 } from "@/lib/find-jobs/map-constants";
-import { formatCents } from "@/lib/listings";
-import type { FindJobsMapPoint } from "@/lib/find-jobs/map-types";
+import { listingsToFindJobsMapPoints } from "@/lib/find-jobs/map-points-from-listings";
 import FindJobsLoading from "./loading";
 
 export const metadata: Metadata = {
@@ -139,8 +138,7 @@ async function FindJobsPageContent({
   };
 
   const query = buildLiveListingsQuery(supabase, filters, takenIds);
-  const { from, to } = jobsBrowsePageRange(1);
-  const { data: listings } = await query.range(from, to);
+  const { data: listings } = await query.range(0, FIND_JOBS_LISTINGS_CAP - 1);
 
   const liveListings = (listings ?? []) as ListingRow[];
 
@@ -182,18 +180,7 @@ async function FindJobsPageContent({
     return { ...l, lat: c.lat, lon: c.lon } as ListingRow;
   });
 
-  const mapPoints: FindJobsMapPoint[] = listingsWithCoords
-    .filter((l) => coordsById[l.id])
-    .map((l) => {
-      const c = coordsById[l.id]!;
-      return {
-        id: String(l.id),
-        title: (l.title ?? "Bond clean").slice(0, 200),
-        priceLabel: formatCents(l.current_lowest_bid_cents ?? 0),
-        lat: c.lat,
-        lon: c.lon,
-      };
-    });
+  const mapPoints = listingsToFindJobsMapPoints(listingsWithCoords);
 
   const listingIds = listingsWithCoords.map((l) => l.id);
   const bidCountByListingId =
