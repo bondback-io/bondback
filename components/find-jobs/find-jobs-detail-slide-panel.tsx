@@ -16,18 +16,7 @@ import type { ListingCommentPublic } from "@/lib/actions/listing-comments";
 import { fetchListingBidsForFindJobsPanel } from "@/lib/actions/find-jobs-detail";
 import { shouldShowPublicListingComments } from "@/lib/listing-public-comments-visibility";
 import type { ListingRow } from "@/lib/listings";
-
-function useLgUp() {
-  const [lgUp, setLgUp] = React.useState(false);
-  React.useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const apply = () => setLgUp(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
-  return lgUp;
-}
+import { useFindJobsDesktopDetailOverlay } from "@/components/find-jobs/use-find-jobs-desktop-detail";
 
 export type FindJobsDetailPanelBodyProps = {
   listing: ListingRow;
@@ -181,17 +170,17 @@ export function FindJobsDetailPanelBody({
   );
 }
 
-/** Mobile: full-height sheet (map column is hidden on small screens). */
+/** Below xl: full-width sheet. At lg–xl the map column is too narrow for inline detail — use sheet. */
 export function FindJobsMobileDetailSheet() {
-  const lgUp = useLgUp();
+  const desktopDetailOverlay = useFindJobsDesktopDetailOverlay();
   const { detailListing, setDetailListing } = useFindJobsMap();
-  const open = Boolean(detailListing) && !lgUp;
+  const open = Boolean(detailListing) && !desktopDetailOverlay;
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && setDetailListing(null)}>
       <SheetContent
         side="right"
-        className="flex w-full max-w-md flex-col gap-0 overflow-hidden p-0 lg:hidden"
+        className="flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-0 p-0 xl:hidden"
       >
         <SheetTitle className="sr-only">Job details</SheetTitle>
         {detailListing ? (

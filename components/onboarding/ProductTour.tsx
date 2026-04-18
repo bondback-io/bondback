@@ -125,7 +125,7 @@ function listerSteps(isDesktop: boolean): Step[] {
 }
 
 function cleanerSteps(isDesktop: boolean): Step[] {
-  const jobsTarget = isDesktop ? "#tour-find-jobs-desktop" : "#tour-mobile-main-menu";
+  const jobsTarget = "#tour-find-jobs-nav";
   const messagesTarget = isDesktop ? "#tour-user-menu" : "#tour-bottom-messages";
   return [
     {
@@ -148,13 +148,13 @@ function cleanerSteps(isDesktop: boolean): Step[] {
         <p className="m-0 text-sm leading-relaxed text-popover-foreground">
           {isDesktop ? (
             <>
-              Tap <strong>Find Jobs</strong> to see bond cleans near you. Filters help you match suburb and
-              timing.
+              Tap <strong>Find Jobs</strong> (next to the logo) to see bond cleans near you. Filters help
+              you match suburb and timing.
             </>
           ) : (
             <>
-              Tap the <strong>menu (☰)</strong>, then <strong>Find Jobs</strong> — same listings as on
-              desktop.
+              Tap <strong>Find Jobs</strong> next to the <strong>Bond Back</strong> logo — same listings as
+              on desktop. You can also open it from the menu (☰).
             </>
           )}
         </p>

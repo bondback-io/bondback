@@ -7,7 +7,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Menu,
   Home,
-  Search,
   PlusCircle,
   User,
   DollarSign,
@@ -22,6 +21,7 @@ import { CreateListingConfirmDialog } from "@/components/listing/create-listing-
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import { signOutAndReloadApp } from "@/lib/auth/client-logout";
+import { FindJobsSheetLink } from "@/components/layout/find-jobs-nav-link";
 import type { SessionWithProfile } from "@/lib/types";
 import { getInAppNotificationFeedbackPrefs } from "@/lib/notifications/in-app-notification-prefs";
 export type MainNavProps = {
@@ -39,10 +39,9 @@ const desktopLinkBase =
 
 function DesktopNavLinks({
   isLoggedIn,
-  isCleaner,
   isLister,
   onRequestCreateListing,
-}: Omit<MainNavProps, "session"> & {
+}: Omit<MainNavProps, "session" | "isCleaner"> & {
   onRequestCreateListing?: () => void;
 }) {
   const pathname = usePathname();
@@ -72,20 +71,6 @@ function DesktopNavLinks({
       )}
       {isLoggedIn && (
         <>
-          {isCleaner && (
-            <Link
-              id="tour-find-jobs-desktop"
-              href="/find-jobs"
-              prefetch
-              className={linkClass("/find-jobs")}
-              title="Find jobs"
-              aria-label="Find jobs"
-              onMouseEnter={() => router.prefetch("/find-jobs")}
-            >
-              <Search className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-              <span>Find Jobs</span>
-            </Link>
-          )}
           {isLister &&
             (onRequestCreateListing ? (
               <Button
@@ -132,7 +117,6 @@ const MOBILE_ROW =
 function MobileNavContent({
   isLoggedIn,
   hasCleanerRole = false,
-  isCleaner,
   isLister,
   session,
   onNavigate,
@@ -190,6 +174,7 @@ function MobileNavContent({
                 </Link>
               </SheetClose>
             )}
+            <FindJobsSheetLink onNavigate={onNavigate} />
             <div
               className={cn(
                 "flex flex-col gap-2 border-t border-chromeBorder/80 pt-4 dark:border-gray-800",
@@ -222,23 +207,7 @@ function MobileNavContent({
         )}
         {isLoggedIn && (
           <>
-        {isCleaner && (
-          <SheetClose asChild>
-            <Link
-              id="tour-find-jobs-mobile"
-              href="/find-jobs"
-              prefetch
-              className={linkClass("/find-jobs")}
-              onPointerDown={() => router.prefetch("/find-jobs")}
-              onClick={onNavigate}
-              title="Find jobs"
-              aria-label="Find jobs"
-            >
-              <Search className="h-5 w-5 shrink-0" aria-hidden />
-              <span>Find Jobs</span>
-            </Link>
-          </SheetClose>
-        )}
+        <FindJobsSheetLink onNavigate={onNavigate} />
         {isLister &&
           (onRequestCreateListing ? (
             <button
@@ -367,7 +336,6 @@ export function MainNav({
     <div className="flex min-w-0 flex-1 items-center justify-end gap-2 md:min-w-0 md:flex-1 md:flex-nowrap md:justify-start md:gap-2">
       <DesktopNavLinks
         isLoggedIn={isLoggedIn}
-        isCleaner={isCleaner}
         isLister={isLister}
         onRequestCreateListing={isLister ? openCreateListingDialog : undefined}
       />

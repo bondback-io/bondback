@@ -43,6 +43,7 @@ import {
 import { useFindJobsMapOptional } from "@/components/find-jobs/find-jobs-map-context";
 import { FindJobsCompactRow } from "@/components/find-jobs/find-jobs-compact-row";
 import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
+import { isFindJobsMapSplitLayoutVisible } from "@/lib/find-jobs/map-split-layout";
 
 function haversineKm(
   lat1: number,
@@ -497,9 +498,11 @@ export function JobsList({
                 findJobsMap.setHighlightedListingId(String(listing.id));
               });
               findJobsMap.setDetailListing(listing);
-              requestAnimationFrame(() => {
-                findJobsMap.requestMapFocus(String(listing.id));
-              });
+              if (isFindJobsMapSplitLayoutVisible()) {
+                requestAnimationFrame(() => {
+                  findJobsMap.requestMapFocus(String(listing.id));
+                });
+              }
             }}
           />
         );
@@ -526,7 +529,9 @@ export function JobsList({
           onClick={(e) => {
             const t = e.target as HTMLElement;
             if (t.closest("a[href]")) return;
-            findJobsMap.requestMapFocus(String(listing.id));
+            if (isFindJobsMapSplitLayoutVisible()) {
+              findJobsMap.requestMapFocus(String(listing.id));
+            }
           }}
         >
           <AnimatedListingCard

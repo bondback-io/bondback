@@ -6,19 +6,8 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useFindJobsMap } from "@/components/find-jobs/find-jobs-map-context";
 import { FindJobsMapPaneSkeleton } from "@/components/find-jobs/find-jobs-map-skeleton";
 import { FindJobsDetailPanelBody } from "@/components/find-jobs/find-jobs-detail-slide-panel";
+import { useFindJobsDesktopDetailOverlay } from "@/components/find-jobs/use-find-jobs-desktop-detail";
 import { cn } from "@/lib/utils";
-
-function useLgUp() {
-  const [lgUp, setLgUp] = React.useState(false);
-  React.useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const apply = () => setLgUp(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
-  return lgUp;
-}
 
 const FindJobsMapDynamic = dynamic(
   () => import("./find-jobs-map-pane").then((m) => m.FindJobsMapPane),
@@ -35,15 +24,15 @@ export type FindJobsRightPaneProps = {
 };
 
 /**
- * Desktop: job detail overlays the map. The Leaflet map stays mounted so teardown does not throw.
- * Mobile: map column is hidden; details use {@link FindJobsMobileDetailSheet}.
+ * Wide desktop (xl+): job detail overlays the map column. Below xl, details use
+ * {@link FindJobsMobileDetailSheet} so the panel is not squeezed beside the list.
  */
 export function FindJobsRightPane({ centerLat, centerLon, radiusKm }: FindJobsRightPaneProps) {
   const reduceMotion = useReducedMotion();
-  const lgUp = useLgUp();
+  const desktopDetailOverlay = useFindJobsDesktopDetailOverlay();
   const { detailListing, setDetailListing, mapPoints } = useFindJobsMap();
 
-  const showDetailOverlay = Boolean(detailListing && lgUp);
+  const showDetailOverlay = Boolean(detailListing && desktopDetailOverlay);
 
   return (
     <div className="relative h-full min-h-[280px] w-full min-w-0 overflow-hidden">

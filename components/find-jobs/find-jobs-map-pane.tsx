@@ -92,13 +92,14 @@ function JobMarkers({
 
   return (
     <>
-      {points.map((p) => {
+      {points.map((p, stackIndex) => {
         const selected = highlightedListingId === p.id;
         return (
           <Marker
-            key={p.id}
+            key={`${p.id}-${selected ? "sel" : "def"}`}
             position={[p.lat, p.lon]}
             icon={selected ? ICON_SELECTED : ICON_NORMAL}
+            zIndexOffset={selected ? 2500 : 100 + stackIndex}
             eventHandlers={{
               click: () => onPinSelect(p.id),
             }}
@@ -160,6 +161,15 @@ function MapFocusSync({
     const focusId = focusRequest.id;
     const p = points.find((x) => x.id === focusId);
     if (!p) {
+      onConsumed();
+      return;
+    }
+    if (
+      !Number.isFinite(p.lat) ||
+      !Number.isFinite(p.lon) ||
+      Math.abs(p.lat) > 90 ||
+      Math.abs(p.lon) > 180
+    ) {
       onConsumed();
       return;
     }

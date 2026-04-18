@@ -6,6 +6,7 @@ import { UserMenu } from "@/components/layout/user-menu";
 import { RoleSwitcher } from "@/components/layout/RoleSwitcher";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { MainNav } from "@/components/layout/main-nav";
+import { FindJobsNavLink } from "@/components/layout/find-jobs-nav-link";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PendingBidsBadge } from "@/components/pwa/pending-bids-badge";
 import { getInAppNotificationFeedbackPrefs } from "@/lib/notifications/in-app-notification-prefs";
@@ -66,13 +67,13 @@ export const Header = async ({
          */
         <div className="container mx-auto min-h-[3.25rem] min-w-0 max-w-7xl px-3 py-2 sm:min-h-14 sm:px-4 md:px-6">
           <div className="flex w-full flex-nowrap items-center justify-between gap-2">
-            {/* Mobile: logo + quick create — shrink-0 so bell/role row never clips the brand */}
-            <div className="flex min-w-0 shrink-0 items-center gap-2 md:hidden">
+            <div className="flex min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
               <LogoMark />
-            </div>
-            {/* Desktop (md+): logo, tagline, MainNav + menu trigger */}
-            <div className="hidden min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] md:flex sm:min-h-0 sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
-              <LogoMark />
+              <span
+                className="h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700"
+                aria-hidden
+              />
+              <FindJobsNavLink id="tour-find-jobs-nav" />
               <span className="hidden shrink-0 truncate text-xs text-muted-foreground xl:inline xl:max-w-[11rem] xl:text-[13px]">
                 Bond clean marketplace
               </span>
@@ -121,7 +122,7 @@ export const Header = async ({
         </div>
       ) : (
         <div className="container flex min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-2 px-3 py-2 sm:min-h-14 sm:gap-4 sm:px-4 md:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4 md:gap-8">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 md:gap-6">
             <Link
               href="/"
               className="flex shrink-0 items-center gap-2 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg"
@@ -134,6 +135,8 @@ export const Header = async ({
                 Bond clean marketplace
               </span>
             </Link>
+            <span className="h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700" aria-hidden />
+            <FindJobsNavLink className="shrink-0" />
             <MainNav
               isLoggedIn={isLoggedIn}
               hasCleanerRole={false}
