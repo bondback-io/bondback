@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { isTransientSupabaseAuthError } from "@/lib/auth/supabase-auth-transient";
 
 /** Public site host — keep Supabase Auth “Redirect URLs” to `https://www.bondback.io/**` only (+ localhost). */
 const CANONICAL_WWW_HOST = "www.bondback.io";
@@ -130,7 +131,9 @@ export async function proxy(request: NextRequest) {
    * `/auth/confirm`, `/login`, marketing pages, etc. removes a full Supabase Auth round-trip
    * on every navigation. That round-trip is especially painful on mobile Safari / iOS Mail → Safari.
    */
-  await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
   if (!isProtected(pathname)) {
     return supabaseResponse;
@@ -138,16 +141,37 @@ export async function proxy(request: NextRequest) {
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (user?.id) {
+    return supabaseResponse;
+  }
+
+  if (!session?.user?.id) {
     const loginUrl = new URL("/login", request.url);
     const nextDest = pathname + (request.nextUrl.search ?? "");
     loginUrl.searchParams.set("next", nextDest);
     return NextResponse.redirect(loginUrl);
   }
 
-  return supabaseResponse;
+  /**
+   * Cookie session present but `getUser()` failed (often transient on cold starts / mobile).
+   * Sending users to `/login` here caused a bounce loop with the login page (which still saw
+   * a valid session via RSC) right after Google OAuth.
+   */
+  if (isTransientSupabaseAuthError(userError)) {
+    console.warn("[proxy] getUser_transient_allow_session", {
+      pathname,
+      message: (userError as { message?: string })?.message ?? null,
+    });
+    return supabaseResponse;
+  }
+
+  const loginUrl = new URL("/login", request.url);
+  const nextDest = pathname + (request.nextUrl.search ?? "");
+  loginUrl.searchParams.set("next", nextDest);
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {

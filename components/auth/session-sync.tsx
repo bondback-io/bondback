@@ -24,6 +24,18 @@ const MIN_REFRESH_GAP_MS = 2800;
 const SESSION_REVALIDATE_POLL_MS = 180_000;
 const AUTH_PAGES_PREFIXES = ["/login", "/signup", "/auth/", "/forgot-password", "/reset-password"];
 
+/** OAuth / email link often lands here; defer first `getUser()` check so we don’t sign out mid-handoff. */
+const POST_AUTH_SESSION_VALIDATE_DEFER_MS = 750;
+
+function shouldDeferInitialSessionValidation(pathname: string): boolean {
+  return (
+    pathname.startsWith("/onboarding") ||
+    pathname === "/dashboard" ||
+    pathname === "/cleaner/dashboard" ||
+    pathname === "/lister/dashboard"
+  );
+}
+
 const SESSION_DEBUG =
   typeof process !== "undefined" && process.env.NODE_ENV !== "production";
 
@@ -116,7 +128,15 @@ export function SessionSync() {
       }
     }
 
-    void validateBrowserSession();
+    let initialValidateTimer: number | null = null;
+    if (shouldDeferInitialSessionValidation(pathname)) {
+      initialValidateTimer = window.setTimeout(
+        () => void validateBrowserSession(),
+        POST_AUTH_SESSION_VALIDATE_DEFER_MS
+      );
+    } else {
+      void validateBrowserSession();
+    }
 
     const onVisible = () => {
       if (document.visibilityState === "visible") void validateBrowserSession();
@@ -203,7 +223,12 @@ export function SessionSync() {
          * delivers fresh RSC + cookies. A debounced `router.refresh()` here duplicates work and
          * stalls weak devices / iOS Safari; skip unless user client-navigates from elsewhere.
          */
-        if (pathname.startsWith("/onboarding")) {
+        if (
+          pathname.startsWith("/onboarding") ||
+          pathname === "/dashboard" ||
+          pathname === "/cleaner/dashboard" ||
+          pathname === "/lister/dashboard"
+        ) {
           return;
         }
         scheduleSignInRefresh();
@@ -219,7 +244,12 @@ export function SessionSync() {
           sessionDebug("USER_UPDATED skipped (post-login full navigation window)", {});
           return;
         }
-        if (pathname.startsWith("/onboarding")) {
+        if (
+          pathname.startsWith("/onboarding") ||
+          pathname === "/dashboard" ||
+          pathname === "/cleaner/dashboard" ||
+          pathname === "/lister/dashboard"
+        ) {
           return;
         }
         scheduleSignInRefresh();
@@ -227,6 +257,7 @@ export function SessionSync() {
     });
     return () => {
       cancelled = true;
+      if (initialValidateTimer != null) window.clearTimeout(initialValidateTimer);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("online", onOnline);
