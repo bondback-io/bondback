@@ -6,14 +6,24 @@ import { Search } from "lucide-react";
 import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
+/** Compact toolbar pill — outline + soft fill, readable in light and dark. */
 const toolbarBase =
-  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-semibold tracking-tight transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/90 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-offset-gray-950";
+  "inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full text-xs font-semibold tracking-tight transition-[color,background-color,border-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-emerald-400/40 dark:focus-visible:ring-offset-gray-950";
 
-const toolbarGradient =
-  "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 text-white shadow-md shadow-emerald-900/30 ring-1 ring-white/15 hover:from-emerald-500 hover:via-teal-500 hover:to-cyan-600 hover:shadow-lg hover:shadow-emerald-900/35 active:scale-[0.98] dark:from-emerald-500 dark:via-teal-600 dark:to-cyan-700 dark:shadow-emerald-950/40 dark:ring-white/10 dark:hover:from-emerald-400 dark:hover:via-teal-500 dark:hover:to-cyan-600";
+const toolbarIdle =
+  "border border-emerald-600/30 bg-emerald-600/[0.07] text-emerald-900 shadow-sm shadow-emerald-900/[0.06] hover:border-emerald-600/45 hover:bg-emerald-600/[0.12] hover:shadow-md hover:shadow-emerald-900/[0.08] active:scale-[0.98] dark:border-emerald-400/35 dark:bg-emerald-400/[0.09] dark:text-emerald-200 dark:shadow-emerald-950/20 dark:hover:border-emerald-400/50 dark:hover:bg-emerald-400/[0.15]";
+
+const toolbarActive =
+  "border-emerald-600/55 bg-emerald-600/[0.16] text-emerald-950 shadow-md ring-1 ring-emerald-600/25 dark:border-emerald-400/55 dark:bg-emerald-400/[0.18] dark:text-white dark:ring-emerald-400/20";
 
 const SHEET_ROW =
-  "flex min-h-[48px] w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "flex min-h-[44px] w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold transition-[color,background-color,border-color] duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-emerald-400/35";
+
+const sheetIdle =
+  "border border-emerald-600/30 bg-emerald-600/[0.07] text-emerald-900 hover:bg-emerald-600/[0.12] dark:border-emerald-400/35 dark:bg-emerald-400/[0.09] dark:text-emerald-200 dark:hover:bg-emerald-400/[0.14]";
+
+const sheetActive =
+  "border-emerald-600/50 bg-emerald-600/[0.14] ring-1 ring-emerald-600/20 dark:border-emerald-400/50 dark:bg-emerald-400/[0.16] dark:ring-emerald-400/15";
 
 export type FindJobsNavLinkProps = {
   className?: string;
@@ -22,7 +32,7 @@ export type FindJobsNavLinkProps = {
 };
 
 /**
- * Prominent “Find Jobs” CTA for the top bar — next to the logo on mobile and desktop.
+ * “Find Jobs” CTA for the top bar — next to the logo on mobile and desktop.
  */
 export function FindJobsNavLink({ className, id }: FindJobsNavLinkProps) {
   const pathname = usePathname();
@@ -39,20 +49,19 @@ export function FindJobsNavLink({ className, id }: FindJobsNavLinkProps) {
       onMouseEnter={() => router.prefetch("/find-jobs")}
       className={cn(
         toolbarBase,
-        toolbarGradient,
-        "min-h-[40px] px-3 py-2 text-xs sm:min-h-[42px] sm:px-3.5 sm:text-sm",
-        active &&
-          "ring-2 ring-amber-300/90 ring-offset-2 ring-offset-background dark:ring-amber-400/80 dark:ring-offset-gray-950",
+        toolbarIdle,
+        "h-8 px-2.5 sm:h-9 sm:px-3 sm:text-[13px]",
+        active && toolbarActive,
         className
       )}
     >
-      <Search className="h-4 w-4 shrink-0 opacity-95 sm:h-[1.05rem] sm:w-[1.05rem]" strokeWidth={2.25} aria-hidden />
+      <Search className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" strokeWidth={2} aria-hidden />
       <span>Find Jobs</span>
     </Link>
   );
 }
 
-/** Mobile drawer row — same visual language as the toolbar CTA. */
+/** Mobile drawer row — matches toolbar treatment. */
 export function FindJobsSheetLink({
   onNavigate,
   className,
@@ -73,15 +82,9 @@ export function FindJobsSheetLink({
         aria-label="Find jobs"
         onPointerDown={() => router.prefetch("/find-jobs")}
         onClick={() => onNavigate?.()}
-        className={cn(
-          SHEET_ROW,
-          toolbarGradient,
-          "text-white hover:brightness-105 dark:hover:brightness-110",
-          isActive && "ring-2 ring-amber-300/90 dark:ring-amber-400/80",
-          className
-        )}
+        className={cn(SHEET_ROW, sheetIdle, isActive && sheetActive, className)}
       >
-        <Search className="h-5 w-5 shrink-0 opacity-95" strokeWidth={2.25} aria-hidden />
+        <Search className="h-[1.125rem] w-[1.125rem] shrink-0 opacity-90" strokeWidth={2} aria-hidden />
         <span>Find Jobs</span>
       </Link>
     </SheetClose>
