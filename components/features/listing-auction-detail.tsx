@@ -312,11 +312,7 @@ export function ListingAuctionDetail({
 
   const addons = Array.isArray(listing.addons) ? listing.addons.filter(Boolean) : [];
 
-  const startingCents = listing.starting_price_cents ?? 0;
   const currentLowCents = listing.current_lowest_bid_cents ?? 0;
-  const buyNowCents =
-    typeof listing.buy_now_cents === "number" ? listing.buy_now_cents : null;
-  const hasBuyNow = buyNowCents != null && buyNowCents > 0;
 
   const moveOut = listing.move_out_date?.trim()
     ? listing.move_out_date
@@ -758,33 +754,6 @@ export function ListingAuctionDetail({
             </div>
           )}
         </div>
-
-        {!embedInFindJobs && isLive && (
-          <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground dark:text-gray-500">
-            <span className="font-medium text-foreground/85 dark:text-gray-400">Current bid</span>{" "}
-            <span className="tabular-nums text-foreground/90 dark:text-gray-300">
-              {formatCents(currentLowCents)}
-            </span>
-            {startingCents > 0 ? (
-              <>
-                <span className="mx-2 inline-block h-1 w-1 rounded-full bg-muted-foreground/50 align-middle" aria-hidden />
-                <span className="text-muted-foreground dark:text-gray-500">Starting price</span>{" "}
-                <span className="tabular-nums text-foreground/80 dark:text-gray-400">
-                  {formatCents(startingCents)}
-                </span>
-              </>
-            ) : null}
-            {hasBuyNow ? (
-              <>
-                <span className="mx-2 inline-block h-1 w-1 rounded-full bg-muted-foreground/50 align-middle" aria-hidden />
-                <span className="text-muted-foreground dark:text-gray-500">Buy now</span>{" "}
-                <span className="tabular-nums text-violet-700 dark:text-violet-300">
-                  {formatCents(buyNowCents!)}
-                </span>
-              </>
-            ) : null}
-          </p>
-        )}
 
         {showPlaceBidCardOnListingPage ? (
           <Card id="place-bid">
