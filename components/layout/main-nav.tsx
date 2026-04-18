@@ -25,6 +25,7 @@ import { ThemeToggleSheetRow } from "@/components/layout/theme-toggle";
 import type { SessionWithProfile } from "@/lib/types";
 import { getInAppNotificationFeedbackPrefs } from "@/lib/notifications/in-app-notification-prefs";
 export type MainNavProps = {
+  className?: string;
   isLoggedIn: boolean;
   /** User has cleaner on their profile — used for /earnings link (same gate as earnings page). */
   hasCleanerRole?: boolean;
@@ -294,6 +295,7 @@ function MobileNavContent({
 }
 
 export function MainNav({
+  className,
   isLoggedIn,
   hasCleanerRole = false,
   isCleaner,
@@ -307,7 +309,12 @@ export function MainNav({
   const swipeHandlers = useSwipeToClose(() => setOpen(false), "right");
 
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-end gap-2 md:min-w-0 md:flex-1 md:flex-nowrap md:justify-start md:gap-2">
+    <div
+      className={cn(
+        "flex min-w-0 shrink-0 items-center justify-start gap-1 sm:gap-2 md:min-w-0 md:shrink md:flex-1 md:flex-nowrap",
+        className
+      )}
+    >
       <DesktopNavLinks
         isLoggedIn={isLoggedIn}
         isLister={isLister}

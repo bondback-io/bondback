@@ -17,14 +17,17 @@ export type HeaderProps = {
   stripeTestMode?: boolean;
 };
 
-function LogoMark() {
+function LogoMark({ className }: { className?: string }) {
   return (
     <Link
       href="/"
-      className="flex min-h-11 min-w-11 shrink-0 items-center justify-start rounded-xl transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className={cn(
+        "flex min-h-9 min-w-0 shrink-0 items-center justify-start rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-11 sm:rounded-xl",
+        className
+      )}
       aria-label="Bond Back home"
     >
-      <span className="rounded-xl bg-primary px-2.5 py-2 text-sm font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10">
+      <span className="rounded-lg bg-primary px-2 py-1.5 text-xs font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10 sm:rounded-xl sm:px-2.5 sm:py-2 sm:text-sm">
         Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
       </span>
     </Link>
@@ -65,19 +68,27 @@ export const Header = async ({
          * Previously we rendered the same tools twice (mobile row + desktop row); after
          * `router.refresh()` that could show both clusters at once (duplicate bells / role UI).
          */
-        <div className="container mx-auto min-h-[3.25rem] min-w-0 max-w-7xl px-3 py-2 sm:min-h-14 sm:px-4 md:px-6">
-          <div className="flex w-full flex-nowrap items-center justify-between gap-2">
-            <div className="flex min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible [scrollbar-width:none] sm:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
-              <LogoMark />
+        <div className="container mx-auto min-h-[3.25rem] min-w-0 max-w-7xl px-2 py-1.5 sm:min-h-14 sm:px-4 sm:py-2 md:px-6">
+          <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1.5 sm:gap-2">
+            <div className="flex min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible [scrollbar-width:none] sm:gap-2 md:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
+              {/**
+               * Mobile (logged-in): hide logo to reduce clutter — Find Jobs sits at the leading edge.
+               * md+: logo → divider → Find Jobs (flex `order` keeps DOM stable for a11y).
+               */}
+              <LogoMark className="hidden shrink-0 md:order-1 md:flex" />
               <span
-                className="h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700"
+                className="hidden h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700 md:order-2 md:block"
                 aria-hidden
               />
-              <FindJobsNavLink id="tour-find-jobs-nav" />
-              <span className="hidden shrink-0 truncate text-xs text-muted-foreground xl:inline xl:max-w-[11rem] xl:text-[13px]">
+              <FindJobsNavLink
+                id="tour-find-jobs-nav"
+                className="relative z-20 order-1 min-w-0 md:order-3"
+              />
+              <span className="hidden shrink-0 truncate text-xs text-muted-foreground md:order-4 xl:inline xl:max-w-[11rem] xl:text-[13px]">
                 Bond clean marketplace
               </span>
               <MainNav
+                className="order-2 min-w-0 md:order-5"
                 isLoggedIn={isLoggedIn}
                 hasCleanerRole={hasCleanerRole}
                 isCleaner={isCleaner}
@@ -88,7 +99,7 @@ export const Header = async ({
 
             <nav
               id="tour-account-tools-nav"
-              className="flex min-w-0 shrink-0 flex-nowrap items-center justify-end gap-x-1 sm:gap-x-1.5 lg:gap-x-2"
+              className="flex min-w-0 shrink-0 flex-nowrap items-center justify-end gap-x-0.5 sm:gap-x-1.5 lg:gap-x-2"
               aria-label="Account and tools"
             >
               <NotificationBell

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 /** Compact toolbar pill — outline + soft fill, readable in light and dark. */
 const toolbarBase =
-  "inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full text-xs font-semibold tracking-tight transition-[color,background-color,border-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-emerald-400/40 dark:focus-visible:ring-offset-gray-950";
+  "inline-flex min-w-0 shrink items-center justify-center gap-1 whitespace-nowrap rounded-full text-xs font-semibold tracking-tight transition-[color,background-color,border-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-emerald-400/40 dark:focus-visible:ring-offset-gray-950 sm:shrink-0";
 
 const toolbarIdle =
   "border border-emerald-600/30 bg-emerald-600/[0.07] text-emerald-900 shadow-sm shadow-emerald-900/[0.06] hover:border-emerald-600/45 hover:bg-emerald-600/[0.12] hover:shadow-md hover:shadow-emerald-900/[0.08] active:scale-[0.98] dark:border-emerald-400/35 dark:bg-emerald-400/[0.09] dark:text-emerald-200 dark:shadow-emerald-950/20 dark:hover:border-emerald-400/50 dark:hover:bg-emerald-400/[0.15]";
@@ -50,13 +50,13 @@ export function FindJobsNavLink({ className, id }: FindJobsNavLinkProps) {
       className={cn(
         toolbarBase,
         toolbarIdle,
-        "h-8 px-2.5 sm:h-9 sm:px-3 sm:text-[13px]",
+        "h-8 max-sm:max-w-[2.5rem] max-sm:px-2 max-sm:gap-0 sm:h-9 sm:max-w-none sm:px-3 sm:gap-1 sm:text-[13px]",
         active && toolbarActive,
         className
       )}
     >
       <Search className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" strokeWidth={2} aria-hidden />
-      <span>Find Jobs</span>
+      <span className="hidden min-w-0 sm:inline">Find Jobs</span>
     </Link>
   );
 }
