@@ -96,7 +96,7 @@ export function buildLiveListingsQuery(
       else query = query.eq("bathrooms", baths);
     }
   }
-  if (propertyTypeFilter) {
+  if (propertyTypeFilter && propertyTypeFilter.toLowerCase() !== "any") {
     query = query.eq("property_type", propertyTypeFilter);
   }
 
@@ -231,7 +231,7 @@ export function listingMatchesJobsListFilters(
   }
 
   const propertyTypeFilter = (filters.property_type ?? "").trim();
-  if (propertyTypeFilter) {
+  if (propertyTypeFilter && propertyTypeFilter.toLowerCase() !== "any") {
     if (String(row.property_type ?? "") !== propertyTypeFilter) return false;
   }
 

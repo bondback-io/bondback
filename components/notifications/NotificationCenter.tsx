@@ -58,8 +58,6 @@ function iconForType(type: NotificationRow["type"]) {
     case "listing_live":
     case "new_job_in_area":
       return <Megaphone className="h-4 w-4 shrink-0 text-primary" />;
-    case "daily_digest":
-      return <Bell className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />;
     case "auto_release_warning":
       return <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />;
     case "payment_released":

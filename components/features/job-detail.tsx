@@ -20,6 +20,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { CountdownTimer } from "@/components/features/countdown-timer";
@@ -85,6 +86,7 @@ import {
   Unlock,
   ChevronDown,
   Loader2,
+  Landmark,
 } from "lucide-react";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { ImageLightboxGallery } from "@/components/ui/image-lightbox-gallery";
@@ -573,6 +575,10 @@ export type JobDetailProps = {
   initialChecklist?: ChecklistItem[] | null;
   /** When true, opens the lister→cleaner review form on first paint (completed job + payment released). */
   expandListerReviewOfCleaner?: boolean;
+  /** False when winning cleaner has not completed Stripe Connect (server-loaded). */
+  winnerStripePayoutReady?: boolean;
+  /** From global settings; when true, release is blocked until cleaner completes Connect. */
+  requireStripeConnectBeforePaymentRelease?: boolean;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -658,6 +664,8 @@ export function JobDetail({
   securedViaBuyNow = false,
   initialChecklist = null,
   expandListerReviewOfCleaner = false,
+  winnerStripePayoutReady = true,
+  requireStripeConnectBeforePaymentRelease = true,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -1615,6 +1623,26 @@ export function JobDetail({
   const listerReleaseFundsStep =
     isJobLister && localJobStatus === "completed_pending_approval";
 
+  const releaseBlockedByCleanerStripe =
+    requireStripeConnectBeforePaymentRelease &&
+    !winnerStripePayoutReady &&
+    isJobLister &&
+    listerReleaseFundsStep;
+
+  const showStripePayoutStatusBadge =
+    hasActiveJob &&
+    requireStripeConnectBeforePaymentRelease &&
+    !winnerStripePayoutReady &&
+    localJobStatus &&
+    !["completed", "cancelled"].includes(localJobStatus);
+
+  const showCleanerStripeWinBanner =
+    isJobCleaner &&
+    Boolean(jobId) &&
+    !winnerStripePayoutReady &&
+    localJobStatus &&
+    !["completed", "cancelled"].includes(localJobStatus);
+
   /** Lister boosted job page after payment released — compact summary + Job history collapsible. */
   const listerCompletedBoostTidy =
     detailUiBoost && isJobLister && hasActiveJob && localJobStatus === "completed";
@@ -1751,9 +1779,19 @@ export function JobDetail({
                       Live auction
                     </Badge>
                   ) : hasActiveJob ? (
-                    <Badge className="shrink-0 border-0 bg-violet-600/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
-                      Job · {jobHeroStatusLabel}
-                    </Badge>
+                    <div className="flex max-w-[min(100%,20rem)] flex-col items-end gap-1 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                      <Badge className="shrink-0 border-0 bg-violet-600/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
+                        Job · {jobHeroStatusLabel}
+                      </Badge>
+                      {showStripePayoutStatusBadge ? (
+                        <Badge
+                          className="shrink-0 border border-amber-400/80 bg-amber-500/90 px-2 py-1 text-[10px] font-bold text-amber-950 shadow-sm dark:border-amber-600 dark:bg-amber-600/90 dark:text-amber-50 sm:text-xs"
+                          title="Winning cleaner must finish Stripe Connect before payment can be released."
+                        >
+                          Stripe setup required
+                        </Badge>
+                      ) : null}
+                    </div>
                   ) : pendingAutoAssignWinner ? (
                     <Badge className="shrink-0 border-0 bg-sky-600/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-md sm:px-2.5 sm:py-1.5 sm:text-xs md:text-sm">
                       Finalising
@@ -1789,6 +1827,28 @@ export function JobDetail({
                 </div>
               </div>
             )}
+
+            {showCleanerStripeWinBanner ? (
+              <Alert className="rounded-none border-x-0 border-t border-amber-500/40 bg-amber-500/[0.09] dark:border-amber-800/50 dark:bg-amber-950/35">
+                <Landmark className="h-4 w-4 text-amber-700 dark:text-amber-400" aria-hidden />
+                <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-amber-950 dark:text-amber-50">
+                      You&apos;ve won this job! Please complete your Stripe payout setup to receive payment.
+                    </p>
+                    <p className="mt-1 text-sm text-amber-900/90 dark:text-amber-100/85">
+                      Open Profile → Payments to connect your bank. The lister can release funds only after this is complete.
+                    </p>
+                  </div>
+                  <Button
+                    asChild
+                    className="w-full shrink-0 bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 sm:w-auto"
+                  >
+                    <Link href="/profile?tab=payments">Complete Stripe setup</Link>
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
             {isLive && !hideCleanerCancelledAuctionUi && (
               <div className="border-t border-border bg-gradient-to-r from-emerald-500/10 via-card to-sky-500/10 px-4 py-4 dark:border-gray-800 dark:from-emerald-950/40 dark:to-sky-950/30 md:px-6">
@@ -2165,9 +2225,19 @@ export function JobDetail({
                     {isLive && !hideCleanerCancelledAuctionUi ? (
                       <Badge className="shrink-0">Live</Badge>
                     ) : hasActiveJob ? (
-                      <Badge variant="secondary" className="shrink-0">
-                        Job · {jobHeroStatusLabel}
-                      </Badge>
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <Badge variant="secondary" className="shrink-0">
+                          Job · {jobHeroStatusLabel}
+                        </Badge>
+                        {showStripePayoutStatusBadge ? (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 border-amber-500/70 bg-amber-500/15 text-amber-950 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100"
+                          >
+                            Stripe setup required
+                          </Badge>
+                        ) : null}
+                      </div>
                     ) : pendingAutoAssignWinner ? (
                       <Badge className="shrink-0 border-0 bg-sky-600 text-white">Finalising</Badge>
                     ) : (
@@ -3430,6 +3500,12 @@ export function JobDetail({
                     ? "Review after-photos, then release or raise a dispute. A dispute pauses auto-release until it is resolved."
                     : `After the cleaner requests payment, you have ${autoReleaseHours} hours to approve or dispute once after-photos are in.`}
                 </p>
+                {releaseBlockedByCleanerStripe && (
+                  <p className="rounded-md border border-amber-500/40 bg-amber-500/[0.08] px-2.5 py-2 text-[11px] font-medium text-amber-950 dark:border-amber-700 dark:bg-amber-950/35 dark:text-amber-100 sm:text-xs">
+                    Approve &amp; Release is unavailable until your cleaner completes Stripe payout setup (Profile →
+                    Payments). They were notified when they won the job.
+                  </p>
+                )}
                 {showListerFinalizeNotice && (
                   <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
                     <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
@@ -3462,9 +3538,14 @@ export function JobDetail({
                           <Button
                             type="button"
                             size="lg"
-                            disabled={!allCompleted || !hasAfterPhotos || isFinalizing}
+                            disabled={
+                              !allCompleted ||
+                              !hasAfterPhotos ||
+                              isFinalizing ||
+                              releaseBlockedByCleanerStripe
+                            }
                             onClick={() => setShowApproveReleaseConfirm(true)}
-                            className="min-h-[48px] flex-1 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                            className="min-h-[48px] flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-700"
                           >
                             {isFinalizing ? "Releasing…" : "Approve & Release Funds"}
                           </Button>

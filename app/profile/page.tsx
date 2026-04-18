@@ -36,7 +36,7 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 export const metadata: Metadata = {
   title: "Account & profile",
   description:
-    "Manage your Bond Back profile, payments, notifications, and preferences for bond cleaning jobs in Australia.",
+    "Manage your Bond Back profile, payments, and preferences for bond cleaning jobs in Australia.",
   alternates: { canonical: "/profile" },
   robots: { index: false, follow: true },
 };
@@ -51,8 +51,8 @@ const TAB_TO_ACCORDION: Record<string, string> = {
   profile: "personal",
   personal: "personal",
   roles: "roles",
-  notifications: "notifications",
-  preferences: "notifications",
+  notifications: "preferences",
+  preferences: "preferences",
   security: "security",
   payments: "payments",
   privacy: "help",
@@ -199,9 +199,6 @@ const ProfilePage = async ({
       ? (TAB_TO_ACCORDION[tabFromQuery as keyof typeof TAB_TO_ACCORDION] ?? "personal")
       : null;
 
-  const notificationPrefs = (profile as { notification_preferences?: Record<string, boolean> | null })
-    ?.notification_preferences ?? null;
-  const emailPreferencesLocked = (profile as { email_preferences_locked?: boolean })?.email_preferences_locked ?? false;
   const profilePublic = (profile as { profile_public?: boolean })?.profile_public ?? false;
 
   const prefRow = profile as { theme_preference?: string | null; distance_unit?: string | null };
@@ -437,8 +434,6 @@ const ProfilePage = async ({
             isListerActive={isListerActive}
             isCleanerActive={isCleanerActive}
             showPaymentsTab={showPaymentsTab}
-            notificationPrefs={notificationPrefs}
-            emailPreferencesLocked={emailPreferencesLocked}
             profilePublic={profilePublic}
             themePreference={themePreference}
             distanceUnitPref={distanceUnitPref}

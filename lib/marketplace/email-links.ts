@@ -60,7 +60,7 @@ export function emailProfileUrl(): string {
 }
 
 export function emailProfileNotificationsUrl(): string {
-  return emailAbsoluteUrl("/profile?tab=notifications");
+  return emailAbsoluteUrl("/profile?tab=preferences");
 }
 
 export function emailSupportUrl(): string {

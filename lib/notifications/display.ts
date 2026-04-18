@@ -20,8 +20,6 @@ function numFromData(v: unknown): number | null {
 export function getNotificationHref(row: NotificationRow): string | null {
   const data = row.data as Record<string, unknown> | null;
   if (data?.admin_test === true) return "/notifications";
-  if (row.type === "daily_digest") return "/dashboard";
-
   const jobFromData = data?.job_id != null ? numFromData(data.job_id) : null;
   const jobFromRow = row.job_id != null ? Number(row.job_id) : null;
   /** Only real job PKs — never use legacy numeric `data.listing_id` here (it was not jobs.id). */
@@ -102,10 +100,12 @@ function labelForType(type: NotificationRow["type"]): string {
       return "Job status";
     case "early_accept_declined":
       return "Early acceptance";
-    case "daily_digest":
-      return "Daily digest";
     case "listing_public_comment":
       return "Q&A Chat";
+    case "job_won_complete_payout":
+      return "Stripe payout setup";
+    case "lister_payout_blocked_cleaner_stripe":
+      return "Release blocked";
     default:
       return "Update";
   }

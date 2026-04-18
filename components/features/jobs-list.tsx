@@ -104,6 +104,11 @@ export type JobsListProps = {
    * disabled buttons with a sign-in prompt; signed-in non-cleaners see view-details only.
    */
   findJobsPublicBrowse?: boolean;
+  /**
+   * When this changes (e.g. `/find-jobs` URL or map window), replace client list state from SSR.
+   * Without it, `useState(initialListings)` stays stale after `router.replace` filter changes.
+   */
+  browseSyncKey?: string;
 };
 
 export function JobsList({
@@ -121,6 +126,7 @@ export function JobsList({
   listLayout = "default",
   mapSync = false,
   findJobsPublicBrowse = false,
+  browseSyncKey,
 }: JobsListProps) {
   const findJobsMap = useFindJobsMapOptional();
   const router = useRouter();
@@ -160,6 +166,22 @@ export function JobsList({
       setMobileRadiusKm(getStoredRadiusKm(_radiusKm));
     }
   }, [_radiusKm, findJobsPublicBrowse]);
+
+  useEffect(() => {
+    if (browseSyncKey === undefined) return;
+    setListings(initialListings);
+    setBidCountByListingId(initialBidCounts);
+    setListerCardDataByListingId(initialListerCard);
+    setPage(1);
+    setLoadingMore(false);
+    setHasMore(!findJobsPublicBrowse && initialListings.length >= INITIAL_PAGE_SIZE);
+  }, [
+    browseSyncKey,
+    findJobsPublicBrowse,
+    initialBidCounts,
+    initialListerCard,
+    initialListings,
+  ]);
 
   const loadMore = useCallback(
     async (opts?: { silent?: boolean }) => {

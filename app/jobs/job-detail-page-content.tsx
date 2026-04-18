@@ -36,6 +36,7 @@ import {
   messengerPeerDisplayName,
 } from "@/lib/chat-messenger-display";
 import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-server";
+import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 
 export type JobDetailRouteMode = "jobs" | "listings";
 
@@ -187,6 +188,21 @@ export async function JobDetailPageContent({
   const stripeTestMode =
     (settings as { stripe_test_mode?: boolean } | null)?.stripe_test_mode ===
     true;
+  const requireStripeConnectBeforePaymentRelease =
+    (settings as { require_stripe_connect_before_payment_release?: boolean } | null)
+      ?.require_stripe_connect_before_payment_release !== false;
+  let winnerStripePayoutReady = true;
+  if (job?.winner_id?.trim()) {
+    const admin = createSupabaseAdminClient();
+    if (admin) {
+      const { data: wp } = await admin
+        .from("profiles")
+        .select("stripe_connect_id, stripe_onboarding_complete")
+        .eq("id", job.winner_id)
+        .maybeSingle();
+      winnerStripePayoutReady = isProfileStripePayoutReady(wp);
+    }
+  }
   const autoReleaseHours = (settings?.auto_release_hours ?? 48) as number;
   const feePercentage = resolvePlatformFeePercent(
     listingRow.platform_fee_percentage,
@@ -592,6 +608,8 @@ export async function JobDetailPageContent({
           }
           initialChecklist={initialChecklist}
           expandListerReviewOfCleaner={expandListerReviewOfCleaner}
+          winnerStripePayoutReady={winnerStripePayoutReady}
+          requireStripeConnectBeforePaymentRelease={requireStripeConnectBeforePaymentRelease}
         />
       </section>
     </OfflineJobsPrimer>

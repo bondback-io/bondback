@@ -36,6 +36,35 @@ import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
 import { isSpecialAreaForJobChecklist } from "@/lib/listing-special-areas";
 import { sameUuid, trimStr } from "@/lib/utils";
 import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
+import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
+import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
+
+async function maybeNotifyCleanerJobWonStripePayoutSetup(params: {
+  cleanerId: string;
+  jobId: number;
+  listingId: string;
+  listingTitle: string | null;
+}) {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("stripe_connect_id, stripe_onboarding_complete")
+    .eq("id", params.cleanerId)
+    .maybeSingle();
+  if (isProfileStripePayoutReady(prof)) return;
+  try {
+    await createNotification(
+      params.cleanerId,
+      "job_won_complete_payout",
+      params.jobId,
+      "You've won this job! Complete your Stripe payout setup under Profile → Payments so you can receive funds when the lister releases payment.",
+      { listingTitle: params.listingTitle, listingUuid: params.listingId }
+    );
+  } catch (e) {
+    console.error("[maybeNotifyCleanerJobWonStripePayoutSetup]", e);
+  }
+}
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 const DEFAULT_CLEANER_CHECKLIST_LABELS = [
@@ -228,7 +257,7 @@ export async function finalizeBidAcceptanceCore(params: {
   }
 
   const settings = await getGlobalSettings();
-  if (settings?.require_stripe_connect_before_bidding !== false) {
+  if (settings?.require_stripe_connect_before_bidding === true) {
     const { data: cleanerProfile } = await admin
       .from("profiles")
       .select("stripe_connect_id, stripe_onboarding_complete")
@@ -321,6 +350,12 @@ export async function finalizeBidAcceptanceCore(params: {
   } catch (e) {
     console.error("[finalizeBidAcceptanceCore] cleaner notification failed", e);
   }
+  await maybeNotifyCleanerJobWonStripePayoutSetup({
+    cleanerId,
+    jobId: numericJobId,
+    listingId: params.listingId,
+    listingTitle,
+  });
 
   revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
@@ -383,7 +418,7 @@ export async function secureJobAtPrice(
   }
 
   const settings = await getGlobalSettings();
-  if (settings?.require_stripe_connect_before_bidding !== false) {
+  if (settings?.require_stripe_connect_before_bidding === true) {
     const { data: profileRow } = await supabase
       .from("profiles")
       .select("stripe_connect_id, stripe_onboarding_complete")
@@ -457,6 +492,12 @@ export async function secureJobAtPrice(
     "You secured this job. The lister will pay and start the job to hold funds in escrow; then you can begin.",
     { listingTitle }
   );
+  await maybeNotifyCleanerJobWonStripePayoutSetup({
+    cleanerId: session.user.id,
+    jobId: numericJobId,
+    listingId: listRow.id,
+    listingTitle,
+  });
 
   revalidateJobsBrowseCaches();
   revalidatePath("/jobs");
@@ -1757,9 +1798,20 @@ export async function releaseJobFunds(
   const profileClient = adminForPayout ?? supabase;
   const { data: profile } = await profileClient
     .from("profiles")
-    .select("stripe_connect_id")
+    .select("stripe_connect_id, stripe_onboarding_complete")
     .eq("id", winnerId)
     .maybeSingle();
+
+  const globalForRelease = await getGlobalSettings();
+  if (globalForRelease?.require_stripe_connect_before_payment_release !== false) {
+    if (!isProfileStripePayoutReady(profile)) {
+      return {
+        ok: false,
+        error:
+          "The cleaner has not finished Stripe payout setup. They must connect their bank account before escrow can be released.",
+      };
+    }
+  }
 
   const stripeConnectIdRaw = (profile as { stripe_connect_id?: string | null } | null)?.stripe_connect_id;
   if (!trimStr(stripeConnectIdRaw)) {
@@ -2090,6 +2142,48 @@ export async function finalizeJobPayment(
       error:
         "At least 3 after-photos must be uploaded before you can release payment.",
     };
+  }
+
+  const settingsForRelease = await getGlobalSettings();
+  if (
+    settingsForRelease?.require_stripe_connect_before_payment_release !== false &&
+    row.winner_id
+  ) {
+    const adminForWinner = createSupabaseAdminClient();
+    if (!adminForWinner) {
+      return {
+        ok: false,
+        error: "Cannot verify cleaner payout status. Try again later or contact support.",
+      };
+    }
+    const { data: winnerProf } = await adminForWinner
+      .from("profiles")
+      .select("stripe_connect_id, stripe_onboarding_complete")
+      .eq("id", row.winner_id)
+      .maybeSingle();
+    if (!isProfileStripePayoutReady(winnerProf)) {
+      const msg =
+        "The assigned cleaner must complete Stripe payout setup before funds can be released. They can finish this under Profile → Payments.";
+      const dup = await hasRecentJobNotification(
+        user.id,
+        "lister_payout_blocked_cleaner_stripe",
+        numericJobId,
+        24
+      );
+      if (!dup) {
+        try {
+          await createNotification(
+            user.id,
+            "lister_payout_blocked_cleaner_stripe",
+            numericJobId,
+            msg
+          );
+        } catch (e) {
+          console.error("[finalizeJobPayment] notify lister stripe blocked", e);
+        }
+      }
+      return { ok: false, error: msg };
+    }
   }
 
   const releaseResult = await releaseJobFunds(numericJobId);

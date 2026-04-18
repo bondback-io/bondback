@@ -17,18 +17,22 @@ export type HeaderProps = {
   stripeTestMode?: boolean;
 };
 
-function LogoMark({ className }: { className?: string }) {
+/** Bond Back wordmark + centered tagline (one home link). */
+function LogoWithTagline({ className }: { className?: string }) {
   return (
     <Link
       href="/"
       className={cn(
-        "flex min-h-9 min-w-0 shrink-0 items-center justify-start rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-11 sm:rounded-xl",
+        "flex min-h-9 min-w-0 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-11 sm:gap-1 sm:rounded-xl",
         className
       )}
       aria-label="Bond Back home"
     >
       <span className="rounded-lg bg-primary px-2 py-1.5 text-xs font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10 sm:rounded-xl sm:px-2.5 sm:py-2 sm:text-sm">
         Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
+      </span>
+      <span className="max-w-[10rem] text-center text-[10px] font-medium leading-snug tracking-tight text-muted-foreground dark:text-gray-400 sm:max-w-[11rem] sm:text-[11px]">
+        Bond clean marketplace
       </span>
     </Link>
   );
@@ -75,19 +79,16 @@ export const Header = async ({
                * Mobile (logged-in): hide logo to reduce clutter — Browse Jobs sits at the leading edge.
                * md+: logo → divider → Browse Jobs (flex `order` keeps DOM stable for a11y).
                */}
-              <LogoMark className="hidden shrink-0 md:order-1 md:flex" />
+              <LogoWithTagline className="hidden shrink-0 md:order-1 md:flex" />
               <span
-                className="hidden h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700 md:order-2 md:block"
+                className="hidden h-7 w-px shrink-0 self-center bg-border/90 dark:bg-gray-700 md:order-2 md:block"
                 aria-hidden
               />
               <FindJobsNavLink
                 id="tour-find-jobs-nav"
                 className="relative z-20 order-1 min-w-0 md:order-3"
               />
-              <span className="hidden shrink-0 truncate text-xs text-muted-foreground md:order-4 xl:inline xl:max-w-[11rem] xl:text-[13px]">
-                Bond clean marketplace
-              </span>
-              <MainNav className="order-2 min-w-0 md:order-5" isLoggedIn={isLoggedIn} isLister={isLister} />
+              <MainNav className="order-2 min-w-0 md:order-4" isLoggedIn={isLoggedIn} isLister={isLister} />
             </div>
 
             <nav
@@ -127,18 +128,7 @@ export const Header = async ({
       ) : (
         <div className="container flex min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-1.5 px-2.5 py-1.5 sm:min-h-14 sm:gap-3 sm:px-4 md:px-6 md:py-2">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-5">
-            <Link
-              href="/"
-              className="flex min-w-0 shrink-0 items-center gap-1.5 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg sm:gap-2"
-              aria-label="Bond Back home"
-            >
-              <span className="rounded-lg bg-primary px-2 py-1.5 text-xs font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10 sm:text-sm sm:px-2.5">
-                Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
-              </span>
-              <span className="hidden min-w-0 truncate text-xs text-muted-foreground md:inline lg:text-[13px]">
-                Bond clean marketplace
-              </span>
-            </Link>
+            <LogoWithTagline className="shrink-0" />
             <span
               className="hidden h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700 sm:block"
               aria-hidden

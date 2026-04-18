@@ -28,7 +28,6 @@ export type NotificationPreferenceKey =
   | "new_job_in_area"
   | "push_enabled"
   | "push_new_job"
-  | "daily_digest"
   /** In-app bell: short chime when a new notification row arrives (Web Audio). */
   | "in_app_sound"
   /** In-app bell: short vibration on supported devices. */
@@ -36,7 +35,11 @@ export type NotificationPreferenceKey =
   /** In-app: new public question on my listing (Q&A Chat). */
   | "in_app_qa_new_question"
   /** In-app: lister replied to my Q&A Chat question. */
-  | "in_app_qa_lister_reply";
+  | "in_app_qa_lister_reply"
+  /** Cleaner: email + in-app when you win a job and still need Stripe payout setup. */
+  | "stripe_payout_reminder_after_job_win"
+  /** Lister: email + in-app when release is blocked because the cleaner has not finished Stripe setup. */
+  | "lister_cleaner_payout_setup_alerts";
 
 export type NotificationPreferences = Partial<Record<NotificationPreferenceKey, boolean>>;
 
@@ -66,11 +69,12 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: Record<
   new_job_in_area: true,
   push_enabled: false,
   push_new_job: false,
-  daily_digest: true,
   in_app_sound: true,
   in_app_vibrate: true,
   in_app_qa_new_question: true,
   in_app_qa_lister_reply: true,
+  stripe_payout_reminder_after_job_win: true,
+  lister_cleaner_payout_setup_alerts: true,
 };
 
 /** Map in-app notification type to preference key for email */
@@ -78,8 +82,6 @@ export function notificationTypeToPreferenceKey(
   type: string
 ): NotificationPreferenceKey | null {
   switch (type) {
-    case "daily_digest":
-      return "daily_digest";
     case "new_bid":
       return "new_bid";
     case "new_message":
@@ -117,6 +119,10 @@ export function notificationTypeToPreferenceKey(
       return "receipt_emails";
     case "weekly_tips":
       return "weekly_tips";
+    case "job_won_complete_payout":
+      return "stripe_payout_reminder_after_job_win";
+    case "lister_payout_blocked_cleaner_stripe":
+      return "lister_cleaner_payout_setup_alerts";
     default:
       return null;
   }
@@ -139,13 +145,6 @@ export function shouldSendEmailForType(
 ): boolean {
   if (emailForceDisabled) return false;
 
-  if (type === "daily_digest") {
-    const explicit = prefs?.daily_digest;
-    return typeof explicit === "boolean"
-      ? explicit
-      : DEFAULT_NOTIFICATION_PREFERENCES.daily_digest;
-  }
-
   /**
    * Payment receipts use `receipt_emails` only (not the master toggle), so users can keep
    * PDF-style receipts while turning off bell/alert emails.
@@ -157,7 +156,7 @@ export function shouldSendEmailForType(
       : DEFAULT_NOTIFICATION_PREFERENCES.receipt_emails;
   }
 
-  /** Master switch for transactional notification emails (digest uses `daily_digest` only). */
+  /** Master switch for transactional notification emails. */
   if (prefs?.email_notifications === false) {
     return false;
   }
@@ -198,11 +197,14 @@ export const NOTIFICATION_LABELS: Record<NotificationPreferenceKey, string> = {
   new_job_in_area: "New listings in my area (in-app + email)",
   push_enabled: "Receive push notifications",
   push_new_job: "Push for new jobs",
-  daily_digest: "Receive daily digest email (summary of the last 24 hours)",
   in_app_sound: "Play sound on new notifications",
   in_app_vibrate: "Vibrate on new notifications",
   in_app_qa_new_question:
     "Q&A Chat: in-app alert when someone asks a public question on my listing",
   in_app_qa_lister_reply:
     "Q&A Chat: in-app alert when the lister replies to my question",
+  stripe_payout_reminder_after_job_win:
+    "Notify me when I need to complete Stripe payout setup after winning a job",
+  lister_cleaner_payout_setup_alerts:
+    "Notify me when payment release is waiting on the cleaner’s Stripe payout setup",
 };

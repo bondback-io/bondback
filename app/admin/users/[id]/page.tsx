@@ -19,7 +19,6 @@ import {
 import { ArrowLeft, User, Mail } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminUsersFetchErrorToast } from "@/components/admin/admin-users-fetch-error-toast";
-import { AdminUserNotificationOverrides } from "@/components/admin/admin-user-notification-overrides";
 import { AdminUserActions } from "@/components/admin/admin-user-actions";
 import { AdminResendWelcomeEmail } from "@/components/admin/admin-resend-welcome-email";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
@@ -80,9 +79,6 @@ export default async function AdminUserDetailPage({
   const client = (supabaseAdmin ?? supabase) as SupabaseClient<Database>;
 
   const p = profile as ProfileRow & {
-    notification_preferences?: Record<string, boolean> | null;
-    email_force_disabled?: boolean | null;
-    email_preferences_locked?: boolean | null;
     is_banned?: boolean | null;
     is_deleted?: boolean | null;
     banned_at?: string | null;
@@ -276,39 +272,6 @@ export default async function AdminUserDetailPage({
                 </>
               )}
             </dl>
-          </CardContent>
-        </Card>
-
-        {/* Notification preferences & admin overrides */}
-        <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
-          <CardHeader>
-            <CardTitle className="text-base md:text-lg dark:text-gray-100">
-              Email notification preferences
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Current notification_preferences (JSON) and admin overrides.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-md border border-border bg-muted/30 p-3 font-mono text-xs dark:bg-gray-800/50">
-              <pre className="whitespace-pre-wrap break-all">
-                {JSON.stringify(p.notification_preferences ?? {}, null, 2)}
-              </pre>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge variant={p.email_force_disabled ? "destructive" : "secondary"}>
-                Emails {p.email_force_disabled ? "force-disabled" : "enabled"}
-              </Badge>
-              {p.email_preferences_locked && (
-                <Badge variant="outline">Preferences locked</Badge>
-              )}
-            </div>
-            <AdminUserNotificationOverrides
-              userId={userId}
-              emailForceDisabled={!!p.email_force_disabled}
-              emailPreferencesLocked={!!p.email_preferences_locked}
-              currentPrefs={p.notification_preferences ?? {}}
-            />
           </CardContent>
         </Card>
 

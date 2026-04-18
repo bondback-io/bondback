@@ -19,6 +19,7 @@ import {
   STRIPE_POPUP_MESSAGE_CONNECT,
   isStripePopupConnectMessage,
   openStripePopup,
+  prefersSameTabStripeConnect,
 } from "@/lib/stripe-popup-messaging";
 
 export type ConnectRequiredModalProps = {
@@ -68,16 +69,38 @@ export function ConnectRequiredModal({
     if (!startOnboarding) return;
     setLoading(true);
     try {
+      if (prefersSameTabStripeConnect()) {
+        const result = await createConnectAccount(userId, { popupReturn: false });
+        if (result.ok) {
+          window.location.assign(result.onboardingUrl);
+          return;
+        }
+        toast({
+          variant: "destructive",
+          title: "Could not start setup",
+          description: result.error,
+        });
+        return;
+      }
+
       const result = await createConnectAccount(userId, { popupReturn: true });
       if (result.ok) {
         const win = openStripePopup(result.onboardingUrl, "bondback_stripe_connect");
-        if (!win) {
+        if (win) return;
+        const again = await createConnectAccount(userId, { popupReturn: false });
+        if (again.ok) {
           toast({
-            variant: "destructive",
-            title: "Popup blocked",
-            description: "Allow popups for this site to connect payouts.",
+            title: "Continuing in this tab",
+            description: "Stripe will open here so you can finish setup.",
           });
+          window.location.assign(again.onboardingUrl);
+          return;
         }
+        toast({
+          variant: "destructive",
+          title: "Could not open Stripe",
+          description: again.error,
+        });
         return;
       }
       toast({
@@ -105,7 +128,7 @@ export function ConnectRequiredModal({
             <DialogTitle className="dark:text-gray-100">Connect bank account</DialogTitle>
           </div>
           <DialogDescription className="dark:text-gray-400">
-            Complete Stripe Connect onboarding to receive payouts. Stripe opens in a new window so you can stay on this page; we’ll refresh when you’re done.
+            Complete Stripe Connect onboarding to receive payouts. On phones, Stripe opens in this tab. On larger screens, a separate window may open; if your browser blocks it, we continue in this tab instead.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-start">

@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { format } from "date-fns";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import type { Database } from "@/types/supabase";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -175,6 +177,28 @@ async function ListerDashboardContent() {
       const raw = (r.full_name ?? "").trim();
       const first = raw.split(/\s+/)[0] ?? "";
       winnerFirstNameById[r.id] = first || "Cleaner";
+    }
+  }
+
+  const requireStripeRelease =
+    (globalSettings as { require_stripe_connect_before_payment_release?: boolean } | null)
+      ?.require_stripe_connect_before_payment_release !== false;
+  const winnerPayoutReadyById = new Map<string, boolean>();
+  if (winnerIds.length > 0 && requireStripeRelease) {
+    const admin = createSupabaseAdminClient();
+    if (admin) {
+      const { data: wprows } = await admin
+        .from("profiles")
+        .select("id, stripe_connect_id, stripe_onboarding_complete")
+        .in("id", winnerIds);
+      for (const row of wprows ?? []) {
+        const r = row as {
+          id: string;
+          stripe_connect_id?: string | null;
+          stripe_onboarding_complete?: boolean | null;
+        };
+        winnerPayoutReadyById.set(r.id, isProfileStripePayoutReady(r));
+      }
     }
   }
 
@@ -391,6 +415,11 @@ async function ListerDashboardContent() {
                     : (listing as { current_lowest_bid_cents?: number | null } | undefined)
                         ?.current_lowest_bid_cents ?? null;
                 const winnerId = j.winner_id?.trim() ?? null;
+                const stripePayoutSetupRequired =
+                  requireStripeRelease &&
+                  winnerId != null &&
+                  winnerPayoutReadyById.has(winnerId) &&
+                  winnerPayoutReadyById.get(winnerId) !== true;
                 const locationLabel =
                   listing != null
                     ? formatLocationWithState(listing.suburb, listing.postcode)
@@ -419,6 +448,7 @@ async function ListerDashboardContent() {
                       : winnerId
                         ? "Cleaner"
                         : null,
+                  stripePayoutSetupRequired,
                 };
               })}
             />

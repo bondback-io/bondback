@@ -218,6 +218,8 @@ export const PUSH_NOTIFICATION_TYPES = new Set<string>([
   "job_status_update",
   "funds_ready",
   "listing_cancelled_by_lister",
+  "job_won_complete_payout",
+  "lister_payout_blocked_cleaner_stripe",
 ]);
 
 /**
@@ -391,6 +393,18 @@ export function buildPushPayload(
         title: "Review & release",
         body: `Job #${id}: review photos and release funds or wait for auto-release.`,
         data: { jobId: id, type: "funds_ready" },
+      };
+    case "job_won_complete_payout":
+      return {
+        title: "Complete Stripe setup",
+        body: `You won Job #${id}. Finish payout setup in Profile to get paid when funds release.`,
+        data: { jobId: id, type: "job_won_complete_payout" },
+      };
+    case "lister_payout_blocked_cleaner_stripe":
+      return {
+        title: "Can’t release payment yet",
+        body: `Job #${id}: your cleaner must finish Stripe payout setup before escrow can be released.`,
+        data: { jobId: id, type: "lister_payout_blocked_cleaner_stripe" },
       };
     default:
       return {

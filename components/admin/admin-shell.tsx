@@ -6,7 +6,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   ArrowLeft,
-  Bell,
   Briefcase,
   CreditCard,
   FileText,
@@ -15,7 +14,6 @@ import {
   BadgeCheck,
   LayoutDashboard,
   List,
-  Mail,
   Menu,
   Scale,
   Shield,
@@ -69,13 +67,6 @@ export const ADMIN_NAV_GROUPS: {
       { label: "Support", href: "/admin/support", icon: LifeBuoy },
       { label: "Reviews", href: "/admin/reviews", icon: Star },
       { label: "Payments", href: "/admin/payments", icon: CreditCard },
-    ],
-  },
-  {
-    label: "Comms",
-    items: [
-      { label: "Notifications & Emails", href: "/admin/notifications", icon: Bell },
-      { label: "Email templates", href: "/admin/emails", icon: Mail },
     ],
   },
   {

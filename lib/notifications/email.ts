@@ -111,7 +111,9 @@ export type NotificationType =
   | "new_job_in_area"
   | "job_status_update"
   | "early_accept_declined"
-  | "listing_public_comment";
+  | "listing_public_comment"
+  | "job_won_complete_payout"
+  | "lister_payout_blocked_cleaner_stripe";
 
 export type SendEmailOptions = {
   /** When set, logs to email_logs (and always logs a masked line to console). */
@@ -428,6 +430,8 @@ export async function buildNotificationEmail(
     job_status_update: `Job update — #${id} – Bond Back`,
     early_accept_declined: `Early pick update — your bid – Bond Back`,
     listing_public_comment: `Someone commented on your listing – Bond Back`,
+    job_won_complete_payout: `You won — complete Stripe payout setup – Bond Back`,
+    lister_payout_blocked_cleaner_stripe: `Payment release waiting on cleaner’s Stripe — Job #${id} – Bond Back`,
   };
 
   let element: React.ReactElement;
@@ -457,6 +461,30 @@ export async function buildNotificationEmail(
     case "job_accepted":
       templateProps = { jobId: idStr, messageText };
       element = React.createElement(JobApproved, { jobId: idStr, messageText });
+      break;
+    case "job_won_complete_payout":
+      templateProps = { headline: "Complete Stripe payout setup", messageText, hrefForJob };
+      element = React.createElement(GenericNotification, {
+        headline: "You won this job — complete Stripe payout setup",
+        messageText:
+          messageText ||
+          "Finish connecting your bank under Profile → Payments so you can receive funds when the lister releases escrow.",
+        hrefPath: hrefForJob,
+        preview: "Stripe payout setup — Bond Back",
+        ctaLabel: id > 0 ? "View job" : "Open Bond Back",
+      });
+      break;
+    case "lister_payout_blocked_cleaner_stripe":
+      templateProps = { headline: "Waiting on cleaner Stripe setup", messageText, hrefForJob };
+      element = React.createElement(GenericNotification, {
+        headline: "Funds can’t be released yet",
+        messageText:
+          messageText ||
+          "Your cleaner hasn’t finished Stripe Connect. They’ll need to complete payout setup before you can release escrow.",
+        hrefPath: hrefForJob,
+        preview: "Cleaner Stripe setup — Bond Back",
+        ctaLabel: id > 0 ? "View job" : "Open Bond Back",
+      });
       break;
     case "job_approved_to_start":
       templateProps = { jobId: idStr, messageText };

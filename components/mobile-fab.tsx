@@ -116,6 +116,8 @@ export type ListerActiveJobItem = {
   bathrooms: number | null;
   /** First name of assigned cleaner, if any */
   cleanerFirstName: string | null;
+  /** Cleaner has not finished Stripe Connect while release requires it. */
+  stripePayoutSetupRequired?: boolean;
 };
 
 function listerActiveJobCopy(item: ListerActiveJobItem): {
@@ -227,6 +229,13 @@ export function ListerActiveJobsList({
                   >
                     {label}
                   </span>
+                  {item.stripePayoutSetupRequired &&
+                  item.status !== "completed" &&
+                  item.status !== "cancelled" ? (
+                    <span className="inline-flex max-w-full rounded-md border border-amber-500/60 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100">
+                      Stripe setup
+                    </span>
+                  ) : null}
                 </div>
                 <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-foreground dark:text-gray-100 md:text-sm">
                   {item.title}

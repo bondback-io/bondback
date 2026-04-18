@@ -111,7 +111,7 @@ export async function requestEarlyBidAcceptance(
   }
 
   const settings = await getGlobalSettings();
-  if (settings?.require_stripe_connect_before_bidding !== false) {
+  if (settings?.require_stripe_connect_before_bidding === true) {
     const { data: cleanerProfile } = await admin
       .from("profiles")
       .select("stripe_connect_id, stripe_onboarding_complete")

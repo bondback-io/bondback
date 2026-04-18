@@ -38,6 +38,21 @@ export function isStripePopupListerSetupMessage(
   );
 }
 
+/**
+ * Prefer full-page navigation for Stripe Connect onboarding on viewports / inputs where
+ * popups are often blocked (async window.open after a server round-trip) or awkward.
+ */
+export function prefersSameTabStripeConnect(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.matchMedia("(pointer: coarse)").matches) return true;
+    if (window.matchMedia("(max-width: 767px)").matches) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /** Open a centered popup for Stripe-hosted pages (Connect onboarding, Checkout, etc.). */
 export function openStripePopup(url: string, windowName: string): Window | null {
   const w = Math.min(520, window.screen.width - 40);

@@ -133,7 +133,7 @@ export async function placeBid(
   }
 
   const settings = await getGlobalSettings();
-  if (settings?.require_stripe_connect_before_bidding !== false) {
+  if (settings?.require_stripe_connect_before_bidding === true) {
     const { data: profileRow } = await supabase
       .from("profiles")
       .select("stripe_connect_id, stripe_onboarding_complete")

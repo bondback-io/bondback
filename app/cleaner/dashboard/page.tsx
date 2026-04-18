@@ -46,6 +46,8 @@ import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-compl
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import { bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
+import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
+import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import CleanerDashboardLoading from "./loading";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -101,6 +103,16 @@ async function CleanerDashboardContent() {
   if (resolvedActive === "lister" && roles.includes("lister")) {
     redirect("/lister/dashboard");
   }
+
+  const globalForDash = await getCachedGlobalSettingsForPages();
+  const requireStripeRelease =
+    (globalForDash as { require_stripe_connect_before_payment_release?: boolean } | null)
+      ?.require_stripe_connect_before_payment_release !== false;
+  const cleanerNeedsStripePayout =
+    requireStripeRelease &&
+    !isProfileStripePayoutReady(
+      profile as { stripe_connect_id?: string | null; stripe_onboarding_complete?: boolean | null }
+    );
 
   const { data: jobsData } = await supabase
     .from("jobs")
@@ -451,6 +463,7 @@ async function CleanerDashboardContent() {
                 counterpartyName: listerId ? listerDisplayNameById.get(listerId) ?? null : null,
                 counterpartyRole: "lister" as const,
                 viewerRole: "cleaner" as const,
+                stripePayoutSetupRequired: cleanerNeedsStripePayout,
               };
             })}
           />

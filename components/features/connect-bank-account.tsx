@@ -32,6 +32,7 @@ import {
   STRIPE_POPUP_MESSAGE_CONNECT,
   isStripePopupConnectMessage,
   openStripePopup,
+  prefersSameTabStripeConnect,
 } from "@/lib/stripe-popup-messaging";
 
 export type ConnectBankAccountProps = {
@@ -184,10 +185,10 @@ export function ConnectBankAccount({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 dark:text-gray-100">
                 <ExternalLink className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                Stripe opens in a new window
+                Continue to Stripe
               </DialogTitle>
               <DialogDescription className="text-left dark:text-gray-400">
-                You’ll complete bank and identity steps on Stripe’s site. Keep this page open — when you finish, we’ll refresh your account status here automatically. You can close this dialog anytime; the Stripe window stays open.
+                You’ll complete bank and identity steps on Stripe’s site. On mobile, this continues in the same tab. On desktop, a separate window may open—when you finish, your status updates when you return here.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-2 sm:flex-col sm:space-x-0">

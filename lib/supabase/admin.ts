@@ -111,6 +111,7 @@ export function syntheticProfileFromAuthUser(u: User): ProfileRow {
     years_experience: null,
     vehicle_type: null,
     stripe_connect_id: null,
+    stripe_onboarding_complete: null,
     stripe_payment_method_id: null,
     stripe_customer_id: null,
     expo_push_token: null,

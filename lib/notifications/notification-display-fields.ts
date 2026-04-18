@@ -120,9 +120,6 @@ export function buildNotificationPersistFields(
     case "early_accept_declined":
       title = "Early acceptance declined";
       break;
-    case "daily_digest":
-      title = "Daily digest";
-      break;
     case "listing_public_comment":
       title =
         options?.qaSubkind === "reply"
@@ -130,6 +127,12 @@ export function buildNotificationPersistFields(
           : options?.qaSubkind === "question"
             ? "Q&A: new question"
             : "Q&A Chat";
+      break;
+    case "job_won_complete_payout":
+      title = jobId != null ? `Finish Stripe setup · Job #${jobId}` : "Finish Stripe payout setup";
+      break;
+    case "lister_payout_blocked_cleaner_stripe":
+      title = jobId != null ? `Release waiting · Job #${jobId}` : "Cleaner Stripe setup needed";
       break;
     default:
       title = "Update";

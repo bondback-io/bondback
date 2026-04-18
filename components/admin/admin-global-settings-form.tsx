@@ -23,14 +23,13 @@ import { useToast } from "@/components/ui/use-toast";
 import type { SaveGlobalSettingsInput } from "@/lib/actions/global-settings";
 import {
   saveGlobalSettings,
+  sendGlobalSettingsTestEmail,
   setStripeTestMode,
   setFloatingChatEnabled as persistFloatingChatEnabled,
 } from "@/lib/actions/global-settings";
-import { sendGlobalSettingsTestEmail } from "@/lib/actions/admin-email-templates";
 import { sendAdminTestNotification } from "@/lib/actions/notifications";
 import { playNotificationChimeFromUserGesture } from "@/lib/notifications/notification-chime";
 import { sendAdminSmsFromGlobalSettings } from "@/lib/actions/sms-notifications";
-import { sendTestDailyDigestEmail } from "@/lib/actions/daily-digest";
 import { sendTestAdminNotificationEmail } from "@/lib/actions/admin-notify-email";
 import { sendNoBidListingRemindersManual } from "@/lib/actions/sms-notifications";
 import { NotificationCronStatusButton } from "@/components/admin/notification-cron-status-dialog";
@@ -60,7 +59,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
     initial?.requireAbn ?? true
   );
   const [requireStripeConnectBeforeBidding, setRequireStripeConnectBeforeBidding] =
-    React.useState(initial?.requireStripeConnectBeforeBidding ?? true);
+    React.useState(initial?.requireStripeConnectBeforeBidding ?? false);
+  const [requireStripeConnectBeforePaymentRelease, setRequireStripeConnectBeforePaymentRelease] =
+    React.useState(initial?.requireStripeConnectBeforePaymentRelease !== false);
   const [minProfileCompletion, setMinProfileCompletion] = React.useState(
     initial?.minProfileCompletion ?? 70
   );
@@ -129,9 +130,6 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
     value: initial?.floatingChatEnabled ?? true,
     saving: false,
   });
-  const [dailyDigestEnabled, setDailyDigestEnabled] = React.useState(
-    initial?.dailyDigestEnabled ?? true
-  );
   const [adminNotifyNewUser, setAdminNotifyNewUser] = React.useState(
     initial?.adminNotifyNewUser ?? true
   );
@@ -267,7 +265,6 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [testEmailTo, setTestEmailTo] = React.useState("");
   const [testEmailPending, setTestEmailPending] = React.useState(false);
   const [testNotifPending, setTestNotifPending] = React.useState(false);
-  const [digestTestPending, setDigestTestPending] = React.useState(false);
   const [newListingReminderPending, setNewListingReminderPending] = React.useState(false);
   const [adminTestPending, setAdminTestPending] = React.useState<
     "new_user" | "new_listing" | "dispute_opened" | null
@@ -292,6 +289,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       feePercentage: Math.max(0, Math.min(30, Number(feePercentage) || 0)),
       requireAbn,
       requireStripeConnectBeforeBidding,
+      requireStripeConnectBeforePaymentRelease,
       minProfileCompletion: Math.max(
         0,
         Math.min(100, Number(minProfileCompletion) || 0)
@@ -327,7 +325,6 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       payoutSchedule,
       stripeTestMode: stripeTestMode.value,
       floatingChatEnabled: floatingChatEnabledState.value,
-      dailyDigestEnabled,
       adminNotifyNewUser,
       adminNotifyNewListing,
       adminNotifyDispute,
@@ -620,13 +617,10 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             Cleaner new-listing notifications
           </CardTitle>
           <p className="text-[11px] text-emerald-800/90 dark:text-emerald-200/90">
-            Applies to users with the <strong>cleaner</strong> role (including lister+cleaner) who opted in under Settings →{" "}
-            <em>New listings in my area</em>. Distance uses suburb/postcode (haversine when coordinates exist).{" "}
+            Applies to users with the <strong>cleaner</strong> role (including lister+cleaner), subject to the channel toggles below and each cleaner&apos;s travel radius. Distance uses suburb/postcode (haversine when coordinates exist).{" "}
             <strong>Notification 1</strong> fires when the listing is within the cleaner&apos;s preferred <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">max_travel_km</code>.{" "}
             <strong>Notification 2</strong> reaches cleaners in the extra buffer ring only; the in-app/email link opens{" "}
-            <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">/jobs?radius_km=preferred+buffer</code> (all live listings). Email template:{" "}
-            <Link href="/admin/emails" className="font-medium underline underline-offset-2">Admin → Emails</Link>{" "}
-            (<code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">new_job_in_area</code>). Purple card above still controls Twilio master + caps.
+            <code className="rounded bg-emerald-100/80 px-0.5 dark:bg-emerald-900/50">/jobs?radius_km=preferred+buffer</code> (all live listings). Purple card above controls Twilio master + caps.
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -1202,15 +1196,30 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             <div className="flex items-center justify-between gap-3">
               <div>
                 <Label className="text-xs font-medium text-muted-foreground dark:text-gray-300">
-                  Require Stripe Connect before bidding
+                  Require Stripe Connect before bidding / Buy Now
                 </Label>
                 <p className="text-[11px] text-muted-foreground dark:text-gray-400">
-                  When on, cleaners must connect their bank account (Stripe Connect) before they can place bids.
+                  When on, cleaners must finish Stripe Connect before placing bids or securing a job at the buy-now price. Default off: cleaners can win jobs first and set up payouts afterward.
                 </p>
               </div>
               <Switch
                 checked={requireStripeConnectBeforeBidding}
                 onCheckedChange={(v) => setRequireStripeConnectBeforeBidding(Boolean(v))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground dark:text-gray-300">
+                  Require Stripe Connect before payment release
+                </Label>
+                <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                  When on (recommended), escrow cannot be released until the winning cleaner has completed Stripe payout setup. Turn off only for exceptional manual payout workflows.
+                </p>
+              </div>
+              <Switch
+                checked={requireStripeConnectBeforePaymentRelease}
+                onCheckedChange={(v) => setRequireStripeConnectBeforePaymentRelease(Boolean(v))}
               />
             </div>
 
@@ -1546,32 +1555,12 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                   Enable all email notifications
                 </Label>
                 <p className="text-[11px] text-muted-foreground dark:text-gray-400">
-                  When off, no emails are sent (emergency kill switch). User-level toggles:{" "}
-                  <Link href="/profile" className="underline text-primary hover:opacity-90">
-                    Settings → Notifications
-                  </Link>
+                  When off, no emails are sent (emergency kill switch).
                 </p>
               </div>
               <Switch
                 checked={emailsEnabled}
                 onCheckedChange={(v) => setEmailsEnabled(Boolean(v))}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/60">
-              <div>
-                <Label className="text-xs font-medium text-muted-foreground dark:text-gray-300">
-                  Daily digest email
-                </Label>
-                <p className="text-[11px] text-muted-foreground dark:text-gray-400 mt-0.5">
-                  When on, the scheduled job can send a 24-hour summary (cleaners: new jobs nearby;
-                  listers: bids &amp; jobs). Users control their own copy in Settings → Notifications.
-                  Recommended schedule: 8:00 AM AEST hitting <code className="rounded bg-muted px-0.5">/api/cron/daily-digest</code> (Vercel Cron on Pro, or external scheduler; Hobby plan omits this cron in vercel.json due to deployment limits).
-                </p>
-              </div>
-              <Switch
-                checked={dailyDigestEnabled}
-                onCheckedChange={(v) => setDailyDigestEnabled(Boolean(v))}
-                disabled={!emailsEnabled}
               />
             </div>
             {!emailsEnabled && (
@@ -1654,32 +1643,6 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                     }}
                   >
                     {testNotifPending ? "Sending…" : "Send test notification"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={digestTestPending || !emailsEnabled || !dailyDigestEnabled}
-                    onClick={() => {
-                      setDigestTestPending(true);
-                      void sendTestDailyDigestEmail().then((r) => {
-                        setDigestTestPending(false);
-                        if (r.ok) {
-                          toast({
-                            title: "Sample digest sent",
-                            description: "Check your inbox (subject starts with [Test]).",
-                          });
-                        } else {
-                          toast({
-                            variant: "destructive",
-                            title: "Digest test failed",
-                            description: r.error,
-                          });
-                        }
-                      });
-                    }}
-                  >
-                    {digestTestPending ? "Sending…" : "Send test daily digest"}
                   </Button>
                 </div>
               </div>

@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import {
   User,
   Users,
-  Bell,
   Shield,
   CreditCard,
   HelpCircle,
@@ -25,7 +24,6 @@ import { cn } from "@/lib/utils";
 import { PRODUCT_TOUR_RESTART_EVENT } from "@/lib/product-tour-constants";
 import { useSupportContactDisplayEmail } from "@/components/providers/support-contact-provider";
 import {
-  SettingsNotificationsForm,
   SettingsPrivacyForm,
   SettingsPasswordForm,
 } from "@/components/settings/settings-forms";
@@ -82,8 +80,6 @@ export type MyAccountSectionsProps = {
   isListerActive: boolean;
   isCleanerActive: boolean;
   showPaymentsTab: boolean;
-  notificationPrefs: Record<string, boolean> | null;
-  emailPreferencesLocked: boolean;
   profilePublic: boolean;
   themePreference: ThemePreference;
   distanceUnitPref: DistanceUnitPref;
@@ -104,8 +100,6 @@ export function MyAccountSections({
   isListerActive,
   isCleanerActive,
   showPaymentsTab,
-  notificationPrefs,
-  emailPreferencesLocked,
   profilePublic,
   themePreference,
   distanceUnitPref,
@@ -237,26 +231,17 @@ export function MyAccountSections({
           </AccordionContent>
         </AccordionItem>
 
-        {/* 3. Notifications & preferences */}
-        <AccordionItem value="notifications" className="rounded-xl border border-border bg-card/40 dark:border-gray-800 dark:bg-gray-950/40">
+        {/* 3. App preferences */}
+        <AccordionItem value="preferences" className="rounded-xl border border-border bg-card/40 dark:border-gray-800 dark:bg-gray-950/40">
           <AccordionTrigger className="min-h-[52px] px-2 py-3 text-left text-base font-semibold hover:no-underline sm:px-4 dark:text-gray-100">
             <span className="flex items-center gap-3">
-              <Bell className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-400" />
-              Notifications &amp; preferences
+              <Settings className="h-5 w-5 shrink-0 text-muted-foreground dark:text-gray-400" />
+              App preferences
             </span>
           </AccordionTrigger>
           <AccordionContent className="space-y-6 px-0 pb-4 pt-0 sm:px-2">
             <div className={sectionClass}>
-              <SectionHeader icon={Bell} title="Notifications" />
-              <SettingsNotificationsForm
-                prefs={notificationPrefs}
-                locked={emailPreferencesLocked}
-                isCleaner={isCleaner}
-                isLister={isLister}
-              />
-            </div>
-            <div className={sectionClass}>
-              <SectionHeader icon={Settings} title="App preferences" />
+              <SectionHeader icon={Settings} title="Theme &amp; distance" />
               <SettingsPreferencesForm
                 themePreference={themePreference}
                 distanceUnit={distanceUnitPref}

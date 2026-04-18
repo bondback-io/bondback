@@ -12,6 +12,7 @@ const LISTER_ONLY_TYPES = new Set<NotificationRow["type"]>([
   "after_photos_uploaded",
   "auto_release_warning",
   "early_accept_declined",
+  "lister_payout_blocked_cleaner_stripe",
 ]);
 
 /** Types only ever sent to the winning cleaner. */
@@ -21,6 +22,7 @@ const CLEANER_ONLY_TYPES = new Set<NotificationRow["type"]>([
   "job_cancelled_by_lister",
   "listing_cancelled_by_lister",
   "new_job_in_area",
+  "job_won_complete_payout",
 ]);
 
 /** Prefer `body` (persisted) then legacy `message_text` — must match SQL unread RPC. */

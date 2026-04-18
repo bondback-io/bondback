@@ -106,6 +106,8 @@ export type DashboardJobCardProps = {
   counterpartyRole?: "lister" | "cleaner";
   /** Defaults to cleaner (cleaner dashboard). */
   viewerRole?: "cleaner" | "lister";
+  /** Both roles: show when escrow release requires cleaner Stripe Connect and it is incomplete. */
+  stripePayoutSetupRequired?: boolean;
 };
 
 function MarkCompleteActionButton({
@@ -169,8 +171,13 @@ function DashboardJobCardInner({
   counterpartyName,
   counterpartyRole,
   viewerRole = "cleaner",
+  stripePayoutSetupRequired = false,
 }: DashboardJobCardProps) {
   const { label: statusLabel, badgeClass: statusClass } = jobCardStatusPresentation(job.status);
+  const showStripeSetupBadge =
+    stripePayoutSetupRequired &&
+    job.status !== "completed" &&
+    job.status !== "cancelled";
 
   const agreed = job.agreed_amount_cents;
   const topUpCount = parseJobTopUpPayments(job.top_up_payments ?? null).length;
@@ -275,6 +282,11 @@ function DashboardJobCardInner({
                 <Badge className="gap-1 border border-orange-400/80 bg-orange-500 px-2.5 py-1 text-xs font-bold text-white">
                   <Flame className="h-3.5 w-3.5" aria-hidden />
                   Hot
+                </Badge>
+              )}
+              {showStripeSetupBadge && (
+                <Badge className="border border-amber-500/70 bg-amber-500/20 px-2.5 py-1 text-[10px] font-bold text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-100 sm:text-xs">
+                  Stripe setup required
                 </Badge>
               )}
             </div>
@@ -441,6 +453,11 @@ function DashboardJobCardInner({
               {dueSoon && !overdue && (
                 <Badge className="bg-amber-500 px-2.5 py-1 text-xs font-bold text-white dark:bg-amber-600">
                   Due soon
+                </Badge>
+              )}
+              {showStripeSetupBadge && (
+                <Badge className="border border-amber-500/70 bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-100">
+                  Stripe setup required
                 </Badge>
               )}
             </div>

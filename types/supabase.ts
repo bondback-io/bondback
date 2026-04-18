@@ -45,6 +45,7 @@ export interface Database {
           is_admin: boolean | null;
           is_deleted: boolean | null;
           stripe_connect_id: string | null;
+          stripe_onboarding_complete: boolean | null;
           stripe_payment_method_id: string | null;
           stripe_customer_id: string | null;
           expo_push_token: string | null;
@@ -101,6 +102,7 @@ export interface Database {
           is_admin?: boolean | null;
           is_deleted?: boolean | null;
           stripe_connect_id?: string | null;
+          stripe_onboarding_complete?: boolean | null;
           stripe_payment_method_id?: string | null;
           stripe_customer_id?: string | null;
           expo_push_token?: string | null;
@@ -151,6 +153,7 @@ export interface Database {
           is_admin?: boolean | null;
           is_deleted?: boolean | null;
           stripe_connect_id?: string | null;
+          stripe_onboarding_complete?: boolean | null;
           stripe_payment_method_id?: string | null;
           stripe_customer_id?: string | null;
           expo_push_token?: string | null;
@@ -611,7 +614,9 @@ export interface Database {
             | "job_status_update"
             | "early_accept_declined"
             | "listing_public_comment"
-            | "daily_digest";
+            | "daily_digest"
+            | "job_won_complete_payout"
+            | "lister_payout_blocked_cleaner_stripe";
           job_id: number | null;
           message_text: string;
           /** Short label for lists (e.g. New bid · Job #12). */
@@ -648,7 +653,8 @@ export interface Database {
             | "job_status_update"
             | "early_accept_declined"
             | "listing_public_comment"
-            | "daily_digest";
+            | "job_won_complete_payout"
+            | "lister_payout_blocked_cleaner_stripe";
           job_id?: number | null;
           message_text: string;
           title?: string | null;
@@ -682,7 +688,8 @@ export interface Database {
             | "job_status_update"
             | "early_accept_declined"
             | "listing_public_comment"
-            | "daily_digest";
+            | "job_won_complete_payout"
+            | "lister_payout_blocked_cleaner_stripe";
           job_id?: number | null;
           message_text?: string;
           title?: string | null;

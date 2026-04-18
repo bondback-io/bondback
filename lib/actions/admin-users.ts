@@ -9,7 +9,6 @@ import { createNotification } from "@/lib/actions/notifications";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getSupportContactEmail } from "@/lib/support-contact-email";
 import type {
-  AdminNotificationPrefsResult,
   BanResult,
   DeleteUserResult,
   EditRoleResult,
@@ -285,93 +284,6 @@ export async function adminEditRole(
   revalidatePath("/admin/users");
   revalidatePath("/admin/users/" + userId);
   revalidatePath("/admin/dashboard");
-  return { ok: true };
-}
-
-/** Admin only: set force-disable all emails for a user (and optionally lock preferences). */
-export async function adminSetEmailForceDisabled(
-  userId: string,
-  forceDisabled: boolean,
-  lockPreferences?: boolean
-): Promise<AdminNotificationPrefsResult> {
-  const supabase = await createServerSupabaseClient();
-  const auth = await requireAdmin(supabase);
-  if (!auth.ok) return { ok: false, error: auth.error };
-  const db = requireServiceRole();
-  if (!db.ok) return { ok: false, error: db.error };
-
-  const updates: Record<string, unknown> = {
-    email_force_disabled: forceDisabled,
-    updated_at: new Date().toISOString(),
-  };
-  if (typeof lockPreferences === "boolean") {
-    updates.email_preferences_locked = lockPreferences;
-  }
-  if (forceDisabled) {
-    updates.notification_preferences = {};
-  }
-
-  const { error } = await db.supabaseAdmin
-    .from("profiles")
-    .update(updates)
-    .eq("id", userId);
-
-  if (error) return { ok: false, error: error.message };
-  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_email_force_disabled", targetType: "user", targetId: userId, details: { forceDisabled, lockPreferences } });
-  revalidatePath("/admin/users");
-  revalidatePath(`/admin/users/${userId}`);
-  return { ok: true };
-}
-
-/** Admin only: set whether user can change their notification preferences. */
-export async function adminSetEmailPreferencesLock(
-  userId: string,
-  locked: boolean
-): Promise<AdminNotificationPrefsResult> {
-  const supabase = await createServerSupabaseClient();
-  const auth = await requireAdmin(supabase);
-  if (!auth.ok) return { ok: false, error: auth.error };
-  const db = requireServiceRole();
-  if (!db.ok) return { ok: false, error: db.error };
-
-  const { error } = await db.supabaseAdmin
-    .from("profiles")
-    .update({
-      email_preferences_locked: locked,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
-
-  if (error) return { ok: false, error: error.message };
-  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_email_preferences_lock", targetType: "user", targetId: userId, details: { locked } });
-  revalidatePath("/admin/users");
-  revalidatePath(`/admin/users/${userId}`);
-  return { ok: true };
-}
-
-/** Admin only: override notification_preferences JSON for a user. */
-export async function adminUpdateNotificationPreferences(
-  userId: string,
-  prefs: Record<string, boolean>
-): Promise<AdminNotificationPrefsResult> {
-  const supabase = await createServerSupabaseClient();
-  const auth = await requireAdmin(supabase);
-  if (!auth.ok) return { ok: false, error: auth.error };
-  const db = requireServiceRole();
-  if (!db.ok) return { ok: false, error: db.error };
-
-  const { error } = await db.supabaseAdmin
-    .from("profiles")
-    .update({
-      notification_preferences: prefs,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
-
-  if (error) return { ok: false, error: error.message };
-  await logAdminActivity({ adminId: auth.adminId!, actionType: "user_notification_preferences_updated", targetType: "user", targetId: userId, details: { keys: Object.keys(prefs) } });
-  revalidatePath("/admin/users");
-  revalidatePath(`/admin/users/${userId}`);
   return { ok: true };
 }
 

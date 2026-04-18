@@ -51,7 +51,8 @@ export type NotificationType =
   | "job_status_update"
   | "early_accept_declined"
   | "listing_public_comment"
-  | "daily_digest";
+  | "job_won_complete_payout"
+  | "lister_payout_blocked_cleaner_stripe";
 
 export type NewJobChannelDelivery = Partial<{
   email: boolean;

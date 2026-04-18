@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { revalidateGlobalSettingsCache } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
 import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
 
 /** When to send the email. instant = immediately; 5m, 1h, 1d etc. = delayed (requires worker); on_dob = on user's date of birth (birthday template only). */
@@ -27,6 +27,8 @@ type GlobalSettingsRow = {
   auto_release_hours?: number;
   emails_enabled?: boolean;
   require_stripe_connect_before_bidding?: boolean;
+  /** When true (default), escrow release requires the winning cleaner to have completed Stripe Connect. */
+  require_stripe_connect_before_payment_release?: boolean;
   announcement_text?: string | null;
   announcement_active?: boolean;
   maintenance_active?: boolean;
@@ -46,7 +48,7 @@ type GlobalSettingsRow = {
   email_type_enabled?: Record<string, boolean>;
   stripe_test_mode?: boolean;
   floating_chat_enabled?: boolean;
-  /** When false, disables the scheduled daily digest email (user prefs still apply when true). */
+  /** Legacy column; digest feature removed — always saved false. */
   daily_digest_enabled?: boolean;
   /** When false, disables new-job SMS and push alerts (cleaner prefs apply when true). */
   enable_sms_alerts_new_jobs?: boolean;
@@ -274,37 +276,20 @@ export async function getGlobalSettings(): Promise<GlobalSettingsRow | null> {
   return null;
 }
 
-/** Email template overrides and per-type enabled flags from email_template_overrides table (no global_settings columns). */
+/** Admin-editable template overrides were removed; transactional email uses built-in templates only. */
 export async function getEmailTemplateOverrides(): Promise<{
   email_templates: Record<string, { subject: string; body: string; active: boolean }>;
   email_type_enabled: Record<string, boolean>;
 }> {
-  const admin = createSupabaseAdminClient();
-  if (!admin) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[getEmailTemplateOverrides] service role missing; returning empty overrides.");
-    }
-    return { email_templates: {}, email_type_enabled: {} };
-  }
-  const { data: rows, error } = await admin
-    .from("email_template_overrides")
-    .select("template_key, subject, body, active, type_enabled");
-  if (error && process.env.NODE_ENV !== "production") {
-    console.warn("[getEmailTemplateOverrides]", error.message);
-  }
-  const email_templates: Record<string, { subject: string; body: string; active: boolean }> = {};
-  const email_type_enabled: Record<string, boolean> = {};
-  (rows ?? []).forEach((r: { template_key: string; subject: string; body: string; active: boolean; type_enabled: boolean }) => {
-    email_templates[r.template_key] = { subject: r.subject ?? "", body: r.body ?? "", active: !!r.active };
-    email_type_enabled[r.template_key] = r.type_enabled !== false;
-  });
-  return { email_templates, email_type_enabled };
+  return { email_templates: {}, email_type_enabled: {} };
 }
 
 export type SaveGlobalSettingsInput = {
   feePercentage: number;
   requireAbn: boolean;
   requireStripeConnectBeforeBidding?: boolean;
+  /** Default ON: block releasing escrow until cleaner finishes Connect onboarding. */
+  requireStripeConnectBeforePaymentRelease?: boolean;
   minProfileCompletion: number;
   autoReleaseHours: number;
   emailsEnabled: boolean;
@@ -353,7 +338,6 @@ export type SaveGlobalSettingsInput = {
   pricingAddonPatioAud?: number;
   pricingAddonFridgeAud?: number;
   pricingAddonBlindsAud?: number;
-  dailyDigestEnabled?: boolean;
   /** Admin email alerts (requires emails_enabled). */
   adminNotifyNewUser?: boolean;
   adminNotifyNewListing?: boolean;
@@ -393,7 +377,8 @@ export async function saveGlobalSettings(
     platform_fee_percentage: data.feePercentage,
     fee_percentage: data.feePercentage,
     require_abn: data.requireAbn,
-    require_stripe_connect_before_bidding: data.requireStripeConnectBeforeBidding ?? true,
+    require_stripe_connect_before_bidding: data.requireStripeConnectBeforeBidding ?? false,
+    require_stripe_connect_before_payment_release: data.requireStripeConnectBeforePaymentRelease !== false,
     min_profile_completion: data.minProfileCompletion,
     auto_release_hours: data.autoReleaseHours,
     emails_enabled: data.emailsEnabled,
@@ -525,7 +510,7 @@ export async function saveGlobalSettings(
       typeof data.pricingAddonBlindsAud === "number" && Number.isFinite(data.pricingAddonBlindsAud)
         ? Math.max(0, data.pricingAddonBlindsAud)
         : DEFAULT_PRICING_MODIFIERS.addonBlindsAud,
-    daily_digest_enabled: data.dailyDigestEnabled !== false,
+    daily_digest_enabled: false,
     admin_notify_new_user: data.adminNotifyNewUser !== false,
     admin_notify_new_listing: data.adminNotifyNewListing !== false,
     admin_notify_dispute: data.adminNotifyDispute !== false,
@@ -598,7 +583,6 @@ export async function saveGlobalSettings(
 
   revalidatePath("/admin/global-settings");
   revalidatePath("/admin/dashboard");
-  revalidatePath("/admin/emails");
   revalidatePath("/");
   revalidatePath("/", "layout");
   revalidatePath("/listings/new");
@@ -712,7 +696,7 @@ export type SetEmailsEnabledResult =
   | { ok: true }
   | { ok: false; error: string };
 
-/** Update only the global emails kill switch (e.g. from admin email templates page). */
+/** Update only the global emails kill switch. */
 export async function setEmailsEnabled(
   enabled: boolean
 ): Promise<SetEmailsEnabledResult> {
@@ -728,9 +712,43 @@ export async function setEmailsEnabled(
   const { data: { session } } = await supabase.auth.getSession();
   const { logAdminActivity } = await import("@/lib/admin-activity-log");
   await logAdminActivity({ adminId: session?.user?.id ?? null, actionType: "emails_enabled_toggled", targetType: "other", targetId: null, details: { enabled } });
-  revalidatePath("/admin/emails");
   revalidatePath("/admin/global-settings");
   revalidateGlobalSettingsCache();
   return { ok: true };
 }
 
+export type SendGlobalSettingsTestEmailResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/** Admin: Resend connectivity test from Global settings. */
+export async function sendGlobalSettingsTestEmail(
+  toEmail: string | null
+): Promise<SendGlobalSettingsTestEmailResult> {
+  try {
+    const supabase = await requireAdmin();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const adminId = session?.user?.id;
+    if (!adminId) return { ok: false, error: "Not authenticated" };
+
+    const recipient = toEmail?.trim() || (await getEmailForUserId(adminId));
+    if (!recipient) {
+      return { ok: false, error: "Enter an email address or add one to your admin account." };
+    }
+    const fromDisplay = process.env.RESEND_FROM ?? "Bond Back <noreply@bondback.io>";
+    const replyHint = process.env.RESEND_REPLY_TO?.trim()
+      ? `<p>Reply-To: <code>${process.env.RESEND_REPLY_TO}</code></p>`
+      : "<p><em>No RESEND_REPLY_TO set.</em></p>";
+    const html = `<p>This is a <strong>connectivity test</strong> from <strong>Admin → Global settings</strong>.</p>${replyHint}<p>From: <code>${fromDisplay}</code></p><p>Sent at ${new Date().toISOString()}</p>`;
+    const { sendEmail } = await import("@/lib/notifications/email");
+    const result = await sendEmail(recipient, "Bond Back – Resend test (global settings)", html, {
+      log: { userId: adminId, kind: "admin_test_global_settings" },
+    });
+    if (!result.ok) return { ok: false, error: result.error ?? "Send failed" };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Send failed" };
+  }
+}

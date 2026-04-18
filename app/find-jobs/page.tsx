@@ -123,6 +123,15 @@ async function FindJobsPageContent({
   const bathroomsFilter = (sp.bathrooms ?? "").trim();
   const propertyTypeFilter = (sp.property_type ?? "").trim();
 
+  const bedroomsNormalized =
+    bedroomsFilter && bedroomsFilter.toLowerCase() !== "any" ? bedroomsFilter : undefined;
+  const bathroomsNormalized =
+    bathroomsFilter && bathroomsFilter.toLowerCase() !== "any" ? bathroomsFilter : undefined;
+  const propertyTypeNormalized =
+    propertyTypeFilter && propertyTypeFilter.toLowerCase() !== "any"
+      ? propertyTypeFilter
+      : undefined;
+
   const filters = {
     suburb: suburbFilter || undefined,
     postcode: postcodeFilter || undefined,
@@ -132,9 +141,9 @@ async function FindJobsPageContent({
     min_bid_price: minBidPriceFilter || undefined,
     max_bid_price: maxBidPriceFilter || undefined,
     buy_now_only: buyNowOnlyFilter || undefined,
-    bedrooms: bedroomsFilter || undefined,
-    bathrooms: bathroomsFilter || undefined,
-    property_type: propertyTypeFilter || undefined,
+    bedrooms: bedroomsNormalized,
+    bathrooms: bathroomsNormalized,
+    property_type: propertyTypeNormalized,
   };
 
   const query = buildLiveListingsQuery(supabase, filters, takenIds);
@@ -228,10 +237,18 @@ async function FindJobsPageContent({
     ...(minBidPriceFilter && { min_bid_price: minBidPriceFilter }),
     ...(maxBidPriceFilter && { max_bid_price: maxBidPriceFilter }),
     ...(buyNowOnlyFilter === "1" && { buy_now_only: "1" }),
-    ...(bedroomsFilter && bedroomsFilter !== "any" && { bedrooms: bedroomsFilter }),
-    ...(bathroomsFilter && bathroomsFilter !== "any" && { bathrooms: bathroomsFilter }),
-    ...(propertyTypeFilter && propertyTypeFilter !== "any" && { property_type: propertyTypeFilter }),
+    ...(bedroomsNormalized && { bedrooms: bedroomsNormalized }),
+    ...(bathroomsNormalized && { bathrooms: bathroomsNormalized }),
+    ...(propertyTypeNormalized && { property_type: propertyTypeNormalized }),
   }).toString();
+
+  /** Bumps when URL filters or map window change so client `JobsList` resets from fresh SSR props. */
+  const browseSyncKey = [
+    jobsListQuery,
+    String(activeRadiusKm),
+    String(effectiveCenterLat),
+    String(effectiveCenterLon),
+  ].join("|");
 
   const listSection =
     listingsWithCoords.length === 0 ? (
@@ -289,6 +306,7 @@ async function FindJobsPageContent({
         listLayout="sidebar"
         mapSync
         findJobsPublicBrowse
+        browseSyncKey={browseSyncKey}
         filters={{
           suburb: suburbFilter || undefined,
           postcode: postcodeFilter || undefined,
@@ -298,9 +316,9 @@ async function FindJobsPageContent({
           min_bid_price: minBidPriceFilter || undefined,
           max_bid_price: maxBidPriceFilter || undefined,
           buy_now_only: buyNowOnlyFilter || undefined,
-          bedrooms: bedroomsFilter || undefined,
-          bathrooms: bathroomsFilter || undefined,
-          property_type: propertyTypeFilter || undefined,
+          bedrooms: bedroomsNormalized,
+          bathrooms: bathroomsNormalized,
+          property_type: propertyTypeNormalized,
         }}
       />
     );
