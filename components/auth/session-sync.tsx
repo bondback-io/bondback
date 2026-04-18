@@ -107,12 +107,28 @@ export function SessionSync() {
         const { data, error } = await supabase.auth.getUser();
         if (cancelled) return;
         if (error || !data?.user) {
+          const status =
+            error && typeof error === "object" && "status" in error
+              ? Number((error as { status?: number }).status)
+              : NaN;
+          if (Number.isFinite(status) && status >= 500 && status < 600) {
+            sessionDebug("validate deferred due to 5xx from auth", { status, message: error?.message ?? null });
+            return;
+          }
           const msg = (error?.message ?? "").toLowerCase();
           const isNetworkLikeError =
             msg.includes("fetch") ||
             msg.includes("network") ||
             msg.includes("timeout") ||
-            msg.includes("offline");
+            msg.includes("offline") ||
+            msg.includes("503") ||
+            msg.includes("502") ||
+            msg.includes("504") ||
+            msg.includes("gateway") ||
+            msg.includes("bad gateway") ||
+            msg.includes("service unavailable") ||
+            msg.includes("temporar") ||
+            msg.includes("unreachable");
           if (offlineRef.current || isNetworkLikeError) {
             sessionDebug("validate deferred due to network/offline", { message: error?.message ?? null });
             return;

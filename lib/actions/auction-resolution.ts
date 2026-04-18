@@ -106,6 +106,18 @@ export async function resolveExpiredLiveAuctions(
       }
       processed++;
       expiredNoBids++;
+      const titleTrim = row.title?.trim() ?? null;
+      const noBidMsg = titleTrim
+        ? `Your auction "${titleTrim}" ended with no bids. You can relist or post a new listing from My Listings.`
+        : "Your auction ended with no bids. You can relist or post a new listing from My Listings.";
+      try {
+        await createNotification(row.lister_id, "listing_expired_no_bids", null, noBidMsg, {
+          listingUuid: listingId,
+          listingTitle: titleTrim,
+        });
+      } catch (e) {
+        console.error("[resolveExpiredLiveAuctions] lister no-bids notification failed", e);
+      }
       revalidateListingPaths(listingId);
       continue;
     }

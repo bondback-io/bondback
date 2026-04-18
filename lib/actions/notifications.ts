@@ -52,7 +52,10 @@ export type NotificationType =
   | "early_accept_declined"
   | "listing_public_comment"
   | "job_won_complete_payout"
-  | "lister_payout_blocked_cleaner_stripe";
+  | "lister_payout_blocked_cleaner_stripe"
+  | "bid_outbid"
+  | "listing_assigned_buy_now"
+  | "listing_expired_no_bids";
 
 export type NewJobChannelDelivery = Partial<{
   email: boolean;
@@ -680,6 +683,38 @@ export async function sendAdminTestNotificationByType(
       jobId: null,
       message: "Sample: job status changed (e.g. payment secured / in progress).",
       options: { adminTest: true },
+    },
+    bid_outbid: {
+      jobId: null,
+      message:
+        "Sample: another cleaner placed a lower bid on \"2 Bed Unit\" ($240.00). Your bid is no longer the lowest.",
+      options: {
+        listingUuid: "00000000-0000-0000-0000-000000000001",
+        listingTitle: "2 Bed Unit",
+        amountCents: 24000,
+        adminTest: true,
+      },
+    },
+    listing_assigned_buy_now: {
+      jobId: null,
+      message:
+        'Sample: another cleaner secured "2 Bed Unit" at the fixed price of $350.00. Your bid is no longer active.',
+      options: {
+        listingUuid: "00000000-0000-0000-0000-000000000001",
+        listingTitle: "2 Bed Unit",
+        amountCents: 35000,
+        adminTest: true,
+      },
+    },
+    listing_expired_no_bids: {
+      jobId: null,
+      message:
+        'Sample: your auction "2 Bed Unit" ended with no bids. You can relist from My Listings.',
+      options: {
+        listingUuid: "00000000-0000-0000-0000-000000000001",
+        listingTitle: "2 Bed Unit",
+        adminTest: true,
+      },
     },
   };
 

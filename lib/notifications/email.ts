@@ -113,7 +113,10 @@ export type NotificationType =
   | "early_accept_declined"
   | "listing_public_comment"
   | "job_won_complete_payout"
-  | "lister_payout_blocked_cleaner_stripe";
+  | "lister_payout_blocked_cleaner_stripe"
+  | "bid_outbid"
+  | "listing_assigned_buy_now"
+  | "listing_expired_no_bids";
 
 export type SendEmailOptions = {
   /** When set, logs to email_logs (and always logs a masked line to console). */
@@ -432,6 +435,9 @@ export async function buildNotificationEmail(
     listing_public_comment: `Someone commented on your listing – Bond Back`,
     job_won_complete_payout: `You won — complete Stripe payout setup – Bond Back`,
     lister_payout_blocked_cleaner_stripe: `Payment release waiting on cleaner’s Stripe — Job #${id} – Bond Back`,
+    bid_outbid: `Someone bid lower — you’re not leading anymore – Bond Back`,
+    listing_assigned_buy_now: `Fixed price taken — your bid’s closed – Bond Back`,
+    listing_expired_no_bids: `Your auction ended with no bids – Bond Back`,
   };
 
   let element: React.ReactElement;
@@ -530,6 +536,42 @@ export async function buildNotificationEmail(
         hrefPath: emailBrowseJobsUrl(),
         preview: "Listing ended — Bond Back",
         ctaLabel: "Browse jobs",
+      });
+      break;
+    case "bid_outbid":
+      templateProps = { headline: "You were outbid", messageText, hrefForJob };
+      element = React.createElement(GenericNotification, {
+        headline: "You were outbid",
+        messageText:
+          messageText ||
+          "Another cleaner placed a lower bid on this listing. Open the listing to see the latest price.",
+        hrefPath: hrefForJob,
+        preview: "Outbid — Bond Back",
+        ctaLabel: listingKeyFromOptions ? "View listing" : "Open Bond Back",
+      });
+      break;
+    case "listing_assigned_buy_now":
+      templateProps = { headline: "Someone used Buy Now", messageText, hrefForJob: emailBrowseJobsUrl() };
+      element = React.createElement(GenericNotification, {
+        headline: "Someone secured this job at the fixed price",
+        messageText:
+          messageText ||
+          "Another cleaner took this listing at the lister’s fixed price. Your bid is no longer active — browse for more work.",
+        hrefPath: emailBrowseJobsUrl(),
+        preview: "Buy now — Bond Back",
+        ctaLabel: "Browse jobs",
+      });
+      break;
+    case "listing_expired_no_bids":
+      templateProps = { headline: "Auction ended with no bids", messageText, hrefForJob };
+      element = React.createElement(GenericNotification, {
+        headline: "Your auction ended with no bids",
+        messageText:
+          messageText ||
+          "No cleaners bid before the end time. You can relist or create a new listing from My Listings.",
+        hrefPath: hrefForJob,
+        preview: "Auction ended — Bond Back",
+        ctaLabel: listingKeyFromOptions ? "View listing" : "Open Bond Back",
       });
       break;
     case "listing_live":

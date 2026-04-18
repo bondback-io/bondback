@@ -220,6 +220,9 @@ export const PUSH_NOTIFICATION_TYPES = new Set<string>([
   "listing_cancelled_by_lister",
   "job_won_complete_payout",
   "lister_payout_blocked_cleaner_stripe",
+  "bid_outbid",
+  "listing_assigned_buy_now",
+  "listing_expired_no_bids",
 ]);
 
 /**
@@ -362,6 +365,34 @@ export function buildPushPayload(
           listingId: listingIdStr || undefined,
           jobId: listingIdStr || undefined,
         },
+      };
+    }
+    case "bid_outbid": {
+      const t = (options?.listingTitle ?? "A listing").toString().trim().slice(0, 48);
+      return {
+        title: "You were outbid",
+        body: `Lower bid on ${t}. Tap to view the listing.`,
+        data: { type: "bid_outbid", listingId: listingIdStr || undefined },
+      };
+    }
+    case "listing_assigned_buy_now": {
+      const t = (options?.listingTitle ?? "A listing").toString().trim().slice(0, 44);
+      const amt =
+        options?.amountCents != null
+          ? `$${(options.amountCents / 100).toFixed(0)}`
+          : "fixed price";
+      return {
+        title: "Taken at fixed price",
+        body: `${t} was secured at ${amt}. Your bid is closed. Tap to browse jobs.`,
+        data: { type: "listing_assigned_buy_now", listingId: listingIdStr || undefined },
+      };
+    }
+    case "listing_expired_no_bids": {
+      const t = (options?.listingTitle ?? "Your listing").toString().trim().slice(0, 52);
+      return {
+        title: "No bids — auction ended",
+        body: `${t} got no bids. Tap to relist or post again.`,
+        data: { type: "listing_expired_no_bids", listingId: listingIdStr || undefined },
       };
     }
     case "after_photos_uploaded":

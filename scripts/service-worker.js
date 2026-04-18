@@ -2,10 +2,12 @@
  * Bond Back PWA Service Worker — advanced caching for optimal mobile performance.
  * Copy this file to public/service-worker.js (e.g. cp scripts/service-worker.js public/service-worker.js).
  * Versioned cache (bondback-v1); update CACHE_VERSION on deploy.
- * Strategies: app shell cache-first, images cache with TTL, API network-first, pages stale-while-revalidate.
+ * Strategies: light shell cache-first, images cache-first, API network-first,
+ * Next `/_next/*` assets network-first (prevents stale chunk vs new HTML after deploy),
+ * listed app routes network-first for navigations (was SWR stale-first — caused refresh thrash).
  */
 
-const CACHE_VERSION = "bondback-v2";
+const CACHE_VERSION = "bondback-v3";
 const SHELL_CACHE = CACHE_VERSION + "-shell";
 const IMAGES_CACHE = CACHE_VERSION + "-images";
 const PAGES_CACHE = CACHE_VERSION + "-pages";
@@ -31,6 +33,14 @@ const SWR_PATHS = [
   "/my-listings"
 ];
 
+/** Next.js hashed bundles, CSS, RSC flight, etc. — must not be cache-first or old tabs break after deploy. */
+function isNextBuildAssetRequest(url) {
+  return new URL(url).pathname.startsWith("/_next/");
+}
+
+/**
+ * Small static shell only (not `/_next/*`). JS/CSS chunks live under `/_next/static` and use network-first.
+ */
 function isAppShellRequest(url) {
   const path = new URL(url).pathname;
   return (
@@ -38,8 +48,7 @@ function isAppShellRequest(url) {
     path === "/manifest.json" ||
     path === "/offline" ||
     path === "/icon" ||
-    /^\/(_next\/static\/|icons\/|favicon)/.test(path) ||
-    /\.(js|css|woff2?)$/i.test(path)
+    /^\/(icons\/|favicon)/.test(path)
   );
 }
 
@@ -389,7 +398,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 2) App shell & static assets: cache-first
+  // 2) Next build output: network-first (then cache for offline). Avoids post-deploy chunk/HTML mismatch loops.
+  if (isNextBuildAssetRequest(url)) {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res.ok && res.type === "basic") {
+            const clone = res.clone();
+            caches.open(SHELL_CACHE).then((cache) => cache.put(request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // 3) App shell (tiny): cache-first
   if (isAppShellRequest(url)) {
     event.respondWith(
       caches.match(request).then((cached) => {
@@ -406,7 +431,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 3) Images: cache-first (30-day effective TTL via cache version on deploy)
+  // 4) Images: cache-first (30-day effective TTL via cache version on deploy)
   if (isImageRequest(url)) {
     event.respondWith(
       caches.match(request).then((cached) => {
@@ -423,30 +448,26 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 4) Navigation to SWR pages: stale-while-revalidate (return cached, revalidate in background)
+  // 5) Navigation to listed app pages: network-first (same as other navigations). Stale-first HTML +
+  //    cached `/_next/*` after a deploy caused hard-to-debug refresh loops for logged-in users.
   if (isNavigationRequest(request) && isSwrPageRequest(url)) {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        const fetchPromise = fetch(request)
-          .then((res) => {
-            if (res.ok && res.type === "basic" && !shouldThrottle()) {
-              const clone = res.clone();
-              caches.open(PAGES_CACHE).then((cache) => cache.put(request, clone));
-            }
-            return res;
-          })
-          .catch(() => null);
-        if (cached) {
-          fetchPromise.then(() => {}); // revalidate in background
-          return cached;
-        }
-        return fetchPromise.then((fresh) => fresh || caches.match("/offline"));
-      }).catch(() => fetch(request))
+      fetch(request)
+        .then((res) => {
+          if (res.ok && res.type === "basic" && !shouldThrottle()) {
+            const clone = res.clone();
+            caches.open(PAGES_CACHE).then((cache) => cache.put(request, clone));
+          }
+          return res;
+        })
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match("/offline"))
+        )
     );
     return;
   }
 
-  // 5) Other navigations: network first, offline fallback
+  // 6) Other navigations: network first, offline fallback
   if (isNavigationRequest(request)) {
     event.respondWith(
       fetch(request)
@@ -464,7 +485,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 6) Other GET: network first
+  // 7) Other GET: network first
   event.respondWith(
     fetch(request)
       .then((res) => {

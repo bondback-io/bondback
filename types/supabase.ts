@@ -616,7 +616,10 @@ export interface Database {
             | "listing_public_comment"
             | "daily_digest"
             | "job_won_complete_payout"
-            | "lister_payout_blocked_cleaner_stripe";
+            | "lister_payout_blocked_cleaner_stripe"
+            | "bid_outbid"
+            | "listing_assigned_buy_now"
+            | "listing_expired_no_bids";
           job_id: number | null;
           message_text: string;
           /** Short label for lists (e.g. New bid · Job #12). */
@@ -654,7 +657,10 @@ export interface Database {
             | "early_accept_declined"
             | "listing_public_comment"
             | "job_won_complete_payout"
-            | "lister_payout_blocked_cleaner_stripe";
+            | "lister_payout_blocked_cleaner_stripe"
+            | "bid_outbid"
+            | "listing_assigned_buy_now"
+            | "listing_expired_no_bids";
           job_id?: number | null;
           message_text: string;
           title?: string | null;
@@ -689,7 +695,10 @@ export interface Database {
             | "early_accept_declined"
             | "listing_public_comment"
             | "job_won_complete_payout"
-            | "lister_payout_blocked_cleaner_stripe";
+            | "lister_payout_blocked_cleaner_stripe"
+            | "bid_outbid"
+            | "listing_assigned_buy_now"
+            | "listing_expired_no_bids";
           job_id?: number | null;
           message_text?: string;
           title?: string | null;

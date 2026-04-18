@@ -29,6 +29,9 @@ const TEST_TYPES: { type: NotificationType; label: string }[] = [
   { type: "new_job_in_area", label: "New job nearby" },
   { type: "job_cancelled_by_lister", label: "Job cancelled" },
   { type: "listing_cancelled_by_lister", label: "Listing ended (had bid)" },
+  { type: "bid_outbid", label: "Outbid (cleaner)" },
+  { type: "listing_assigned_buy_now", label: "Buy now taken (loser)" },
+  { type: "listing_expired_no_bids", label: "Auction ended, no bids" },
   { type: "referral_reward", label: "Referral reward" },
 ];
 

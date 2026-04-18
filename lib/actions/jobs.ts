@@ -470,7 +470,42 @@ export async function secureJobAtPrice(
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
   const admin = createSupabaseAdminClient();
+  const listingTitle = listRow.title ?? null;
+  const buyNowCents = listRow.buy_now_cents!;
+  const buyNowDisplay = `$${(buyNowCents / 100).toFixed(2)}`;
+
   if (admin) {
+    const { data: loserBidRows } = await admin
+      .from("bids")
+      .select("cleaner_id")
+      .eq("listing_id", listRow.id)
+      .in("status", ["active", "pending_confirmation"])
+      .neq("cleaner_id", session.user.id);
+    const loserIds = new Set<string>();
+    for (const lr of loserBidRows ?? []) {
+      const cid = (lr as { cleaner_id: string }).cleaner_id;
+      if (cid) loserIds.add(cid);
+    }
+    await admin
+      .from("bids")
+      .update({ status: "cancelled" } as never)
+      .eq("listing_id", listRow.id)
+      .in("status", ["active", "pending_confirmation"]);
+
+    const tShort = (listingTitle ?? "this listing").trim();
+    const loserMsg = `Another cleaner secured "${tShort}" at the fixed price of ${buyNowDisplay}. Your bid is no longer active.`;
+    for (const loserId of loserIds) {
+      try {
+        await createNotification(loserId, "listing_assigned_buy_now", null, loserMsg, {
+          listingUuid: listingId,
+          listingTitle,
+          amountCents: buyNowCents,
+        });
+      } catch (e) {
+        console.error("[secureJobAtPrice] loser notification failed", e);
+      }
+    }
+
     await admin
       .from("listings")
       .update({ status: "ended" } as never)
@@ -478,7 +513,6 @@ export async function secureJobAtPrice(
       .eq("status", "live");
   }
 
-  const listingTitle = listRow.title ?? null;
   await createNotification(
     listRow.lister_id,
     "job_created",
@@ -508,6 +542,7 @@ export async function secureJobAtPrice(
   revalidatePath("/messages");
   revalidatePath("/lister/dashboard");
   revalidatePath("/cleaner/dashboard");
+  revalidatePath("/find-jobs");
 
   return { ok: true, jobId };
 }

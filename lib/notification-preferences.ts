@@ -104,6 +104,11 @@ export function notificationTypeToPreferenceKey(
       return "payment_released";
     case "listing_live":
       return "listing_published";
+    case "listing_expired_no_bids":
+      return "listing_published";
+    case "bid_outbid":
+    case "listing_assigned_buy_now":
+      return "new_bid";
     case "early_accept_declined":
       return "job_accepted";
     case "after_photos_uploaded":

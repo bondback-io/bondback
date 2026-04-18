@@ -134,6 +134,15 @@ export function buildNotificationPersistFields(
     case "lister_payout_blocked_cleaner_stripe":
       title = jobId != null ? `Release waiting · Job #${jobId}` : "Cleaner Stripe setup needed";
       break;
+    case "bid_outbid":
+      title = "You were outbid";
+      break;
+    case "listing_assigned_buy_now":
+      title = "Listing taken at fixed price";
+      break;
+    case "listing_expired_no_bids":
+      title = "Auction ended — no bids";
+      break;
     default:
       title = "Update";
   }

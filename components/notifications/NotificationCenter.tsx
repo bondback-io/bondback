@@ -68,6 +68,11 @@ function iconForType(type: NotificationRow["type"]) {
       return <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />;
     case "new_bid":
       return <Megaphone className="h-4 w-4 shrink-0 text-primary" />;
+    case "bid_outbid":
+    case "listing_assigned_buy_now":
+      return <Briefcase className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />;
+    case "listing_expired_no_bids":
+      return <Megaphone className="h-4 w-4 shrink-0 text-muted-foreground" />;
     case "early_accept_declined":
       return <Briefcase className="h-4 w-4 shrink-0 text-slate-600 dark:text-slate-400" />;
     default:

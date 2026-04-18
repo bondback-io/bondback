@@ -280,6 +280,35 @@ export async function placeBid(
     };
   }
 
+  const adminForOutbid = createSupabaseAdminClient();
+  if (adminForOutbid && minBidRow != null) {
+    const { data: outbidRows } = await adminForOutbid
+      .from("bids")
+      .select("cleaner_id")
+      .eq("listing_id", listingId)
+      .eq("status", "active")
+      .eq("amount_cents", effectiveLowest)
+      .neq("cleaner_id", session.user.id);
+    const seenOutbid = new Set<string>();
+    const titleTrim = row.title?.trim() ?? null;
+    const titlePart = titleTrim ? `"${titleTrim}"` : "this listing";
+    const outbidMsg = `Another cleaner placed a lower bid on ${titlePart} (${formatAudFromCents(amountCents)}). Your bid is no longer the lowest.`;
+    for (const br of outbidRows ?? []) {
+      const cid = (br as { cleaner_id: string }).cleaner_id;
+      if (!cid || seenOutbid.has(cid)) continue;
+      seenOutbid.add(cid);
+      try {
+        await createNotification(cid, "bid_outbid", null, outbidMsg, {
+          listingUuid: listingId,
+          listingTitle: titleTrim,
+          amountCents,
+        });
+      } catch (e) {
+        console.error("[placeBid] outbid notification failed", e);
+      }
+    }
+  }
+
   if (row.lister_id) {
     let cleanerName = "A cleaner";
     const { data: bp } = await supabase

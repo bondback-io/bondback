@@ -210,6 +210,9 @@ const PUSH_NOTIFICATION_TYPES = new Set([
   "job_status_update",
   "funds_ready",
   "listing_cancelled_by_lister",
+  "bid_outbid",
+  "listing_assigned_buy_now",
+  "listing_expired_no_bids",
 ]);
 
 let loggedMissingServiceRoleForPrefs = false;

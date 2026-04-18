@@ -106,6 +106,12 @@ function labelForType(type: NotificationRow["type"]): string {
       return "Stripe payout setup";
     case "lister_payout_blocked_cleaner_stripe":
       return "Release blocked";
+    case "bid_outbid":
+      return "Outbid";
+    case "listing_assigned_buy_now":
+      return "Buy now taken";
+    case "listing_expired_no_bids":
+      return "No bids";
     default:
       return "Update";
   }
