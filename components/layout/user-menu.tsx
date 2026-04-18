@@ -46,7 +46,7 @@ import {
   LayoutDashboard,
   Users,
 } from "lucide-react";
-import { useThemeToggle } from "@/components/layout/theme-toggle";
+import { ThemeToggleSheetRow, useThemeToggle } from "@/components/layout/theme-toggle";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import type { ProfileRole, SessionWithProfile } from "@/lib/types";
@@ -78,29 +78,6 @@ function useIsMobile() {
 
 const MOBILE_ROW_CLASS =
   "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
-
-function UserMenuThemeToggleSheetRow({ persistToServer }: { persistToServer: boolean }) {
-  const { mounted, isDark, toggleTheme } = useThemeToggle(persistToServer);
-  const label = isDark ? "Light mode" : "Dark mode";
-  const ariaLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
-  return (
-    <button
-      type="button"
-      onClick={toggleTheme}
-      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-      aria-label={ariaLabel}
-    >
-      {!mounted ? (
-        <Moon className="h-5 w-5 shrink-0 opacity-50" aria-hidden />
-      ) : isDark ? (
-        <Sun className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
-      ) : (
-        <Moon className="h-5 w-5 shrink-0 text-slate-700 dark:text-gray-300" aria-hidden />
-      )}
-      <span>{label}</span>
-    </button>
-  );
-}
 
 function UserMenuThemeToggleDropdownItem({ persistToServer }: { persistToServer: boolean }) {
   const { mounted, isDark, toggleTheme } = useThemeToggle(persistToServer);
@@ -509,7 +486,7 @@ export function UserMenu({ session }: UserMenuProps) {
                   aria-hidden
                 />
                 <p className={MENU_SECTION_HEADER}>Appearance</p>
-                <UserMenuThemeToggleSheetRow persistToServer />
+                <ThemeToggleSheetRow persistToServer />
 
                 {isAdmin && (
                   <>

@@ -21,6 +21,7 @@ import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import { signOutAndReloadApp } from "@/lib/auth/client-logout";
 import { FindJobsSheetLink } from "@/components/layout/find-jobs-nav-link";
+import { ThemeToggleSheetRow } from "@/components/layout/theme-toggle";
 import type { SessionWithProfile } from "@/lib/types";
 import { getInAppNotificationFeedbackPrefs } from "@/lib/notifications/in-app-notification-prefs";
 export type MainNavProps = {
@@ -172,6 +173,9 @@ function MobileNavContent({
                   Sign up
                 </Link>
               </SheetClose>
+              <div className="border-t border-chromeBorder/80 pt-3 dark:border-gray-800">
+                <ThemeToggleSheetRow persistToServer={false} />
+              </div>
             </div>
           </>
         )}

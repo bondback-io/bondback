@@ -121,22 +121,25 @@ export const Header = async ({
           </div>
         </div>
       ) : (
-        <div className="container flex min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-2 px-3 py-2 sm:min-h-14 sm:gap-4 sm:px-4 md:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 md:gap-6">
+        <div className="container flex min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-1.5 px-2.5 py-1.5 sm:min-h-14 sm:gap-3 sm:px-4 md:px-6 md:py-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-5">
             <Link
               href="/"
-              className="flex shrink-0 items-center gap-2 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg"
+              className="flex min-w-0 shrink-0 items-center gap-1.5 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg sm:gap-2"
               aria-label="Bond Back home"
             >
-              <span className="rounded-lg bg-primary px-2 py-1.5 text-sm font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10 sm:px-2.5">
+              <span className="rounded-lg bg-primary px-2 py-1.5 text-xs font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10 sm:text-sm sm:px-2.5">
                 Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
               </span>
-              <span className="hidden truncate text-xs text-muted-foreground sm:inline lg:text-[13px]">
+              <span className="hidden min-w-0 truncate text-xs text-muted-foreground md:inline lg:text-[13px]">
                 Bond clean marketplace
               </span>
             </Link>
-            <span className="h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700" aria-hidden />
-            <FindJobsNavLink className="shrink-0" />
+            <span
+              className="hidden h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700 sm:block"
+              aria-hidden
+            />
+            <FindJobsNavLink className="min-w-0 shrink" />
             <MainNav
               isLoggedIn={isLoggedIn}
               hasCleanerRole={false}
@@ -147,31 +150,33 @@ export const Header = async ({
           </div>
 
           <nav
-            className="flex shrink-0 items-center justify-end gap-1 sm:gap-2"
+            className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1.5"
             aria-label="Account and tools"
           >
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-0.5 sm:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
                 asChild
-                className="min-h-9 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                className="h-9 min-h-9 px-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 sm:h-10 sm:min-h-10 sm:px-3 sm:text-sm dark:hover:bg-gray-800 dark:hover:text-gray-100"
               >
                 <Link href="/login">Log in</Link>
               </Button>
               <Button
                 asChild
                 size="sm"
-                className="min-h-9 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+                className="h-9 min-h-9 shrink-0 rounded-full bg-primary px-2.5 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 sm:h-10 sm:min-h-10 sm:px-4 sm:text-sm"
               >
                 <Link href="/signup">Sign up</Link>
               </Button>
             </div>
             <span
-              className="mx-0.5 hidden h-5 w-px shrink-0 bg-border dark:bg-gray-700 sm:block md:mx-1"
+              className="mx-0.5 hidden h-5 w-px shrink-0 bg-border dark:bg-gray-700 md:mx-1 md:block"
               aria-hidden
             />
-            <ThemeToggle />
+            <span className="hidden md:inline-flex">
+              <ThemeToggle />
+            </span>
           </nav>
         </div>
       )}
