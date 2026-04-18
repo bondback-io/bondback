@@ -1,7 +1,9 @@
-/** Trust row for job cards: lister display name + verification_badges from profiles. */
+/** Trust row for job cards: lister display name + verification_badges + avatar from profiles. */
 export type ListerCardData = {
   listerName: string | null;
   listerVerificationBadges: string[] | null;
+  /** Public profile image URL (storage or OAuth); null if unset. */
+  listerAvatarUrl: string | null;
 };
 
 /**
@@ -19,24 +21,34 @@ export async function buildListerCardDataByListingId(
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, full_name, verification_badges")
+    .select("id, full_name, verification_badges, avatar_url, profile_photo_url")
     .in("id", uniqueListerIds);
 
   const byUser = new Map<
     string,
-    { full_name: string | null; verification_badges: string[] | null }
+    {
+      full_name: string | null;
+      verification_badges: string[] | null;
+      listerAvatarUrl: string | null;
+    }
   >();
   for (const p of profiles ?? []) {
     const row = p as {
       id: string;
       full_name?: string | null;
       verification_badges?: string[] | null;
+      avatar_url?: string | null;
+      profile_photo_url?: string | null;
     };
+    const uploaded = row.profile_photo_url?.trim() || null;
+    const oauth = row.avatar_url?.trim() || null;
+    const listerAvatarUrl = uploaded || oauth || null;
     byUser.set(row.id, {
       full_name: row.full_name ?? null,
       verification_badges: Array.isArray(row.verification_badges)
         ? row.verification_badges
         : null,
+      listerAvatarUrl,
     });
   }
 
@@ -46,6 +58,7 @@ export async function buildListerCardDataByListingId(
     out[String(l.id)] = {
       listerName: prof?.full_name ?? null,
       listerVerificationBadges: prof?.verification_badges ?? null,
+      listerAvatarUrl: prof?.listerAvatarUrl ?? null,
     };
   }
   return out;

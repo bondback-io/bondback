@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Menu,
-  Home,
   PlusCircle,
   User,
   DollarSign,
@@ -34,9 +33,6 @@ export type MainNavProps = {
   session?: SessionWithProfile | null;
 };
 
-const desktopLinkBase =
-  "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium transition-all duration-150 md:px-3 md:py-2 lg:px-3.5";
-
 function DesktopNavLinks({
   isLoggedIn,
   isLister,
@@ -44,31 +40,13 @@ function DesktopNavLinks({
 }: Omit<MainNavProps, "session" | "isCleaner"> & {
   onRequestCreateListing?: () => void;
 }) {
-  const pathname = usePathname();
   const router = useRouter();
-  const isHomePage = pathname === "/";
-
-  const isActive = (href: string) =>
-    pathname === href || (href !== "/" && pathname.startsWith(href));
-
-  const linkClass = (href: string) =>
-    cn(
-      desktopLinkBase,
-      "text-muted-foreground hover:text-foreground hover:bg-muted/70 dark:hover:bg-gray-800/80 dark:hover:text-gray-100",
-      isActive(href) &&
-        "bg-muted text-foreground dark:bg-gray-800 dark:text-gray-100 ring-1 ring-border/50 dark:ring-gray-700"
-    );
 
   return (
     <nav
       className="hidden min-w-0 flex-nowrap items-center gap-1 md:flex md:gap-1.5 lg:gap-2"
       aria-label="Main navigation"
     >
-      {!isLoggedIn && !isHomePage && (
-        <Link href="/" className={linkClass("/")}>
-          Home
-        </Link>
-      )}
       {isLoggedIn && (
         <>
           {isLister &&
@@ -166,14 +144,6 @@ function MobileNavContent({
       <nav className="space-y-0.5 pt-4" aria-label="Main navigation">
         {!isLoggedIn && (
           <>
-            {!isHomePage && (
-              <SheetClose asChild>
-                <Link href="/" className={linkClass("/")} onClick={onNavigate}>
-                  <Home className="h-5 w-5 shrink-0" aria-hidden />
-                  <span>Home</span>
-                </Link>
-              </SheetClose>
-            )}
             <FindJobsSheetLink onNavigate={onNavigate} />
             <div
               className={cn(

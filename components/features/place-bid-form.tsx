@@ -285,11 +285,31 @@ export function PlaceBidForm({
                   ) : null}
                   .
                 </p>
+                {typeof listing.starting_price_cents === "number" &&
+                listing.starting_price_cents > 0 ? (
+                  <p className="mt-2 text-xs font-normal normal-case tracking-normal text-muted-foreground dark:text-gray-500">
+                    Listing started at{" "}
+                    <span className="tabular-nums text-foreground/80 dark:text-gray-400">
+                      {formatCents(listing.starting_price_cents)}
+                    </span>
+                    .
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : null}
 
           <div className="space-y-3 px-4 py-4 sm:px-5">
+            {compactHelpText &&
+            typeof listing.starting_price_cents === "number" &&
+            listing.starting_price_cents > 0 ? (
+              <p className="text-[11px] leading-snug text-muted-foreground dark:text-gray-500">
+                Started at{" "}
+                <span className="tabular-nums font-medium text-foreground/80 dark:text-gray-400">
+                  {formatCents(listing.starting_price_cents)}
+                </span>
+              </p>
+            ) : null}
             <Label
               htmlFor="bid-amount"
               className={cn(

@@ -485,6 +485,7 @@ export function JobsList({
             distanceKm={distanceKm}
             selected={selected}
             listerName={listerCard?.listerName ?? null}
+            listerAvatarUrl={listerCard?.listerAvatarUrl ?? null}
             onPrefetchEnter={prefetchListingDetail}
             imagePriority={index < 4}
             onSelect={() => {

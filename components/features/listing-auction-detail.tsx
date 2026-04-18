@@ -191,6 +191,14 @@ export function ListingAuctionDetail({
   const showCleanerBidUi =
     isCleaner && isLive && !hasActiveJob && !isListingCancelled;
 
+  /** Full listing page: bid card (cleaners + guests / other listers — not the listing owner). */
+  const showPlaceBidCardOnListingPage =
+    !embedInFindJobs &&
+    isLive &&
+    !hasActiveJob &&
+    !isListingCancelled &&
+    !isListerOwner;
+
   /** Find Jobs embed: show bid form in the top-right card for everyone (guests see login / CTA copy). */
   const showEmbedBidForm =
     embedInFindJobs && isLive && !hasActiveJob && !isListingCancelled;
@@ -635,6 +643,7 @@ export function ListingAuctionDetail({
           )}
         </div>
       ) : (
+        <>
         <div
           className={cn(
             "overflow-hidden rounded-2xl border bg-card shadow-sm dark:bg-gray-950",
@@ -749,6 +758,119 @@ export function ListingAuctionDetail({
             </div>
           )}
         </div>
+
+        {!embedInFindJobs && isLive && (
+          <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground dark:text-gray-500">
+            <span className="font-medium text-foreground/85 dark:text-gray-400">Current bid</span>{" "}
+            <span className="tabular-nums text-foreground/90 dark:text-gray-300">
+              {formatCents(currentLowCents)}
+            </span>
+            {startingCents > 0 ? (
+              <>
+                <span className="mx-2 inline-block h-1 w-1 rounded-full bg-muted-foreground/50 align-middle" aria-hidden />
+                <span className="text-muted-foreground dark:text-gray-500">Starting price</span>{" "}
+                <span className="tabular-nums text-foreground/80 dark:text-gray-400">
+                  {formatCents(startingCents)}
+                </span>
+              </>
+            ) : null}
+            {hasBuyNow ? (
+              <>
+                <span className="mx-2 inline-block h-1 w-1 rounded-full bg-muted-foreground/50 align-middle" aria-hidden />
+                <span className="text-muted-foreground dark:text-gray-500">Buy now</span>{" "}
+                <span className="tabular-nums text-violet-700 dark:text-violet-300">
+                  {formatCents(buyNowCents!)}
+                </span>
+              </>
+            ) : null}
+          </p>
+        )}
+
+        {showPlaceBidCardOnListingPage ? (
+          <Card id="place-bid">
+            <CardHeader>
+              <CardTitle className="text-lg">Place a bid</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PlaceBidForm
+                listingId={listing.id}
+                listing={listing}
+                isCleaner={isCleaner}
+                currentUserId={currentUserId}
+                onBidPlaced={onBidPlaced}
+              />
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {!embedInFindJobs ? (
+          <Card id="bids" className="overflow-hidden">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-6 py-4 [&::-webkit-details-marker]:hidden">
+                <Gavel className="h-5 w-5 shrink-0" aria-hidden />
+                <CardTitle className="mb-0 flex flex-1 items-center gap-2 text-lg">
+                  Bids
+                  {initialBids.length > 0 ? (
+                    <Badge variant="secondary" className="font-mono text-xs tabular-nums">
+                      {initialBids.length}
+                    </Badge>
+                  ) : null}
+                </CardTitle>
+                <ChevronDown
+                  className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+                  aria-hidden
+                />
+              </summary>
+              <CardContent className="space-y-3 border-t border-border/80 px-6 pb-6 pt-4 dark:border-gray-800">
+                <BidHistoryTable
+                  listingId={String(listing.id)}
+                  bids={initialBids}
+                  hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
+                  onAcceptBid={
+                    canManageListingAsLister && !hasActiveJob && isLive
+                      ? handleAcceptBid
+                      : undefined
+                  }
+                  closedAuctionBidStatus={closedAuctionBidStatus}
+                  showRevertLastBid={showRevertLastBidInHistory}
+                  onRevertLastBid={
+                    showRevertLastBidInHistory ? handleRevertLastBid : undefined
+                  }
+                  largeTouch
+                  buyNowJobOutcome={
+                    securedViaBuyNow &&
+                    hasActiveJob &&
+                    buyNowHistoryAmountCents != null &&
+                    buyNowHistoryAmountCents > 0
+                      ? { amountCents: buyNowHistoryAmountCents }
+                      : null
+                  }
+                />
+                {canManageListingAsLister && !hasActiveJob && isLive && (
+                  <p className="text-sm text-muted-foreground">
+                    {initialBids.length === 0 ? (
+                      <>
+                        When cleaners start bidding, their offers will appear in the table above. To hire
+                        someone, open their row and tap{" "}
+                        <strong>Accept bid</strong>
+                        {" "}
+                        — that locks in that cleaner for this job.
+                      </>
+                    ) : (
+                      <>
+                        To confirm who you want, tap{" "}
+                        <strong>Accept bid</strong>
+                        {" "}
+                        on that cleaner&apos;s row in the table above.
+                      </>
+                    )}
+                  </p>
+                )}
+              </CardContent>
+            </details>
+          </Card>
+        ) : null}
+      </>
       )}
 
       {pendingAutoAssignWinner && (
@@ -827,95 +949,6 @@ export function ListingAuctionDetail({
           </div>
         </CardContent>
       </Card>
-
-      {/* Pricing strip — full listing page only (Find Jobs embed shows pricing in the top-right card). */}
-      {!embedInFindJobs && (
-        <Card
-          className={cn(
-            "overflow-hidden shadow-sm dark:border-gray-800",
-            showEndedListingVisual
-              ? "border-red-900/50 ring-1 ring-red-500/20 dark:border-red-900/60"
-              : "border-border/90"
-          )}
-        >
-          <CardContent className="p-0">
-            <div
-              className={cn(
-                "grid grid-cols-1 divide-y divide-border dark:divide-gray-800",
-                "md:divide-y-0 md:divide-x md:divide-border/80",
-                hasBuyNow ? "md:grid-cols-3" : "md:grid-cols-2"
-              )}
-            >
-              <div
-                className={cn(
-                  "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
-                  showEndedListingVisual
-                    ? "bg-red-950/20 dark:bg-red-950/35"
-                    : "bg-emerald-500/[0.06] dark:bg-emerald-950/30"
-                )}
-              >
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                  Current lowest bid
-                </p>
-                <p
-                  className={cn(
-                    "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
-                    showEndedListingVisual
-                      ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
-                      : "text-emerald-600 dark:text-emerald-400"
-                  )}
-                >
-                  {formatCents(currentLowCents)}
-                </p>
-              </div>
-              <div
-                className={cn(
-                  "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
-                  showEndedListingVisual ? "bg-muted/50 dark:bg-red-950/30" : "bg-card dark:bg-gray-950/40"
-                )}
-              >
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                  Starting bid
-                </p>
-                <p
-                  className={cn(
-                    "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
-                    showEndedListingVisual
-                      ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
-                      : "text-foreground dark:text-gray-100"
-                  )}
-                >
-                  {formatCents(startingCents)}
-                </p>
-              </div>
-              {hasBuyNow && (
-                <div
-                  className={cn(
-                    "flex min-h-[5.25rem] flex-col justify-center gap-1 px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6",
-                    showEndedListingVisual
-                      ? "bg-red-950/15 dark:bg-red-950/40"
-                      : "bg-violet-500/[0.07] dark:bg-violet-950/35"
-                  )}
-                >
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                    Buy now
-                  </p>
-                  <p
-                    className={cn(
-                      "text-2xl font-bold tabular-nums tracking-tight sm:text-3xl",
-                      showEndedListingVisual
-                        ? "text-muted-foreground line-through decoration-red-500/80 decoration-2 dark:text-gray-500"
-                        : "text-violet-700 dark:text-violet-300"
-                    )}
-                  >
-                    {formatCents(buyNowCents!)}
-                  </p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Property summary — full listing page only (Find Jobs embed shows this in the top-left column). */}
       {!embedInFindJobs && (
@@ -1185,94 +1218,73 @@ export function ListingAuctionDetail({
         ariaLabel="Initial condition photos"
       />
 
-      {showCleanerBidUi && !embedInFindJobs && (
-        <Card id="place-bid">
-          <CardHeader>
-            <CardTitle className="text-lg">Place a bid</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PlaceBidForm
-              listingId={listing.id}
-              listing={listing}
-              isCleaner={isCleaner}
-              currentUserId={currentUserId}
-              onBidPlaced={onBidPlaced}
-            />
-          </CardContent>
+      {embedInFindJobs ? (
+        <Card id="bids" className="overflow-hidden">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-6 py-4 [&::-webkit-details-marker]:hidden">
+              <Gavel className="h-5 w-5 shrink-0" aria-hidden />
+              <CardTitle className="mb-0 flex flex-1 items-center gap-2 text-lg">
+                Bids
+                {initialBids.length > 0 ? (
+                  <Badge variant="secondary" className="font-mono text-xs tabular-nums">
+                    {initialBids.length}
+                  </Badge>
+                ) : null}
+              </CardTitle>
+              <ChevronDown
+                className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+                aria-hidden
+              />
+            </summary>
+            <CardContent className="space-y-3 border-t border-border/80 px-6 pb-6 pt-4 dark:border-gray-800">
+              <BidHistoryTable
+                listingId={String(listing.id)}
+                bids={initialBids}
+                hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
+                onAcceptBid={
+                  canManageListingAsLister && !hasActiveJob && isLive
+                    ? handleAcceptBid
+                    : undefined
+                }
+                closedAuctionBidStatus={closedAuctionBidStatus}
+                showRevertLastBid={showRevertLastBidInHistory}
+                onRevertLastBid={
+                  showRevertLastBidInHistory ? handleRevertLastBid : undefined
+                }
+                largeTouch
+                buyNowJobOutcome={
+                  securedViaBuyNow &&
+                  hasActiveJob &&
+                  buyNowHistoryAmountCents != null &&
+                  buyNowHistoryAmountCents > 0
+                    ? { amountCents: buyNowHistoryAmountCents }
+                    : null
+                }
+              />
+              {canManageListingAsLister && !hasActiveJob && isLive && (
+                <p className="text-sm text-muted-foreground">
+                  {initialBids.length === 0 ? (
+                    <>
+                      When cleaners start bidding, their offers will appear in the table above. To hire
+                      someone, open their row and tap{" "}
+                      <strong>Accept bid</strong>
+                      {" "}
+                      — that locks in that cleaner for this job.
+                    </>
+                  ) : (
+                    <>
+                      To confirm who you want, tap{" "}
+                      <strong>Accept bid</strong>
+                      {" "}
+                      on that cleaner&apos;s row in the table above.
+                    </>
+                  )}
+                </p>
+              )}
+            </CardContent>
+          </details>
         </Card>
-      )}
-
-      <Card id="bids" className="overflow-hidden">
-        <details className="group">
-          <summary className="flex cursor-pointer list-none items-center gap-2 px-6 py-4 [&::-webkit-details-marker]:hidden">
-            <Gavel className="h-5 w-5 shrink-0" aria-hidden />
-            <CardTitle className="mb-0 flex flex-1 items-center gap-2 text-lg">
-              Bids
-              {initialBids.length > 0 ? (
-                <Badge variant="secondary" className="font-mono text-xs tabular-nums">
-                  {initialBids.length}
-                </Badge>
-              ) : null}
-            </CardTitle>
-            <ChevronDown
-              className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
-              aria-hidden
-            />
-          </summary>
-          <CardContent className="space-y-3 border-t border-border/80 px-6 pb-6 pt-4 dark:border-gray-800">
-            <BidHistoryTable
-              listingId={String(listing.id)}
-              bids={initialBids}
-              hasPendingEarlyAcceptance={hasPendingEarlyAcceptance}
-              onAcceptBid={
-                canManageListingAsLister && !hasActiveJob && isLive
-                  ? handleAcceptBid
-                  : undefined
-              }
-              closedAuctionBidStatus={closedAuctionBidStatus}
-              showRevertLastBid={showRevertLastBidInHistory}
-              onRevertLastBid={
-                showRevertLastBidInHistory ? handleRevertLastBid : undefined
-              }
-              largeTouch
-              buyNowJobOutcome={
-                securedViaBuyNow &&
-                hasActiveJob &&
-                buyNowHistoryAmountCents != null &&
-                buyNowHistoryAmountCents > 0
-                  ? { amountCents: buyNowHistoryAmountCents }
-                  : null
-              }
-            />
-            {canManageListingAsLister && !hasActiveJob && isLive && (
-              <p className="text-sm text-muted-foreground">
-                {initialBids.length === 0 ? (
-                  <>
-                    When cleaners start bidding, their offers will appear in the table above. To hire
-                    someone, open their row and tap{" "}
-                    <strong>Accept bid</strong>
-                    {" "}
-                    — that locks in that cleaner for this job.
-                  </>
-                ) : (
-                  <>
-                    To confirm who you want, tap{" "}
-                    <strong>Accept bid</strong>
-                    {" "}
-                    on that cleaner&apos;s row in the table above.
-                  </>
-                )}
-              </p>
-            )}
-          </CardContent>
-        </details>
-      </Card>
-
-      {!embedInFindJobs && !isCleaner && !isListerOwner && (
-        <p className="text-center text-sm text-muted-foreground">
-          Sign in as a cleaner to bid, or as the lister for this property to accept bids.
-        </p>
-      )}
+      ) : null}
 
       {embedInFindJobs ? (
         <ListingLocationMapDialog

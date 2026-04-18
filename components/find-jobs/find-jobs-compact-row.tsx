@@ -2,10 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Calendar, Gavel, MapPin } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Calendar, Gavel, MapPin, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import {
   formatCents,
   getListingCoverUrl,
@@ -13,19 +11,33 @@ import {
 } from "@/lib/listings";
 import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
-import { parseUtcTimestamp } from "@/lib/utils";
+import { cn, parseUtcTimestamp } from "@/lib/utils";
 export type FindJobsCompactRowProps = {
   listing: ListingRow;
   bidCount: number;
   distanceKm?: number;
   selected: boolean;
   listerName?: string | null;
+  /** Profile photo URL from `profiles.avatar_url` (batch-loaded with lister card data). */
+  listerAvatarUrl?: string | null;
   onSelect: () => void;
   /** Prefetch listing detail route on hover for faster navigation. */
   onPrefetchEnter?: () => void;
   /** First rows: eager-load hero thumbnail (LCP). */
   imagePriority?: boolean;
 };
+
+function listerInitials(name: string | null | undefined): string {
+  const t = (name ?? "").trim();
+  if (!t) return "";
+  const parts = t.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0]![0] ?? "";
+    const b = parts[parts.length - 1]![0] ?? "";
+    return `${a}${b}`.toUpperCase().slice(0, 2);
+  }
+  return t.slice(0, 2).toUpperCase();
+}
 
 function formatEndsShort(endTime: string | null | undefined): string {
   if (!endTime) return "";
@@ -50,6 +62,7 @@ export function FindJobsCompactRow({
   distanceKm,
   selected,
   listerName,
+  listerAvatarUrl = null,
   onSelect,
   onPrefetchEnter,
   imagePriority = false,
@@ -63,6 +76,8 @@ export function FindJobsCompactRow({
   const price = formatCents(listing.current_lowest_bid_cents ?? 0);
   const loc = [listing.suburb, listing.postcode].filter(Boolean).join(" ") || "—";
   const ends = formatEndsShort(listing.end_time);
+  const avatarSrc = listerAvatarUrl?.trim() || null;
+  const initials = listerInitials(listerName);
 
   return (
     <div
@@ -129,12 +144,31 @@ export function FindJobsCompactRow({
             </span>
           </div>
         </div>
-        <div className="hidden shrink-0 flex-col items-end justify-center gap-1 sm:flex">
-          <Avatar className="h-9 w-9 border border-border/80 dark:border-gray-700">
-            <AvatarFallback className="text-[10px] font-semibold">
-              {(listerName ?? "?").slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
+        <div className="flex shrink-0 flex-col items-end justify-center gap-1">
+          <div
+            className="relative h-8 w-8 overflow-hidden rounded-full border border-border/80 bg-muted dark:border-gray-700 sm:h-9 sm:w-9"
+            aria-hidden
+          >
+            {avatarSrc ? (
+              <Image
+                src={avatarSrc}
+                alt=""
+                fill
+                sizes="36px"
+                className="object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-muted dark:bg-gray-800">
+                {initials ? (
+                  <span className="text-[10px] font-semibold text-foreground/80 dark:text-gray-200">
+                    {initials}
+                  </span>
+                ) : (
+                  <User className="h-4 w-4 text-muted-foreground dark:text-gray-500" aria-hidden />
+                )}
+              </div>
+            )}
+          </div>
           <Link
             href={href}
             prefetch
