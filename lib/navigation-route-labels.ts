@@ -9,7 +9,7 @@ export function getNavigationLoadingLabel(pathname: string, search: string): str
   if (path === "/lister/dashboard") return "Opening Lister dashboard…";
   if (path === "/cleaner/dashboard") return "Opening Cleaner dashboard…";
   if (path === "/find-jobs" || path === "/jobs" || path.startsWith("/jobs/browse")) {
-    return "Opening Find jobs…";
+    return "Opening Browse Jobs…";
   }
   if (path.startsWith("/jobs/") && path !== "/jobs") return "Opening job…";
   if (path === "/my-listings") return "Opening My listings…";

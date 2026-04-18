@@ -352,7 +352,7 @@ export function MobileBottomNav({
               ? "Listings"
               : storedRoleFallback === "cleaner"
                 ? "Earnings"
-                : "Jobs"));
+                : "Browse"));
   const SecondaryTabIcon =
     effectiveRole === "lister" || inferred?.label === "Listings"
       ? List

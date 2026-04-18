@@ -45,12 +45,14 @@ import {
   Search,
   LayoutDashboard,
   Users,
+  PlusCircle,
 } from "lucide-react";
 import { ThemeToggleSheetRow, useThemeToggle } from "@/components/layout/theme-toggle";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import type { ProfileRole, SessionWithProfile } from "@/lib/types";
 import { clearMessagesUnreadForNav } from "@/lib/messages/clear-messages-unread-nav";
+import { BROWSE_JOBS_AVATAR_MENU_LABEL } from "@/lib/navigation/browse-jobs-labels";
 
 export type UserMenuProps = {
   session: SessionWithProfile;
@@ -383,6 +385,19 @@ export function UserMenu({ session }: UserMenuProps) {
                     </Link>
                   </SheetClose>
                 )}
+                {isLister && (
+                  <SheetClose asChild>
+                    <Link
+                      href="/listings/new"
+                      prefetch
+                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                      aria-label="Create listing"
+                    >
+                      <PlusCircle className="h-5 w-5 shrink-0" aria-hidden />
+                      <span>Create Listing</span>
+                    </Link>
+                  </SheetClose>
+                )}
                 <SheetClose asChild>
                   <Link
                     href={jobsActivityHref(session.roles, session.activeRole)}
@@ -414,10 +429,10 @@ export function UserMenu({ session }: UserMenuProps) {
                     <Link
                       href="/find-jobs"
                       className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                      aria-label="Browse jobs near me"
+                      aria-label={BROWSE_JOBS_AVATAR_MENU_LABEL}
                     >
                       <Search className="h-5 w-5 shrink-0" aria-hidden />
-                      <span>Browse Jobs Near Me</span>
+                      <span>{BROWSE_JOBS_AVATAR_MENU_LABEL}</span>
                     </Link>
                   </SheetClose>
                 )}
@@ -584,6 +599,18 @@ export function UserMenu({ session }: UserMenuProps) {
               <span>Dashboard</span>
             </DropdownMenuItem>
           )}
+          {isLister && (
+            <DropdownMenuItem
+              onSelect={() => {
+                router.push("/listings/new");
+              }}
+              className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+              aria-label="Create listing"
+            >
+              <PlusCircle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span>Create Listing</span>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             onSelect={() => {
               router.push(jobsActivityHref(session.roles, session.activeRole));
@@ -615,10 +642,10 @@ export function UserMenu({ session }: UserMenuProps) {
                 router.push("/find-jobs");
               }}
               className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
-              aria-label="Browse jobs near me"
+              aria-label={BROWSE_JOBS_AVATAR_MENU_LABEL}
             >
               <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span>Browse Jobs Near Me</span>
+              <span>{BROWSE_JOBS_AVATAR_MENU_LABEL}</span>
             </DropdownMenuItem>
           )}
           {isCleaner && (

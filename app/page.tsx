@@ -105,7 +105,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
                 )}
               >
                 <Link href="/find-jobs">
-                  Find Cleaning Jobs
+                  Browse Jobs
                   <ArrowRight className="ml-2 h-5 w-5 shrink-0 opacity-90" aria-hidden />
                 </Link>
               </Button>

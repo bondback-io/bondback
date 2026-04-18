@@ -72,8 +72,8 @@ export const Header = async ({
           <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1.5 sm:gap-2">
             <div className="flex min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible [scrollbar-width:none] sm:gap-2 md:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
               {/**
-               * Mobile (logged-in): hide logo to reduce clutter — Find Jobs sits at the leading edge.
-               * md+: logo → divider → Find Jobs (flex `order` keeps DOM stable for a11y).
+               * Mobile (logged-in): hide logo to reduce clutter — Browse Jobs sits at the leading edge.
+               * md+: logo → divider → Browse Jobs (flex `order` keeps DOM stable for a11y).
                */}
               <LogoMark className="hidden shrink-0 md:order-1 md:flex" />
               <span
@@ -87,14 +87,7 @@ export const Header = async ({
               <span className="hidden shrink-0 truncate text-xs text-muted-foreground md:order-4 xl:inline xl:max-w-[11rem] xl:text-[13px]">
                 Bond clean marketplace
               </span>
-              <MainNav
-                className="order-2 min-w-0 md:order-5"
-                isLoggedIn={isLoggedIn}
-                hasCleanerRole={hasCleanerRole}
-                isCleaner={isCleaner}
-                isLister={isLister}
-                session={session ?? null}
-              />
+              <MainNav className="order-2 min-w-0 md:order-5" isLoggedIn={isLoggedIn} isLister={isLister} />
             </div>
 
             <nav
@@ -151,13 +144,7 @@ export const Header = async ({
               aria-hidden
             />
             <FindJobsNavLink className="min-w-0 shrink" />
-            <MainNav
-              isLoggedIn={isLoggedIn}
-              hasCleanerRole={false}
-              isCleaner={false}
-              isLister={false}
-              session={null}
-            />
+            <MainNav isLoggedIn={isLoggedIn} isLister={false} />
           </div>
 
           <nav

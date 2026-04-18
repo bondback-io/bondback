@@ -148,13 +148,13 @@ function cleanerSteps(isDesktop: boolean): Step[] {
         <p className="m-0 text-sm leading-relaxed text-popover-foreground">
           {isDesktop ? (
             <>
-              Tap <strong>Find Jobs</strong> (next to the logo) to see bond cleans near you. Filters help
-              you match suburb and timing.
+              Tap <strong>Browse Jobs</strong> (top bar) to see bond cleans near you. Filters help you match
+              suburb and timing.
             </>
           ) : (
             <>
-              Tap <strong>Find Jobs</strong> next to the <strong>Bond Back</strong> logo — same listings as
-              on desktop. You can also open it from the menu (☰).
+              Tap <strong>Browse Jobs</strong> at the top — same listings as on desktop. Use your account menu
+              for the rest.
             </>
           )}
         </p>

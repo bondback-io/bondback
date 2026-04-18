@@ -11,6 +11,7 @@ import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import type { DashboardJobCardProps } from "@/components/dashboard/dashboard-job-card";
 import { DashboardJobCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
+import { BROWSE_JOBS_NAV_LABEL } from "@/lib/navigation/browse-jobs-labels";
 
 /** Primary contextual FAB for lister/cleaner dashboards (mobile only). Sits above the tab bar; leaves room for the layout icon FAB on the right. */
 export function MobileDashboardFab({
@@ -21,7 +22,7 @@ export function MobileDashboardFab({
   const router = useRouter();
   const isLister = variant === "lister";
   const href = isLister ? "/listings/new" : "/find-jobs";
-  const label = isLister ? "Create New Listing" : "Find Jobs";
+  const label = isLister ? "Create New Listing" : BROWSE_JOBS_NAV_LABEL;
 
   return (
     <Link

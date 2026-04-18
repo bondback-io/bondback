@@ -23,7 +23,7 @@ export function MobileMenuSearch({ onNavigate, className }: MobileMenuSearchProp
       aria-label="Search bond cleans in your area"
     >
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
-        Find jobs near you
+        Browse jobs near you
       </p>
       <FindJobsSearch
         variant="home"

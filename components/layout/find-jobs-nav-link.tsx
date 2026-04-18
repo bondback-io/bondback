@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { BROWSE_JOBS_NAV_LABEL } from "@/lib/navigation/browse-jobs-labels";
 
 /** Compact toolbar pill — outline + soft fill, readable in light and dark. */
 const toolbarBase =
@@ -32,7 +33,7 @@ export type FindJobsNavLinkProps = {
 };
 
 /**
- * “Find Jobs” CTA for the top bar — next to the logo on mobile and desktop.
+ * Top bar CTA to `/find-jobs` — label {@link BROWSE_JOBS_NAV_LABEL} everywhere except the avatar menu.
  */
 export function FindJobsNavLink({ className, id }: FindJobsNavLinkProps) {
   const pathname = usePathname();
@@ -45,23 +46,23 @@ export function FindJobsNavLink({ className, id }: FindJobsNavLinkProps) {
       href="/find-jobs"
       prefetch
       title="Browse bond cleaning jobs near you"
-      aria-label="Find jobs"
+      aria-label={BROWSE_JOBS_NAV_LABEL}
       onMouseEnter={() => router.prefetch("/find-jobs")}
       className={cn(
         toolbarBase,
         toolbarIdle,
-        "h-8 max-sm:max-w-[2.5rem] max-sm:px-2 max-sm:gap-0 sm:h-9 sm:max-w-none sm:px-3 sm:gap-1 sm:text-[13px]",
+        "h-8 min-w-0 px-2 sm:h-9 sm:px-3 sm:text-[13px]",
         active && toolbarActive,
         className
       )}
     >
       <Search className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" strokeWidth={2} aria-hidden />
-      <span className="hidden min-w-0 sm:inline">Find Jobs</span>
+      <span className="min-w-0 truncate">{BROWSE_JOBS_NAV_LABEL}</span>
     </Link>
   );
 }
 
-/** Mobile drawer row — matches toolbar treatment. */
+/** Guest mobile drawer row — same label as the toolbar CTA. */
 export function FindJobsSheetLink({
   onNavigate,
   className,
@@ -79,13 +80,13 @@ export function FindJobsSheetLink({
         href="/find-jobs"
         prefetch
         title="Browse bond cleaning jobs near you"
-        aria-label="Find jobs"
+        aria-label={BROWSE_JOBS_NAV_LABEL}
         onPointerDown={() => router.prefetch("/find-jobs")}
         onClick={() => onNavigate?.()}
         className={cn(SHEET_ROW, sheetIdle, isActive && sheetActive, className)}
       >
         <Search className="h-[1.125rem] w-[1.125rem] shrink-0 opacity-90" strokeWidth={2} aria-hidden />
-        <span>Find Jobs</span>
+        <span>{BROWSE_JOBS_NAV_LABEL}</span>
       </Link>
     </SheetClose>
   );
