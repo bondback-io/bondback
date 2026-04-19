@@ -7,9 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DisputeJobCaseSummary } from "@/components/disputes/dispute-job-case-summary";
+import { DisputeAuditTimeline } from "@/components/disputes/dispute-audit-timeline";
 import { DisputeThreadCard } from "@/components/disputes/dispute-thread-card";
 import { MediationVoteButtons } from "@/components/disputes/mediation-vote-buttons";
 import { serializeDisputeMessagesForClient } from "@/lib/disputes/serialize-dispute-messages";
+import { mergeOpeningMessageFromJobIfMissing } from "@/lib/disputes/dispute-audit-merge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const dynamic = "force-dynamic";
@@ -124,6 +126,7 @@ export default async function DisputesPage() {
           const isLister = job.lister_id === userId;
           const isCleaner = job.winner_id === userId;
           const messages = messagesByJob.get(Number(job.id)) ?? [];
+          const auditMessages = mergeOpeningMessageFromJobIfMissing(job, messages);
           const requests = paymentReqByJob.get(Number(job.id)) ?? [];
           const latestMediation = mediationByJob.get(Number(job.id)) ?? null;
           const jobHref = `/jobs/${job.id}`;
@@ -173,7 +176,9 @@ export default async function DisputesPage() {
 
                 <DisputeJobCaseSummary job={job} />
 
-                <DisputeThreadCard jobId={Number(job.id)} messages={messages} />
+                <DisputeAuditTimeline jobId={Number(job.id)} messages={auditMessages} />
+
+                <DisputeThreadCard jobId={Number(job.id)} messages={messages} showMessageList={false} />
 
                 {latestMediation ? (
                   <Card className="border-violet-300/70 bg-violet-50/60 dark:border-violet-800 dark:bg-violet-950/20">

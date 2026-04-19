@@ -13,57 +13,67 @@ import { OptimizedImage } from "@/components/ui/optimized-image";
 export function DisputeThreadCard({
   jobId,
   messages,
+  showMessageList = true,
 }: {
   jobId: number;
   messages: SerializableDisputeMessage[];
+  /** When false, only the reply form is shown (use with a separate audit timeline). */
+  showMessageList?: boolean;
 }) {
   const [state, formAction] = useFormState(submitDisputeMessage, {} as DisputeActionState);
 
   return (
     <Card className="border-border dark:border-gray-800 dark:bg-gray-900/50">
       <CardHeader>
-        <CardTitle className="text-base">Dispute thread</CardTitle>
+        <CardTitle className="text-base">{showMessageList ? "Dispute thread" : "Add a message"}</CardTitle>
+        {!showMessageList ? (
+          <p className="text-xs text-muted-foreground">
+            Your reply appears in the activity log above after you send it.
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-3">
-        <ul className="space-y-2">
-          {messages.length === 0 ? (
-            <li className="text-sm text-muted-foreground">No messages yet.</li>
-          ) : (
-            messages.map((m) => (
-              <li
-                key={m.id || `${m.created_at}-${m.body.slice(0, 12)}`}
-                className="rounded-lg border border-border bg-card p-3 dark:border-gray-700 dark:bg-gray-900"
-              >
-                <p className="text-[11px] text-muted-foreground">
-                  {m.author_role} • {new Date(m.created_at).toLocaleString()}
-                </p>
-                {m.is_escalation_event ? (
-                  <Badge variant="outline" className="mt-1 text-[10px]">
-                    Escalation event
-                  </Badge>
-                ) : null}
-                <p className="mt-1 whitespace-pre-wrap text-sm">{m.body}</p>
-                {m.attachment_urls && m.attachment_urls.length > 0 ? (
-                  <ul className="mt-2 flex flex-wrap gap-2">
-                    {m.attachment_urls.map((url) => (
-                      <li key={url} className="h-16 w-16 overflow-hidden rounded-md border dark:border-gray-600">
-                        <a href={url} target="_blank" rel="noopener noreferrer" className="block h-full w-full">
-                          <OptimizedImage
-                            src={url}
-                            alt=""
-                            width={64}
-                            height={64}
-                            className="h-full w-full object-cover"
-                          />
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </li>
-            ))
-          )}
-        </ul>
+        {showMessageList ? (
+          <ul className="space-y-2">
+            {messages.length === 0 ? (
+              <li className="text-sm text-muted-foreground">No messages yet.</li>
+            ) : (
+              messages.map((m) => (
+                <li
+                  key={m.id || `${m.created_at}-${m.body.slice(0, 12)}`}
+                  className="rounded-lg border border-border bg-card p-3 dark:border-gray-700 dark:bg-gray-900"
+                >
+                  <p className="text-[11px] text-muted-foreground">
+                    {m.author_role} • {new Date(m.created_at).toLocaleString()}
+                  </p>
+                  {m.is_escalation_event ? (
+                    <Badge variant="outline" className="mt-1 text-[10px]">
+                      Escalation event
+                    </Badge>
+                  ) : null}
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{m.body}</p>
+                  {m.attachment_urls && m.attachment_urls.length > 0 ? (
+                    <ul className="mt-2 flex flex-wrap gap-2">
+                      {m.attachment_urls.map((url) => (
+                        <li key={url} className="h-16 w-16 overflow-hidden rounded-md border dark:border-gray-600">
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="block h-full w-full">
+                            <OptimizedImage
+                              src={url}
+                              alt=""
+                              width={64}
+                              height={64}
+                              className="h-full w-full object-cover"
+                            />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              ))
+            )}
+          </ul>
+        ) : null}
 
         <form action={formAction} className="space-y-2">
           <input type="hidden" name="jobId" value={jobId} />

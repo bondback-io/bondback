@@ -451,6 +451,10 @@ export interface Database {
           dispute_opened_by: string | null;
           proposed_refund_amount: number | null;
           counter_proposal_amount: number | null;
+          dispute_cleaner_counter_used: boolean;
+          dispute_lister_counter_used: boolean;
+          admin_mediation_requested: boolean;
+          admin_mediation_requested_at: string | null;
           dispute_resolution: string | null;
           resolution_type: string | null;
           resolution_at: string | null;
@@ -486,6 +490,10 @@ export interface Database {
           dispute_opened_by?: string | null;
           proposed_refund_amount?: number | null;
           counter_proposal_amount?: number | null;
+          dispute_cleaner_counter_used?: boolean;
+          dispute_lister_counter_used?: boolean;
+          admin_mediation_requested?: boolean;
+          admin_mediation_requested_at?: string | null;
           dispute_resolution?: string | null;
           resolution_type?: string | null;
           resolution_at?: string | null;
@@ -520,6 +528,10 @@ export interface Database {
           dispute_opened_by?: string | null;
           proposed_refund_amount?: number | null;
           counter_proposal_amount?: number | null;
+          dispute_cleaner_counter_used?: boolean;
+          dispute_lister_counter_used?: boolean;
+          admin_mediation_requested?: boolean;
+          admin_mediation_requested_at?: string | null;
           dispute_resolution?: string | null;
           resolution_type?: string | null;
           resolution_at?: string | null;

@@ -8,6 +8,12 @@ import { createJobTopUpCheckoutSession, openDispute } from "@/lib/actions/jobs";
 import { sendEmail } from "@/lib/notifications/email";
 import { getSiteUrl } from "@/lib/site";
 import { countJobAfterPhotosFromStorage } from "@/lib/jobs/after-photo-storage-count";
+import {
+  disputeHubLinksHtml,
+  escapeHtmlForEmail,
+  insertDisputeThreadEntry,
+  sendDisputeActivityEmail,
+} from "@/lib/disputes/dispute-thread-and-notify";
 
 function trimText(v: unknown): string {
   return String(v ?? "").trim();
@@ -237,6 +243,17 @@ export async function reviewCleanerAdditionalPaymentRequest(formData: FormData):
         ? `Lister denied your additional payment request. Note: ${listerNote.slice(0, 500)}`
         : "Lister denied your additional payment request.";
       await createNotification(req.cleaner_id, "job_status_update", req.job_id, inAppMsg);
+      const denyBody = [
+        "Additional payment request — DENIED (lister)",
+        `Amount was: $${(Number(req.amount_cents) / 100).toFixed(2)} AUD`,
+        listerNote ? `\nLister note:\n${listerNote}` : "",
+      ].join("\n");
+      await insertDisputeThreadEntry({
+        jobId: Number(req.job_id),
+        authorUserId: userId,
+        authorRole: "lister",
+        body: denyBody,
+      });
       const cleanerEmail = await getEmailForUserId(req.cleaner_id);
       if (trimText(cleanerEmail)) {
         const safeNote = listerNote.replace(/</g, "&lt;");
@@ -372,6 +389,14 @@ export async function submitDisputeMessage(
         jobId,
         escalate ? "Dispute escalated for admin mediation." : "New dispute message received."
       );
+      await sendDisputeActivityEmail({
+        jobId,
+        toUserId: otherUserId,
+        subject: escalate
+          ? `[Bond Back] Job #${jobId}: dispute escalated`
+          : `[Bond Back] New dispute message — job #${jobId}`,
+        htmlBody: `<p>${escalate ? "A dispute was <strong>escalated</strong> for admin mediation." : "You have a new message"} on job #${jobId}.</p><p style="white-space:pre-wrap;">${escapeHtmlForEmail(body)}</p>${disputeHubLinksHtml(jobId)}`,
+      });
     }
     if (escalate) {
       const { data: admins } = await (admin as any).from("profiles").select("id").eq("is_admin", true);
@@ -426,10 +451,34 @@ export async function proposeMediation(formData: FormData) {
     job_id: jobId,
     author_user_id: userId,
     author_role: "admin",
-    body: `Mediation Proposal: ${proposalText}`,
+    body: `Mediation proposal\n\n${proposalText}\n\nRefund (cents): ${refundCents} · Top-up (cents): ${additionalPaymentCents}`,
     attachment_urls: [],
     is_escalation_event: false,
   });
+
+  const { data: jobRow } = await (admin as any)
+    .from("jobs")
+    .select("lister_id, winner_id")
+    .eq("id", jobId)
+    .maybeSingle();
+  const jr = jobRow as { lister_id?: string; winner_id?: string | null } | null;
+  const parties = [jr?.lister_id, jr?.winner_id].filter(Boolean) as string[];
+  const snippet = proposalText.length > 200 ? `${proposalText.slice(0, 197)}…` : proposalText;
+  for (const pid of parties) {
+    await createNotification(
+      pid,
+      "dispute_opened",
+      jobId,
+      `Admin posted a mediation proposal: ${snippet}`
+    );
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: pid,
+      subject: `[Bond Back] Job #${jobId}: mediation proposal from admin`,
+      htmlBody: `<p>An admin posted a <strong>mediation proposal</strong> for job #${jobId}.</p><p style="white-space:pre-wrap;">${escapeHtmlForEmail(proposalText)}</p><p>Refund: $${(refundCents / 100).toFixed(2)} · Top-up: $${(additionalPaymentCents / 100).toFixed(2)}</p>${disputeHubLinksHtml(jobId)}`,
+    });
+  }
+
   revalidatePath("/admin/disputes");
   revalidatePath("/disputes");
 }
@@ -483,6 +532,12 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
     if (!u) return { error: "Could not update vote." };
 
     if (u.lister_accepted === true && u.cleaner_accepted === true) {
+      await insertDisputeThreadEntry({
+        jobId,
+        authorUserId: null,
+        authorRole: "system",
+        body: "Mediation proposal accepted by both parties. Job completed per admin settlement.",
+      });
       await (admin as any)
         .from("jobs")
         .update({
@@ -507,6 +562,28 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
       return { ok: true, success: "Mediation accepted. The job has been updated." };
     }
     if (vote === false) {
+      await insertDisputeThreadEntry({
+        jobId,
+        authorUserId: userId,
+        authorRole: isLister ? "lister" : "cleaner",
+        body: `${isLister ? "Lister" : "Cleaner"} declined the admin mediation proposal.`,
+        isEscalationEvent: true,
+      });
+      const otherRej = isLister ? j.winner_id : j.lister_id;
+      if (otherRej) {
+        await createNotification(
+          otherRej,
+          "dispute_opened",
+          jobId,
+          "The other party declined the admin mediation proposal."
+        );
+        await sendDisputeActivityEmail({
+          jobId,
+          toUserId: otherRej,
+          subject: `[Bond Back] Job #${jobId}: mediation declined`,
+          htmlBody: `<p>The other party <strong>declined</strong> the admin mediation proposal for job #${jobId}.</p>${disputeHubLinksHtml(jobId)}`,
+        });
+      }
       await (admin as any)
         .from("jobs")
         .update({
@@ -518,6 +595,28 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
       revalidatePath("/disputes");
       revalidatePath("/admin/disputes");
       return { ok: true, success: "You rejected this proposal." };
+    }
+
+    await insertDisputeThreadEntry({
+      jobId,
+      authorUserId: userId,
+      authorRole: isLister ? "lister" : "cleaner",
+      body: `${isLister ? "Lister" : "Cleaner"} accepted the admin mediation proposal (pending the other party).`,
+    });
+    const otherAcc = isLister ? j.winner_id : j.lister_id;
+    if (otherAcc) {
+      await createNotification(
+        otherAcc,
+        "dispute_opened",
+        jobId,
+        "The other party accepted the admin mediation proposal. Your response is needed to finalize."
+      );
+      await sendDisputeActivityEmail({
+        jobId,
+        toUserId: otherAcc,
+        subject: `[Bond Back] Job #${jobId}: mediation — other party accepted`,
+        htmlBody: `<p>The other party <strong>accepted</strong> the admin mediation proposal. Please respond on the job or dispute hub to finalize.</p>${disputeHubLinksHtml(jobId)}`,
+      });
     }
 
     revalidatePath("/disputes");
@@ -599,5 +698,84 @@ export async function openEscalatedDispute(
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Something went wrong.";
     return { error: msg };
+  }
+}
+
+export type AdminDisputeEmailState = { ok?: boolean; error?: string; success?: string };
+
+/** Admin-only: send email to lister or cleaner; inserts audit row in `dispute_messages` and logs email. */
+export async function sendAdminDisputePartyEmail(
+  _prev: AdminDisputeEmailState | undefined,
+  formData: FormData
+): Promise<AdminDisputeEmailState> {
+  const auth = await requireUserOrError();
+  if ("error" in auth) return { error: auth.error };
+
+  try {
+    const { supabase, userId } = auth;
+    const jobId = Number(formData.get("jobId"));
+    const recipient = trimText(formData.get("recipient"));
+    const subject = trimText(formData.get("subject"));
+    const body = trimText(formData.get("body"));
+    if (!jobId || !subject || body.length < 3) {
+      return { error: "Enter a subject and message (at least a few characters)." };
+    }
+    if (recipient !== "lister" && recipient !== "cleaner") {
+      return { error: "Invalid recipient." };
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!(profile as { is_admin?: boolean } | null)?.is_admin) {
+      return { error: "Not authorized." };
+    }
+
+    const admin = createSupabaseAdminClient();
+    if (!admin) return { error: "Server configuration error." };
+
+    const { data: jobRow } = await admin
+      .from("jobs")
+      .select("lister_id, winner_id")
+      .eq("id", jobId)
+      .maybeSingle();
+    const jr = jobRow as { lister_id: string; winner_id: string | null } | null;
+    if (!jr) return { error: "Job not found." };
+    const targetId = recipient === "cleaner" ? jr.winner_id : jr.lister_id;
+    if (!targetId) return { error: "That party is not assigned on this job." };
+
+    const email = await getEmailForUserId(targetId);
+    const to = trimText(email);
+    if (!to) return { error: "No email on file for that user." };
+
+    const mailSubject = subject.toLowerCase().includes("job #") ? subject : `[Bond Back] Job #${jobId}: ${subject}`;
+    const htmlBody = `<p><strong>Message from Bond Back</strong> regarding job #${jobId}:</p><p style="white-space:pre-wrap;">${escapeHtmlForEmail(body)}</p>${disputeHubLinksHtml(jobId)}`;
+    await sendEmail(to, mailSubject, htmlBody, {
+      log: { userId: targetId, kind: "dispute_admin_message" },
+    });
+
+    const partyLabel = recipient === "cleaner" ? "cleaner" : "lister";
+    await insertDisputeThreadEntry({
+      jobId,
+      authorUserId: userId,
+      authorRole: "admin",
+      body: `[Email sent to ${partyLabel}]\nSubject: ${subject}\n\n${body}`,
+    });
+
+    await createNotification(
+      targetId,
+      "dispute_opened",
+      jobId,
+      "An admin sent you an email about this dispute. Check your inbox and the dispute activity log."
+    );
+
+    revalidatePath("/admin/disputes");
+    revalidatePath("/disputes");
+    revalidatePath(`/jobs/${jobId}`);
+    return { ok: true, success: `Email sent to ${partyLabel}.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
   }
 }

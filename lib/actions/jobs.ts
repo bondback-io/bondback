@@ -41,6 +41,13 @@ import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
 import { disputeOpenedByLister } from "@/lib/jobs/dispute-opened-by";
+import {
+  disputeHubLinksHtml,
+  escapeHtmlForEmail,
+  insertDisputeThreadEntry,
+  notifyAdminUsersAboutJob,
+  sendDisputeActivityEmail,
+} from "@/lib/disputes/dispute-thread-and-notify";
 
 async function maybeNotifyCleanerJobWonStripePayoutSetup(params: {
   cleanerId: string;
@@ -2673,6 +2680,10 @@ export async function openDispute(
     dispute_opened_by: session.user.id,
     disputed_at: nowIso,
     dispute_status: "disputed",
+    dispute_cleaner_counter_used: false,
+    dispute_lister_counter_used: false,
+    admin_mediation_requested: false,
+    admin_mediation_requested_at: null as string | null,
     /** Pause auto-release until dispute is resolved */
     auto_release_at: null as string | null,
     auto_release_at_original: null as string | null,
@@ -2690,6 +2701,19 @@ export async function openDispute(
     return { ok: false, error: updateError.message };
   }
 
+  const openerRole = isLister ? "lister" : "cleaner";
+  let threadBody = `Dispute opened (${openerRole})\n\n${fullReason}`;
+  if (isLister && proposedRefundCents != null && proposedRefundCents > 0) {
+    threadBody += `\n\nProposed refund to lister: $${(proposedRefundCents / 100).toFixed(2)} AUD`;
+  }
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: session.user.id,
+    authorRole: openerRole,
+    body: threadBody,
+    attachmentUrls: photoUrls,
+  });
+
   after(async () => {
     const { notifyAdminDisputeOpened } = await import("@/lib/actions/admin-notify-email");
     await notifyAdminDisputeOpened(jobId).catch(() => {});
@@ -2701,6 +2725,12 @@ export async function openDispute(
     const msg =
       `A dispute has been opened on this job. Auto-release is paused. You have 72 hours to respond. Reason: ${reasonSnippet}`;
     await createNotification(otherUserId, "dispute_opened", jobId, msg);
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: otherUserId,
+      subject: `[Bond Back] Dispute opened — job #${jobId}`,
+      htmlBody: `<p>A dispute was opened on <strong>job #${jobId}</strong>. Auto-release is paused.</p><p style="white-space:pre-wrap;">${escapeHtmlForEmail(fullReason)}</p>${disputeHubLinksHtml(jobId)}`,
+    });
   }
   await createNotification(
     session.user.id,
@@ -2713,6 +2743,7 @@ export async function openDispute(
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/my-listings");
   revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
 
   return { ok: true };
 }
@@ -2881,8 +2912,21 @@ export async function acceptRefund(jobId: number): Promise<AcceptRefundResult> {
       .eq("id", listingIdForJob as never);
   }
 
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: session.user.id,
+    authorRole: "cleaner",
+    body: `Accepted lister’s refund proposal: $${(refundCents / 100).toFixed(2)} AUD returned to lister. Job completed.`,
+  });
+
   if (j.lister_id) {
     await createNotification(j.lister_id, "payment_released", jobId, `Cleaner accepted partial refund of $${(refundCents / 100).toFixed(0)}. Job completed.`);
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: j.lister_id,
+      subject: `[Bond Back] Job #${jobId}: refund accepted — completed`,
+      htmlBody: `<p>The cleaner accepted your partial refund request. <strong>$${(refundCents / 100).toFixed(2)}</strong> will be processed per your payment method.</p>${disputeHubLinksHtml(jobId)}`,
+    });
   }
   if (j.winner_id) {
     await createNotification(j.winner_id, "payment_released", jobId, "You accepted the partial refund. Refund has been processed.");
@@ -2909,6 +2953,7 @@ export async function acceptRefund(jobId: number): Promise<AcceptRefundResult> {
   revalidatePath("/dashboard");
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
   return { ok: true };
 }
 
@@ -2925,16 +2970,26 @@ export async function counterRefund(jobId: number, payload: CounterRefundPayload
 
   const { data: job, error: fetchError } = await supabase
     .from("jobs")
-    .select("id, lister_id, winner_id, status, dispute_opened_by, proposed_refund_amount")
+    .select("id, lister_id, winner_id, status, dispute_opened_by, proposed_refund_amount, dispute_cleaner_counter_used")
     .eq("id", jobId)
     .maybeSingle();
 
   if (fetchError || !job) return { ok: false, error: "Job not found." };
-  const j = job as { lister_id: string; winner_id: string | null; status: string; dispute_opened_by?: string; proposed_refund_amount?: number | null };
+  const j = job as {
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    dispute_opened_by?: string;
+    proposed_refund_amount?: number | null;
+    dispute_cleaner_counter_used?: boolean | null;
+  };
   if (j.status !== "dispute_negotiating" && j.status !== "disputed") {
     return { ok: false, error: "This job is not in refund negotiation." };
   }
   if (session.user.id !== j.winner_id) return { ok: false, error: "Only the cleaner can counter." };
+  if (j.dispute_cleaner_counter_used === true) {
+    return { ok: false, error: "You have already used your counter-offer for this dispute." };
+  }
 
   const amountCents = Math.max(0, Math.round(payload.amountCents));
   const responseMessage = trimStr(payload.message) || null;
@@ -2945,6 +3000,7 @@ export async function counterRefund(jobId: number, payload: CounterRefundPayload
 
   const updatePayload: Record<string, unknown> = {
     counter_proposal_amount: amountCents,
+    dispute_cleaner_counter_used: true,
     dispute_status: "disputed",
     dispute_response_reason: "Counter offer",
     dispute_response_message: responseMessage,
@@ -2960,6 +3016,16 @@ export async function counterRefund(jobId: number, payload: CounterRefundPayload
 
   if (updateError) return { ok: false, error: updateError.message };
 
+  let counterBody = `Counter-offer: partial refund to lister of $${(amountCents / 100).toFixed(2)} AUD`;
+  if (responseMessage) counterBody += `\n\n${responseMessage}`;
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: session.user.id,
+    authorRole: "cleaner",
+    body: counterBody,
+    attachmentUrls: responsePhotos ?? [],
+  });
+
   if (j.lister_id) {
     await createNotification(
       j.lister_id,
@@ -2967,9 +3033,270 @@ export async function counterRefund(jobId: number, payload: CounterRefundPayload
       jobId,
       `Cleaner countered with partial refund of $${(amountCents / 100).toFixed(0)}. You can accept or respond on the job page.`
     );
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: j.lister_id,
+      subject: `[Bond Back] Job #${jobId}: cleaner counter-offer`,
+      htmlBody: `<p>The cleaner proposed a different partial refund: <strong>$${(amountCents / 100).toFixed(2)}</strong> back to you.</p>${
+        responseMessage
+          ? `<p style="white-space:pre-wrap;">${escapeHtmlForEmail(responseMessage)}</p>`
+          : ""
+      }${disputeHubLinksHtml(jobId)}`,
+    });
   }
   revalidatePath("/dashboard");
   revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/disputes");
+  return { ok: true };
+}
+
+export type ListerCounterRefundPayload = { amountCents: number; message?: string };
+export type ListerCounterRefundResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Lister’s single counter-offer back to the cleaner (after cleaner countered). Updates proposed refund and clears counter.
+ */
+export async function listerCounterRefund(
+  jobId: number,
+  payload: ListerCounterRefundPayload
+): Promise<ListerCounterRefundResult> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "You must be logged in." };
+
+  const { data: job, error: fetchError } = await supabase
+    .from("jobs")
+    .select(
+      "id, lister_id, winner_id, status, counter_proposal_amount, agreed_amount_cents, dispute_lister_counter_used"
+    )
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (fetchError || !job) return { ok: false, error: "Job not found." };
+  const j = job as {
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    counter_proposal_amount?: number | null;
+    agreed_amount_cents?: number | null;
+    dispute_lister_counter_used?: boolean | null;
+  };
+  if (j.status !== "dispute_negotiating" && j.status !== "disputed") {
+    return { ok: false, error: "This job is not in refund negotiation." };
+  }
+  if (session.user.id !== j.lister_id) return { ok: false, error: "Only the lister can send this counter." };
+  const prevCounter = j.counter_proposal_amount ?? 0;
+  if (prevCounter < 1) return { ok: false, error: "There is no cleaner counter-offer to respond to." };
+  if (j.dispute_lister_counter_used === true) {
+    return { ok: false, error: "You have already used your counter-offer for this dispute." };
+  }
+
+  const agreed = Math.max(0, Math.round(Number(j.agreed_amount_cents ?? 0)));
+  const amountCents = Math.max(0, Math.round(payload.amountCents));
+  if (agreed > 0 && amountCents > agreed) {
+    return { ok: false, error: "Refund amount cannot exceed the agreed job payment." };
+  }
+  const note = trimStr(payload.message) || null;
+
+  const { error: updateError } = await supabase
+    .from("jobs")
+    .update({
+      proposed_refund_amount: amountCents,
+      counter_proposal_amount: null,
+      dispute_lister_counter_used: true,
+      dispute_status: "disputed",
+    } as Partial<JobRow> as never)
+    .eq("id", jobId);
+
+  if (updateError) return { ok: false, error: updateError.message };
+
+  let body = `Lister counter-offer: partial refund to lister of $${(amountCents / 100).toFixed(2)} AUD (was responding to cleaner’s $${(prevCounter / 100).toFixed(2)} offer).`;
+  if (note) body += `\n\n${note}`;
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: session.user.id,
+    authorRole: "lister",
+    body,
+  });
+
+  if (j.winner_id) {
+    await createNotification(
+      j.winner_id,
+      "dispute_opened",
+      jobId,
+      `The lister countered with a refund request of $${(amountCents / 100).toFixed(0)}. You can accept or decline on the job page.`
+    );
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: j.winner_id,
+      subject: `[Bond Back] Job #${jobId}: lister counter-offer`,
+      htmlBody: `<p>The lister proposed a different partial refund: <strong>$${(amountCents / 100).toFixed(2)}</strong> back to them (responding to your previous offer).</p>${
+        note ? `<p style="white-space:pre-wrap;">${escapeHtmlForEmail(note)}</p>` : ""
+      }${disputeHubLinksHtml(jobId)}`,
+    });
+  }
+  revalidatePath("/dashboard");
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
+  return { ok: true };
+}
+
+export type RejectCounterOfferResult = { ok: true } | { ok: false; error: string };
+
+/** Lister declines the cleaner’s counter-offer; escalates for admin review. */
+export async function rejectCounterOfferByLister(jobId: number): Promise<RejectCounterOfferResult> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "You must be logged in." };
+
+  const { data: job, error: fetchError } = await supabase
+    .from("jobs")
+    .select("id, lister_id, winner_id, status, counter_proposal_amount")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (fetchError || !job) return { ok: false, error: "Job not found." };
+  const j = job as {
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    counter_proposal_amount?: number | null;
+  };
+  if (j.status !== "dispute_negotiating" && j.status !== "disputed") {
+    return { ok: false, error: "This job is not in refund negotiation." };
+  }
+  if (session.user.id !== j.lister_id) return { ok: false, error: "Only the lister can decline this offer." };
+  if ((j.counter_proposal_amount ?? 0) < 1) return { ok: false, error: "There is no active counter-offer to decline." };
+
+  const { error: updateError } = await supabase
+    .from("jobs")
+    .update({
+      status: "in_review",
+      counter_proposal_amount: null,
+      dispute_status: "in_review",
+      dispute_escalated: true,
+    } as Partial<JobRow> as never)
+    .eq("id", jobId);
+
+  if (updateError) return { ok: false, error: updateError.message };
+
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: session.user.id,
+    authorRole: "lister",
+    body: "Declined the cleaner’s counter-offer. Dispute escalated for admin review.",
+    isEscalationEvent: true,
+  });
+
+  if (j.winner_id) {
+    await createNotification(
+      j.winner_id,
+      "dispute_opened",
+      jobId,
+      "The lister declined your counter-offer. The dispute has been escalated for admin review."
+    );
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: j.winner_id,
+      subject: `[Bond Back] Job #${jobId}: counter-offer declined`,
+      htmlBody: `<p>The lister declined your counter-offer. The dispute has been escalated for admin review.</p>${disputeHubLinksHtml(jobId)}`,
+    });
+  }
+
+  await notifyAdminUsersAboutJob({
+    jobId,
+    subject: `[Bond Back] Job #${jobId}: lister declined counter — review`,
+    inAppMessage: `Job #${jobId}: lister declined cleaner counter-offer — needs review.`,
+    htmlBody: `<p>The lister declined the cleaner’s counter-offer on job #${jobId}. Please review in the admin dispute console.</p>${disputeHubLinksHtml(jobId)}`,
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
+  return { ok: true };
+}
+
+export type RequestAdminMediationHelpResult = { ok: true } | { ok: false; error: string };
+
+/** Lister asks Bond Back admins to help mediate (after receiving a cleaner counter-offer). */
+export async function requestAdminMediationHelp(jobId: number): Promise<RequestAdminMediationHelpResult> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "You must be logged in." };
+
+  const { data: job, error: fetchError } = await supabase
+    .from("jobs")
+    .select(
+      "id, lister_id, winner_id, status, counter_proposal_amount, proposed_refund_amount, admin_mediation_requested"
+    )
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (fetchError || !job) return { ok: false, error: "Job not found." };
+  const j = job as {
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    counter_proposal_amount?: number | null;
+    proposed_refund_amount?: number | null;
+    admin_mediation_requested?: boolean | null;
+  };
+  if (j.status !== "dispute_negotiating" && j.status !== "disputed") {
+    return { ok: false, error: "This job is not in an active dispute negotiation." };
+  }
+  if (session.user.id !== j.lister_id) return { ok: false, error: "Only the lister can request admin mediation." };
+  if ((j.counter_proposal_amount ?? 0) < 1) {
+    return { ok: false, error: "Admin mediation can be requested after you receive a counter-offer from the cleaner." };
+  }
+  if (j.admin_mediation_requested === true) {
+    return { ok: false, error: "Admin mediation has already been requested for this job." };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("jobs")
+    .update({
+      admin_mediation_requested: true,
+      admin_mediation_requested_at: nowIso,
+      dispute_mediation_status: "requested",
+      mediation_last_activity_at: nowIso,
+    } as Partial<JobRow> as never)
+    .eq("id", jobId);
+
+  if (updateError) return { ok: false, error: updateError.message };
+
+  const counter = j.counter_proposal_amount ?? 0;
+  const proposed = j.proposed_refund_amount ?? 0;
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: session.user.id,
+    authorRole: "lister",
+    body: `Requested admin mediation help.\n\nLister asked: $${(proposed / 100).toFixed(2)} refund • Cleaner counter: $${(counter / 100).toFixed(2)}`,
+    isEscalationEvent: true,
+  });
+
+  await notifyAdminUsersAboutJob({
+    jobId,
+    subject: `[Bond Back] Job #${jobId}: lister requested mediation`,
+    inAppMessage: `Job #${jobId}: the lister requested admin mediation help on a refund counter-offer.`,
+    htmlBody: `<p>The lister requested <strong>admin mediation help</strong> on job #${jobId}.</p><p>Lister refund ask: $${(proposed / 100).toFixed(2)} · Cleaner counter: $${(counter / 100).toFixed(2)}</p><p>Review the dispute in the admin console.</p>${disputeHubLinksHtml(jobId)}`,
+  });
+
+  if (j.winner_id) {
+    await createNotification(
+      j.winner_id,
+      "dispute_opened",
+      jobId,
+      "The lister requested admin mediation help on this dispute. Bond Back support has been notified."
+    );
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
   return { ok: true };
 }
 
@@ -3003,12 +3330,27 @@ export async function rejectRefund(jobId: number): Promise<RejectRefundResult> {
 
   if (updateError) return { ok: false, error: updateError.message };
 
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: session.user.id,
+    authorRole: "cleaner",
+    body: "Rejected the lister’s partial refund proposal. Dispute escalated for admin review.",
+    isEscalationEvent: true,
+  });
+
   if (j.lister_id) {
     await createNotification(j.lister_id, "dispute_opened", jobId, "Cleaner declined the partial refund. The dispute has been escalated for review.");
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: j.lister_id,
+      subject: `[Bond Back] Job #${jobId}: refund proposal declined`,
+      htmlBody: `<p>The cleaner declined your partial refund proposal. The dispute has been escalated for admin review.</p>${disputeHubLinksHtml(jobId)}`,
+    });
   }
   revalidatePath("/dashboard");
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
   return { ok: true };
 }
 
@@ -3065,8 +3407,21 @@ export async function acceptCounterRefund(jobId: number): Promise<AcceptCounterR
       .eq("id", j.listing_id);
   }
 
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: session.user.id,
+    authorRole: "lister",
+    body: `Accepted cleaner’s counter-offer: $${(counterCents / 100).toFixed(2)} AUD refund to lister. Job completed.`,
+  });
+
   if (j.winner_id) {
     await createNotification(j.winner_id, "payment_released", jobId, `Lister accepted your counter ($${(counterCents / 100).toFixed(0)} refund). Job completed.`);
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: j.winner_id,
+      subject: `[Bond Back] Job #${jobId}: counter-offer accepted`,
+      htmlBody: `<p>The lister accepted your counter-offer. Refund of <strong>$${(counterCents / 100).toFixed(2)}</strong> to the lister is being processed; your payout follows per escrow rules.</p>${disputeHubLinksHtml(jobId)}`,
+    });
   }
   if (counterCents >= 1 && j.lister_id) {
     let jobTitle: string | null = null;
@@ -3089,6 +3444,7 @@ export async function acceptCounterRefund(jobId: number): Promise<AcceptCounterR
   revalidatePath("/dashboard");
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
   return { ok: true };
 }
 
@@ -3169,6 +3525,15 @@ export async function respondToDispute(
     return { ok: false, error: updateError.message };
   }
 
+  const responderRole = isCleaner ? "cleaner" : "lister";
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: session.user.id,
+    authorRole: responderRole,
+    body: `Dispute response (${responderRole})\n\n${fullReason}`,
+    attachmentUrls: photoUrls,
+  });
+
   const otherUserId = isCleaner ? j.lister_id : j.winner_id;
   if (otherUserId) {
     const reasonSnippet = fullReason.length > 150 ? `${fullReason.slice(0, 147)}…` : fullReason;
@@ -3178,11 +3543,18 @@ export async function respondToDispute(
       jobId,
       `The other party has responded to the dispute. Response: ${reasonSnippet}`
     );
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: otherUserId,
+      subject: `[Bond Back] Dispute response — job #${jobId}`,
+      htmlBody: `<p>The other party responded to the dispute on <strong>job #${jobId}</strong>.</p><p style="white-space:pre-wrap;">${escapeHtmlForEmail(fullReason)}</p>${disputeHubLinksHtml(jobId)}`,
+    });
   }
 
   revalidatePath("/dashboard");
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
 
   return { ok: true };
 }

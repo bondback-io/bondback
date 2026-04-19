@@ -103,6 +103,9 @@ import {
   counterRefund,
   rejectRefund,
   acceptCounterRefund,
+  listerCounterRefund,
+  rejectCounterOfferByLister,
+  requestAdminMediationHelp,
   extendListerReview24h,
 } from "@/lib/actions/jobs";
 import { requestEarlyBidAcceptance } from "@/lib/actions/early-bid-acceptance";
@@ -547,6 +550,12 @@ export type JobDetailProps = {
   proposedRefundAmount?: number | null;
   /** Cleaner's counter proposal in cents. */
   counterProposalAmount?: number | null;
+  /** Cleaner has used their one counter-offer in the partial-refund negotiation. */
+  disputeCleanerCounterUsed?: boolean;
+  /** Lister has used their one counter-offer back to the cleaner. */
+  disputeListerCounterUsed?: boolean;
+  /** Lister requested admin help after receiving a cleaner counter-offer. */
+  adminMediationRequested?: boolean;
   /** Transaction timeline (payment released, refund). */
   paymentTimeline?: JobPaymentTimelineProps | null;
   /** True when lister has secured payment (Stripe hold) for this job. */
@@ -657,6 +666,9 @@ export function JobDetail({
   agreedAmountCents = 0,
   proposedRefundAmount = null,
   counterProposalAmount = null,
+  disputeCleanerCounterUsed = false,
+  disputeListerCounterUsed = false,
+  adminMediationRequested = false,
   paymentTimeline = null,
   hasPaymentHold = false,
   isStripeTestMode = false,
@@ -810,7 +822,14 @@ export function JobDetail({
   const [isCounteringRefund, startCounteringRefund] = useTransition();
   const [isRejectingRefund, startRejectingRefund] = useTransition();
   const [isAcceptingCounter, startAcceptCounter] = useTransition();
+  const [isListerCountering, startListerCountering] = useTransition();
+  const [isListerRejectingCounter, startListerRejectingCounter] = useTransition();
+  const [isRequestingMediation, startRequestingMediation] = useTransition();
   const [showCounterDialog, setShowCounterDialog] = useState(false);
+  const [showListerCounterDialog, setShowListerCounterDialog] = useState(false);
+  const [listerCounterAmountCents, setListerCounterAmountCents] = useState(0);
+  const [listerCounterMessage, setListerCounterMessage] = useState("");
+  const [showListerRejectCounterDialog, setShowListerRejectCounterDialog] = useState(false);
   const handleAuctionTimerExpired = useCallback(() => {
     void resolveAuctionEndForListing(listingId).then(() => {
       router.refresh();
@@ -4087,168 +4106,190 @@ export function JobDetail({
                   </>
                 )}
 
-                {isJobCleaner && (
-                  <>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                      {proposedRefundAmount && proposedRefundAmount > 0 && (
-                        <Button
-                          size="lg"
-                          className="min-h-[48px] w-full flex-1 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-                          disabled={isAcceptingRefund}
-                          onClick={() => {
-                            startAcceptRefund(async () => {
-                              const res = await acceptRefund(numericJobId);
-                              if (res.ok) {
-                                setLocalJobStatus("completed");
-                                toast({ title: "Refund accepted", description: "Funds have been released." });
-                              } else {
-                                toast({ variant: "destructive", title: "Failed", description: res.error });
-                              }
-                            });
-                          }}
-                        >
-                          {isAcceptingRefund
-                            ? "Accepting…"
-                            : disputeRefundDisplay.cleanerNetFromListerOffer != null &&
-                                disputeRefundDisplay.listerAsk != null
-                              ? `Accept — I receive ${formatCents(disputeRefundDisplay.cleanerNetFromListerOffer)}`
-                              : "Accept offer"}
-                        </Button>
-                      )}
-
-                      <Dialog open={showCounterDialog} onOpenChange={setShowCounterDialog}>
-                        <DialogTrigger asChild>
+                {isJobCleaner &&
+                  (counterProposalAmount != null && counterProposalAmount > 0 ? (
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      You sent a counter-offer. Waiting for the lister to accept, send their own counter (once), or
+                      decline.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                        {proposedRefundAmount && proposedRefundAmount > 0 ? (
                           <Button
                             size="lg"
-                            variant="outline"
-                            className="min-h-[48px] w-full flex-1 border-amber-400 bg-amber-100 text-amber-900 hover:bg-amber-200 dark:border-amber-600 dark:bg-amber-900/50 dark:text-amber-100 dark:hover:bg-amber-900/70"
-                            onClick={() => setCounterAmountCents(proposedRefundAmount ?? 0)}
+                            className="min-h-[48px] w-full flex-1 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                            disabled={isAcceptingRefund}
+                            onClick={() => {
+                              startAcceptRefund(async () => {
+                                const res = await acceptRefund(numericJobId);
+                                if (res.ok) {
+                                  setLocalJobStatus("completed");
+                                  toast({ title: "Refund accepted", description: "Funds have been released." });
+                                } else {
+                                  toast({ variant: "destructive", title: "Failed", description: res.error });
+                                }
+                              });
+                            }}
                           >
-                            Counter
+                            {isAcceptingRefund
+                              ? "Accepting…"
+                              : disputeRefundDisplay.cleanerNetFromListerOffer != null &&
+                                  disputeRefundDisplay.listerAsk != null
+                                ? `Accept — I receive ${formatCents(disputeRefundDisplay.cleanerNetFromListerOffer)}`
+                                : "Accept offer"}
                           </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-md dark:border-gray-700 dark:bg-gray-900">
-                          <DialogHeader>
-                            <DialogTitle>Counter: refund to lister</DialogTitle>
-                            <DialogDescription>
-                              Choose how much of the agreed job payment should go back to the lister. If they
-                              accept, you would receive the remainder (after that refund).
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-3 py-2">
-                            <Label>Amount to return to the lister</Label>
-                            <Slider
-                              value={[counterAmountCents]}
-                              onValueChange={([v]) => {
-                                // v can be undefined from Slider onValueChange
-                                if (v !== undefined) setCounterAmountCents(v);
-                              }}
-                              min={0}
-                              max={agreedAmountCents || 1}
-                              step={500}
-                              className="w-full"
-                            />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium">
-                                Refund to lister: {formatCents(counterAmountCents)}
-                              </p>
-                              {agreedAmountCents > 0 && (
-                                <p className="text-xs text-muted-foreground dark:text-gray-400">
-                                  You would keep approximately{" "}
-                                  <strong className="text-foreground dark:text-gray-200">
-                                    {formatCents(Math.max(0, agreedAmountCents - counterAmountCents))}
-                                  </strong>{" "}
-                                  if this offer is accepted (from the {formatCents(agreedAmountCents)} agreed job
-                                  payment).
-                                </p>
-                              )}
-                            </div>
-                            <Label htmlFor="counter-msg">Message (optional)</Label>
-                            <Textarea
-                              id="counter-msg"
-                              placeholder="Add a note…"
-                              value={counterMessage}
-                              onChange={(e) => setCounterMessage(e.target.value)}
-                              rows={2}
-                              className="dark:bg-gray-800"
-                            />
-                          </div>
-                          <DialogFooter>
-                            <Button variant="outline" onClick={() => setShowCounterDialog(false)}>
-                              Cancel
-                            </Button>
-                            <Button
-                              disabled={isCounteringRefund}
-                              onClick={() => {
-                                startCounteringRefund(async () => {
-                                  const res = await counterRefund(numericJobId, {
-                                    amountCents: counterAmountCents,
-                                    message: counterMessage.trim() || undefined,
-                                  });
-                                  if (res.ok) {
-                                    setShowCounterDialog(false);
-                                    toast({ title: "Counter sent", description: "The lister has been notified." });
-                                  } else {
-                                    toast({ variant: "destructive", title: "Failed", description: res.error });
-                                  }
-                                });
-                              }}
-                            >
-                              {isCounteringRefund ? "Sending…" : "Send counter"}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+                        ) : null}
 
-                      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-                        <DialogTrigger asChild>
-                          <Button
-                            size="lg"
-                            variant="destructive"
-                            className="min-h-[48px] w-full flex-1"
-                            disabled={isRejectingRefund}
-                          >
-                            {isRejectingRefund ? "Rejecting…" : "Reject"}
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="dark:border-gray-700 dark:bg-gray-900">
-                          <DialogHeader>
-                            <DialogTitle>Reject refund offer?</DialogTitle>
-                            <DialogDescription>
-                              The dispute will be escalated for admin review. You can still respond with evidence.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <DialogFooter>
-                            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
-                            <Button
-                              variant="destructive"
-                              disabled={isRejectingRefund}
-                              onClick={() => {
-                                startRejectingRefund(async () => {
-                                  const res = await rejectRefund(numericJobId);
-                                  if (res.ok) {
-                                    setLocalJobStatus("in_review");
-                                    setShowRejectDialog(false);
-                                    toast({ title: "Escalated", description: "Dispute has been sent for review." });
-                                  } else {
-                                    toast({ variant: "destructive", title: "Failed", description: res.error });
-                                  }
-                                });
-                              }}
-                            >
-                              {isRejectingRefund ? "Rejecting…" : "Reject & escalate"}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </>
-                )}
+                        {proposedRefundAmount && proposedRefundAmount > 0 && !disputeCleanerCounterUsed ? (
+                          <Dialog open={showCounterDialog} onOpenChange={setShowCounterDialog}>
+                            <DialogTrigger asChild>
+                              <Button
+                                size="lg"
+                                variant="outline"
+                                className="min-h-[48px] w-full flex-1 border-amber-400 bg-amber-100 text-amber-900 hover:bg-amber-200 dark:border-amber-600 dark:bg-amber-900/50 dark:text-amber-100 dark:hover:bg-amber-900/70"
+                                onClick={() => setCounterAmountCents(proposedRefundAmount ?? 0)}
+                              >
+                                Counter
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-md dark:border-gray-700 dark:bg-gray-900">
+                              <DialogHeader>
+                                <DialogTitle>Counter: refund to lister</DialogTitle>
+                                <DialogDescription>
+                                  Choose how much of the agreed job payment should go back to the lister. If they
+                                  accept, you would receive the remainder (after that refund). You can only do this
+                                  once.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-3 py-2">
+                                <Label>Amount to return to the lister</Label>
+                                <Slider
+                                  value={[counterAmountCents]}
+                                  onValueChange={([v]) => {
+                                    if (v !== undefined) setCounterAmountCents(v);
+                                  }}
+                                  min={0}
+                                  max={agreedAmountCents || 1}
+                                  step={500}
+                                  className="w-full"
+                                />
+                                <div className="space-y-1">
+                                  <p className="text-sm font-medium">
+                                    Refund to lister: {formatCents(counterAmountCents)}
+                                  </p>
+                                  {agreedAmountCents > 0 && (
+                                    <p className="text-xs text-muted-foreground dark:text-gray-400">
+                                      You would keep approximately{" "}
+                                      <strong className="text-foreground dark:text-gray-200">
+                                        {formatCents(Math.max(0, agreedAmountCents - counterAmountCents))}
+                                      </strong>{" "}
+                                      if this offer is accepted (from the {formatCents(agreedAmountCents)} agreed job
+                                      payment).
+                                    </p>
+                                  )}
+                                </div>
+                                <Label htmlFor="counter-msg">Message (optional)</Label>
+                                <Textarea
+                                  id="counter-msg"
+                                  placeholder="Add a note…"
+                                  value={counterMessage}
+                                  onChange={(e) => setCounterMessage(e.target.value)}
+                                  rows={2}
+                                  className="dark:bg-gray-800"
+                                />
+                              </div>
+                              <DialogFooter>
+                                <Button variant="outline" onClick={() => setShowCounterDialog(false)}>
+                                  Cancel
+                                </Button>
+                                <Button
+                                  disabled={isCounteringRefund}
+                                  onClick={() => {
+                                    startCounteringRefund(async () => {
+                                      const res = await counterRefund(numericJobId, {
+                                        amountCents: counterAmountCents,
+                                        message: counterMessage.trim() || undefined,
+                                      });
+                                      if (res.ok) {
+                                        setShowCounterDialog(false);
+                                        toast({ title: "Counter sent", description: "The lister has been notified." });
+                                        router.refresh();
+                                      } else {
+                                        toast({ variant: "destructive", title: "Failed", description: res.error });
+                                      }
+                                    });
+                                  }}
+                                >
+                                  {isCounteringRefund ? "Sending…" : "Send counter"}
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        ) : null}
+
+                        {proposedRefundAmount && proposedRefundAmount > 0 ? (
+                          <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+                            <DialogTrigger asChild>
+                              <Button
+                                size="lg"
+                                variant="destructive"
+                                className="min-h-[48px] w-full flex-1"
+                                disabled={isRejectingRefund}
+                              >
+                                {isRejectingRefund ? "Rejecting…" : "Reject"}
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="dark:border-gray-700 dark:bg-gray-900">
+                              <DialogHeader>
+                                <DialogTitle>Reject refund offer?</DialogTitle>
+                                <DialogDescription>
+                                  The dispute will be escalated for admin review. You can still respond with evidence.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <DialogFooter>
+                                <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
+                                  Cancel
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  disabled={isRejectingRefund}
+                                  onClick={() => {
+                                    startRejectingRefund(async () => {
+                                      const res = await rejectRefund(numericJobId);
+                                      if (res.ok) {
+                                        setLocalJobStatus("in_review");
+                                        setShowRejectDialog(false);
+                                        toast({ title: "Escalated", description: "Dispute has been sent for review." });
+                                      } else {
+                                        toast({ variant: "destructive", title: "Failed", description: res.error });
+                                      }
+                                    });
+                                  }}
+                                >
+                                  {isRejectingRefund ? "Rejecting…" : "Reject & escalate"}
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        ) : null}
+                      </div>
+                      {disputeCleanerCounterUsed &&
+                      proposedRefundAmount &&
+                      proposedRefundAmount > 0 &&
+                      !(counterProposalAmount != null && counterProposalAmount > 0) ? (
+                        <p className="text-xs text-amber-800 dark:text-amber-200">
+                          You have already used your counter-offer. You can only <strong>accept</strong> or{" "}
+                          <strong>reject</strong> the lister&apos;s current refund amount.
+                        </p>
+                      ) : null}
+                    </>
+                  ))}
 
                 {isJobLister && (
                   <>
                     {counterProposalAmount != null && counterProposalAmount > 0 ? (
-                      <div className="space-y-2 rounded border border-amber-300/60 bg-white/60 p-3 dark:border-amber-700 dark:bg-amber-950/40">
+                      <div className="space-y-3 rounded border border-amber-300/60 bg-white/60 p-3 dark:border-amber-700 dark:bg-amber-950/40">
                         <p className="text-sm text-amber-900 dark:text-amber-100">
                           The cleaner proposes returning{" "}
                           <strong className="text-foreground dark:text-gray-100">
@@ -4271,25 +4312,194 @@ export function JobDetail({
                           If you accept: you get that refund back; they would be paid about{" "}
                           <strong>{formatCents(disputeRefundDisplay.cleanerNetFromCounter ?? 0)}</strong>.
                         </p>
-                        <Button
-                          size="lg"
-                          className="min-h-[48px] bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-                          disabled={isAcceptingCounter}
-                          onClick={() => {
-                            startAcceptCounter(async () => {
-                              const res = await acceptCounterRefund(numericJobId);
-                              if (res.ok) {
-                                setLocalJobStatus("completed");
-                                toast({ title: "Counter accepted", description: "Job completed." });
-                              } else {
-                                toast({ variant: "destructive", title: "Failed", description: res.error });
-                              }
-                            });
-                          }}
-                        >
-                          {isAcceptingCounter ? "Accepting…" : "Accept counter"}
-                        </Button>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                          <Button
+                            size="lg"
+                            className="min-h-[48px] w-full flex-1 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                            disabled={isAcceptingCounter}
+                            onClick={() => {
+                              startAcceptCounter(async () => {
+                                const res = await acceptCounterRefund(numericJobId);
+                                if (res.ok) {
+                                  setLocalJobStatus("completed");
+                                  toast({ title: "Counter accepted", description: "Job completed." });
+                                } else {
+                                  toast({ variant: "destructive", title: "Failed", description: res.error });
+                                }
+                              });
+                            }}
+                          >
+                            {isAcceptingCounter ? "Accepting…" : "Accept counter"}
+                          </Button>
+
+                          {!disputeListerCounterUsed ? (
+                            <Dialog open={showListerCounterDialog} onOpenChange={setShowListerCounterDialog}>
+                              <DialogTrigger asChild>
+                                <Button
+                                  size="lg"
+                                  variant="outline"
+                                  className="min-h-[48px] w-full flex-1 border-amber-400 bg-amber-100 text-amber-900 hover:bg-amber-200 dark:border-amber-600 dark:bg-amber-900/50 dark:text-amber-100 dark:hover:bg-amber-900/70"
+                                  onClick={() =>
+                                    setListerCounterAmountCents(
+                                      counterProposalAmount ?? proposedRefundAmount ?? 0
+                                    )
+                                  }
+                                >
+                                  Counter offer
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-md dark:border-gray-700 dark:bg-gray-900">
+                                <DialogHeader>
+                                  <DialogTitle>Your counter-offer</DialogTitle>
+                                  <DialogDescription>
+                                    Propose a different refund amount for you to receive from escrow. You can only do
+                                    this once; afterwards you and the cleaner can only accept or decline.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-3 py-2">
+                                  <Label>Refund to you (lister)</Label>
+                                  <Slider
+                                    value={[listerCounterAmountCents]}
+                                    onValueChange={([v]) => {
+                                      if (v !== undefined) setListerCounterAmountCents(v);
+                                    }}
+                                    min={0}
+                                    max={agreedAmountCents || 1}
+                                    step={500}
+                                    className="w-full"
+                                  />
+                                  <p className="text-sm font-medium">
+                                    Refund to you: {formatCents(listerCounterAmountCents)}
+                                  </p>
+                                  <Label htmlFor="lister-counter-msg">Message (optional)</Label>
+                                  <Textarea
+                                    id="lister-counter-msg"
+                                    placeholder="Add a note…"
+                                    value={listerCounterMessage}
+                                    onChange={(e) => setListerCounterMessage(e.target.value)}
+                                    rows={2}
+                                    className="dark:bg-gray-800"
+                                  />
+                                </div>
+                                <DialogFooter>
+                                  <Button variant="outline" onClick={() => setShowListerCounterDialog(false)}>
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    disabled={isListerCountering}
+                                    onClick={() => {
+                                      startListerCountering(async () => {
+                                        const res = await listerCounterRefund(numericJobId, {
+                                          amountCents: listerCounterAmountCents,
+                                          message: listerCounterMessage.trim() || undefined,
+                                        });
+                                        if (res.ok) {
+                                          setShowListerCounterDialog(false);
+                                          toast({
+                                            title: "Counter sent",
+                                            description: "The cleaner has been notified.",
+                                          });
+                                          router.refresh();
+                                        } else {
+                                          toast({ variant: "destructive", title: "Failed", description: res.error });
+                                        }
+                                      });
+                                    }}
+                                  >
+                                    {isListerCountering ? "Sending…" : "Send counter"}
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          ) : null}
+
+                          <Dialog
+                            open={showListerRejectCounterDialog}
+                            onOpenChange={setShowListerRejectCounterDialog}
+                          >
+                            <DialogTrigger asChild>
+                              <Button
+                                size="lg"
+                                variant="destructive"
+                                className="min-h-[48px] w-full flex-1"
+                                disabled={isListerRejectingCounter}
+                              >
+                                {isListerRejectingCounter ? "Declining…" : "Decline counter"}
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="dark:border-gray-700 dark:bg-gray-900">
+                              <DialogHeader>
+                                <DialogTitle>Decline cleaner&apos;s counter-offer?</DialogTitle>
+                                <DialogDescription>
+                                  The dispute will be escalated for admin review. The cleaner will be notified.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <DialogFooter>
+                                <Button variant="outline" onClick={() => setShowListerRejectCounterDialog(false)}>
+                                  Cancel
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  disabled={isListerRejectingCounter}
+                                  onClick={() => {
+                                    startListerRejectingCounter(async () => {
+                                      const res = await rejectCounterOfferByLister(numericJobId);
+                                      if (res.ok) {
+                                        setShowListerRejectCounterDialog(false);
+                                        setLocalJobStatus("in_review");
+                                        toast({
+                                          title: "Escalated",
+                                          description: "An admin will review this dispute.",
+                                        });
+                                        router.refresh();
+                                      } else {
+                                        toast({ variant: "destructive", title: "Failed", description: res.error });
+                                      }
+                                    });
+                                  }}
+                                >
+                                  {isListerRejectingCounter ? "Declining…" : "Decline & escalate"}
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+
+                        {!adminMediationRequested ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            disabled={isRequestingMediation}
+                            onClick={() => {
+                              startRequestingMediation(async () => {
+                                const res = await requestAdminMediationHelp(numericJobId);
+                                if (res.ok) {
+                                  toast({
+                                    title: "Admin notified",
+                                    description: "Support has been alerted to help mediate this job.",
+                                  });
+                                  router.refresh();
+                                } else {
+                                  toast({ variant: "destructive", title: "Failed", description: res.error });
+                                }
+                              });
+                            }}
+                          >
+                            {isRequestingMediation ? "Sending…" : "Request admin mediation help"}
+                          </Button>
+                        ) : (
+                          <p className="text-xs text-violet-800 dark:text-violet-200">
+                            Admin mediation help has been requested. Our team has been notified (in-app and by email).
+                          </p>
+                        )}
                       </div>
+                    ) : proposedRefundAmount != null && proposedRefundAmount > 0 && disputeListerCounterUsed ? (
+                      <p className="text-xs text-amber-800 dark:text-amber-200">
+                        You sent a counter-offer. Waiting for the cleaner to accept your refund amount or decline and
+                        escalate.
+                      </p>
                     ) : (
                       <p className="text-xs text-amber-800 dark:text-amber-200">
                         Waiting for the cleaner to accept your refund split, counter with a different amount to

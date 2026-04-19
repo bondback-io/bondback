@@ -637,6 +637,15 @@ export async function JobDetailPageContent({
           agreedAmountCents={agreedAmountCents}
           proposedRefundAmount={proposedRefundAmount}
           counterProposalAmount={counterProposalAmount}
+          disputeCleanerCounterUsed={
+            Boolean((job as JobRow | null)?.dispute_cleaner_counter_used) === true
+          }
+          disputeListerCounterUsed={
+            Boolean((job as JobRow | null)?.dispute_lister_counter_used) === true
+          }
+          adminMediationRequested={
+            Boolean((job as JobRow | null)?.admin_mediation_requested) === true
+          }
           paymentTimeline={paymentTimeline}
           hasPaymentHold={hasPaymentHold}
           isStripeTestMode={stripeTestMode}
