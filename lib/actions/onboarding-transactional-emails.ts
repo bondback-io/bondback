@@ -8,6 +8,7 @@ import { getNotificationPrefs } from "@/lib/supabase/admin";
 import { buildTutorialEmail, buildWelcomeEmail, sendEmail } from "@/lib/notifications/email";
 import type { ProfileRole } from "@/lib/types";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
+import { DEFAULT_RESEND_FROM } from "@/lib/email-default-from";
 
 type TutorialRole = "lister" | "cleaner";
 
@@ -35,7 +36,8 @@ function logEmailEnvSnapshot(context: string) {
     context,
     hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
     hasResendKey: Boolean(process.env.RESEND_API_KEY?.trim()),
-    resendFrom: process.env.RESEND_FROM?.trim() || "(default Bond Back <noreply@bondback.io>)",
+    resendFrom:
+      process.env.RESEND_FROM?.trim() || `(default ${DEFAULT_RESEND_FROM})`,
   });
 }
 

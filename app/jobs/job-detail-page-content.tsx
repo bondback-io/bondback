@@ -563,30 +563,46 @@ export async function JobDetailPageContent({
             </div>
           </Alert>
         ) : null}
-        <Button variant="ghost" asChild className="dark:hover:bg-gray-800 dark:hover:text-gray-100">
-          <Link href={backHref}>← {backLabel}</Link>
-        </Button>
-        {isDisputed && (
-          <Alert variant="warning" className="border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/40">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <h5 className="mb-1 font-medium leading-none tracking-tight text-amber-900 dark:text-amber-100">
-              Dispute in progress — details below
-            </h5>
-            <AlertDescription className="mt-1 text-amber-800 dark:text-amber-200">
-              Status: {disputeStatusLabel}
-            </AlertDescription>
-            <div className="mt-3">
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900/50"
-              >
-                <a href="#dispute">View Dispute Details</a>
-              </Button>
-            </div>
-          </Alert>
-        )}
+        <div className="w-full space-y-3 md:space-y-4">
+          <Button
+            variant="ghost"
+            asChild
+            className="h-auto min-h-11 w-full justify-start px-3 py-2 text-left dark:hover:bg-gray-800 dark:hover:text-gray-100"
+          >
+            <Link href={backHref}>← {backLabel}</Link>
+          </Button>
+          {isDisputed && (
+            <Alert
+              variant="warning"
+              className="w-full border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/40"
+            >
+              <div className="flex w-full items-start gap-2 sm:gap-3">
+                <AlertTriangle
+                  className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+                  aria-hidden
+                />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="m-0 text-sm font-medium leading-snug text-amber-900 dark:text-amber-100 sm:text-base">
+                    Dispute in progress — details below
+                  </p>
+                  <AlertDescription className="m-0 p-0 text-amber-800 dark:text-amber-200">
+                    Status: {disputeStatusLabel}
+                  </AlertDescription>
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className="border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900/50"
+                    >
+                      <a href="#dispute">View Dispute Details</a>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Alert>
+          )}
+        </div>
         <JobDetail
           listingId={listingId}
           initialListing={listingRow}

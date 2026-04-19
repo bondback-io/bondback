@@ -5,6 +5,7 @@ import { revalidateGlobalSettingsCache } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
 import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
+import { DEFAULT_RESEND_FROM } from "@/lib/email-default-from";
 
 /** When to send the email. instant = immediately; 5m, 1h, 1d etc. = delayed (requires worker); on_dob = on user's date of birth (birthday template only). */
 export type SendAfterOption = "instant" | "5m" | "15m" | "30m" | "1h" | "2h" | "1d" | "2d" | "3d" | "5d" | "7d" | "10d" | "14d" | "21d" | "30d" | "60d" | "on_dob";
@@ -737,7 +738,7 @@ export async function sendGlobalSettingsTestEmail(
     if (!recipient) {
       return { ok: false, error: "Enter an email address or add one to your admin account." };
     }
-    const fromDisplay = process.env.RESEND_FROM ?? "Bond Back <noreply@bondback.io>";
+    const fromDisplay = process.env.RESEND_FROM ?? DEFAULT_RESEND_FROM;
     const replyHint = process.env.RESEND_REPLY_TO?.trim()
       ? `<p>Reply-To: <code>${process.env.RESEND_REPLY_TO}</code></p>`
       : "<p><em>No RESEND_REPLY_TO set.</em></p>";

@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { OptimizedImage } from "@/components/ui/optimized-image";
-import { CheckCircle2, HelpCircle, Upload, X } from "lucide-react";
+import { CheckCircle2, HelpCircle, Loader2, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { formatCents } from "@/lib/listings";
 
@@ -98,6 +98,8 @@ export function GuidedDisputeForm({
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   const [isSubmitting, startSubmitTransition] = useTransition();
+  const [showSlowSubmitHint, setShowSlowSubmitHint] = useState(false);
+  const slowSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [errorReason, setErrorReason] = useState<string | null>(null);
@@ -109,6 +111,12 @@ export function GuidedDisputeForm({
   const proposedRefundCents =
     maxRefundCents > 0
       ? Math.round((maxRefundCents * refundPercentage) / 100)
+      : 0;
+  const cleanerWouldReceiveIfAccepted =
+    maxRefundCents > 0 ? Math.max(0, maxRefundCents - proposedRefundCents) : 0;
+  const refundToListerPct =
+    maxRefundCents > 0 && proposedRefundCents > 0
+      ? Math.round((proposedRefundCents / maxRefundCents) * 100)
       : 0;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -130,6 +138,28 @@ export function GuidedDisputeForm({
     );
     firstFocusable?.focus({ preventScroll: true });
   }, []);
+
+  /** After a few seconds, reassure users — uploads + server action can feel “stuck” otherwise. */
+  useEffect(() => {
+    if (!isSubmitting) {
+      setShowSlowSubmitHint(false);
+      if (slowSubmitTimerRef.current) {
+        clearTimeout(slowSubmitTimerRef.current);
+        slowSubmitTimerRef.current = null;
+      }
+      return;
+    }
+    slowSubmitTimerRef.current = setTimeout(() => {
+      setShowSlowSubmitHint(true);
+      slowSubmitTimerRef.current = null;
+    }, 2800);
+    return () => {
+      if (slowSubmitTimerRef.current) {
+        clearTimeout(slowSubmitTimerRef.current);
+        slowSubmitTimerRef.current = null;
+      }
+    };
+  }, [isSubmitting]);
 
   // Announce errors to screen readers
   const announceError = (msg: string) => {
@@ -308,7 +338,7 @@ export function GuidedDisputeForm({
               </h2>
               <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">
                 {isLister && proposedRefundCents > 0
-                  ? `We've sent your partial refund offer (${formatCents(proposedRefundCents)}) to the cleaner. They can accept, counter, or reject.`
+                  ? `We've sent your request for ${formatCents(proposedRefundCents)} back from escrow (from the ${formatCents(maxRefundCents)} agreed job payment). If the cleaner accepts, they would be paid about ${formatCents(cleanerWouldReceiveIfAccepted)}. They can accept, counter, or reject.`
                   : "The other party has 72 hours to respond. We'll review if needed."}
               </p>
             </div>
@@ -387,28 +417,35 @@ export function GuidedDisputeForm({
             </AccordionItem>
           </Accordion>
 
-          {/* Partial refund (lister only — cleaners never see this) */}
+          {/* Refund from escrow (lister only — how much of the agreed payment comes back to you) */}
           {isLister === true && maxRefundCents > 0 && (
             <section className="space-y-2 animate-in fade-in duration-200" aria-labelledby="dispute-refund-label">
               <div className="flex items-center gap-2">
-                <Label id="dispute-refund-label">Partial refund (required)</Label>
+                <Label id="dispute-refund-label">Money back from escrow (optional)</Label>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
                         className="inline-flex size-6 items-center justify-center rounded-full border border-muted-foreground/40 text-muted-foreground hover:bg-muted dark:border-gray-500 dark:text-gray-400 dark:hover:bg-gray-800"
-                        aria-label="What is partial refund?"
+                        aria-label="How does the refund slider work?"
                       >
                         <HelpCircle className="size-3.5" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[240px]">
-                      Partial refund lets you keep some payment while resolving the issue fairly.
+                    <TooltipContent side="top" className="max-w-[260px]">
+                      The agreed job payment is held in escrow. Use the slider to say how much of that amount
+                      should be returned to you (e.g. if the clean didn&apos;t meet the agreed standard). The
+                      cleaner is offered the remainder if they accept — they can also counter or reject.
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
+              <p className="text-xs text-muted-foreground dark:text-gray-400">
+                This is not an extra charge: it is how much of the{" "}
+                <strong className="text-foreground dark:text-gray-200">{formatCents(maxRefundCents)}</strong>{" "}
+                agreed job payment you are asking to receive back from escrow.
+              </p>
               <Slider
                 value={[refundPercentage]}
                 onValueChange={([v]) => {
@@ -421,11 +458,26 @@ export function GuidedDisputeForm({
                 max={100}
                 step={REFUND_PERCENTAGE_STEP}
                 className="w-full"
-                aria-label="Propose refund percentage (0–100%)"
+                aria-label="Percentage of agreed job payment to receive back from escrow (0–100%)"
               />
-              <p className="text-sm font-medium text-foreground dark:text-gray-100" aria-live="polite">
-                Refund: {refundPercentage}% — {formatCents(proposedRefundCents)} of {formatCents(maxRefundCents)} total
-              </p>
+              <div className="space-y-1 text-sm text-foreground dark:text-gray-100" aria-live="polite">
+                <p className="font-medium">
+                  Back to you: {refundPercentage}% ({formatCents(proposedRefundCents)}) · Agreed job payment:{" "}
+                  {formatCents(maxRefundCents)}
+                </p>
+                {proposedRefundCents > 0 ? (
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">
+                    If the cleaner accepts: you receive {formatCents(proposedRefundCents)} back; they would be
+                    paid about {formatCents(cleanerWouldReceiveIfAccepted)}
+                    {refundToListerPct > 0 ? ` (${100 - refundToListerPct}% of the agreed payment)` : ""}.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">
+                    At 0%, you are not asking for money back from escrow via this offer (you can still open the
+                    dispute on quality and evidence).
+                  </p>
+                )}
+              </div>
               {errorRefund && (
                 <Alert variant="destructive" className="text-red-700 dark:text-red-200 dark:border-red-800 dark:bg-red-950/50">
                   {errorRefund}
@@ -592,8 +644,29 @@ export function GuidedDisputeForm({
             </Alert>
           )}
 
-          {/* 5. Actions */}
-          <section className="flex flex-col gap-2 pt-2 animate-in fade-in duration-200 delay-150">
+          {/* 5. Long-running submit hint (uploads + server action) */}
+          {isSubmitting && showSlowSubmitHint && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-start gap-3 rounded-xl border border-sky-200/80 bg-sky-50/90 px-3 py-3 text-sm text-sky-950 dark:border-sky-800/80 dark:bg-sky-950/35 dark:text-sky-100"
+            >
+              <Loader2
+                className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-sky-700 dark:text-sky-300"
+                aria-hidden
+              />
+              <span>
+                <span className="font-semibold">Still working…</span> Uploading photos and sending
+                your dispute can take a moment. Please keep this page open.
+              </span>
+            </div>
+          )}
+
+          {/* 6. Actions */}
+          <section
+            className="flex flex-col gap-2 pt-2 animate-in fade-in duration-200 delay-150"
+            aria-busy={isSubmitting}
+          >
             <Button
               type="button"
               variant="destructive"
@@ -602,7 +675,14 @@ export function GuidedDisputeForm({
               onClick={() => handleSubmit()}
               aria-label="Submit dispute"
             >
-              {isSubmitting ? "Submitting…" : "Submit Dispute"}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                  Submitting…
+                </>
+              ) : (
+                "Submit Dispute"
+              )}
             </Button>
             {onCancel && (
               <Button
@@ -611,6 +691,7 @@ export function GuidedDisputeForm({
                 size="lg"
                 className="w-full min-h-[48px] min-w-[48px] md:min-h-10 md:min-w-0 text-muted-foreground dark:hover:text-gray-100 touch-manipulation"
                 onClick={onCancel}
+                disabled={isSubmitting}
                 aria-label="Cancel and go back"
               >
                 Cancel

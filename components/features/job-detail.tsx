@@ -99,7 +99,6 @@ import { logClientError } from "@/lib/errors/log-client-error";
 import { useIsOffline } from "@/hooks/use-offline";
 import {
   respondToDispute,
-  acceptResolution,
   acceptRefund,
   counterRefund,
   rejectRefund,
@@ -806,7 +805,6 @@ export function JobDetail({
   const [disputeResponsePhotos, setDisputeResponsePhotos] = useState<File[]>([]);
   const [isSubmittingResponse, startSubmitResponse] = useTransition();
   const [responseSubmitted, setResponseSubmitted] = useState(false);
-  const [isAcceptingResolution, startAcceptResolution] = useTransition();
   const [isExtendingReview, startExtendReview] = useTransition();
   const [isAcceptingRefund, startAcceptRefund] = useTransition();
   const [isCounteringRefund, startCounteringRefund] = useTransition();
@@ -855,6 +853,32 @@ export function JobDetail({
   const supabase = createBrowserSupabaseClient();
 
   const numericJobId = jobId != null ? Number(jobId) : null;
+
+  /** Agreed job payment in escrow: lister refund ask vs remainder paid to cleaner if accepted. */
+  const disputeRefundDisplay = useMemo(() => {
+    const escrowTotal = Math.max(0, agreedAmountCents);
+    const listerAsk =
+      proposedRefundAmount != null && proposedRefundAmount > 0 ? proposedRefundAmount : null;
+    const cleanerNetFromListerOffer =
+      listerAsk != null && escrowTotal > 0 ? Math.max(0, escrowTotal - listerAsk) : null;
+    const listerAskPct =
+      listerAsk != null && escrowTotal > 0 ? Math.round((listerAsk / escrowTotal) * 100) : null;
+    const counterAsk =
+      counterProposalAmount != null && counterProposalAmount > 0 ? counterProposalAmount : null;
+    const cleanerNetFromCounter =
+      counterAsk != null && escrowTotal > 0 ? Math.max(0, escrowTotal - counterAsk) : null;
+    const counterAskPct =
+      counterAsk != null && escrowTotal > 0 ? Math.round((counterAsk / escrowTotal) * 100) : null;
+    return {
+      escrowTotal,
+      listerAsk,
+      cleanerNetFromListerOffer,
+      listerAskPct,
+      counterAsk,
+      cleanerNetFromCounter,
+      counterAskPct,
+    };
+  }, [agreedAmountCents, proposedRefundAmount, counterProposalAmount]);
 
   useEffect(() => {
     const ch = supabase
@@ -3883,7 +3907,7 @@ export function JobDetail({
                   Dispute opened – {disputeOpenedBy === "lister" ? "cleaner" : "lister"} can respond with evidence
                 </p>
                 <p className="text-xs text-amber-800 dark:text-amber-200">
-                  Respond with your side, photos and a message. You can also accept a mutual resolution below.
+                  Respond with your side, photos and a message.
                 </p>
                 {/* Responder: show form if they haven't responded yet */}
                 {((disputeOpenedBy === "lister" && isJobCleaner) || (disputeOpenedBy === "cleaner" && isJobLister)) &&
@@ -3973,27 +3997,6 @@ export function JobDetail({
                 {(hasDisputeResponse || responseSubmitted) && (
                   <p className="text-xs text-amber-800 dark:text-amber-200">Response submitted. Waiting for resolution or admin review.</p>
                 )}
-                {/* Accept Resolution – both parties */}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="border-emerald-300 text-emerald-800 dark:border-emerald-700 dark:text-emerald-200"
-                  disabled={isAcceptingResolution}
-                  onClick={() => {
-                    startAcceptResolution(async () => {
-                      const res = await acceptResolution(numericJobId);
-                      if (res.ok) {
-                        setLocalJobStatus("completed");
-                        toast({ title: "Resolution accepted", description: "Dispute closed by mutual agreement." });
-                      } else {
-                        toast({ variant: "destructive", title: "Failed", description: res.error });
-                      }
-                    });
-                  }}
-                >
-                  {isAcceptingResolution ? "Accepting…" : "Accept Resolution (mutual agreement)"}
-                </Button>
               </div>
             )}
 
@@ -4004,20 +4007,88 @@ export function JobDetail({
               localJobStatus === "disputed") &&
             (isJobLister || isJobCleaner) && (
               <div className="space-y-4 rounded-md border border-amber-200 bg-amber-50/50 px-4 py-4 dark:border-amber-800/60 dark:bg-amber-950/30">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                  Partial refund offer
-                </p>
-                <p className="text-base font-semibold text-foreground dark:text-gray-100">
-                  {proposedRefundAmount && proposedRefundAmount > 0
-                    ? `Lister offers partial refund: ${formatCents(proposedRefundAmount)}`
-                    : "No partial refund amount proposed yet (cleaner can counter)."}
-                </p>
+                {isJobCleaner ? (
+                  <>
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      Refund from escrow (lister&apos;s request)
+                    </p>
+                    {disputeRefundDisplay.listerAsk != null && disputeRefundDisplay.escrowTotal > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-sm text-amber-900 dark:text-amber-100">
+                          The lister is asking for{" "}
+                          <strong className="text-foreground dark:text-gray-100">
+                            {formatCents(disputeRefundDisplay.listerAsk)}
+                          </strong>{" "}
+                          to be returned to them from the agreed job payment (
+                          <strong className="text-foreground dark:text-gray-100">
+                            {formatCents(disputeRefundDisplay.escrowTotal)}
+                          </strong>
+                          ) held in escrow — typically when they believe the work didn&apos;t meet the agreed scope
+                          or standard.
+                        </p>
+                        <p className="text-base font-semibold text-foreground dark:text-gray-100">
+                          If you accept: you would be paid{" "}
+                          <strong>{formatCents(disputeRefundDisplay.cleanerNetFromListerOffer ?? 0)}</strong>
+                          {disputeRefundDisplay.listerAskPct != null
+                            ? ` (${100 - disputeRefundDisplay.listerAskPct}% of the agreed job payment). `
+                            : ". "}
+                          The lister would receive the refund portion (
+                          {formatCents(disputeRefundDisplay.listerAsk)}
+                          {disputeRefundDisplay.listerAskPct != null
+                            ? `, about ${disputeRefundDisplay.listerAskPct}%`
+                            : ""}
+                          ).
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-amber-900 dark:text-amber-100">
+                        The lister hasn&apos;t set a refund amount yet. You can use{" "}
+                        <strong className="text-foreground dark:text-gray-100">Counter</strong> to suggest how much
+                        should go back to them from the agreed job payment — you would keep the remainder if they
+                        accept. Or reject to escalate for review.
+                      </p>
+                    )}
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      Accept their split, counter with a different refund to the lister, or reject to escalate.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      Your refund from escrow
+                    </p>
+                    {disputeRefundDisplay.listerAsk != null && disputeRefundDisplay.escrowTotal > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-sm text-amber-900 dark:text-amber-100">
+                          You&apos;re asking for{" "}
+                          <strong className="text-foreground dark:text-gray-100">
+                            {formatCents(disputeRefundDisplay.listerAsk)}
+                          </strong>{" "}
+                          to be returned to you from the agreed job payment (
+                          <strong className="text-foreground dark:text-gray-100">
+                            {formatCents(disputeRefundDisplay.escrowTotal)}
+                          </strong>
+                          ) currently held in escrow.
+                        </p>
+                        <p className="text-base font-semibold text-foreground dark:text-gray-100">
+                          If the cleaner accepts: you receive that amount back; they would be paid the remaining{" "}
+                          <strong>{formatCents(disputeRefundDisplay.cleanerNetFromListerOffer ?? 0)}</strong>
+                          {disputeRefundDisplay.listerAskPct != null
+                            ? ` (${100 - disputeRefundDisplay.listerAskPct}% of the agreed payment).`
+                            : "."}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-amber-900 dark:text-amber-100">
+                        No refund amount is on file yet. If you opened a dispute without a refund figure, you can
+                        describe terms in the thread, or wait for the cleaner to propose a counter.
+                      </p>
+                    )}
+                  </>
+                )}
 
                 {isJobCleaner && (
                   <>
-                    <p className="text-xs text-amber-800 dark:text-amber-200">
-                      Accept the amount, propose a different amount, or reject to escalate to review.
-                    </p>
                     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       {proposedRefundAmount && proposedRefundAmount > 0 && (
                         <Button
@@ -4036,7 +4107,12 @@ export function JobDetail({
                             });
                           }}
                         >
-                          {isAcceptingRefund ? "Accepting…" : "Accept Refund"}
+                          {isAcceptingRefund
+                            ? "Accepting…"
+                            : disputeRefundDisplay.cleanerNetFromListerOffer != null &&
+                                disputeRefundDisplay.listerAsk != null
+                              ? `Accept — I receive ${formatCents(disputeRefundDisplay.cleanerNetFromListerOffer)}`
+                              : "Accept offer"}
                         </Button>
                       )}
 
@@ -4053,13 +4129,14 @@ export function JobDetail({
                         </DialogTrigger>
                         <DialogContent className="max-w-md dark:border-gray-700 dark:bg-gray-900">
                           <DialogHeader>
-                            <DialogTitle>Propose a different amount</DialogTitle>
+                            <DialogTitle>Counter: refund to lister</DialogTitle>
                             <DialogDescription>
-                              Suggest a refund amount. The lister can accept or respond.
+                              Choose how much of the agreed job payment should go back to the lister. If they
+                              accept, you would receive the remainder (after that refund).
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-3 py-2">
-                            <Label>Your counter (refund amount)</Label>
+                            <Label>Amount to return to the lister</Label>
                             <Slider
                               value={[counterAmountCents]}
                               onValueChange={([v]) => {
@@ -4071,7 +4148,21 @@ export function JobDetail({
                               step={500}
                               className="w-full"
                             />
-                            <p className="text-sm font-medium">{formatCents(counterAmountCents)}</p>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium">
+                                Refund to lister: {formatCents(counterAmountCents)}
+                              </p>
+                              {agreedAmountCents > 0 && (
+                                <p className="text-xs text-muted-foreground dark:text-gray-400">
+                                  You would keep approximately{" "}
+                                  <strong className="text-foreground dark:text-gray-200">
+                                    {formatCents(Math.max(0, agreedAmountCents - counterAmountCents))}
+                                  </strong>{" "}
+                                  if this offer is accepted (from the {formatCents(agreedAmountCents)} agreed job
+                                  payment).
+                                </p>
+                              )}
+                            </div>
                             <Label htmlFor="counter-msg">Message (optional)</Label>
                             <Textarea
                               id="counter-msg"
@@ -4158,8 +4249,27 @@ export function JobDetail({
                   <>
                     {counterProposalAmount != null && counterProposalAmount > 0 ? (
                       <div className="space-y-2 rounded border border-amber-300/60 bg-white/60 p-3 dark:border-amber-700 dark:bg-amber-950/40">
-                        <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                          Cleaner countered with: {formatCents(counterProposalAmount)}
+                        <p className="text-sm text-amber-900 dark:text-amber-100">
+                          The cleaner proposes returning{" "}
+                          <strong className="text-foreground dark:text-gray-100">
+                            {formatCents(counterProposalAmount)}
+                          </strong>{" "}
+                          to you from the agreed job payment
+                          {disputeRefundDisplay.escrowTotal > 0 ? (
+                            <>
+                              {" "}
+                              ({formatCents(disputeRefundDisplay.escrowTotal)} in escrow
+                              {disputeRefundDisplay.counterAskPct != null
+                                ? ` — about ${disputeRefundDisplay.counterAskPct}%`
+                                : ""}
+                              )
+                            </>
+                          ) : null}
+                          .
+                        </p>
+                        <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                          If you accept: you get that refund back; they would be paid about{" "}
+                          <strong>{formatCents(disputeRefundDisplay.cleanerNetFromCounter ?? 0)}</strong>.
                         </p>
                         <Button
                           size="lg"
@@ -4182,7 +4292,8 @@ export function JobDetail({
                       </div>
                     ) : (
                       <p className="text-xs text-amber-800 dark:text-amber-200">
-                        Waiting for the cleaner to accept, counter, or reject your offer.
+                        Waiting for the cleaner to accept your refund split, counter with a different amount to
+                        return to you, or reject and escalate.
                       </p>
                     )}
                   </>

@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { DEFAULT_RESEND_FROM } from "@/lib/email-default-from";
 
 export type EmailDiagnosticsData = {
   hasResendApiKey: boolean;
@@ -94,7 +95,7 @@ export async function getEmailDiagnostics(): Promise<
     hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
     hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()),
     resendFromDisplay:
-      process.env.RESEND_FROM?.trim() || "Bond Back <noreply@bondback.io> (default)",
+      process.env.RESEND_FROM?.trim() || `${DEFAULT_RESEND_FROM} (default)`,
     replyToSet: Boolean(process.env.RESEND_REPLY_TO?.trim()),
     appUrlDisplay:
       process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.bondback.io (default when unset)",

@@ -1,6 +1,7 @@
 import { render } from "@react-email/render";
 import React from "react";
 import { Resend } from "resend";
+import { DEFAULT_RESEND_FROM } from "@/lib/email-default-from";
 import { getEmailForUserId } from "@/lib/supabase/admin";
 import {
   substituteEmailTemplatePlaceholders,
@@ -35,7 +36,7 @@ const resend = process.env.RESEND_API_KEY?.trim()
   ? new Resend(process.env.RESEND_API_KEY.trim())
   : null;
 
-const FROM = process.env.RESEND_FROM ?? "Bond Back <noreply@bondback.io>";
+const FROM = process.env.RESEND_FROM ?? DEFAULT_RESEND_FROM;
 const REPLY_TO = process.env.RESEND_REPLY_TO?.trim() || undefined;
 
 /** Log once per server process: Resend env (no secrets). Helps diagnose Vercel/local “no emails”. */
@@ -128,9 +129,10 @@ export type SendEmailOptions = {
 /**
  * Send a single email via Resend.
  *
- * **Env:** `RESEND_API_KEY` (required to send). `RESEND_FROM` — full From header, default
- * `Bond Back <noreply@bondback.io>` when unset (verify `bondback.io` in Resend). For local dev
- * without a verified domain, set `RESEND_FROM=Bond Back <onboarding@resend.dev>`. `RESEND_REPLY_TO` — optional Reply-To.
+ * **Env:** `RESEND_API_KEY` (required to send). `RESEND_FROM` — full From header; when unset,
+ * uses `DEFAULT_RESEND_FROM` in `lib/email-default-from.ts` (real inbox for support replies).
+ * For Resend sandbox without a verified sender, set `RESEND_FROM=Bond Back <onboarding@resend.dev>`.
+ * `RESEND_REPLY_TO` — optional Reply-To.
  * Every attempt logs to console as `[email:resend]` with outcome, kind, masked recipient, from/replyTo.
  *
  * Skips sending (returns ok: true, skipped) if global_settings.emails_enabled is false.

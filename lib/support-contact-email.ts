@@ -6,7 +6,8 @@
  * Set `NEXT_PUBLIC_SUPPORT_CONTACT_EMAIL` to match `ADMIN_NOTIFICATION_EMAIL` so browser UI shows the admin inbox.
  */
 
-const LEGACY_DEFAULT = "support@bondback.io";
+/** Shown in mailto / UI when env overrides are unset; align with `DEFAULT_RESEND_FROM` inbox. */
+const LEGACY_DEFAULT = "bondback2026@gmail.com";
 
 export function getSupportContactEmail(): string {
   const explicit = process.env.SUPPORT_CONTACT_EMAIL?.trim();

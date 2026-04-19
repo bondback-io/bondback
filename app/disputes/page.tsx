@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DisputeJobCaseSummary } from "@/components/disputes/dispute-job-case-summary";
 import { DisputeThreadCard } from "@/components/disputes/dispute-thread-card";
 import { MediationVoteButtons } from "@/components/disputes/mediation-vote-buttons";
 import { serializeDisputeMessagesForClient } from "@/lib/disputes/serialize-dispute-messages";
@@ -23,7 +24,7 @@ export default async function DisputesPage() {
   const { data: jobs, error: jobsError } = await supabase
     .from("jobs")
     .select(
-      "id, lister_id, winner_id, status, dispute_status, dispute_priority, dispute_escalated, dispute_mediation_status, agreed_amount_cents, updated_at"
+      "id, lister_id, winner_id, status, dispute_status, dispute_priority, dispute_escalated, dispute_mediation_status, agreed_amount_cents, updated_at, disputed_at, dispute_reason, dispute_photos, dispute_evidence, dispute_opened_by, proposed_refund_amount, counter_proposal_amount"
     )
     .or(`lister_id.eq.${userId},winner_id.eq.${userId}`)
     .order("updated_at", { ascending: false })
@@ -169,6 +170,8 @@ export default async function DisputesPage() {
                     </CardContent>
                   </Card>
                 ) : null}
+
+                <DisputeJobCaseSummary job={job} />
 
                 <DisputeThreadCard jobId={Number(job.id)} messages={messages} />
 
