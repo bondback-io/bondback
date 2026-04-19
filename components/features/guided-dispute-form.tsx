@@ -43,11 +43,23 @@ import { CheckCircle2, HelpCircle, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { formatCents } from "@/lib/listings";
 
-const DISPUTE_REASONS = [
+const DISPUTE_REASONS_LISTER = [
   { value: "quality", label: "Quality of cleaning not up to standard" },
   { value: "incomplete", label: "Job not completed / items missed" },
   { value: "timeliness", label: "Cleaner was late or didn't show" },
   { value: "damage", label: "Damage caused during clean" },
+  { value: "other", label: "Other" },
+] as const;
+
+/** Cleaner-raised disputes: scope, site, or lister-provided information. */
+const DISPUTE_REASONS_CLEANER = [
+  { value: "scope_mismatch", label: "Scope larger than the listing described" },
+  { value: "site_conditions", label: "Unexpected site conditions (access, heavy soiling, safety)" },
+  { value: "time_underestimate", label: "Job took much longer than reasonable for the listed details" },
+  { value: "extra_work_lister", label: "Extra work requested on site by the lister" },
+  { value: "listing_details_wrong", label: "Incorrect or incomplete property details from the lister" },
+  { value: "access_equipment", label: "Access, keys, or equipment not as described" },
+  { value: "payment_scope", label: "Disagreement over payment or agreed scope" },
   { value: "other", label: "Other" },
 ] as const;
 
@@ -78,6 +90,7 @@ export function GuidedDisputeForm({
   agreedAmountCents = 0,
 }: GuidedDisputeFormProps) {
   const { toast } = useToast();
+  const disputeReasonOptions = isLister ? DISPUTE_REASONS_LISTER : DISPUTE_REASONS_CLEANER;
   const [reason, setReason] = useState("");
   const [reasonOther, setReasonOther] = useState("");
   const [message, setMessage] = useState("");
@@ -242,7 +255,7 @@ export function GuidedDisputeForm({
         reason:
           reason === "other"
             ? "other"
-            : (DISPUTE_REASONS.find((r) => r.value === reason)?.label ?? reason),
+            : (disputeReasonOptions.find((r) => r.value === reason)?.label ?? reason),
         reasonOther: reason === "other" ? reasonOther.trim() : undefined,
         photoUrls: urls,
         message: message.trim().slice(0, MESSAGE_MAX_LENGTH) || undefined,
@@ -374,8 +387,8 @@ export function GuidedDisputeForm({
             </AccordionItem>
           </Accordion>
 
-          {/* Partial refund (lister only) */}
-          {isLister && maxRefundCents > 0 && (
+          {/* Partial refund (lister only — cleaners never see this) */}
+          {isLister === true && maxRefundCents > 0 && (
             <section className="space-y-2 animate-in fade-in duration-200" aria-labelledby="dispute-refund-label">
               <div className="flex items-center gap-2">
                 <Label id="dispute-refund-label">Partial refund (required)</Label>
@@ -445,7 +458,7 @@ export function GuidedDisputeForm({
                 <SelectValue placeholder="Select a reason…" />
               </SelectTrigger>
               <SelectContent>
-                {DISPUTE_REASONS.map((r) => (
+                {disputeReasonOptions.map((r) => (
                   <SelectItem key={r.value} value={r.value}>
                     {r.label}
                   </SelectItem>

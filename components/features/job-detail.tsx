@@ -729,6 +729,18 @@ export function JobDetail({
     }
     prevHasActiveJobRef.current = hasActiveJob;
   }, [hasActiveJob, jobStatus]);
+
+  /** Keep local status aligned with RSC after navigation/refresh; don't revert optimistic in_progress while server still shows accepted. */
+  useEffect(() => {
+    if (jobStatus == null || jobStatus === "") return;
+    setLocalJobStatus((prev) => {
+      if (jobStatus === "accepted" && prev === "in_progress") {
+        return prev;
+      }
+      if (jobStatus === prev) return prev;
+      return jobStatus;
+    });
+  }, [jobStatus]);
   const [cancellingJob, setCancellingJob] = useState(false);
   const [showCancelJobDialog, setShowCancelJobDialog] = useState(false);
   const [showCancelListingDialog, setShowCancelListingDialog] = useState(false);
@@ -1198,12 +1210,26 @@ export function JobDetail({
 
   // Load after-photos for this job (used for funds release gating and history)
   useEffect(() => {
-    if (
-      !numericJobId ||
-      (localJobStatus !== "in_progress" &&
-        localJobStatus !== "completed" &&
-        localJobStatus !== "completed_pending_approval")
-    ) {
+    const statusForAfterPhotos = localJobStatus ?? jobStatus;
+    const afterPhotoLoadStatuses = new Set([
+      "accepted",
+      "in_progress",
+      "completed_pending_approval",
+      "completed",
+      "disputed",
+      "dispute_negotiating",
+      "in_review",
+      "refunded",
+      "partially_refunded",
+    ]);
+    const shouldLoadAfterPhotos =
+      Boolean(numericJobId) &&
+      hasActiveJob &&
+      statusForAfterPhotos != null &&
+      statusForAfterPhotos !== "cancelled" &&
+      afterPhotoLoadStatuses.has(statusForAfterPhotos);
+
+    if (!shouldLoadAfterPhotos) {
       return;
     }
 
@@ -1216,7 +1242,6 @@ export function JobDetail({
         .list(`jobs/${numericJobId}/after`, { limit: 100 });
       if (cancelled) return;
       if (error || !data) {
-        setAfterPhotoEntries([]);
         setAfterPhotosLoading(false);
         return;
       }
@@ -1234,12 +1259,19 @@ export function JobDetail({
       setAfterPhotosLoading(false);
     };
 
-    loadAfterPhotos();
+    void loadAfterPhotos();
+
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || cancelled) return;
+      void loadAfterPhotos();
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [supabase, numericJobId, localJobStatus]);
+  }, [supabase, numericJobId, localJobStatus, jobStatus, hasActiveJob]);
 
   // Load initial photos from storage (same method as after-photos: list folder and build public URLs)
   useEffect(() => {

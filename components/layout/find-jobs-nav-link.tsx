@@ -30,12 +30,18 @@ export type FindJobsNavLinkProps = {
   className?: string;
   /** For product tour / e2e (cleaner flow). */
   id?: string;
+  /** Guest top bar: icon + sr-only label below `md` to save horizontal space. */
+  compactLabelOnMobile?: boolean;
 };
 
 /**
  * Top bar CTA to `/find-jobs` — label {@link BROWSE_JOBS_NAV_LABEL} everywhere except the avatar menu.
  */
-export function FindJobsNavLink({ className, id }: FindJobsNavLinkProps) {
+export function FindJobsNavLink({
+  className,
+  id,
+  compactLabelOnMobile = false,
+}: FindJobsNavLinkProps) {
   const pathname = usePathname();
   const router = useRouter();
   const active = pathname === "/find-jobs" || pathname.startsWith("/find-jobs/");
@@ -52,12 +58,20 @@ export function FindJobsNavLink({ className, id }: FindJobsNavLinkProps) {
         toolbarBase,
         toolbarIdle,
         "h-8 min-w-0 px-2 sm:h-9 sm:px-3 sm:text-[13px]",
+        compactLabelOnMobile && "max-md:px-1.5",
         active && toolbarActive,
         className
       )}
     >
       <Search className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" strokeWidth={2} aria-hidden />
-      <span className="min-w-0 truncate">{BROWSE_JOBS_NAV_LABEL}</span>
+      <span
+        className={cn(
+          "min-w-0 truncate",
+          compactLabelOnMobile && "max-md:sr-only"
+        )}
+      >
+        {BROWSE_JOBS_NAV_LABEL}
+      </span>
     </Link>
   );
 }

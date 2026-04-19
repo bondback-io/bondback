@@ -17,13 +17,23 @@ export type HeaderProps = {
   stripeTestMode?: boolean;
 };
 
-/** Bond Back wordmark + centered tagline (one home link). */
-function LogoWithTagline({ className }: { className?: string }) {
+/** Bond Back wordmark + optional tagline (one home link). */
+function LogoWithTagline({
+  className,
+  /** Public toolbar: drop tagline on small screens to save vertical space. */
+  hideTaglineOnMobile = false,
+}: {
+  className?: string;
+  hideTaglineOnMobile?: boolean;
+}) {
   return (
     <Link
       href="/"
       className={cn(
-        "flex min-h-9 min-w-0 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-11 sm:gap-1 sm:rounded-xl",
+        "flex min-w-0 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:gap-1 sm:rounded-xl",
+        hideTaglineOnMobile
+          ? "max-md:min-h-0 max-md:gap-0 max-md:py-0 md:min-h-9 md:gap-0.5 lg:min-h-11 lg:gap-1"
+          : "min-h-9 sm:min-h-11",
         className
       )}
       aria-label="Bond Back home"
@@ -31,7 +41,12 @@ function LogoWithTagline({ className }: { className?: string }) {
       <span className="rounded-lg bg-primary px-2 py-1.5 text-xs font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10 sm:rounded-xl sm:px-2.5 sm:py-2 sm:text-sm">
         Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
       </span>
-      <span className="max-w-[10rem] text-center text-[10px] font-medium leading-snug tracking-tight text-muted-foreground dark:text-gray-400 sm:max-w-[11rem] sm:text-[11px]">
+      <span
+        className={cn(
+          "max-w-[10rem] text-center text-[10px] font-medium leading-snug tracking-tight text-muted-foreground dark:text-gray-400 sm:max-w-[11rem] sm:text-[11px]",
+          hideTaglineOnMobile && "hidden md:block"
+        )}
+      >
         Bond clean marketplace
       </span>
     </Link>
@@ -126,34 +141,34 @@ export const Header = async ({
           </div>
         </div>
       ) : (
-        <div className="container flex min-h-[3.25rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-1.5 px-2.5 py-1.5 sm:min-h-14 sm:gap-3 sm:px-4 md:px-6 md:py-2">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-5">
-            <LogoWithTagline className="shrink-0" />
+        <div className="container flex min-h-[2.875rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-1 px-2 py-1 sm:min-h-14 sm:gap-3 sm:px-4 sm:py-1.5 md:px-6 md:py-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2 md:gap-5">
+            <LogoWithTagline className="shrink-0" hideTaglineOnMobile />
             <span
               className="hidden h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700 sm:block"
               aria-hidden
             />
-            <FindJobsNavLink className="min-w-0 shrink" />
+            <FindJobsNavLink className="min-w-0 shrink" compactLabelOnMobile />
             <MainNav isLoggedIn={isLoggedIn} isLister={false} />
           </div>
 
           <nav
-            className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1.5"
+            className="flex shrink-0 items-center justify-end gap-0 sm:gap-1.5"
             aria-label="Account and tools"
           >
-            <div className="flex items-center gap-0.5 sm:gap-2">
+            <div className="flex items-center gap-0 sm:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
                 asChild
-                className="h-9 min-h-9 px-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 sm:h-10 sm:min-h-10 sm:px-3 sm:text-sm dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                className="h-8 min-h-8 px-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 sm:h-10 sm:min-h-10 sm:px-3 sm:text-sm dark:hover:bg-gray-800 dark:hover:text-gray-100"
               >
                 <Link href="/login">Log in</Link>
               </Button>
               <Button
                 asChild
                 size="sm"
-                className="h-9 min-h-9 shrink-0 rounded-full bg-primary px-2.5 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 sm:h-10 sm:min-h-10 sm:px-4 sm:text-sm"
+                className="h-8 min-h-8 shrink-0 rounded-full bg-primary px-2 text-[11px] font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 sm:h-10 sm:min-h-10 sm:px-4 sm:text-sm"
               >
                 <Link href="/signup">Sign up</Link>
               </Button>

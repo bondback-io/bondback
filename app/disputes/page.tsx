@@ -9,7 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RaiseDisputeForm } from "@/components/disputes/raise-dispute-form";
 import { AdditionalPaymentRequestForm } from "@/components/disputes/additional-payment-request-form";
 import { DisputeThreadCard } from "@/components/disputes/dispute-thread-card";
-import { reviewCleanerAdditionalPaymentRequest, respondToMediationProposal } from "@/lib/actions/disputes";
+import { ReviewAdditionalPaymentButtons } from "@/components/disputes/review-additional-payment-buttons";
+import { MediationVoteButtons } from "@/components/disputes/mediation-vote-buttons";
+import { serializeDisputeMessagesForClient } from "@/lib/disputes/serialize-dispute-messages";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +22,16 @@ export default async function DisputesPage() {
   const supabase = await createServerSupabaseClient();
   const userId = session.user.id;
 
-  const { data: jobs } = await supabase
+  const { data: jobs, error: jobsError } = await supabase
     .from("jobs")
     .select("id, lister_id, winner_id, status, dispute_status, dispute_priority, dispute_escalated, dispute_mediation_status, agreed_amount_cents, updated_at")
     .or(`lister_id.eq.${userId},winner_id.eq.${userId}`)
     .order("updated_at", { ascending: false })
     .limit(20);
+
+  if (jobsError) {
+    console.error("[disputes page] jobs query", jobsError.message);
+  }
 
   const list = (jobs ?? []) as any[];
   const ids = list.map((j) => j.id).filter(Boolean);
@@ -45,6 +51,9 @@ export default async function DisputesPage() {
       const arr = messagesByJob.get(key) ?? [];
       arr.push(m);
       messagesByJob.set(key, arr);
+    }
+    for (const [jid, arr] of messagesByJob) {
+      messagesByJob.set(jid, serializeDisputeMessagesForClient(arr));
     }
 
     const { data: reqs } = await (admin as any)
@@ -81,10 +90,19 @@ export default async function DisputesPage() {
         </Button>
       </div>
 
-      {list.length === 0 ? (
+      {jobsError ? (
+        <Card className="border-destructive/60 dark:border-red-900">
+          <CardContent className="py-6 text-sm text-destructive">
+            Could not load your jobs: {jobsError.message}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!jobsError && list.length === 0 ? (
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900/50">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No active disputes yet. If an issue happens on a job, you can raise it here.
+            No jobs linked to your account yet. When you have an active job, it will appear here for disputes and
+            payment requests.
           </CardContent>
         </Card>
       ) : null}
@@ -133,18 +151,7 @@ export default async function DisputesPage() {
                               <p className="mt-1 text-xs text-muted-foreground">{String(r.reason ?? "")}</p>
                               <p className="mt-1 text-[11px] uppercase text-muted-foreground">{r.status}</p>
                               {isLister && r.status === "pending" ? (
-                                <div className="mt-2 flex gap-2">
-                                  <form action={reviewCleanerAdditionalPaymentRequest}>
-                                    <input type="hidden" name="requestId" value={r.id} />
-                                    <input type="hidden" name="decision" value="accept" />
-                                    <Button type="submit" size="sm">Accept</Button>
-                                  </form>
-                                  <form action={reviewCleanerAdditionalPaymentRequest}>
-                                    <input type="hidden" name="requestId" value={r.id} />
-                                    <input type="hidden" name="decision" value="deny" />
-                                    <Button type="submit" size="sm" variant="outline">Deny</Button>
-                                  </form>
-                                </div>
+                                <ReviewAdditionalPaymentButtons requestId={String(r.id)} />
                               ) : null}
                             </div>
                           ))
@@ -166,20 +173,7 @@ export default async function DisputesPage() {
                       <p className="text-xs text-muted-foreground">
                         Refund ${(Number(latestMediation.refund_cents ?? 0) / 100).toFixed(2)} • Additional payment ${(Number(latestMediation.additional_payment_cents ?? 0) / 100).toFixed(2)}
                       </p>
-                      {(isLister || isCleaner) && (
-                        <div className="flex gap-2">
-                          <form action={respondToMediationProposal}>
-                            <input type="hidden" name="jobId" value={job.id} />
-                            <input type="hidden" name="vote" value="accept" />
-                            <Button type="submit" size="sm">Accept</Button>
-                          </form>
-                          <form action={respondToMediationProposal}>
-                            <input type="hidden" name="jobId" value={job.id} />
-                            <input type="hidden" name="vote" value="reject" />
-                            <Button type="submit" size="sm" variant="outline">Reject</Button>
-                          </form>
-                        </div>
-                      )}
+                      {(isLister || isCleaner) && <MediationVoteButtons jobId={Number(job.id)} />}
                     </CardContent>
                   </Card>
                 ) : null}
