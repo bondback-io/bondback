@@ -123,38 +123,42 @@ export const Header = async ({
           </div>
         </div>
       ) : (
-        <div className="container flex min-h-[2.875rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-1 px-2 py-1 sm:min-h-14 sm:gap-3 sm:px-4 sm:py-1.5 md:px-6 md:py-2">
+        <div className="container flex min-h-[2.875rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-1 px-2 py-1 sm:min-h-14 sm:gap-2 sm:px-4 sm:py-1.5 md:gap-3 md:px-6 md:py-2">
           <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2 md:gap-5">
             <LogoWithTagline className="shrink-0" />
             <span
               className="hidden h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700 sm:block"
               aria-hidden
             />
-            <FindJobsNavLink className="min-w-0 shrink" compactLabelOnMobile />
-            <MainNav isLoggedIn={isLoggedIn} isLister={false} />
+            {/**
+             * Same visible label as logged-in mobile: icon + "Browse Jobs" (not icon-only).
+             */}
+            <FindJobsNavLink className="min-w-0 shrink" />
           </div>
 
           <nav
-            className="flex shrink-0 items-center justify-end gap-0 sm:gap-1.5"
+            className="flex min-w-0 shrink-0 items-center justify-end gap-0.5 sm:gap-1.5 md:gap-2"
             aria-label="Account and tools"
           >
-            <div className="flex items-center gap-0 sm:gap-2">
+            <div className="flex items-center gap-0.5 sm:gap-1.5">
               <Button
                 variant="ghost"
                 size="sm"
                 asChild
-                className="h-8 min-h-8 px-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 sm:h-10 sm:min-h-10 sm:px-3 sm:text-sm dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                className="h-9 min-h-9 px-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 sm:h-10 sm:min-h-10 sm:px-3 sm:text-sm dark:hover:bg-gray-800 dark:hover:text-gray-100"
               >
                 <Link href="/login">Log in</Link>
               </Button>
               <Button
                 asChild
                 size="sm"
-                className="h-8 min-h-8 shrink-0 rounded-full bg-primary px-2 text-[11px] font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 sm:h-10 sm:min-h-10 sm:px-4 sm:text-sm"
+                className="h-9 min-h-9 shrink-0 rounded-full bg-primary px-2.5 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 sm:h-10 sm:min-h-10 sm:px-4 sm:text-sm"
               >
                 <Link href="/signup">Sign up</Link>
               </Button>
             </div>
+            {/** Guest hamburger at far right (mobile); desktop sheet trigger stays hidden md+. */}
+            <MainNav isLoggedIn={isLoggedIn} isLister={false} trailingGuestTools />
             <span
               className="mx-0.5 hidden h-5 w-px shrink-0 bg-border dark:bg-gray-700 md:mx-1 md:block"
               aria-hidden

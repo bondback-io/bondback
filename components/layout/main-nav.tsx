@@ -17,6 +17,11 @@ export type MainNavProps = {
   className?: string;
   isLoggedIn: boolean;
   isLister: boolean;
+  /**
+   * Guest header: hamburger sits after Log in / Sign up. Omit `md:flex-1` so the cluster
+   * doesn’t stretch and push the theme toggle.
+   */
+  trailingGuestTools?: boolean;
 };
 
 const MOBILE_ROW =
@@ -138,7 +143,12 @@ function DesktopNavLinks({
   );
 }
 
-export function MainNav({ className, isLoggedIn, isLister }: MainNavProps) {
+export function MainNav({
+  className,
+  isLoggedIn,
+  isLister,
+  trailingGuestTools = false,
+}: MainNavProps) {
   const [open, setOpen] = React.useState(false);
   const [createListingOpen, setCreateListingOpen] = React.useState(false);
   const openCreateListingDialog = React.useCallback(() => setCreateListingOpen(true), []);
@@ -148,7 +158,8 @@ export function MainNav({ className, isLoggedIn, isLister }: MainNavProps) {
   return (
     <div
       className={cn(
-        "flex min-w-0 shrink-0 items-center justify-start gap-1 sm:gap-2 md:min-w-0 md:shrink md:flex-1 md:flex-nowrap",
+        "flex min-w-0 shrink-0 items-center justify-start gap-1 sm:gap-2 md:min-w-0 md:flex-nowrap",
+        !trailingGuestTools && "md:shrink md:flex-1",
         className
       )}
     >
