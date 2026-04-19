@@ -17,37 +17,19 @@ export type HeaderProps = {
   stripeTestMode?: boolean;
 };
 
-/** Bond Back wordmark + optional tagline (one home link). */
-function LogoWithTagline({
-  className,
-  /** Public toolbar: drop tagline on small screens to save vertical space. */
-  hideTaglineOnMobile = false,
-}: {
-  className?: string;
-  hideTaglineOnMobile?: boolean;
-}) {
+/** Bond Back wordmark home link. */
+function LogoWithTagline({ className }: { className?: string }) {
   return (
     <Link
       href="/"
       className={cn(
-        "flex min-w-0 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:gap-1 sm:rounded-xl",
-        hideTaglineOnMobile
-          ? "max-md:min-h-0 max-md:gap-0 max-md:py-0 md:min-h-9 md:gap-0.5 lg:min-h-11 lg:gap-1"
-          : "min-h-9 sm:min-h-11",
+        "inline-flex min-h-9 min-w-0 shrink-0 items-center justify-center rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-11 sm:rounded-xl",
         className
       )}
       aria-label="Bond Back home"
     >
       <span className="rounded-lg bg-primary px-2 py-1.5 text-xs font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10 sm:rounded-xl sm:px-2.5 sm:py-2 sm:text-sm">
         Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
-      </span>
-      <span
-        className={cn(
-          "max-w-[10rem] text-center text-[10px] font-medium leading-snug tracking-tight text-muted-foreground dark:text-gray-400 sm:max-w-[11rem] sm:text-[11px]",
-          hideTaglineOnMobile && "hidden md:block"
-        )}
-      >
-        Bond clean marketplace
       </span>
     </Link>
   );
@@ -143,7 +125,7 @@ export const Header = async ({
       ) : (
         <div className="container flex min-h-[2.875rem] min-w-0 max-w-7xl flex-nowrap items-center justify-between gap-1 px-2 py-1 sm:min-h-14 sm:gap-3 sm:px-4 sm:py-1.5 md:px-6 md:py-2">
           <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2 md:gap-5">
-            <LogoWithTagline className="shrink-0" hideTaglineOnMobile />
+            <LogoWithTagline className="shrink-0" />
             <span
               className="hidden h-7 w-px shrink-0 bg-border/90 dark:bg-gray-700 sm:block"
               aria-hidden

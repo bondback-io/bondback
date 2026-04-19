@@ -12,6 +12,7 @@ import {
   type AdminNotificationEventType,
 } from "@/emails/AdminNotificationEmail";
 import { formatDateTimeForEmail } from "@/lib/email-datetime";
+import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
 
 function maskAbn(digits: string): string {
   if (digits.length !== 11) return digits;
@@ -259,7 +260,7 @@ export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
   const { data: job } = await admin
     .from("jobs")
     .select(
-      "id, listing_id, dispute_reason, disputed_at, dispute_opened_by"
+      "id, listing_id, lister_id, winner_id, dispute_reason, disputed_at, dispute_opened_by"
     )
     .eq("id", jobId)
     .maybeSingle();
@@ -267,6 +268,8 @@ export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
   const j = job as {
     id: number;
     listing_id: string | null;
+    lister_id: string;
+    winner_id: string | null;
     dispute_reason?: string | null;
     disputed_at?: string | null;
     dispute_opened_by?: string | null;
@@ -284,10 +287,15 @@ export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
     listingTitle = (listing as { title?: string | null } | null)?.title ?? null;
   }
 
+  const openerRole = disputeOpenerRole({
+    dispute_opened_by: j.dispute_opened_by,
+    lister_id: j.lister_id,
+    winner_id: j.winner_id,
+  });
   const openedByLabel =
-    j.dispute_opened_by === "lister"
+    openerRole === "lister"
       ? "Lister"
-      : j.dispute_opened_by === "cleaner"
+      : openerRole === "cleaner"
         ? "Cleaner"
         : "—";
 

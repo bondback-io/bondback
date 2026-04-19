@@ -1080,6 +1080,8 @@ export function MyListingsList({
                       dispute_reason: job.dispute_reason,
                       dispute_status: job.dispute_status,
                       dispute_opened_by: job.dispute_opened_by,
+                      lister_id: listing.lister_id,
+                      winner_id: job.winnerId,
                       disputed_at: job.disputed_at,
                       cleaner_confirmed_complete: job.cleanerConfirmedComplete,
                       agreed_amount_cents: job.agreed_amount_cents,

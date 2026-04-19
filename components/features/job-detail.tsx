@@ -92,6 +92,7 @@ import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { ImageLightboxGallery } from "@/components/ui/image-lightbox-gallery";
 import { ReviewForm } from "@/components/features/review-form";
 import { GuidedDisputeForm } from "@/components/features/guided-dispute-form";
+import { ListerAdditionalPaymentReviewDialog } from "@/components/disputes/lister-additional-payment-review-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
 import { logClientError } from "@/lib/errors/log-client-error";
@@ -579,6 +580,13 @@ export type JobDetailProps = {
   winnerStripePayoutReady?: boolean;
   /** From global settings; when true, release is blocked until cleaner completes Connect. */
   requireStripeConnectBeforePaymentRelease?: boolean;
+  /** Pending cleaner additional-payment row for lister Accept/Deny on the job page. */
+  pendingListerAdditionalPayment?: {
+    id: string;
+    amount_cents: number;
+    reason: string;
+    job_id: number;
+  } | null;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -666,6 +674,7 @@ export function JobDetail({
   expandListerReviewOfCleaner = false,
   winnerStripePayoutReady = true,
   requireStripeConnectBeforePaymentRelease = true,
+  pendingListerAdditionalPayment = null,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -790,6 +799,7 @@ export function JobDetail({
     if (expandListerReviewOfCleaner) setShowCleanerReviewForm(true);
   }, [expandListerReviewOfCleaner]);
   const [showOpenDisputeForm, setShowOpenDisputeForm] = useState(false);
+  const [showCleanerDisputeForm, setShowCleanerDisputeForm] = useState(false);
   const [showApproveReleaseConfirm, setShowApproveReleaseConfirm] = useState(false);
   const [disputeResponseReason, setDisputeResponseReason] = useState("");
   const [disputeResponseMessage, setDisputeResponseMessage] = useState("");
@@ -3037,6 +3047,30 @@ export function JobDetail({
           )}
 
           {hasActiveJob &&
+            isJobLister &&
+            pendingListerAdditionalPayment &&
+            numericJobId && (
+              <Alert className="border-violet-300/80 bg-violet-50/90 text-violet-950 dark:border-violet-800 dark:bg-violet-950/35 dark:text-violet-50">
+                <AlertDescription className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    Your cleaner requested an additional payment of{" "}
+                    <strong className="text-foreground dark:text-white">
+                      ${(pendingListerAdditionalPayment.amount_cents / 100).toFixed(2)} AUD
+                    </strong>
+                    . Review and accept (Stripe) or deny.
+                  </span>
+                  <ListerAdditionalPaymentReviewDialog
+                    requestId={pendingListerAdditionalPayment.id}
+                    amountCents={pendingListerAdditionalPayment.amount_cents}
+                    reason={pendingListerAdditionalPayment.reason}
+                    jobId={numericJobId}
+                    triggerClassName="shrink-0 bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
+                  />
+                </AlertDescription>
+              </Alert>
+            )}
+
+          {hasActiveJob &&
             !listerCompletedBoostTidy &&
             (localJobStatus === "in_progress" ||
               localJobStatus === "completed" ||
@@ -3454,6 +3488,13 @@ export function JobDetail({
                           Tick every checklist item and upload at least 3 after-photos to continue.
                         </p>
                       )}
+                      {allCompleted && hasAfterPhotos && numericJobId ? (
+                        <Button asChild variant="outline" className="w-full min-h-11">
+                          <Link href={`/jobs/${numericJobId}/request-additional-payment`}>
+                            Request additional payment
+                          </Link>
+                        </Button>
+                      ) : null}
                     </div>
                   )}
                   {localJobStatus === "completed_pending_approval" && (
@@ -3462,10 +3503,50 @@ export function JobDetail({
                         You&apos;ve requested payment. Waiting for the property lister to review and release funds.
                       </p>
                       <Button asChild variant="outline" className="w-full min-h-11">
-                        <Link href="/disputes">Request Additional Payment</Link>
+                        <Link href={`/jobs/${numericJobId}/request-additional-payment`}>
+                          Request additional payment
+                        </Link>
                       </Button>
                     </div>
                   )}
+                  {isJobCleaner &&
+                    hasAfterPhotos &&
+                    allCompleted &&
+                    numericJobId &&
+                    (localJobStatus === "completed_pending_approval" ||
+                      localJobStatus === "completed" ||
+                      (localJobStatus === "in_progress" && cleanerConfirmedComplete)) && (
+                      <div className="space-y-2 rounded-lg border border-amber-200/80 bg-amber-50/40 px-3 py-3 dark:border-amber-800/50 dark:bg-amber-950/25">
+                        <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
+                          Raise a dispute
+                        </p>
+                        <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                          After-photos are on file. If you need admin help or a formal dispute, start here — not from
+                          the Dispute Resolution menu.
+                        </p>
+                        {!showCleanerDisputeForm ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full min-h-11 border-amber-600/50 text-amber-950 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-50 dark:hover:bg-amber-900/40"
+                            onClick={() => setShowCleanerDisputeForm(true)}
+                          >
+                            Raise a dispute
+                          </Button>
+                        ) : (
+                          <div className="rounded-md border border-amber-300/60 bg-background/80 p-3 dark:border-amber-800 dark:bg-gray-900/50">
+                            <GuidedDisputeForm
+                              jobId={numericJobId}
+                              jobPageHref={`/jobs/${numericJobId}`}
+                              jobTitle={listing.title ?? undefined}
+                              onCancel={() => setShowCleanerDisputeForm(false)}
+                              isLister={false}
+                              agreedAmountCents={agreedAmountCents}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
               )}
             </>
@@ -3583,7 +3664,7 @@ export function JobDetail({
                           </Button>
                         )}
 
-                        {localJobStatus === "completed_pending_approval" && (
+                        {localJobStatus === "completed_pending_approval" && hasAfterPhotos && (
                           <Button
                             type="button"
                             size="lg"

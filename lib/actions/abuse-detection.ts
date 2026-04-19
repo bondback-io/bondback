@@ -2,6 +2,7 @@
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAdminActivity } from "@/lib/admin-activity-log";
+import { resolveDisputeOpenerUserId } from "@/lib/jobs/dispute-opened-by";
 
 const THRESHOLD = 3;
 const DAYS = 30;
@@ -50,9 +51,7 @@ export async function processDisputeAbuseDetection(): Promise<{
 
   for (const j of list) {
     if (!j.dispute_opened_by || !j.disputed_at) continue;
-    let opener: string | null = null;
-    if (j.dispute_opened_by === "lister") opener = j.lister_id;
-    else if (j.dispute_opened_by === "cleaner" && j.winner_id) opener = j.winner_id;
+    const opener = resolveDisputeOpenerUserId(j);
     if (!opener) continue;
     openerCounts.set(opener, (openerCounts.get(opener) ?? 0) + 1);
   }

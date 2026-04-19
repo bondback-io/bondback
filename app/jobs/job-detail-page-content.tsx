@@ -37,6 +37,7 @@ import {
 } from "@/lib/chat-messenger-display";
 import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-server";
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
+import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
 
 export type JobDetailRouteMode = "jobs" | "listings";
 
@@ -434,12 +435,56 @@ export async function JobDetailPageContent({
   const cancelledJobBanner =
     mode === "jobs" && hasAssignedCleaner && jobStatusNorm === "cancelled";
 
-  const rawDisputeOpener = (job as { dispute_opened_by?: string | null })
-    ?.dispute_opened_by;
-  const disputeOpenedByTyped: "lister" | "cleaner" | null =
-    rawDisputeOpener === "lister" || rawDisputeOpener === "cleaner"
-      ? rawDisputeOpener
-      : null;
+  const disputeOpenedByTyped: "lister" | "cleaner" | null = job
+    ? disputeOpenerRole({
+        dispute_opened_by: job.dispute_opened_by,
+        lister_id: job.lister_id,
+        winner_id: job.winner_id,
+      })
+    : null;
+
+  let pendingListerAdditionalPayment: {
+    id: string;
+    amount_cents: number;
+    reason: string;
+    job_id: number;
+  } | null = null;
+  if (
+    mode === "jobs" &&
+    jobId != null &&
+    sessionUserId &&
+    job &&
+    sameUserId(job.lister_id, sessionUserId) &&
+    roles.includes("lister") &&
+    isListerActive
+  ) {
+    const adminPr = createSupabaseAdminClient();
+    if (adminPr) {
+      const { data: prRow } = await adminPr
+        .from("cleaner_additional_payment_requests")
+        .select("id, amount_cents, reason, job_id")
+        .eq("job_id", jobId)
+        .eq("lister_id", sessionUserId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const pr = prRow as {
+        id?: string;
+        amount_cents?: number;
+        reason?: string | null;
+        job_id?: number;
+      } | null;
+      if (pr?.id) {
+        pendingListerAdditionalPayment = {
+          id: String(pr.id),
+          amount_cents: Number(pr.amount_cents ?? 0),
+          reason: String(pr.reason ?? ""),
+          job_id: Number(pr.job_id ?? jobId),
+        };
+      }
+    }
+  }
 
   return (
     <OfflineJobsPrimer jobId={jobId ? String(jobId) : id}>
@@ -610,6 +655,7 @@ export async function JobDetailPageContent({
           expandListerReviewOfCleaner={expandListerReviewOfCleaner}
           winnerStripePayoutReady={winnerStripePayoutReady}
           requireStripeConnectBeforePaymentRelease={requireStripeConnectBeforePaymentRelease}
+          pendingListerAdditionalPayment={pendingListerAdditionalPayment}
         />
       </section>
     </OfflineJobsPrimer>

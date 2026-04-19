@@ -8,6 +8,7 @@ export type SerializableDisputeMessage = {
   author_role: string;
   created_at: string;
   is_escalation_event?: boolean | null;
+  attachment_urls?: string[];
 };
 
 export function serializeDisputeMessagesForClient(raw: unknown): SerializableDisputeMessage[] {
@@ -15,6 +16,10 @@ export function serializeDisputeMessagesForClient(raw: unknown): SerializableDis
   return raw.map((m) => {
     const row = m as Record<string, unknown>;
     const idRaw = row.id;
+    const att = row.attachment_urls;
+    const attachment_urls = Array.isArray(att)
+      ? att.map((u) => String(u)).filter(Boolean).slice(0, 12)
+      : [];
     return {
       id: idRaw != null ? String(idRaw as string | number | bigint) : "",
       body: String(row.body ?? ""),
@@ -26,6 +31,7 @@ export function serializeDisputeMessagesForClient(raw: unknown): SerializableDis
             ? row.created_at
             : new Date(row.created_at as string | number).toISOString(),
       is_escalation_event: Boolean(row.is_escalation_event),
+      ...(attachment_urls.length > 0 ? { attachment_urls } : {}),
     };
   });
 }

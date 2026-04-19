@@ -6,6 +6,8 @@ import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/adm
 import { createNotification } from "@/lib/actions/notifications";
 import { createJobTopUpCheckoutSession, openDispute } from "@/lib/actions/jobs";
 import { sendEmail } from "@/lib/notifications/email";
+import { getSiteUrl } from "@/lib/site";
+import { countJobAfterPhotosFromStorage } from "@/lib/jobs/after-photo-storage-count";
 
 function trimText(v: unknown): string {
   return String(v ?? "").trim();
@@ -74,16 +76,29 @@ export async function submitCleanerAdditionalPaymentRequest(
       audDollarsInputToCents(formData.get("amountAud")) ||
       toCents(formData.get("amountCents"));
     const reason = trimText(formData.get("reason"));
+    const attachmentLines = String(formData.get("attachmentUrls") ?? "")
+      .split(/[\n\r]+/)
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, 8);
     if (!jobId || amountCents < 100 || !reason) {
       return { error: "Enter at least $1.00 AUD and a reason." };
+    }
+    if (attachmentLines.length < 1) {
+      return { error: "Upload at least one supporting image (or paste image URLs)." };
     }
 
     const { data: job } = await supabase
       .from("jobs")
-      .select("id, winner_id, lister_id, status")
+      .select("id, winner_id, lister_id, status, listing_id")
       .eq("id", jobId)
       .maybeSingle();
-    const row = job as { winner_id?: string | null; lister_id?: string | null; status?: string } | null;
+    const row = job as {
+      winner_id?: string | null;
+      lister_id?: string | null;
+      status?: string;
+      listing_id?: string | null;
+    } | null;
     if (!row || row.winner_id !== userId) {
       return { error: "Only the assigned cleaner can request this." };
     }
@@ -93,6 +108,13 @@ export async function submitCleanerAdditionalPaymentRequest(
       )
     ) {
       return { error: "This job is not eligible for an additional payment request." };
+    }
+
+    const afterCount = await countJobAfterPhotosFromStorage(jobId);
+    if (afterCount < 3) {
+      return {
+        error: "Upload at least 3 after-photos on the job (stage 4) before requesting additional payment.",
+      };
     }
 
     const admin = createSupabaseAdminClient();
@@ -107,6 +129,24 @@ export async function submitCleanerAdditionalPaymentRequest(
       status: "pending",
     });
 
+    const threadBody = [
+      "Additional payment request (cleaner)",
+      `Amount: $${(amountCents / 100).toFixed(2)} AUD`,
+      "",
+      "Reason:",
+      reason,
+      "",
+      "The lister can Accept or Deny this request from the job or listing page.",
+    ].join("\n");
+    await (admin as any).from("dispute_messages").insert({
+      job_id: jobId,
+      author_user_id: userId,
+      author_role: "user",
+      body: threadBody,
+      attachment_urls: attachmentLines,
+      is_escalation_event: false,
+    });
+
     if (row.lister_id) {
       await createNotification(
         row.lister_id,
@@ -116,16 +156,27 @@ export async function submitCleanerAdditionalPaymentRequest(
       );
       const listerEmail = await getEmailForUserId(row.lister_id);
       if (trimText(listerEmail)) {
+        const lid = trimText(row.listing_id);
+        const listingUrl = lid
+          ? `${getSiteUrl().origin}/listings/${encodeURIComponent(lid)}`
+          : "";
+        const jobUrl = `${getSiteUrl().origin}/jobs/${jobId}`;
         await sendEmail(
           trimText(listerEmail),
           `[BB-DISPUTE-${jobId}] Additional Payment Requested`,
-          `<p>Your cleaner requested an additional payment for Job #${jobId}.</p><p><strong>Amount:</strong> $${(amountCents / 100).toFixed(2)}</p><p><strong>Reason:</strong> ${reason.replace(/</g, "&lt;")}</p>`
+          `<p>Your cleaner requested an additional payment for Job #${jobId}.</p><p><strong>Amount:</strong> $${(amountCents / 100).toFixed(2)} AUD</p><p><strong>Reason:</strong> ${reason.replace(/</g, "&lt;")}</p><p><a href="${jobUrl}">Open the job</a> and tap <strong>View request</strong> to accept or deny. A thread entry was added under Dispute Resolution.</p>${
+            listingUrl
+              ? `<p>Or <a href="${listingUrl}">open your listing</a> to respond.</p>`
+              : ""
+          }`
         );
       }
     }
 
     revalidatePath(`/jobs/${jobId}`);
     revalidatePath("/disputes");
+    const lid = trimText(row?.listing_id);
+    if (lid) revalidatePath(`/listings/${lid}`);
     return { ok: true, success: "Request sent to the lister. They’ll be notified by email and in-app." };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Something went wrong.";
@@ -141,6 +192,8 @@ export async function reviewCleanerAdditionalPaymentRequest(formData: FormData):
     const { userId } = auth;
     const requestId = trimText(formData.get("requestId"));
     const decision = trimText(formData.get("decision"));
+    const listerNoteRaw = trimText(formData.get("listerNote"));
+    const listerNote = listerNoteRaw.slice(0, 2000);
     if (!requestId || !["accept", "deny"].includes(decision)) {
       return { error: "Invalid request." };
     }
@@ -157,26 +210,60 @@ export async function reviewCleanerAdditionalPaymentRequest(formData: FormData):
     if (!req || req.lister_id !== userId) return { error: "Only the lister can review this request." };
     if (req.status !== "pending") return { error: "This request was already reviewed." };
 
+    const { data: jobLoc } = await (admin as any)
+      .from("jobs")
+      .select("listing_id")
+      .eq("id", req.job_id)
+      .maybeSingle();
+    const listingUuid = trimText((jobLoc as { listing_id?: string } | null)?.listing_id);
+
+    const revalidateJobAndListing = () => {
+      revalidatePath(`/jobs/${req.job_id}`);
+      revalidatePath("/disputes");
+      if (listingUuid) revalidatePath(`/listings/${listingUuid}`);
+    };
+
     if (decision === "deny") {
       await (admin as any)
         .from("cleaner_additional_payment_requests")
-        .update({ status: "denied", responded_by: userId, responded_at: new Date().toISOString() })
+        .update({
+          status: "denied",
+          responded_by: userId,
+          responded_at: new Date().toISOString(),
+          lister_response_note: listerNote || null,
+        })
         .eq("id", requestId);
-      await createNotification(
-        req.cleaner_id,
-        "job_status_update",
-        req.job_id,
-        "Lister denied your additional payment request."
-      );
-      revalidatePath(`/jobs/${req.job_id}`);
-      revalidatePath("/disputes");
+      const inAppMsg = listerNote
+        ? `Lister denied your additional payment request. Note: ${listerNote.slice(0, 500)}`
+        : "Lister denied your additional payment request.";
+      await createNotification(req.cleaner_id, "job_status_update", req.job_id, inAppMsg);
+      const cleanerEmail = await getEmailForUserId(req.cleaner_id);
+      if (trimText(cleanerEmail)) {
+        const safeNote = listerNote.replace(/</g, "&lt;");
+        await sendEmail(
+          trimText(cleanerEmail),
+          `[BB-JOB-${req.job_id}] Additional payment request declined`,
+          `<p>The lister declined your additional payment request for Job #${req.job_id}.</p>${
+            safeNote
+              ? `<p><strong>Lister note:</strong> ${safeNote}</p>`
+              : ""
+          }`
+        );
+      }
+      revalidateJobAndListing();
       return { ok: true, success: "Request denied. The cleaner has been notified." };
     }
 
+    const reasonLine = String(req.reason ?? "").trim().slice(0, 180);
+    const topUpNote =
+      reasonLine.length > 0
+        ? `Additional payment (cleaner request): ${reasonLine}`
+        : "Additional payment (cleaner request)";
     const topUp = await createJobTopUpCheckoutSession(
       Number(req.job_id),
       Number(req.amount_cents),
-      `Additional Payment Requested by Cleaner: ${String(req.reason ?? "").slice(0, 180)}`
+      topUpNote,
+      { flexibleCleanerRequest: true }
     );
     if (!topUp.ok) return { error: topUp.error ?? "Could not create Stripe checkout." };
 
@@ -194,10 +281,24 @@ export async function reviewCleanerAdditionalPaymentRequest(formData: FormData):
       req.cleaner_id,
       "job_status_update",
       req.job_id,
-      "Lister accepted your additional payment request."
+      `Lister accepted your additional payment request ($${(Number(req.amount_cents) / 100).toFixed(2)}). They will complete payment in Stripe; you will be notified when funds are held.`
     );
-    revalidatePath(`/jobs/${req.job_id}`);
-    revalidatePath("/disputes");
+    const cleanerEmailAccept = await getEmailForUserId(req.cleaner_id);
+    if (trimText(cleanerEmailAccept)) {
+      const amt = (Number(req.amount_cents) / 100).toFixed(2);
+      const safeReason = String(req.reason ?? "")
+        .trim()
+        .replace(/</g, "&lt;")
+        .slice(0, 1500);
+      await sendEmail(
+        trimText(cleanerEmailAccept),
+        `[BB-JOB-${req.job_id}] Additional payment accepted — lister paying`,
+        `<p>The lister accepted your additional payment request for Job #${req.job_id}.</p><p><strong>Amount:</strong> $${amt} AUD</p>${
+          safeReason ? `<p><strong>Your reason:</strong> ${safeReason}</p>` : ""
+        }<p>They are opening Stripe Checkout to add this amount to escrow. You will get another update when the payment is held.</p>`
+      );
+    }
+    revalidateJobAndListing();
     return {
       ok: true,
       success: "Opening Stripe to complete the extra escrow payment…",

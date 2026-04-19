@@ -26,6 +26,7 @@ import { fetchListingCommentsPublic } from "@/lib/actions/listing-comments";
 import { countUnreadListingQaNotifications } from "@/lib/actions/notifications";
 import { ListingPublicCommentsDock } from "@/components/features/listing-public-comments-dock";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ListerAdditionalPaymentReviewDialog } from "@/components/disputes/lister-additional-payment-review-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -249,6 +250,41 @@ export default async function ListingDetailPage({
       : Promise.resolve(0),
   ]);
 
+  let pendingCleanerPaymentRequest: {
+    id: string;
+    amount_cents: number;
+    reason: string;
+    job_id: number;
+  } | null = null;
+  if (ownsListingAsLister && jobRow?.id != null && sessionUserId) {
+    const adminPay = createSupabaseAdminClient();
+    if (adminPay) {
+      const { data: payReq } = await adminPay
+        .from("cleaner_additional_payment_requests")
+        .select("id, amount_cents, reason, job_id")
+        .eq("job_id", jobRow.id)
+        .eq("lister_id", sessionUserId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const pr = payReq as {
+        id?: string;
+        amount_cents?: number;
+        reason?: string | null;
+        job_id?: number;
+      } | null;
+      if (pr?.id) {
+        pendingCleanerPaymentRequest = {
+          id: String(pr.id),
+          amount_cents: Number(pr.amount_cents ?? 0),
+          reason: String(pr.reason ?? ""),
+          job_id: Number(pr.job_id ?? jobRow.id),
+        };
+      }
+    }
+  }
+
   return (
     <section
       className={cn(
@@ -285,6 +321,28 @@ export default async function ListingDetailPage({
               >
                 Dismiss
               </Link>
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+      {pendingCleanerPaymentRequest ? (
+        <div className="page-inner mx-auto w-full max-w-6xl px-3 pt-2 sm:px-4">
+          <Alert className="border-violet-300/80 bg-violet-50/90 text-violet-950 dark:border-violet-800 dark:bg-violet-950/35 dark:text-violet-50">
+            <AlertDescription className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                Your cleaner requested an additional payment of{" "}
+                <strong className="text-foreground dark:text-white">
+                  ${(pendingCleanerPaymentRequest.amount_cents / 100).toFixed(2)} AUD
+                </strong>{" "}
+                for this job. Review the details to accept (you&apos;ll pay through Stripe) or deny.
+              </span>
+              <ListerAdditionalPaymentReviewDialog
+                requestId={pendingCleanerPaymentRequest.id}
+                amountCents={pendingCleanerPaymentRequest.amount_cents}
+                reason={pendingCleanerPaymentRequest.reason}
+                jobId={pendingCleanerPaymentRequest.job_id}
+                triggerClassName="shrink-0 bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-600 dark:hover:bg-violet-500"
+              />
             </AlertDescription>
           </Alert>
         </div>

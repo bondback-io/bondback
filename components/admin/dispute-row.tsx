@@ -43,6 +43,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
@@ -58,7 +59,7 @@ type Job = {
   dispute_photos: string[] | null;
   dispute_evidence?: string[] | null;
   dispute_status?: string | null;
-  dispute_opened_by?: "lister" | "cleaner" | null;
+  dispute_opened_by?: string | null;
   disputed_at?: string | null;
   dispute_response_reason?: string | null;
   dispute_response_evidence?: string[] | null;
@@ -85,7 +86,12 @@ export function DisputeRow({
   const reason = job.dispute_reason ?? "No reason supplied";
   const evidence: string[] =
     job.dispute_evidence ?? job.dispute_photos ?? [];
-  const disputedBy = job.dispute_opened_by ?? "lister";
+  const disputedBy =
+    disputeOpenerRole({
+      dispute_opened_by: job.dispute_opened_by,
+      lister_id: job.lister_id,
+      winner_id: job.winner_id,
+    }) ?? "lister";
   const [resolveOpen, setResolveOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [refundAmountCents, setRefundAmountCents] = useState(0);

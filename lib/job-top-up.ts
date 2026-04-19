@@ -81,3 +81,21 @@ export function isValidJobTopUpAgreedCents(cents: number): boolean {
   if ((cents - JOB_TOP_UP_MIN_CENTS) % JOB_TOP_UP_STEP_CENTS !== 0) return false;
   return true;
 }
+
+/** After lister accepts a cleaner additional-payment request (matches request form: min AUD 1). */
+export const CLEANER_REQUEST_TOP_UP_MIN_CENTS = 100;
+
+export function isValidCleanerRequestTopUpCents(cents: number): boolean {
+  return (
+    Number.isFinite(cents) &&
+    cents >= CLEANER_REQUEST_TOP_UP_MIN_CENTS &&
+    cents <= 100_000_000
+  );
+}
+
+/** Stripe session fulfillment: manual lister top-up rules OR approved cleaner-request amount. */
+export function isValidStoredTopUpAgreedCents(cents: number): boolean {
+  if (!Number.isFinite(cents) || cents < 1) return false;
+  if (isValidJobTopUpAgreedCents(cents)) return true;
+  return isValidCleanerRequestTopUpCents(cents);
+}

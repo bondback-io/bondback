@@ -46,6 +46,7 @@ import {
   LayoutDashboard,
   Users,
   PlusCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { ThemeToggleSheetRow, useThemeToggle } from "@/components/layout/theme-toggle";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
@@ -80,6 +81,125 @@ function useIsMobile() {
 
 const MOBILE_ROW_CLASS =
   "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
+const MOBILE_SUB_ROW_CLASS =
+  "flex min-h-[40px] w-full items-center gap-3 rounded-lg px-3 py-2.5 pl-3 text-left text-sm font-medium transition-colors active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
+const COLLAPSE_TRANSITION = "transition-[grid-template-rows] duration-300 ease-out";
+
+function MobileCollapsibleGroup({
+  id,
+  label,
+  icon: Icon,
+  open,
+  onToggle,
+  children,
+}: {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-xl">
+      <button
+        type="button"
+        id={`${id}-trigger`}
+        aria-expanded={open}
+        aria-controls={`${id}-panel`}
+        onClick={onToggle}
+        className={cn(
+          MOBILE_ROW_CLASS,
+          "justify-between text-foreground hover:bg-muted dark:text-gray-100 dark:hover:bg-gray-800"
+        )}
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <Icon className="h-5 w-5 shrink-0" aria-hidden />
+          <span className="truncate">{label}</span>
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-300 ease-out dark:text-gray-400",
+            open && "rotate-180"
+          )}
+          aria-hidden
+        />
+      </button>
+      <div
+        id={`${id}-panel`}
+        role="region"
+        aria-labelledby={`${id}-trigger`}
+        className={cn("grid min-h-0", COLLAPSE_TRANSITION, open ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-col gap-0.5 border-l-2 border-border/70 py-0.5 pl-3 ml-4 dark:border-gray-700">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DesktopCollapsibleGroup({
+  id,
+  label,
+  icon: Icon,
+  open,
+  onToggle,
+  children,
+}: {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        id={`${id}-trigger`}
+        aria-expanded={open}
+        aria-controls={`${id}-panel`}
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.preventDefault();
+          onToggle();
+        }}
+        className={cn(
+          "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-medium outline-none transition-colors duration-200",
+          "hover:bg-muted/80 focus-visible:bg-muted dark:hover:bg-gray-800 dark:focus-visible:bg-gray-800 dark:text-gray-100"
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-out",
+            open && "rotate-180"
+          )}
+          aria-hidden
+        />
+      </button>
+      <div
+        id={`${id}-panel`}
+        role="region"
+        aria-labelledby={`${id}-trigger`}
+        className={cn("grid min-h-0", COLLAPSE_TRANSITION, open ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="space-y-0.5 border-l border-border/80 py-1 pl-2 ml-4 dark:border-gray-700">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function UserMenuThemeToggleDropdownItem({ persistToServer }: { persistToServer: boolean }) {
   const { mounted, isDark, toggleTheme } = useThemeToggle(persistToServer);
@@ -133,6 +253,10 @@ export function UserMenu({ session }: UserMenuProps) {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [mobileSheetOpen, setMobileSheetOpen] = React.useState(false);
+  const [mobileDashboardOpen, setMobileDashboardOpen] = React.useState(false);
+  const [mobileHelpOpen, setMobileHelpOpen] = React.useState(false);
+  const [desktopDashboardOpen, setDesktopDashboardOpen] = React.useState(false);
+  const [desktopHelpOpen, setDesktopHelpOpen] = React.useState(false);
   useBodyScrollLock(isMobile && mobileSheetOpen);
   const swipeHandlers = useSwipeToClose(() => setMobileSheetOpen(false), "down");
 
@@ -186,6 +310,7 @@ export function UserMenu({ session }: UserMenuProps) {
       "/messages",
       "/help",
       "/support",
+      "/disputes",
       "/my-listings",
       "/find-jobs",
       "/earnings",
@@ -293,6 +418,10 @@ export function UserMenu({ session }: UserMenuProps) {
           open={mobileSheetOpen}
           onOpenChange={(open) => {
             setMobileSheetOpen(open);
+            if (!open) {
+              setMobileDashboardOpen(false);
+              setMobileHelpOpen(false);
+            }
             if (open) prefetchAccountRoutes();
           }}
         >
@@ -374,44 +503,57 @@ export function UserMenu({ session }: UserMenuProps) {
                   </Link>
                 </SheetClose>
                 {isLister && (
-                  <SheetClose asChild>
-                    <Link
-                      href={LISTER_DASHBOARD_HREF}
-                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                      aria-label="Lister dashboard"
-                    >
-                      <LayoutDashboard className="h-5 w-5 shrink-0" aria-hidden />
-                      <span>Dashboard</span>
-                    </Link>
-                  </SheetClose>
-                )}
-                {isLister && (
-                  <SheetClose asChild>
-                    <Link
-                      href="/listings/new"
-                      prefetch
-                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                      aria-label="Create listing"
-                    >
-                      <PlusCircle className="h-5 w-5 shrink-0" aria-hidden />
-                      <span>Create Listing</span>
-                    </Link>
-                  </SheetClose>
-                )}
-                <SheetClose asChild>
-                  <Link
-                    href={jobsActivityHref(session.roles, session.activeRole)}
-                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                    aria-label={session.activeRole === "lister" ? "My Listings" : "My Jobs"}
+                  <MobileCollapsibleGroup
+                    id="mobile-dash"
+                    label="Dashboard"
+                    icon={LayoutDashboard}
+                    open={mobileDashboardOpen}
+                    onToggle={() => {
+                      setMobileDashboardOpen((v) => !v);
+                      setMobileHelpOpen(false);
+                    }}
                   >
-                    {session.activeRole === "lister" ? (
-                      <List className="h-5 w-5 shrink-0" aria-hidden />
-                    ) : (
+                    <SheetClose asChild>
+                      <Link
+                        href="/listings/new"
+                        prefetch
+                        className={[
+                          MOBILE_SUB_ROW_CLASS,
+                          "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100",
+                        ].join(" ")}
+                        aria-label="Create listing"
+                      >
+                        <PlusCircle className="h-4 w-4 shrink-0" aria-hidden />
+                        <span>Create Listing</span>
+                      </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link
+                        href={jobsActivityHref(session.roles, session.activeRole)}
+                        className={[
+                          MOBILE_SUB_ROW_CLASS,
+                          "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100",
+                        ].join(" ")}
+                        aria-label="My Listings"
+                      >
+                        <List className="h-4 w-4 shrink-0" aria-hidden />
+                        <span>My Listings</span>
+                      </Link>
+                    </SheetClose>
+                  </MobileCollapsibleGroup>
+                )}
+                {!isLister && (
+                  <SheetClose asChild>
+                    <Link
+                      href={jobsActivityHref(session.roles, session.activeRole)}
+                      className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                      aria-label="My Jobs"
+                    >
                       <Briefcase className="h-5 w-5 shrink-0" aria-hidden />
-                    )}
-                    <span>{session.activeRole === "lister" ? "My Listings" : "My Jobs"}</span>
-                  </Link>
-                </SheetClose>
+                      <span>My Jobs</span>
+                    </Link>
+                  </SheetClose>
+                )}
                 {isLister && (
                   <SheetClose asChild>
                     <Link
@@ -464,36 +606,43 @@ export function UserMenu({ session }: UserMenuProps) {
                     <span>Messages</span>
                   </Link>
                 </SheetClose>
-                <SheetClose asChild>
-                  <Link
-                    href="/help"
-                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                    aria-label="Help and Support"
-                  >
-                    <HelpCircle className="h-5 w-5 shrink-0" aria-hidden />
-                    <span>Help &amp; Support</span>
-                  </Link>
-                </SheetClose>
-                <SheetClose asChild>
-                  <Link
-                    href="/support"
-                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                    aria-label="Support Tickets"
-                  >
-                    <LifeBuoy className="h-5 w-5 shrink-0" aria-hidden />
-                    <span>Support Tickets</span>
-                  </Link>
-                </SheetClose>
-                <SheetClose asChild>
-                  <Link
-                    href="/disputes"
-                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
-                    aria-label="Dispute Resolution Center"
-                  >
-                    <Scale className="h-5 w-5 shrink-0" aria-hidden />
-                    <span>Dispute Resolution</span>
-                  </Link>
-                </SheetClose>
+                <MobileCollapsibleGroup
+                  id="mobile-help"
+                  label="Help & Support"
+                  icon={HelpCircle}
+                  open={mobileHelpOpen}
+                  onToggle={() => {
+                    setMobileHelpOpen((v) => !v);
+                    setMobileDashboardOpen(false);
+                  }}
+                >
+                  <SheetClose asChild>
+                    <Link
+                      href="/support"
+                      className={[
+                        MOBILE_SUB_ROW_CLASS,
+                        "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100",
+                      ].join(" ")}
+                      aria-label="Support Tickets"
+                    >
+                      <LifeBuoy className="h-4 w-4 shrink-0" aria-hidden />
+                      <span>Support Tickets</span>
+                    </Link>
+                  </SheetClose>
+                  <SheetClose asChild>
+                    <Link
+                      href="/disputes"
+                      className={[
+                        MOBILE_SUB_ROW_CLASS,
+                        "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100",
+                      ].join(" ")}
+                      aria-label="Dispute Resolution Center"
+                    >
+                      <Scale className="h-4 w-4 shrink-0" aria-hidden />
+                      <span>Dispute Resolution</span>
+                    </Link>
+                  </SheetClose>
+                </MobileCollapsibleGroup>
 
                 <div
                   role="separator"
@@ -564,7 +713,15 @@ export function UserMenu({ session }: UserMenuProps) {
   // Desktop: floating dropdown
   return (
     <>
-      <DropdownMenu onOpenChange={(open) => open && prefetchAccountRoutes()}>
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (open) prefetchAccountRoutes();
+          else {
+            setDesktopDashboardOpen(false);
+            setDesktopHelpOpen(false);
+          }
+        }}
+      >
         <DropdownMenuTrigger asChild>
           {triggerButton}
         </DropdownMenuTrigger>
@@ -588,42 +745,49 @@ export function UserMenu({ session }: UserMenuProps) {
 
           <div className={MENU_SECTION_HEADER}>Jobs &amp; activity</div>
           {isLister && (
+            <DesktopCollapsibleGroup
+              id="desk-dash"
+              label="Dashboard"
+              icon={LayoutDashboard}
+              open={desktopDashboardOpen}
+              onToggle={() => {
+                setDesktopDashboardOpen((v) => !v);
+                setDesktopHelpOpen(false);
+              }}
+            >
+              <DropdownMenuItem
+                onSelect={() => {
+                  router.push("/listings/new");
+                }}
+                className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2 pl-6 focus:bg-muted dark:focus:bg-gray-800"
+                aria-label="Create listing"
+              >
+                <PlusCircle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span>Create Listing</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  router.push(jobsActivityHref(session.roles, session.activeRole));
+                }}
+                className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2 pl-6 focus:bg-muted dark:focus:bg-gray-800"
+                aria-label="My Listings"
+              >
+                <List className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span>My Listings</span>
+              </DropdownMenuItem>
+            </DesktopCollapsibleGroup>
+          )}
+          {!isLister && (
             <DropdownMenuItem
               onSelect={() => {
-                router.push(LISTER_DASHBOARD_HREF);
+                router.push(jobsActivityHref(session.roles, session.activeRole));
               }}
               className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
-              aria-label="Lister dashboard"
             >
-              <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span>Dashboard</span>
-            </DropdownMenuItem>
-          )}
-          {isLister && (
-            <DropdownMenuItem
-              onSelect={() => {
-                router.push("/listings/new");
-              }}
-              className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
-              aria-label="Create listing"
-            >
-              <PlusCircle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span>Create Listing</span>
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem
-            onSelect={() => {
-              router.push(jobsActivityHref(session.roles, session.activeRole));
-            }}
-            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
-          >
-            {session.activeRole === "lister" ? (
-              <List className="h-4 w-4 shrink-0 text-muted-foreground" />
-            ) : (
               <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
-            )}
-            <span>{session.activeRole === "lister" ? "My Listings" : "My Jobs"}</span>
-          </DropdownMenuItem>
+              <span>My Jobs</span>
+            </DropdownMenuItem>
+          )}
           {isLister && (
             <DropdownMenuItem
               onSelect={() => {
@@ -675,33 +839,35 @@ export function UserMenu({ session }: UserMenuProps) {
           <DropdownMenuSeparator className="my-1" />
 
           <div className={MENU_SECTION_HEADER}>Support</div>
-          <DropdownMenuItem
-            onSelect={() => {
-              router.push("/help");
+          <DesktopCollapsibleGroup
+            id="desk-help"
+            label="Help & Support"
+            icon={HelpCircle}
+            open={desktopHelpOpen}
+            onToggle={() => {
+              setDesktopHelpOpen((v) => !v);
+              setDesktopDashboardOpen(false);
             }}
-            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
           >
-            <HelpCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span>Help &amp; Support</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              router.push("/support");
-            }}
-            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
-          >
-            <LifeBuoy className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span>Support Tickets</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              router.push("/disputes");
-            }}
-            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
-          >
-            <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span>Dispute Resolution</span>
-          </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                router.push("/support");
+              }}
+              className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2 pl-6 focus:bg-muted dark:focus:bg-gray-800"
+            >
+              <LifeBuoy className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span>Support Tickets</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                router.push("/disputes");
+              }}
+              className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2 pl-6 focus:bg-muted dark:focus:bg-gray-800"
+            >
+              <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span>Dispute Resolution</span>
+            </DropdownMenuItem>
+          </DesktopCollapsibleGroup>
 
           <DropdownMenuSeparator className="my-1" />
           <div className={MENU_SECTION_HEADER}>Appearance</div>

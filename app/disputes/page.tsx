@@ -6,12 +6,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RaiseDisputeForm } from "@/components/disputes/raise-dispute-form";
-import { AdditionalPaymentRequestForm } from "@/components/disputes/additional-payment-request-form";
 import { DisputeThreadCard } from "@/components/disputes/dispute-thread-card";
-import { ReviewAdditionalPaymentButtons } from "@/components/disputes/review-additional-payment-buttons";
 import { MediationVoteButtons } from "@/components/disputes/mediation-vote-buttons";
 import { serializeDisputeMessagesForClient } from "@/lib/disputes/serialize-dispute-messages";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +22,9 @@ export default async function DisputesPage() {
 
   const { data: jobs, error: jobsError } = await supabase
     .from("jobs")
-    .select("id, lister_id, winner_id, status, dispute_status, dispute_priority, dispute_escalated, dispute_mediation_status, agreed_amount_cents, updated_at")
+    .select(
+      "id, lister_id, winner_id, status, dispute_status, dispute_priority, dispute_escalated, dispute_mediation_status, agreed_amount_cents, updated_at"
+    )
     .or(`lister_id.eq.${userId},winner_id.eq.${userId}`)
     .order("updated_at", { ascending: false })
     .limit(20);
@@ -82,13 +82,24 @@ export default async function DisputesPage() {
     <section className="page-inner mx-auto max-w-5xl space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Dispute Resolution Center</h1>
-          <p className="text-sm text-muted-foreground">Mobile-first dispute, escalation, and mediation workflows.</p>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Dispute Resolution</h1>
+          <p className="text-sm text-muted-foreground">
+            View threads and mediation for your jobs. Open a <strong>new</strong> dispute or request additional
+            payment only from the job page after after-photos (stage 4).
+          </p>
         </div>
         <Button asChild variant="outline">
           <Link href="/dashboard">Back to dashboard</Link>
         </Button>
       </div>
+
+      <Alert className="border-sky-200 bg-sky-50/80 dark:border-sky-900 dark:bg-sky-950/30">
+        <AlertDescription className="text-sm text-sky-950 dark:text-sky-100">
+          <strong>Cleaners:</strong> use <strong>Request additional payment</strong> on the job after uploading
+          after-photos. <strong>Listers / cleaners:</strong> use <strong>Raise a dispute</strong> on the job in the
+          same stage — not from this page.
+        </AlertDescription>
+      </Alert>
 
       {jobsError ? (
         <Card className="border-destructive/60 dark:border-red-900">
@@ -101,8 +112,8 @@ export default async function DisputesPage() {
       {!jobsError && list.length === 0 ? (
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900/50">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No jobs linked to your account yet. When you have an active job, it will appear here for disputes and
-            payment requests.
+            No jobs linked to your account yet. When you have an active job, dispute threads and payment updates will
+            appear here.
           </CardContent>
         </Card>
       ) : null}
@@ -114,52 +125,50 @@ export default async function DisputesPage() {
           const messages = messagesByJob.get(Number(job.id)) ?? [];
           const requests = paymentReqByJob.get(Number(job.id)) ?? [];
           const latestMediation = mediationByJob.get(Number(job.id)) ?? null;
+          const jobHref = `/jobs/${job.id}`;
           return (
             <Card key={job.id} className="border-border dark:border-gray-800 dark:bg-gray-900/40">
               <CardHeader className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle className="text-base">Job #{job.id}</CardTitle>
-                  <Badge variant="outline">{job.status}</Badge>
-                  <Badge variant="secondary">{job.dispute_priority ?? "medium"} priority</Badge>
-                  {job.dispute_escalated ? <Badge className="bg-red-600 text-white">Escalated</Badge> : null}
-                  {job.dispute_mediation_status && job.dispute_mediation_status !== "none" ? (
-                    <Badge className="bg-violet-600 text-white">Mediation: {job.dispute_mediation_status}</Badge>
-                  ) : null}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-base">Job #{job.id}</CardTitle>
+                    <Badge variant="outline">{job.status}</Badge>
+                    <Badge variant="secondary">{job.dispute_priority ?? "medium"} priority</Badge>
+                    {job.dispute_escalated ? <Badge className="bg-red-600 text-white">Escalated</Badge> : null}
+                    {job.dispute_mediation_status && job.dispute_mediation_status !== "none" ? (
+                      <Badge className="bg-violet-600 text-white">Mediation: {job.dispute_mediation_status}</Badge>
+                    ) : null}
+                  </div>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={jobHref}>Open job</Link>
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <RaiseDisputeForm
-                    jobId={Number(job.id)}
-                    isLister={isLister}
-                    agreedAmountCents={Number(job.agreed_amount_cents ?? 0)}
-                  />
-                  {isCleaner ? (
-                    <AdditionalPaymentRequestForm jobId={Number(job.id)} />
-                  ) : (
-                    <Card className="border-border dark:border-gray-800 dark:bg-gray-900/60">
-                      <CardHeader>
-                        <CardTitle className="text-base">Cleaner Additional Payment Requests</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {requests.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No requests for this job.</p>
-                        ) : (
-                          requests.map((r: any) => (
-                            <div key={r.id} className="rounded-lg border border-border p-3 dark:border-gray-700">
-                              <p className="text-sm font-medium">${(Number(r.amount_cents) / 100).toFixed(2)} requested</p>
-                              <p className="mt-1 text-xs text-muted-foreground">{String(r.reason ?? "")}</p>
-                              <p className="mt-1 text-[11px] uppercase text-muted-foreground">{r.status}</p>
-                              {isLister && r.status === "pending" ? (
-                                <ReviewAdditionalPaymentButtons requestId={String(r.id)} />
-                              ) : null}
-                            </div>
-                          ))
-                        )}
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
+                {requests.length > 0 ? (
+                  <Card className="border-border dark:border-gray-800 dark:bg-gray-900/60">
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-sm">Additional payment requests</CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        Accept or deny from the job or listing page (button: View request).
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-2 pt-0">
+                      {requests.map((r: any) => (
+                        <div key={r.id} className="rounded-lg border border-border p-3 dark:border-gray-700">
+                          <p className="text-sm font-medium">${(Number(r.amount_cents) / 100).toFixed(2)} requested</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{String(r.reason ?? "")}</p>
+                          <p className="mt-1 text-[11px] uppercase text-muted-foreground">{r.status}</p>
+                          {isLister && r.status === "pending" ? (
+                            <Button asChild size="sm" className="mt-2">
+                              <Link href={jobHref}>View request on job</Link>
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : null}
 
                 <DisputeThreadCard jobId={Number(job.id)} messages={messages} />
 
@@ -171,7 +180,8 @@ export default async function DisputesPage() {
                     <CardContent className="space-y-2">
                       <p className="text-sm">{String(latestMediation.proposal_text ?? "")}</p>
                       <p className="text-xs text-muted-foreground">
-                        Refund ${(Number(latestMediation.refund_cents ?? 0) / 100).toFixed(2)} • Additional payment ${(Number(latestMediation.additional_payment_cents ?? 0) / 100).toFixed(2)}
+                        Refund ${(Number(latestMediation.refund_cents ?? 0) / 100).toFixed(2)} • Additional payment $
+                        {(Number(latestMediation.additional_payment_cents ?? 0) / 100).toFixed(2)}
                       </p>
                       {(isLister || isCleaner) && <MediationVoteButtons jobId={Number(job.id)} />}
                     </CardContent>

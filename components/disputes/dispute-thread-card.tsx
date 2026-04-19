@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { submitDisputeMessage, type DisputeActionState } from "@/lib/actions/disputes";
 import type { SerializableDisputeMessage } from "@/lib/disputes/serialize-dispute-messages";
 import { DisputeSubmitButton } from "@/components/disputes/dispute-submit-button";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 
 export function DisputeThreadCard({
   jobId,
@@ -42,6 +43,23 @@ export function DisputeThreadCard({
                   </Badge>
                 ) : null}
                 <p className="mt-1 whitespace-pre-wrap text-sm">{m.body}</p>
+                {m.attachment_urls && m.attachment_urls.length > 0 ? (
+                  <ul className="mt-2 flex flex-wrap gap-2">
+                    {m.attachment_urls.map((url) => (
+                      <li key={url} className="h-16 w-16 overflow-hidden rounded-md border dark:border-gray-600">
+                        <a href={url} target="_blank" rel="noopener noreferrer" className="block h-full w-full">
+                          <OptimizedImage
+                            src={url}
+                            alt=""
+                            width={64}
+                            height={64}
+                            className="h-full w-full object-cover"
+                          />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             ))
           )}

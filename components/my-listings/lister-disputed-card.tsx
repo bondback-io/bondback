@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal } from "lucide-react";
 import { formatDisputePhaseLabel, formatDisputeReasonLabel } from "@/lib/my-listings/dispute-labels";
+import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
 
 export type DisputedJobInfo = {
   jobId: string | number;
@@ -23,6 +24,8 @@ export type DisputedJobInfo = {
   dispute_reason?: string | null;
   dispute_status?: string | null;
   dispute_opened_by?: string | null;
+  lister_id: string;
+  winner_id: string | null;
   disputed_at?: string | null;
   cleaner_confirmed_complete?: boolean | null;
   agreed_amount_cents?: number | null;
@@ -49,10 +52,15 @@ export function ListerDisputedCard({
 
   const phase = formatDisputePhaseLabel(job.status, job.dispute_status);
   const reason = formatDisputeReasonLabel(job.dispute_reason);
+  const openerRole = disputeOpenerRole({
+    dispute_opened_by: job.dispute_opened_by,
+    lister_id: job.lister_id,
+    winner_id: job.winner_id,
+  });
   const openedBy =
-    job.dispute_opened_by === "lister"
+    openerRole === "lister"
       ? "You opened this dispute"
-      : job.dispute_opened_by === "cleaner"
+      : openerRole === "cleaner"
         ? "Cleaner opened this dispute"
         : null;
 

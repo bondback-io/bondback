@@ -22,6 +22,8 @@ import {
 import {
   buildEscrowReleaseLegs,
   isValidJobTopUpAgreedCents,
+  isValidCleanerRequestTopUpCents,
+  isValidStoredTopUpAgreedCents,
   parseJobTopUpPayments,
   type JobTopUpPaymentRecord,
 } from "@/lib/job-top-up";
@@ -38,6 +40,7 @@ import { sameUuid, trimStr } from "@/lib/utils";
 import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
+import { disputeOpenedByLister } from "@/lib/jobs/dispute-opened-by";
 
 async function maybeNotifyCleanerJobWonStripePayoutSetup(params: {
   cleanerId: string;
@@ -763,7 +766,8 @@ export type CreateJobTopUpCheckoutSessionResult =
 export async function createJobTopUpCheckoutSession(
   jobId: string | number,
   topUpAgreedCents: number,
-  note: string | null
+  note: string | null,
+  options?: { flexibleCleanerRequest?: boolean }
 ): Promise<CreateJobTopUpCheckoutSessionResult> {
   const supabase = await createServerSupabaseClient();
   const {
@@ -772,7 +776,12 @@ export async function createJobTopUpCheckoutSession(
   if (!session) {
     return { ok: false, error: "You must be logged in." };
   }
-  if (!isValidJobTopUpAgreedCents(topUpAgreedCents)) {
+  const flexible = options?.flexibleCleanerRequest === true;
+  if (flexible) {
+    if (!isValidCleanerRequestTopUpCents(topUpAgreedCents)) {
+      return { ok: false, error: "Invalid top-up amount for this request." };
+    }
+  } else if (!isValidJobTopUpAgreedCents(topUpAgreedCents)) {
     return {
       ok: false,
       error: "Top-up must be at least $20 and in $10 increments.",
@@ -849,8 +858,16 @@ export async function createJobTopUpCheckoutSession(
     return { ok: false, error: "Pay & Start Job first before adding a top-up." };
   }
   const st = String(row.status ?? "");
-  if (st !== "in_progress" && st !== "completed_pending_approval") {
-    return { ok: false, error: "Top-up is only available while the job is in progress or awaiting your release." };
+  const topUpOkStatuses = flexible
+    ? ["in_progress", "completed_pending_approval", "disputed", "dispute_negotiating"]
+    : ["in_progress", "completed_pending_approval"];
+  if (!topUpOkStatuses.includes(st)) {
+    return {
+      ok: false,
+      error: flexible
+        ? "Top-up is not available for this job in its current state."
+        : "Top-up is only available while the job is in progress or awaiting your release.",
+    };
   }
 
   const { data: listing, error: listingError } = await supabase
@@ -929,7 +946,7 @@ export async function fulfillJobTopUpFromSession(
     }
     const numericJobId = Number(jobIdMeta);
     const agreedFromMeta = Math.floor(Number(cs.metadata?.top_up_agreed_cents ?? 0));
-    if (!isValidJobTopUpAgreedCents(agreedFromMeta)) {
+    if (!isValidStoredTopUpAgreedCents(agreedFromMeta)) {
       return { ok: false, error: "Invalid top-up amount on session." };
     }
 
@@ -982,7 +999,9 @@ export async function fulfillJobTopUpFromSession(
       return { ok: false, error: "Funds were already released." };
     }
     const st = String(j.status ?? "");
-    if (st !== "in_progress" && st !== "completed_pending_approval") {
+    if (
+      !["in_progress", "completed_pending_approval", "disputed", "dispute_negotiating"].includes(st)
+    ) {
       return { ok: false, error: "Job is not in a state that accepts top-ups." };
     }
 
@@ -2651,7 +2670,7 @@ export async function openDispute(
     dispute_reason: fullReason,
     dispute_photos: photoUrls, // legacy
     dispute_evidence: photoUrls,
-    dispute_opened_by: isLister ? "lister" : "cleaner",
+    dispute_opened_by: session.user.id,
     disputed_at: nowIso,
     dispute_status: "disputed",
     /** Pause auto-release until dispute is resolved */
@@ -2662,27 +2681,10 @@ export async function openDispute(
       : {}),
   };
 
-  let { error: updateError } = await supabase
+  const { error: updateError } = await supabase
     .from("jobs")
     .update(updatePayload as Partial<JobRow> as never)
     .eq("id", jobId);
-
-  // Back-compat for older DBs where `dispute_opened_by` is uuid (not text role).
-  if (
-    updateError &&
-    updateError.code === "22P02" &&
-    String(updateError.message ?? "").toLowerCase().includes("dispute_opened_by")
-  ) {
-    const legacyPayload = {
-      ...updatePayload,
-      dispute_opened_by: session.user.id,
-    };
-    const retry = await supabase
-      .from("jobs")
-      .update(legacyPayload as Partial<JobRow> as never)
-      .eq("id", jobId);
-    updateError = retry.error;
-  }
 
   if (updateError) {
     return { ok: false, error: updateError.message };
@@ -2838,11 +2840,11 @@ export async function acceptRefund(jobId: number): Promise<AcceptRefundResult> {
     .maybeSingle();
 
   if (fetchError || !job) return { ok: false, error: "Job not found." };
-  const j = job as { lister_id: string; winner_id: string | null; status: string; dispute_opened_by?: string; proposed_refund_amount?: number | null };
+  const j = job as { lister_id: string; winner_id: string | null; status: string; dispute_opened_by?: string | null; proposed_refund_amount?: number | null };
   if (j.status !== "dispute_negotiating" && j.status !== "disputed") {
     return { ok: false, error: "This job is not in refund negotiation." };
   }
-  if (j.dispute_opened_by !== "lister") return { ok: false, error: "Only the lister can propose a refund; this flow is for the cleaner to accept." };
+  if (!disputeOpenedByLister(j)) return { ok: false, error: "Only the lister can propose a refund; this flow is for the cleaner to accept." };
   if (session.user.id !== j.winner_id) return { ok: false, error: "Only the cleaner can accept the refund." };
 
   const refundCents = j.proposed_refund_amount ?? 0;
@@ -3132,7 +3134,7 @@ export async function respondToDispute(
     return { ok: false, error: "This job is not in dispute." };
   }
 
-  const openedByLister = j.dispute_opened_by === "lister";
+  const openedByLister = disputeOpenedByLister(j);
   const isLister = session.user.id === j.lister_id;
   const isCleaner = session.user.id === j.winner_id;
   if (openedByLister && !isCleaner) {
