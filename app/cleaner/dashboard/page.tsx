@@ -45,6 +45,7 @@ import {
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
+import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
 import { bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
@@ -126,7 +127,18 @@ async function CleanerDashboardContent() {
       "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
     )
     .eq("winner_id", user.id)
-    .in("status", ["accepted", "in_progress", "completed", "completed_pending_approval", "cancelled"])
+    .in("status", [
+      "accepted",
+      "in_progress",
+      "completed",
+      "completed_pending_approval",
+      "cancelled",
+      "refunded",
+      "partially_refunded",
+      "in_review",
+      "disputed",
+      "dispute_negotiating",
+    ])
     .order("created_at", { ascending: false });
 
   const jobs = (jobsData ?? []) as JobRow[];
@@ -191,7 +203,7 @@ async function CleanerDashboardContent() {
     }
   }
 
-  const completedJobs = jobs.filter((j) => j.status === "completed");
+  const completedJobs = jobs.filter((j) => isDashboardCompletedJob(j));
   const cancelledJobs = jobs.filter((j) => j.status === "cancelled");
 
   const now = new Date();

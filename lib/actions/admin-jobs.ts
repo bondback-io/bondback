@@ -140,10 +140,10 @@ export async function refundJob(
 
     const nowIso = new Date().toISOString();
     const refundStatus = refund.status === "succeeded" ? "succeeded" : refund.status === "failed" ? "failed" : "pending";
-    const isFullRefund = false; // Could compare amount to job total if we had agreed_amount on job
-    const statusUpdate = refundStatus === "succeeded" ? "refunded" : j.status;
+    /** Use `completed` so lister/cleaner dashboards show the job under Completed (not legacy `refunded`). */
+    const statusUpdate = refundStatus === "succeeded" ? "completed" : j.status;
 
-    const updatePayload = {
+    const updatePayload: Record<string, unknown> = {
       refund_amount: amount,
       refund_status: refundStatus,
       status: statusUpdate,
@@ -151,6 +151,9 @@ export async function refundJob(
       resolution_at: nowIso,
       resolution_by: (await supabase.auth.getUser()).data.user?.id ?? null,
     };
+    if (refundStatus === "succeeded") {
+      updatePayload.dispute_status = "completed";
+    }
 
     const { error: updateError } = await supabase
       .from("jobs")
@@ -172,6 +175,9 @@ export async function refundJob(
 
     revalidatePath("/admin/disputes");
     revalidatePath(`/jobs/${jobId}`);
+    revalidatePath("/lister/dashboard");
+    revalidatePath("/cleaner/dashboard");
+    revalidatePath("/dashboard");
     return { ok: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Stripe refund failed.";

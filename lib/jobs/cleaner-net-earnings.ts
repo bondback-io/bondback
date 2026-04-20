@@ -46,13 +46,18 @@ export function listerRefundCentsFromDisputeJob(job: JobRowForCleanerNet): numbe
  * What the cleaner actually receives from the job escrow: full bid while in progress;
  * after completion, agreed/bid minus any recorded lister refund from disputes.
  */
+function jobIsSettledForNet(job: JobRowForCleanerNet): boolean {
+  const s = String(job.status ?? "").toLowerCase();
+  return s === "completed" || s === "refunded" || s === "partially_refunded";
+}
+
 export function cleanerNetEarnedCents(
   job: JobRowForCleanerNet,
   listingCurrentLowestBidCents: number | null | undefined
 ): number {
   const gross = adminJobGrossCents(job, listingCurrentLowestBidCents);
   if (gross <= 0) return 0;
-  if (String(job.status ?? "") !== "completed") return gross;
+  if (!jobIsSettledForNet(job)) return gross;
   const refund = listerRefundCentsFromDisputeJob(job);
   return refund >= 1 ? Math.max(0, gross - refund) : gross;
 }
@@ -67,7 +72,7 @@ export function listerNetSettledSpendCents(
 ): number {
   const gross = adminJobGrossCents(job, listingCurrentLowestBidCents);
   if (gross <= 0) return 0;
-  if (String(job.status ?? "") !== "completed") return gross;
+  if (!jobIsSettledForNet(job)) return gross;
   const refund = listerRefundCentsFromDisputeJob(job);
   return refund >= 1 ? Math.max(0, gross - refund) : gross;
 }

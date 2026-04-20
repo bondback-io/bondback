@@ -45,6 +45,23 @@ export function isDisputeHubCaseClosed(job: {
 }
 
 /** Fields to set on jobs when escrow pays out and an open dispute case should be archived. */
+/**
+ * Jobs that should appear under “Completed” on lister/cleaner dashboards — includes dispute exits
+ * where `status` was left as `refunded` or legacy rows with `dispute_status: completed` only.
+ */
+export function isDashboardCompletedJob(job: {
+  status?: string | null;
+  dispute_status?: string | null;
+}): boolean {
+  const s = String(job.status ?? "").toLowerCase();
+  const ds = String(job.dispute_status ?? "").toLowerCase();
+  if (s === "cancelled" || ds === "cancelled") return false;
+  if (s === "completed") return true;
+  if (s === "refunded" || s === "partially_refunded") return true;
+  if (ds === "completed") return true;
+  return false;
+}
+
 export function disputeAutoClosePatchOnPaymentRelease(job: {
   disputed_at?: string | null;
   dispute_reason?: string | null;

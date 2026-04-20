@@ -46,6 +46,8 @@ import {
   resolveActiveRoleFromProfile,
 } from "@/lib/profile-roles";
 import { listerNetSettledSpendCents } from "@/lib/jobs/cleaner-net-earnings";
+import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
+import type { SupabaseClient } from "@supabase/supabase-js";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -138,7 +140,7 @@ async function ListerDashboardContent() {
       !cancelledJobListingIds.has(String(l.id))
   );
 
-  const completedJobs = jobs.filter((j) => j.status === "completed");
+  const completedJobs = jobs.filter((j) => isDashboardCompletedJob(j));
   const activeJobs = jobs.filter(
     (j) =>
       j.status === "accepted" ||
