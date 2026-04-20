@@ -77,6 +77,48 @@ async function maybeNotifyCleanerJobWonStripePayoutSetup(params: {
   }
 }
 
+/** Race: concurrent auction close / bid accept runs the same insert; Postgres returns 23505 after unique index. */
+function isPostgresUniqueViolation(
+  error: { code?: string; message?: string } | null | undefined
+): boolean {
+  if (!error) return false;
+  if (String(error.code) === "23505") return true;
+  const m = String(error.message ?? "").toLowerCase();
+  return (
+    m.includes("duplicate key") ||
+    m.includes("unique constraint") ||
+    m.includes("jobs_one_non_cancelled_per_listing")
+  );
+}
+
+async function applyAcceptedBidListingSideEffects(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  listingId: string,
+  acceptedBidId: string
+) {
+  const acceptedId = trimStr(acceptedBidId);
+  if (!acceptedId) return;
+  await admin
+    .from("bids")
+    .update({ status: "cancelled" } as never)
+    .eq("listing_id", listingId)
+    .neq("id", acceptedId);
+  await admin.from("bids").update({ status: "accepted" } as never).eq("id", acceptedId);
+  await admin.from("listings").update({ status: "ended" } as never).eq("id", listingId);
+}
+
+function revalidateAfterListerAcceptedBid(listingId: string, jobId: number | string) {
+  revalidateJobsBrowseCaches();
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath(`/jobs/${listingId}`);
+  revalidatePath(`/listings/${listingId}`);
+  revalidatePath("/my-listings");
+  revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+}
+
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 const DEFAULT_CLEANER_CHECKLIST_LABELS = [
   "Vacuum Apartment/House",
@@ -302,6 +344,11 @@ export async function finalizeBidAcceptanceCore(params: {
     return { ok: false, error: "Invalid bid amount." };
   }
 
+  const acceptedId = trimStr(params.acceptedBidId);
+  if (!acceptedId) {
+    return { ok: false, error: "Missing accepted bid." };
+  }
+
   const { data: inserted, error: insertError } = await admin
     .from("jobs")
     .insert({
@@ -316,28 +363,37 @@ export async function finalizeBidAcceptanceCore(params: {
     .select("id")
     .maybeSingle();
 
+  let jobId: number | string;
   if (insertError || !inserted) {
+    if (insertError && isPostgresUniqueViolation(insertError)) {
+      const { data: racedJob } = await admin
+        .from("jobs")
+        .select("id, winner_id")
+        .eq("listing_id", listRow.id)
+        .neq("status", "cancelled")
+        .maybeSingle();
+      const rj = racedJob as { id: number | string; winner_id: string | null } | null;
+      if (rj && sameUuid(rj.winner_id, cleanerId)) {
+        await applyAcceptedBidListingSideEffects(admin, params.listingId, params.acceptedBidId);
+        jobId = rj.id;
+        const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
+        revalidateAfterListerAcceptedBid(params.listingId, jobId);
+        return { ok: true, jobId };
+      }
+      if (rj) {
+        return { ok: false, error: "A job already exists for this listing." };
+      }
+    }
     return {
       ok: false,
       error: insertError?.message ?? "Failed to create job.",
     };
   }
 
-  const jobId = (inserted as { id: number | string }).id;
+  jobId = (inserted as { id: number | string }).id;
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
-  const acceptedId = trimStr(params.acceptedBidId);
-  if (!acceptedId) {
-    return { ok: false, error: "Missing accepted bid." };
-  }
-  await admin
-    .from("bids")
-    .update({ status: "cancelled" } as never)
-    .eq("listing_id", params.listingId)
-    .neq("id", acceptedId);
-  await admin.from("bids").update({ status: "accepted" } as never).eq("id", acceptedId);
-
-  await admin.from("listings").update({ status: "ended" } as never).eq("id", params.listingId);
+  await applyAcceptedBidListingSideEffects(admin, params.listingId, params.acceptedBidId);
 
   const listingTitle = params.listingTitle ?? listRow.title ?? null;
   try {
@@ -368,15 +424,7 @@ export async function finalizeBidAcceptanceCore(params: {
     listingTitle,
   });
 
-  revalidateJobsBrowseCaches();
-  revalidatePath("/jobs");
-  revalidatePath(`/jobs/${numericJobId}`);
-  revalidatePath(`/jobs/${params.listingId}`);
-  revalidatePath(`/listings/${params.listingId}`);
-  revalidatePath("/my-listings");
-  revalidatePath("/dashboard");
-  revalidatePath("/lister/dashboard");
-  revalidatePath("/cleaner/dashboard");
+  revalidateAfterListerAcceptedBid(params.listingId, jobId);
 
   return { ok: true, jobId };
 }
@@ -470,20 +518,46 @@ export async function secureJobAtPrice(
     .select("id")
     .maybeSingle();
 
-  if (insertError || !inserted) {
-    return {
-      ok: false,
-      error: insertError?.message ?? "Failed to secure job.",
-    };
-  }
-
-  const jobId = (inserted as { id: number | string }).id;
-  const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
-
   const admin = createSupabaseAdminClient();
   const listingTitle = listRow.title ?? null;
   const buyNowCents = listRow.buy_now_cents!;
   const buyNowDisplay = `$${(buyNowCents / 100).toFixed(2)}`;
+
+  let jobId: number | string;
+  let skipBuyNowWinnerNotifications = false;
+
+  if (insertError || !inserted) {
+    if (insertError && isPostgresUniqueViolation(insertError)) {
+      const db = (admin ?? supabase) as SupabaseClient<Database>;
+      const { data: raced } = await db
+        .from("jobs")
+        .select("id, winner_id")
+        .eq("listing_id", listRow.id)
+        .neq("status", "cancelled")
+        .maybeSingle();
+      const rj = raced as { id: number | string; winner_id: string | null } | null;
+      if (rj && sameUuid(rj.winner_id, session.user.id)) {
+        jobId = rj.id;
+        skipBuyNowWinnerNotifications = true;
+      } else if (rj) {
+        return { ok: false, error: "This job is already taken." };
+      } else {
+        return {
+          ok: false,
+          error: insertError?.message ?? "Failed to secure job.",
+        };
+      }
+    } else {
+      return {
+        ok: false,
+        error: insertError?.message ?? "Failed to secure job.",
+      };
+    }
+  } else {
+    jobId = (inserted as { id: number | string }).id;
+  }
+
+  const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
   if (admin) {
     const { data: loserBidRows } = await admin
@@ -524,25 +598,27 @@ export async function secureJobAtPrice(
       .eq("status", "live");
   }
 
-  await createNotification(
-    listRow.lister_id,
-    "job_created",
-    numericJobId,
-    "A cleaner secured this job at your fixed price. Pay & Start Job to hold funds in escrow and start the job."
-  );
-  await createNotification(
-    session.user.id,
-    "job_accepted",
-    numericJobId,
-    "You secured this job. The lister will pay and start the job to hold funds in escrow; then you can begin.",
-    { listingTitle }
-  );
-  await maybeNotifyCleanerJobWonStripePayoutSetup({
-    cleanerId: session.user.id,
-    jobId: numericJobId,
-    listingId: listRow.id,
-    listingTitle,
-  });
+  if (!skipBuyNowWinnerNotifications) {
+    await createNotification(
+      listRow.lister_id,
+      "job_created",
+      numericJobId,
+      "A cleaner secured this job at your fixed price. Pay & Start Job to hold funds in escrow and start the job."
+    );
+    await createNotification(
+      session.user.id,
+      "job_accepted",
+      numericJobId,
+      "You secured this job. The lister will pay and start the job to hold funds in escrow; then you can begin.",
+      { listingTitle }
+    );
+    await maybeNotifyCleanerJobWonStripePayoutSetup({
+      cleanerId: session.user.id,
+      jobId: numericJobId,
+      listingId: listRow.id,
+      listingTitle,
+    });
+  }
 
   revalidateJobsBrowseCaches();
   revalidatePath("/jobs");

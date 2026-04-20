@@ -21,6 +21,10 @@ type ResolveFilter = { listingId?: string };
  * Closes live listings whose `end_time` has passed: assigns the lowest **active** bid to a new job
  * (same path as lister “Accept bid”), or sets `expired` when there were no bids, or `ended` when
  * bids exist but none are active (edge case) or assignment fails.
+ *
+ * **Concurrency:** `applyListingAuctionOutcomes`, the listing countdown (`resolveAuctionEndForListing`),
+ * and cron can run this for the same listing at once. Job creation uses a DB unique index + insert
+ * conflict handling in {@link finalizeBidAcceptanceCore} so only one non-cancelled job per listing exists.
  */
 export async function resolveExpiredLiveAuctions(
   filter?: ResolveFilter
