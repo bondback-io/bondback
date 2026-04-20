@@ -85,6 +85,27 @@ export function isDashboardCompletedJob(job: {
   return false;
 }
 
+type DashboardJobPhaseFields = Parameters<typeof isDashboardCompletedJob>[0];
+
+/**
+ * Jobs that belong in “Active jobs” on lister/cleaner dashboards — includes open disputes and
+ * lister-review / escrow pipeline; excludes cancelled and anything already dashboard-complete.
+ * (Without this, `disputed` / `in_review` / `dispute_negotiating` rows disappear from both Active and Completed.)
+ */
+export function isDashboardActivePipelineJob(job: DashboardJobPhaseFields & { status?: string | null }): boolean {
+  if (isDashboardCompletedJob(job)) return false;
+  const s = String(job.status ?? "");
+  if (s === "cancelled") return false;
+  return (
+    s === "accepted" ||
+    s === "in_progress" ||
+    s === "completed_pending_approval" ||
+    s === "disputed" ||
+    s === "in_review" ||
+    s === "dispute_negotiating"
+  );
+}
+
 /** Cleaner earnings / payout UI: settled job (may lack `payment_released_at` after partial refund). */
 export function isCleanerEarningsPaidJob(job: {
   status?: string | null;

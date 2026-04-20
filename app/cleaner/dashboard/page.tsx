@@ -45,7 +45,10 @@ import {
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
-import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
+import {
+  isDashboardActivePipelineJob,
+  isDashboardCompletedJob,
+} from "@/lib/jobs/dispute-hub-helpers";
 import { bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
@@ -146,14 +149,9 @@ async function CleanerDashboardContent() {
     });
   }
 
-  const activeJobs = jobs.filter(
-    (j) =>
-      j.status === "accepted" ||
-      j.status === "in_progress" ||
-      j.status === "completed_pending_approval"
-  );
+  const activeJobs = jobs.filter((j) => isDashboardActivePipelineJob(j));
 
-  const inProgressJobIds = activeJobs
+  const inProgressJobIds = jobs
     .filter((j) => j.status === "in_progress")
     .map((j) => Number(j.id))
     .filter((id) => Number.isFinite(id) && id > 0);

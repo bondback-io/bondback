@@ -158,6 +158,14 @@ function listerActiveJobCopy(item: ListerActiveJobItem): {
         "border-sky-400/70 bg-sky-500/15 text-sky-950 dark:border-sky-600/50 dark:bg-sky-950/50 dark:text-sky-100",
     };
   }
+  if (status === "disputed" || status === "dispute_negotiating" || status === "in_review") {
+    return {
+      label: "Dispute",
+      hint: "Open the job or Disputes hub to respond",
+      badgeClass:
+        "border-amber-400/70 bg-amber-500/15 text-amber-950 dark:border-amber-600/50 dark:bg-amber-950/50 dark:text-amber-100",
+    };
+  }
   return {
     label: status.replace(/_/g, " "),
     hint: null,

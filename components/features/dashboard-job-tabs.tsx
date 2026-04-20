@@ -5,6 +5,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ActiveJobCard } from "@/components/features/active-job-card";
 import type { ListingRow } from "@/lib/listings";
+import {
+  isDashboardActivePipelineJob,
+  isDashboardCompletedJob,
+} from "@/lib/jobs/dispute-hub-helpers";
 
 type JobItem = {
   id: string | number;
@@ -12,7 +16,23 @@ type JobItem = {
   status: string;
   winner_id?: string | null;
   cleaner_id?: string | null;
+  dispute_status?: string | null;
+  dispute_resolution?: string | null;
+  refund_amount?: number | null;
+  payment_released_at?: string | null;
+  completed_at?: string | null;
 };
+
+function jobForDashboardHelpers(job: JobItem) {
+  return {
+    status: job.status,
+    dispute_status: job.dispute_status ?? null,
+    dispute_resolution: job.dispute_resolution ?? null,
+    refund_amount: job.refund_amount ?? null,
+    payment_released_at: job.payment_released_at ?? null,
+    completed_at: job.completed_at ?? null,
+  };
+}
 
 export type DashboardJobTabsProps = {
   jobs: { job: JobItem; listing: ListingRow | null; daysLeft: number | null }[];
@@ -21,11 +41,8 @@ export type DashboardJobTabsProps = {
   defaultTab?: "all" | "active" | "completed" | "disputed";
 };
 
-const DISPUTED_STATUSES = ["disputed", "in_review", "dispute_negotiating"];
-const ACTIVE_STATUSES = ["accepted", "in_progress"];
-
 function isDisputed(status: string) {
-  return DISPUTED_STATUSES.includes(status);
+  return ["disputed", "in_review", "dispute_negotiating"].includes(status);
 }
 
 export function DashboardJobTabs({
@@ -36,9 +53,11 @@ export function DashboardJobTabs({
   const [value, setValue] = useState<string>(defaultTab);
 
   const { active, completed, disputed } = useMemo(() => {
-    const active = jobs.filter(({ job }) => ACTIVE_STATUSES.includes(job.status));
-    const completed = jobs.filter(({ job }) => job.status === "completed");
-    const disputed = jobs.filter(({ job }) => isDisputed(job.status));
+    const active = jobs.filter(({ job }) => isDashboardActivePipelineJob(jobForDashboardHelpers(job)));
+    const completed = jobs.filter(({ job }) => isDashboardCompletedJob(jobForDashboardHelpers(job)));
+    const disputed = jobs.filter(
+      ({ job }) => isDisputed(job.status) && !isDashboardCompletedJob(jobForDashboardHelpers(job))
+    );
     return { active, completed, disputed };
   }, [jobs]);
 
