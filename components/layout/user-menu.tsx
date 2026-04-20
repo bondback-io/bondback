@@ -93,6 +93,7 @@ function MobileCollapsibleGroup({
   icon: Icon,
   open,
   onToggle,
+  headerHref,
   children,
 }: {
   id: string;
@@ -100,33 +101,72 @@ function MobileCollapsibleGroup({
   icon: LucideIcon;
   open: boolean;
   onToggle: () => void;
+  /** When set, the label row navigates here; chevron still expands/collapses. */
+  headerHref?: string;
   children: React.ReactNode;
 }) {
+  const chevron = (
+    <ChevronDown
+      className={cn(
+        "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-300 ease-out dark:text-gray-400",
+        open && "rotate-180"
+      )}
+      aria-hidden
+    />
+  );
+
   return (
     <div className="flex flex-col overflow-hidden rounded-xl">
-      <button
-        type="button"
-        id={`${id}-trigger`}
-        aria-expanded={open}
-        aria-controls={`${id}-panel`}
-        onClick={onToggle}
-        className={cn(
-          MOBILE_ROW_CLASS,
-          "justify-between text-foreground hover:bg-muted dark:text-gray-100 dark:hover:bg-gray-800"
-        )}
-      >
-        <span className="flex min-w-0 items-center gap-3">
-          <Icon className="h-5 w-5 shrink-0" aria-hidden />
-          <span className="truncate">{label}</span>
-        </span>
-        <ChevronDown
+      {headerHref ? (
+        <div className="flex w-full min-w-0 items-stretch overflow-hidden rounded-xl text-foreground hover:bg-muted dark:text-gray-100 dark:hover:bg-gray-800">
+          <SheetClose asChild>
+            <Link
+              href={headerHref}
+              prefetch
+              className={cn(
+                MOBILE_ROW_CLASS,
+                "w-auto min-w-0 flex-1 justify-start rounded-r-none rounded-l-xl border-r border-border/60 py-3 dark:border-gray-700"
+              )}
+              aria-label={label}
+            >
+              <Icon className="h-5 w-5 shrink-0" aria-hidden />
+              <span className="truncate">{label}</span>
+            </Link>
+          </SheetClose>
+          <button
+            type="button"
+            id={`${id}-trigger`}
+            aria-expanded={open}
+            aria-controls={`${id}-panel`}
+            aria-label={`${open ? "Collapse" : "Expand"} ${label} submenu`}
+            onClick={onToggle}
+            className={cn(
+              MOBILE_ROW_CLASS,
+              "w-auto shrink-0 justify-center rounded-l-none rounded-r-xl px-3.5"
+            )}
+          >
+            {chevron}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          id={`${id}-trigger`}
+          aria-expanded={open}
+          aria-controls={`${id}-panel`}
+          onClick={onToggle}
           className={cn(
-            "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-300 ease-out dark:text-gray-400",
-            open && "rotate-180"
+            MOBILE_ROW_CLASS,
+            "justify-between text-foreground hover:bg-muted dark:text-gray-100 dark:hover:bg-gray-800"
           )}
-          aria-hidden
-        />
-      </button>
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <Icon className="h-5 w-5 shrink-0" aria-hidden />
+            <span className="truncate">{label}</span>
+          </span>
+          {chevron}
+        </button>
+      )}
       <div
         id={`${id}-panel`}
         role="region"
@@ -149,6 +189,7 @@ function DesktopCollapsibleGroup({
   icon: Icon,
   open,
   onToggle,
+  headerHref,
   children,
 }: {
   id: string;
@@ -156,35 +197,75 @@ function DesktopCollapsibleGroup({
   icon: LucideIcon;
   open: boolean;
   onToggle: () => void;
+  headerHref?: string;
   children: React.ReactNode;
 }) {
+  const chevron = (
+    <ChevronDown
+      className={cn(
+        "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-out",
+        open && "rotate-180"
+      )}
+      aria-hidden
+    />
+  );
+
   return (
     <div className="flex flex-col">
-      <button
-        type="button"
-        id={`${id}-trigger`}
-        aria-expanded={open}
-        aria-controls={`${id}-panel`}
-        onPointerDown={(e) => e.preventDefault()}
-        onClick={(e) => {
-          e.preventDefault();
-          onToggle();
-        }}
-        className={cn(
-          "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-medium outline-none transition-colors duration-200",
-          "hover:bg-muted/80 focus-visible:bg-muted dark:hover:bg-gray-800 dark:focus-visible:bg-gray-800 dark:text-gray-100"
-        )}
-      >
-        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-        <ChevronDown
+      {headerHref ? (
+        <div className="flex w-full min-w-0 items-stretch overflow-hidden rounded-lg hover:bg-muted/80 dark:hover:bg-gray-800">
+          <Link
+            href={headerHref}
+            prefetch
+            className={cn(
+              "flex min-w-0 flex-1 cursor-pointer select-none items-center gap-2.5 rounded-l-lg px-2.5 py-2.5 text-sm font-medium outline-none transition-colors duration-200",
+              "focus-visible:bg-muted dark:focus-visible:bg-gray-800 dark:text-gray-100"
+            )}
+            aria-label={label}
+          >
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+          </Link>
+          <button
+            type="button"
+            id={`${id}-trigger`}
+            aria-expanded={open}
+            aria-controls={`${id}-panel`}
+            aria-label={`${open ? "Collapse" : "Expand"} ${label} submenu`}
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.preventDefault();
+              onToggle();
+            }}
+            className={cn(
+              "flex shrink-0 cursor-pointer select-none items-center justify-center rounded-r-lg px-2 py-2.5 outline-none transition-colors duration-200",
+              "focus-visible:bg-muted dark:focus-visible:bg-gray-800"
+            )}
+          >
+            {chevron}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          id={`${id}-trigger`}
+          aria-expanded={open}
+          aria-controls={`${id}-panel`}
+          onPointerDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.preventDefault();
+            onToggle();
+          }}
           className={cn(
-            "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-out",
-            open && "rotate-180"
+            "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-medium outline-none transition-colors duration-200",
+            "hover:bg-muted/80 focus-visible:bg-muted dark:hover:bg-gray-800 dark:focus-visible:bg-gray-800 dark:text-gray-100"
           )}
-          aria-hidden
-        />
-      </button>
+        >
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+          {chevron}
+        </button>
+      )}
       <div
         id={`${id}-panel`}
         role="region"
@@ -508,6 +589,7 @@ export function UserMenu({ session }: UserMenuProps) {
                     label="Dashboard"
                     icon={LayoutDashboard}
                     open={mobileDashboardOpen}
+                    headerHref="/dashboard"
                     onToggle={() => {
                       setMobileDashboardOpen((v) => !v);
                       setMobileHelpOpen(false);
@@ -611,6 +693,7 @@ export function UserMenu({ session }: UserMenuProps) {
                   label="Help & Support"
                   icon={HelpCircle}
                   open={mobileHelpOpen}
+                  headerHref="/help"
                   onToggle={() => {
                     setMobileHelpOpen((v) => !v);
                     setMobileDashboardOpen(false);
@@ -750,6 +833,7 @@ export function UserMenu({ session }: UserMenuProps) {
               label="Dashboard"
               icon={LayoutDashboard}
               open={desktopDashboardOpen}
+              headerHref="/dashboard"
               onToggle={() => {
                 setDesktopDashboardOpen((v) => !v);
                 setDesktopHelpOpen(false);
@@ -844,6 +928,7 @@ export function UserMenu({ session }: UserMenuProps) {
             label="Help & Support"
             icon={HelpCircle}
             open={desktopHelpOpen}
+            headerHref="/help"
             onToggle={() => {
               setDesktopHelpOpen((v) => !v);
               setDesktopDashboardOpen(false);

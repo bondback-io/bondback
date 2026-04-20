@@ -115,10 +115,15 @@ async function CleanerDashboardContent() {
       profile as { stripe_connect_id?: string | null; stripe_onboarding_complete?: boolean | null }
     );
 
-  const { data: jobsData } = await supabase
+  /**
+   * RLS can hide assigned jobs once the listing leaves marketplace-visible states; service-role
+   * read is scoped to `winner_id = auth user` only (same boundary as listing snapshots below).
+   */
+  const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+  const { data: jobsData } = await jobsClient
     .from("jobs")
     .select(
-      "id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+      "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
     )
     .eq("winner_id", user.id)
     .in("status", ["accepted", "in_progress", "completed", "completed_pending_approval", "cancelled"])
@@ -129,7 +134,9 @@ async function CleanerDashboardContent() {
 
   let listingsMap = new Map<string, ListingRow>();
   if (listingIds.length > 0) {
-    const { data: listingsData } = await supabase
+    /** Bypass RLS for listing snapshots tied to this cleaner's jobs (see earnings page). */
+    const listingsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+    const { data: listingsData } = await listingsClient
       .from("listings")
       .select(LISTING_FULL_SELECT)
       .in("id", listingIds as string[]);
@@ -509,7 +516,7 @@ async function CleanerDashboardContent() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="line-clamp-2 text-base font-semibold text-foreground dark:text-gray-100 md:line-clamp-1">
-                          {listing?.title ?? `Job #${job.id}`}
+                          {listing?.title?.trim() || job.title?.trim() || `Job #${job.id}`}
                         </p>
                         <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
                           <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -581,7 +588,7 @@ async function CleanerDashboardContent() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="line-clamp-2 text-base font-semibold text-foreground dark:text-gray-100 md:line-clamp-1">
-                          {listing?.title ?? `Job #${job.id}`}
+                          {listing?.title?.trim() || job.title?.trim() || `Job #${job.id}`}
                         </p>
                         <p className="mt-0.5 text-sm text-muted-foreground dark:text-gray-400">
                           Cancelled by lister

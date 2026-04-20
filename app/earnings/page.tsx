@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { EarningsPageClient } from "@/components/features/earnings-page-client";
 import { getEffectivePayoutSchedule, getNextPayoutEstimate, formatPayoutScheduleLabel } from "@/lib/payout-schedule";
@@ -24,6 +26,7 @@ type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = {
   id: number;
   listing_id: string;
+  title?: string | null;
   winner_id: string | null;
   status: string;
   created_at: string;
@@ -68,10 +71,12 @@ export default async function EarningsPage() {
       .replace(/[^a-zA-Z0-9-_]/g, "_")
       .slice(0, 50) || "User";
 
-  const { data: jobsData } = await supabase
+  /** Same RLS gap as listings: completed jobs may not be visible on the user client. */
+  const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+  const { data: jobsData } = await jobsClient
     .from("jobs")
     .select(
-      "id, listing_id, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+      "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
     )
     .eq("winner_id", sessionData.user.id)
     .in("status", [
@@ -87,14 +92,28 @@ export default async function EarningsPage() {
   let listingsMap = new Map<string, ListingRow>();
 
   if (listingIds.length > 0) {
-    const { data: listingsData } = await supabase
+    /**
+     * User-scoped Supabase client often returns no listing rows for won jobs when RLS or listing
+     * status no longer matches marketplace helpers — but gross earnings still need
+     * `current_lowest_bid_cents` when `agreed_amount_cents` is unset. Load listings for IDs that
+     * already appear on this cleaner's jobs only (same idea as cleaner dashboard lister profiles).
+     */
+    const listingsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+    const { data: listingsData } = await listingsClient
       .from("listings")
       .select("id, title, current_lowest_bid_cents")
-      .in("id", listingIds);
-    (listingsData ?? []).forEach((l: any) => {
+      .in("id", listingIds as string[]);
+    (listingsData ?? []).forEach((l: { id: string }) => {
       listingsMap.set(l.id, l as ListingRow);
     });
   }
+
+  const earningsRowTitle = (job: JobRow, listing?: ListingRow) => {
+    const fromListing = (listing as { title?: string | null } | undefined)?.title;
+    const raw = (typeof fromListing === "string" && fromListing.trim() ? fromListing : null) ?? job.title;
+    const s = typeof raw === "string" ? raw.trim() : "";
+    return s.length > 0 ? s : `Job #${job.id}`;
+  };
 
   type PayoutHistoryRow = {
     jobId: number;
@@ -119,7 +138,7 @@ export default async function EarningsPage() {
     const releasedAt = job.payment_released_at!;
     payoutHistory.push({
       jobId: job.id,
-      title: listing?.title ?? `Job #${job.id}`,
+      title: earningsRowTitle(job, listing),
       grossCents,
       feeCents,
       netCents,
@@ -166,7 +185,7 @@ export default async function EarningsPage() {
       job.status === "completed"
         ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
         : grossCents;
-    const title = listing?.title ?? `Job #${job.id}`;
+    const title = earningsRowTitle(job, listing);
 
     let status: "Pending" | "Processing" | "Paid" = "Pending";
     if (job.status === "completed") status = "Paid";
@@ -279,7 +298,7 @@ export default async function EarningsPage() {
       job.status === "completed"
         ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
         : grossCents;
-    const title = listing?.title ?? `Job #${job.id}`;
+    const title = earningsRowTitle(job, listing);
 
     const updatedAt = job.updated_at ? new Date(job.updated_at).getTime() : 0;
     const confirmedAt = job.cleaner_confirmed_at

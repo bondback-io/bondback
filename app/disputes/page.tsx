@@ -2,18 +2,16 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DisputeJobCaseSummary } from "@/components/disputes/dispute-job-case-summary";
-import { DisputeAuditTimeline } from "@/components/disputes/dispute-audit-timeline";
-import { DisputeThreadCard } from "@/components/disputes/dispute-thread-card";
-import { MediationVoteButtons } from "@/components/disputes/mediation-vote-buttons";
-import { serializeDisputeMessagesForClient } from "@/lib/disputes/serialize-dispute-messages";
-import { mergeOpeningMessageFromJobIfMissing } from "@/lib/disputes/dispute-audit-merge";
-import { filterDisputeMessageRowsForPartyViewer } from "@/lib/disputes/filter-dispute-messages-for-viewer";
+import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  DISPUTE_HUB_JOB_SELECT,
+  jobQualifiesForDisputeHub,
+  isDisputeHubCaseClosed,
+} from "@/lib/jobs/dispute-hub-helpers";
+import { ChevronRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -26,68 +24,41 @@ export default async function DisputesPage() {
 
   const { data: jobs, error: jobsError } = await supabase
     .from("jobs")
-    .select(
-      "id, lister_id, winner_id, status, dispute_status, dispute_priority, dispute_escalated, dispute_mediation_status, agreed_amount_cents, updated_at, disputed_at, dispute_reason, dispute_photos, dispute_evidence, dispute_opened_by, proposed_refund_amount, counter_proposal_amount"
-    )
+    .select(DISPUTE_HUB_JOB_SELECT)
     .or(`lister_id.eq.${userId},winner_id.eq.${userId}`)
     .order("updated_at", { ascending: false })
-    .limit(20);
+    .limit(150);
 
   if (jobsError) {
     console.error("[disputes page] jobs query", jobsError.message);
   }
 
-  const list = (jobs ?? []) as any[];
-  const ids = list.map((j) => j.id).filter(Boolean);
+  const raw = (jobs ?? []) as {
+    id: number;
+    title?: string | null;
+    status: string;
+    disputed_at?: string | null;
+    dispute_status?: string | null;
+    dispute_reason?: string | null;
+    dispute_escalated?: boolean | null;
+    dispute_mediation_status?: string | null;
+    updated_at?: string | null;
+    payment_released_at?: string | null;
+    lister_id: string;
+    winner_id: string | null;
+  }[];
 
-  const admin = createSupabaseAdminClient();
-  const messagesByJob = new Map<number, ReturnType<typeof serializeDisputeMessagesForClient>>();
-  const paymentReqByJob = new Map<number, any[]>();
-  const mediationByJob = new Map<number, any>();
-  if (admin && ids.length > 0) {
-    const { data: msgs } = await (admin as any)
-      .from("dispute_messages")
-      .select("*")
-      .in("job_id", ids)
-      .order("created_at", { ascending: true });
-    const rawByJob = new Map<number, any[]>();
-    for (const m of msgs ?? []) {
-      const key = Number(m.job_id);
-      const arr = rawByJob.get(key) ?? [];
-      arr.push(m);
-      rawByJob.set(key, arr);
-    }
-    for (const job of list) {
-      const jid = Number(job.id);
-      const raw = rawByJob.get(jid) ?? [];
-      const filtered = filterDisputeMessageRowsForPartyViewer(raw, userId, {
-        lister_id: job.lister_id,
-        winner_id: job.winner_id,
-      });
-      messagesByJob.set(jid, serializeDisputeMessagesForClient(filtered));
-    }
+  const cases = raw.filter(jobQualifiesForDisputeHub).sort((a, b) => {
+    const aOpen = !isDisputeHubCaseClosed(a);
+    const bOpen = !isDisputeHubCaseClosed(b);
+    if (aOpen !== bOpen) return aOpen ? -1 : 1;
+    const at = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+    const bt = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+    return bt - at;
+  });
 
-    const { data: reqs } = await (admin as any)
-      .from("cleaner_additional_payment_requests")
-      .select("*")
-      .in("job_id", ids)
-      .order("created_at", { ascending: false });
-    for (const r of reqs ?? []) {
-      const key = Number(r.job_id);
-      const arr = paymentReqByJob.get(key) ?? [];
-      arr.push(r);
-      paymentReqByJob.set(key, arr);
-    }
-
-    const { data: votes } = await (admin as any)
-      .from("dispute_mediation_votes")
-      .select("*")
-      .in("job_id", ids)
-      .order("created_at", { ascending: false });
-    for (const v of votes ?? []) {
-      if (!mediationByJob.has(Number(v.job_id))) mediationByJob.set(Number(v.job_id), v);
-    }
-  }
+  const openCases = cases.filter((c) => !isDisputeHubCaseClosed(c));
+  const closedCases = cases.filter((c) => isDisputeHubCaseClosed(c));
 
   return (
     <section className="page-inner mx-auto max-w-5xl space-y-4">
@@ -95,8 +66,8 @@ export default async function DisputesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Dispute Resolution</h1>
           <p className="text-sm text-muted-foreground">
-            View threads and mediation for your jobs. Open a <strong>new</strong> dispute or request additional
-            payment only from the job page after after-photos (stage 4).
+            Open a <strong>new</strong> dispute from the job page. Here you can review all cases tied to your
+            account — open first, then history after payment is settled.
           </p>
         </div>
         <Button asChild variant="outline">
@@ -107,8 +78,8 @@ export default async function DisputesPage() {
       <Alert className="border-sky-200 bg-sky-50/80 dark:border-sky-900 dark:bg-sky-950/30">
         <AlertDescription className="text-sm text-sky-950 dark:text-sky-100">
           <strong>Cleaners:</strong> use <strong>Request additional payment</strong> on the job after uploading
-          after-photos. <strong>Listers / cleaners:</strong> use <strong>Raise a dispute</strong> on the job in the
-          same stage — not from this page.
+          after-photos. <strong>Listers / cleaners:</strong> use <strong>Raise a dispute</strong> on the job in
+          the same stage — not from this page.
         </AlertDescription>
       </Alert>
 
@@ -120,94 +91,117 @@ export default async function DisputesPage() {
         </Card>
       ) : null}
 
-      {!jobsError && list.length === 0 ? (
+      {!jobsError && cases.length === 0 ? (
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900/50">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No jobs linked to your account yet. When you have an active job, dispute threads and payment updates will
-            appear here.
+            No dispute cases yet. When you raise a dispute on a job, it will appear in this list.
           </CardContent>
         </Card>
       ) : null}
 
-      <div className="grid gap-4">
-        {list.map((job) => {
-          const isLister = job.lister_id === userId;
-          const isCleaner = job.winner_id === userId;
-          const messages = messagesByJob.get(Number(job.id)) ?? [];
-          const auditMessages = mergeOpeningMessageFromJobIfMissing(job, messages);
-          const requests = paymentReqByJob.get(Number(job.id)) ?? [];
-          const latestMediation = mediationByJob.get(Number(job.id)) ?? null;
-          const jobHref = `/jobs/${job.id}`;
-          return (
-            <Card key={job.id} className="border-border dark:border-gray-800 dark:bg-gray-900/40">
-              <CardHeader className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CardTitle className="text-base">Job #{job.id}</CardTitle>
-                    <Badge variant="outline">{job.status}</Badge>
-                    <Badge variant="secondary">{job.dispute_priority ?? "medium"} priority</Badge>
-                    {job.dispute_escalated ? <Badge className="bg-red-600 text-white">Escalated</Badge> : null}
-                    {job.dispute_mediation_status && job.dispute_mediation_status !== "none" ? (
-                      <Badge className="bg-violet-600 text-white">Mediation: {job.dispute_mediation_status}</Badge>
-                    ) : null}
-                  </div>
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={jobHref}>Open job</Link>
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {requests.length > 0 ? (
-                  <Card className="border-border dark:border-gray-800 dark:bg-gray-900/60">
-                    <CardHeader className="py-3">
-                      <CardTitle className="text-sm">Additional payment requests</CardTitle>
-                      <p className="text-xs text-muted-foreground">
-                        Accept or deny from the job or listing page (button: View request).
-                      </p>
-                    </CardHeader>
-                    <CardContent className="space-y-2 pt-0">
-                      {requests.map((r: any) => (
-                        <div key={r.id} className="rounded-lg border border-border p-3 dark:border-gray-700">
-                          <p className="text-sm font-medium">${(Number(r.amount_cents) / 100).toFixed(2)} requested</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{String(r.reason ?? "")}</p>
-                          <p className="mt-1 text-[11px] uppercase text-muted-foreground">{r.status}</p>
-                          {isLister && r.status === "pending" ? (
-                            <Button asChild size="sm" className="mt-2">
-                              <Link href={jobHref}>View request on job</Link>
-                            </Button>
-                          ) : null}
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                ) : null}
+      {!jobsError && cases.length > 0 ? (
+        <div className="space-y-6">
+          {openCases.length > 0 ? (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Open cases ({openCases.length})
+              </h2>
+              <ul className="space-y-2">
+                {openCases.map((job) => (
+                  <DisputeCaseListRow key={job.id} job={job} userId={userId} />
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">You have no open dispute cases.</p>
+          )}
 
-                <DisputeJobCaseSummary job={job} />
-
-                <DisputeAuditTimeline jobId={Number(job.id)} messages={auditMessages} />
-
-                <DisputeThreadCard jobId={Number(job.id)} messages={messages} showMessageList={false} />
-
-                {latestMediation ? (
-                  <Card className="border-violet-300/70 bg-violet-50/60 dark:border-violet-800 dark:bg-violet-950/20">
-                    <CardHeader>
-                      <CardTitle className="text-base">Mediation Proposal</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <p className="text-sm">{String(latestMediation.proposal_text ?? "")}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Refund ${(Number(latestMediation.refund_cents ?? 0) / 100).toFixed(2)} • Additional payment $
-                        {(Number(latestMediation.additional_payment_cents ?? 0) / 100).toFixed(2)}
-                      </p>
-                      {(isLister || isCleaner) && <MediationVoteButtons jobId={Number(job.id)} />}
-                    </CardContent>
-                  </Card>
-                ) : null}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+          {closedCases.length > 0 ? (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                History — closed &amp; settled ({closedCases.length})
+              </h2>
+              <ul className="space-y-2">
+                {closedCases.map((job) => (
+                  <DisputeCaseListRow key={job.id} job={job} userId={userId} />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function DisputeCaseListRow({
+  job,
+  userId,
+}: {
+  job: {
+    id: number;
+    title?: string | null;
+    status: string;
+    disputed_at?: string | null;
+    dispute_status?: string | null;
+    dispute_escalated?: boolean | null;
+    dispute_mediation_status?: string | null;
+    updated_at?: string | null;
+    lister_id: string;
+    winner_id: string | null;
+  };
+  userId: string;
+}) {
+  const closed = isDisputeHubCaseClosed(job);
+  const role =
+    job.lister_id === userId ? "Lister" : job.winner_id === userId ? "Cleaner" : "Party";
+  const title = (typeof job.title === "string" && job.title.trim()) || `Job #${job.id}`;
+  const opened =
+    job.disputed_at && !Number.isNaN(new Date(job.disputed_at).getTime())
+      ? new Date(job.disputed_at).toLocaleString()
+      : null;
+  const updated =
+    job.updated_at && !Number.isNaN(new Date(job.updated_at).getTime())
+      ? new Date(job.updated_at).toLocaleDateString()
+      : null;
+
+  return (
+    <li>
+      <Link
+        href={`/disputes/${job.id}`}
+        className="flex min-h-[56px] items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted/40 dark:border-gray-800 dark:bg-gray-900/40 dark:hover:bg-gray-800/50"
+      >
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-foreground dark:text-gray-100">Job #{job.id}</span>
+            <Badge variant={closed ? "secondary" : "default"} className="text-[10px] uppercase">
+              {closed ? "Closed" : "Open"}
+            </Badge>
+            <Badge variant="outline" className="text-[10px]">
+              {role}
+            </Badge>
+            {job.dispute_escalated ? (
+              <Badge className="bg-red-600 text-[10px] text-white">Escalated</Badge>
+            ) : null}
+            {job.dispute_mediation_status && job.dispute_mediation_status !== "none" ? (
+              <Badge className="bg-violet-600 text-[10px] text-white">
+                Mediation: {job.dispute_mediation_status}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="line-clamp-2 text-sm text-muted-foreground dark:text-gray-400">{title}</p>
+          <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+            {job.dispute_status ? (
+              <span className="capitalize">{String(job.dispute_status).replace(/_/g, " ")}</span>
+            ) : null}
+            {job.dispute_status ? " · " : null}
+            {opened ? <>Opened {opened}</> : null}
+            {opened && updated ? " · " : null}
+            {updated ? <>Updated {updated}</> : null}
+          </p>
+        </div>
+        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+      </Link>
+    </li>
   );
 }

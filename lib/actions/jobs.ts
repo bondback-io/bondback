@@ -41,6 +41,7 @@ import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
 import { disputeOpenedByLister } from "@/lib/jobs/dispute-opened-by";
+import { disputeAutoClosePatchOnPaymentRelease } from "@/lib/jobs/dispute-hub-helpers";
 import {
   disputeHubLinksHtml,
   escapeHtmlForEmail,
@@ -1804,7 +1805,7 @@ export async function releaseJobFunds(
   const { data: job, error: jobError } = await supabase
     .from("jobs")
     .select(
-      "id, listing_id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id, top_up_payments"
+      "id, listing_id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id, top_up_payments, disputed_at, dispute_reason, dispute_status"
     )
     .eq("id", numericJobId)
     .maybeSingle();
@@ -1821,6 +1822,9 @@ export async function releaseJobFunds(
     payment_released_at: string | null;
     stripe_transfer_id: string | null;
     top_up_payments?: unknown;
+    disputed_at?: string | null;
+    dispute_reason?: string | null;
+    dispute_status?: string | null;
   };
 
   if (j.payment_released_at) {
@@ -1957,6 +1961,11 @@ export async function releaseJobFunds(
     }
 
     const nowIso = new Date().toISOString();
+    const disputeClose = disputeAutoClosePatchOnPaymentRelease({
+      disputed_at: j.disputed_at,
+      dispute_reason: j.dispute_reason,
+      dispute_status: j.dispute_status,
+    });
     const { error: updateError } = await supabase
       .from("jobs")
       .update({
@@ -1964,6 +1973,7 @@ export async function releaseJobFunds(
         stripe_transfer_id: transferIds.join(","),
         top_up_payments: updatedTopUps as unknown as never,
         updated_at: nowIso,
+        ...(disputeClose ?? {}),
       } as never)
       .eq("id", numericJobId);
 

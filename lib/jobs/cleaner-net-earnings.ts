@@ -56,3 +56,18 @@ export function cleanerNetEarnedCents(
   const refund = listerRefundCentsFromDisputeJob(job);
   return refund >= 1 ? Math.max(0, gross - refund) : gross;
 }
+
+/**
+ * Lister’s net outlay for a completed job after partial-refund disputes (escrow gross minus refund
+ * returned to the lister). Matches job-detail settlement semantics.
+ */
+export function listerNetSettledSpendCents(
+  job: JobRowForCleanerNet,
+  listingCurrentLowestBidCents: number | null | undefined
+): number {
+  const gross = adminJobGrossCents(job, listingCurrentLowestBidCents);
+  if (gross <= 0) return 0;
+  if (String(job.status ?? "") !== "completed") return gross;
+  const refund = listerRefundCentsFromDisputeJob(job);
+  return refund >= 1 ? Math.max(0, gross - refund) : gross;
+}

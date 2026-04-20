@@ -140,9 +140,14 @@ export function DisputeJobCaseSummary({ job }: { job: DisputeJobCaseJobFields })
           </div>
         )}
 
-        <Button asChild size="sm" className="w-full sm:w-auto">
-          <Link href={`/jobs/${job.id}#dispute`}>Manage dispute on job page</Link>
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button asChild size="sm" className="w-full sm:w-auto">
+            <Link href={`/disputes/${job.id}`}>Dispute case &amp; timeline</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="w-full sm:w-auto">
+            <Link href={`/jobs/${job.id}#dispute`}>Manage on job page</Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

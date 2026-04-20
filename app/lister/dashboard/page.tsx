@@ -45,6 +45,7 @@ import {
   normalizeProfileRolesFromDb,
   resolveActiveRoleFromProfile,
 } from "@/lib/profile-roles";
+import { listerNetSettledSpendCents } from "@/lib/jobs/cleaner-net-earnings";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -95,7 +96,7 @@ async function ListerDashboardContent() {
     supabase
       .from("jobs")
       .select(
-        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments"
+        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
       )
       .eq("lister_id", user.id),
     supabase
@@ -229,27 +230,25 @@ async function ListerDashboardContent() {
       new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime()
   );
 
-  const completedListingIds = new Set(
-    completedJobs.map((j) => String(j.listing_id))
-  );
-  const totalSpentCents = listings
-    .filter((l) => completedListingIds.has(String(l.id)))
-    .reduce(
-      (sum, l) => sum + ((l.current_lowest_bid_cents as number | null) ?? 0),
-      0
-    );
-  const avgCostPerJobCents =
-    completedJobs.length > 0
-      ? Math.round(totalSpentCents / completedJobs.length)
-      : 0;
+  const totalSpentCents = completedJobs.reduce((sum, job) => {
+    const listing = listingMap.get(job.listing_id as string);
+    return sum + listerNetSettledSpendCents(job, listing?.current_lowest_bid_cents);
+  }, 0);
+  const totalFeesCents = completedJobs.reduce((sum, job) => {
+    const listing = listingMap.get(job.listing_id as string);
+    const netSpend = listerNetSettledSpendCents(job, listing?.current_lowest_bid_cents);
+    if (netSpend <= 0) return sum;
+    const pct = resolvePlatformFeePercent(listing?.platform_fee_percentage, feePercentage);
+    return sum + Math.round((netSpend * pct) / 100);
+  }, 0);
 
   const stats = [
     { label: "Active Listings", value: liveListings.length },
     { label: "Completed Jobs", value: completedJobs.length },
     { label: "Total Spent", value: formatCents(totalSpentCents) },
     {
-      label: "Avg per Job",
-      value: avgCostPerJobCents > 0 ? formatCents(avgCostPerJobCents) : "—",
+      label: "Total Fees",
+      value: formatCents(totalFeesCents),
     },
   ];
 
