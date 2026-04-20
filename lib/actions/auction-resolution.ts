@@ -202,9 +202,9 @@ export async function resolveExpiredLiveAuctions(
 
 function revalidateListingPaths(listingId: string) {
   revalidatePath("/jobs");
+  revalidatePath("/find-jobs");
   revalidatePath("/my-listings");
   revalidatePath(`/listings/${listingId}`);
-  revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/lister/dashboard");
   revalidatePath("/cleaner/dashboard");
 }

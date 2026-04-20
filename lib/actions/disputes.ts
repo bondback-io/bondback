@@ -538,12 +538,85 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
     if (!u) return { error: "Could not update vote." };
 
     if (u.lister_accepted === true && u.cleaner_accepted === true) {
+      const additionalCents = Number(u.additional_payment_cents ?? 0);
+      const refundCents = Number(u.refund_cents ?? 0);
       await insertDisputeThreadEntry({
         jobId,
         authorUserId: null,
         authorRole: "system",
-        body: "Mediation proposal accepted by both parties. Job completed per admin settlement.",
+        body:
+          additionalCents > 0
+            ? "Mediation proposal accepted by both parties. The lister must pay the approved additional amount to continue; the job stays open until that payment completes."
+            : "Mediation proposal accepted by both parties. Job completed per admin settlement.",
       });
+
+      /**
+       * Top-up checkout requires job status `in_progress` or `completed_pending_approval` and a
+       * logged-in lister. Do not set `status: completed` before top-up — that blocks checkout.
+       */
+      if (additionalCents > 0) {
+        await (admin as any)
+          .from("jobs")
+          .update({
+            dispute_mediation_status: "accepted",
+            status: "completed_pending_approval",
+            dispute_status: "completed",
+            resolution_type: "mediation",
+            resolution_at: new Date().toISOString(),
+            proposed_refund_amount: refundCents,
+            counter_proposal_amount: null,
+          })
+          .eq("id", jobId);
+
+        if (isLister) {
+          const topUp = await createJobTopUpCheckoutSession(
+            jobId,
+            additionalCents,
+            "Mediation-approved additional payment",
+            { flexibleCleanerRequest: true }
+          );
+          if (!topUp.ok) {
+            return { error: topUp.error ?? "Mediation saved but could not start payment. Open the job and try Pay / top-up, or contact support." };
+          }
+          revalidatePath(`/jobs/${jobId}`);
+          revalidatePath("/disputes");
+          revalidatePath("/admin/disputes");
+          revalidatePath("/my-listings");
+          revalidatePath("/lister/dashboard");
+          return {
+            ok: true,
+            success: "Redirecting to pay the mediation top-up…",
+            checkoutUrl: topUp.url,
+          };
+        }
+
+        const listerId = trimText(j.lister_id);
+        if (listerId) {
+          await createNotification(
+            listerId,
+            "job_status_update",
+            jobId,
+            `Mediation was accepted. Pay the additional $${(additionalCents / 100).toFixed(2)} from the job page (top-up) to finalize.`
+          );
+          await sendDisputeActivityEmail({
+            jobId,
+            toUserId: listerId,
+            subject: `[Bond Back] Job #${jobId}: pay mediation top-up`,
+            htmlBody: `<p>Both parties accepted the mediation proposal. Please open the job and complete the <strong>additional payment</strong> ($${(
+              additionalCents / 100
+            ).toFixed(2)} AUD) to continue.</p>${disputeHubLinksHtml(jobId)}`,
+          });
+        }
+        revalidatePath(`/jobs/${jobId}`);
+        revalidatePath("/disputes");
+        revalidatePath("/admin/disputes");
+        return {
+          ok: true,
+          success:
+            "Mediation accepted. The lister has been asked to pay the additional amount from the job page.",
+        };
+      }
+
       await (admin as any)
         .from("jobs")
         .update({
@@ -552,19 +625,17 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
           dispute_status: "completed",
           resolution_type: "mediation",
           resolution_at: new Date().toISOString(),
-          proposed_refund_amount: Number(u.refund_cents ?? 0),
+          proposed_refund_amount: refundCents,
           counter_proposal_amount: null,
         })
         .eq("id", jobId);
-      if (Number(u.additional_payment_cents ?? 0) > 0) {
-        await createJobTopUpCheckoutSession(
-          jobId,
-          Number(u.additional_payment_cents),
-          "Mediation-approved additional payment"
-        );
-      }
+
+      revalidatePath(`/jobs/${jobId}`);
       revalidatePath("/disputes");
       revalidatePath("/admin/disputes");
+      revalidatePath("/my-listings");
+      revalidatePath("/lister/dashboard");
+      revalidatePath("/cleaner/dashboard");
       return { ok: true, success: "Mediation accepted. The job has been updated." };
     }
     if (vote === false) {

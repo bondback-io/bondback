@@ -441,6 +441,14 @@ export async function secureJobAtPrice(
   listingId: string
 ): Promise<SecureJobAtPriceResult> {
   const supabase = await createServerSupabaseClient();
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      error:
+        "Buy now is temporarily unavailable (server configuration). Please try again later or place a bid.",
+    };
+  }
 
   const {
     data: { session },
@@ -450,7 +458,7 @@ export async function secureJobAtPrice(
     return { ok: false, error: "You must be logged in." };
   }
 
-  const { data: listing, error: fetchError } = await supabase
+  const { data: listing, error: fetchError } = await admin
     .from("listings")
     .select("id, lister_id, status, buy_now_cents, title")
     .eq("id", listingId)
@@ -492,7 +500,7 @@ export async function secureJobAtPrice(
     }
   }
 
-  const { data: existingJob } = await supabase
+  const { data: existingJob } = await admin
     .from("jobs")
     .select("id")
     .eq("listing_id", listRow.id)
@@ -504,7 +512,7 @@ export async function secureJobAtPrice(
   }
 
   const dueAt = listerPaymentDueAtFromNowIso();
-  const { data: inserted, error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await admin
     .from("jobs")
     .insert({
       listing_id: listRow.id,
@@ -517,8 +525,6 @@ export async function secureJobAtPrice(
     } as never)
     .select("id")
     .maybeSingle();
-
-  const admin = createSupabaseAdminClient();
   const listingTitle = listRow.title ?? null;
   const buyNowCents = listRow.buy_now_cents!;
   const buyNowDisplay = `$${(buyNowCents / 100).toFixed(2)}`;
@@ -528,7 +534,7 @@ export async function secureJobAtPrice(
 
   if (insertError || !inserted) {
     if (insertError && isPostgresUniqueViolation(insertError)) {
-      const db = (admin ?? supabase) as SupabaseClient<Database>;
+      const db = admin as SupabaseClient<Database>;
       const { data: raced } = await db
         .from("jobs")
         .select("id, winner_id")
@@ -2116,10 +2122,11 @@ export async function executeRefund(
   if (refundCents < 1) return { ok: true };
 
   const supabase = await createServerSupabaseClient();
-  const { data: job, error: jobError } = await supabase
+  const db = (createSupabaseAdminClient() ?? supabase) as SupabaseClient<Database>;
+  const { data: job, error: jobError } = await db
     .from("jobs")
     .select(
-      "id, listing_id, payment_intent_id, agreed_amount_cents, stripe_transfer_id, payment_released_at"
+      "id, listing_id, payment_intent_id, agreed_amount_cents, stripe_transfer_id, payment_released_at, top_up_payments"
     )
     .eq("id", jobId)
     .maybeSingle();
@@ -2131,12 +2138,21 @@ export async function executeRefund(
     agreed_amount_cents: number | null;
     stripe_transfer_id: string | null;
     payment_released_at: string | null;
+    top_up_payments?: unknown;
   };
 
   if (!trimStr(j.payment_intent_id)) {
     return { ok: false, error: "Job has no payment hold; cannot process Stripe refund." };
   }
-  const paymentIntentId = trimStr(j.payment_intent_id);
+
+  const legs = buildEscrowReleaseLegs({
+    paymentIntentId: j.payment_intent_id,
+    agreedAmountCents: j.agreed_amount_cents,
+    topUpPaymentsRaw: j.top_up_payments as JobRow["top_up_payments"],
+  });
+  if (!legs?.length) {
+    return { ok: false, error: "Could not resolve escrow payment legs for refund." };
+  }
 
   const agreedCents = j.agreed_amount_cents ?? 0;
   const settings = await getGlobalSettings();
@@ -2144,7 +2160,7 @@ export async function executeRefund(
     (await fetchPlatformFeePercentForListing(supabase, j.listing_id, settings)) / 100;
   const feeCents = Math.round(agreedCents * feePct);
   const chargeTotalCents = agreedCents + feeCents;
-  const amount = Math.min(refundCents, Math.max(1, chargeTotalCents));
+  let remaining = Math.min(refundCents, Math.max(1, chargeTotalCents));
 
   let stripe;
   try {
@@ -2154,22 +2170,44 @@ export async function executeRefund(
   }
 
   try {
-    // Ensure funds are captured before creating a refund. (Manual capture escrow holds until release/dispute resolution.)
-    const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-    if (pi.status === "requires_capture") {
-      await stripe.paymentIntents.capture(paymentIntentId);
+    for (const leg of legs) {
+      if (remaining < 1) break;
+      const piId = leg.paymentIntentId;
+      let pi = await stripe.paymentIntents.retrieve(piId);
+      if (pi.status === "requires_capture") {
+        await stripe.paymentIntents.capture(piId);
+        pi = await stripe.paymentIntents.retrieve(piId);
+      }
+      const received = Number(pi.amount_received ?? 0);
+      if (received < 1) continue;
+      const slice = Math.min(remaining, received);
+      if (slice < 1) continue;
+      await stripe.refunds.create({
+        payment_intent: piId,
+        amount: slice,
+        reason: "requested_by_customer",
+        metadata: { job_id: String(jobId), leg: String(leg.topUpIndex) },
+      });
+      remaining -= slice;
     }
 
-    await stripe.refunds.create({
-      payment_intent: paymentIntentId,
-      amount,
-      reason: "requested_by_customer",
-      metadata: { job_id: String(jobId) },
-    });
+    if (remaining > 0) {
+      return {
+        ok: false,
+        error:
+          "Refund amount exceeds captured funds on escrow payment(s). Check top-ups and PaymentIntents in Stripe.",
+      };
+    }
 
     const stripeTransferId = trimStr(j.stripe_transfer_id);
-    if (stripeTransferId && amount > feeCents && agreedCents >= 1) {
-      const reverseCents = Math.min(agreedCents, amount - feeCents);
+    const refundApplied = Math.min(refundCents, chargeTotalCents);
+    if (
+      legs.length === 1 &&
+      stripeTransferId &&
+      refundApplied > feeCents &&
+      agreedCents >= 1
+    ) {
+      const reverseCents = Math.min(agreedCents, refundApplied - feeCents);
       if (reverseCents >= 1) {
         await stripe.transfers.createReversal(stripeTransferId, {
           amount: reverseCents,

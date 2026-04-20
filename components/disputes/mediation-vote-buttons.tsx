@@ -26,6 +26,10 @@ export function MediationVoteButtons({ jobId }: { jobId: number }) {
         });
         return;
       }
+      if (r.checkoutUrl) {
+        window.location.href = r.checkoutUrl;
+        return;
+      }
       toast({
         title: vote === "accept" ? "Accepted" : "Rejected",
         description: r.success ?? "Done.",
