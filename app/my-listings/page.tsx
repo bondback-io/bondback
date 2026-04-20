@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { applyListingAuctionOutcomes, fetchListingsForLister } from "@/lib/actions/listings";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import type { Database } from "@/types/supabase";
@@ -11,6 +13,7 @@ import {
   isListerNoBidsRelistListing,
   isListerPaidJobListing,
 } from "@/lib/my-listings/lister-listing-helpers";
+import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -49,6 +52,25 @@ export const metadata: Metadata = {
 function isDisputeJobStatus(s: string | null | undefined): boolean {
   const x = String(s ?? "").toLowerCase();
   return x === "disputed" || x === "in_review" || x === "dispute_negotiating";
+}
+
+function jobRowDashboardCompleted(row: {
+  status: string | null;
+  dispute_status?: string | null;
+  dispute_resolution?: string | null;
+  refund_amount?: number | null;
+  payment_released_at?: string | null;
+  completed_at?: string | null;
+} | null | undefined): boolean {
+  if (!row) return false;
+  return isDashboardCompletedJob({
+    status: row.status,
+    dispute_status: row.dispute_status ?? null,
+    dispute_resolution: row.dispute_resolution ?? null,
+    refund_amount: row.refund_amount ?? null,
+    payment_released_at: row.payment_released_at ?? null,
+    completed_at: row.completed_at ?? null,
+  });
 }
 
 function parseTabParam(raw: string | undefined): ListerViewTab {
@@ -142,9 +164,11 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
           agreed_amount_cents?: number | null;
           dispute_resolution?: string | null;
           refund_amount?: number | null;
-          proposed_refund_amount?: number | null;
-          counter_proposal_amount?: number | null;
-        }
+      proposed_refund_amount?: number | null;
+      counter_proposal_amount?: number | null;
+      payment_released_at?: string | null;
+      completed_at?: string | null;
+    }
       >
     | undefined;
 
@@ -155,10 +179,11 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
   let noBidsCount = 0;
 
   if (listingIds.length > 0) {
-    const { data: jobsData } = await supabase
+    const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+    const { data: jobsData } = await jobsClient
       .from("jobs")
       .select(
-        "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+        "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at"
       )
       .in("listing_id", listingIds);
     const jobs = (jobsData ?? []) as {
@@ -178,6 +203,8 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
       refund_amount?: number | null;
       proposed_refund_amount?: number | null;
       counter_proposal_amount?: number | null;
+      payment_released_at?: string | null;
+      completed_at?: string | null;
     }[];
 
     const winnerIds = [
@@ -223,6 +250,8 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
         refund_amount: j.refund_amount ?? null,
         proposed_refund_amount: j.proposed_refund_amount ?? null,
         counter_proposal_amount: j.counter_proposal_amount ?? null,
+        payment_released_at: j.payment_released_at ?? null,
+        completed_at: j.completed_at ?? null,
       };
     }
     initialActiveJobsSnapshot = jobByListing;
@@ -243,22 +272,28 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
         !cancelledJobListingIds.has(String(l.id)) &&
         !listingIdsWithActiveJob.has(String(l.id))
     ).length;
-    disputedCount = new Set(
-      jobs.filter((j) => isDisputeJobStatus(j.status)).map((j) => String(j.listing_id))
-    ).size;
+    disputedCount = initialListings.filter((l) => {
+      const row = jobByListing[String(l.id)];
+      return (
+        row &&
+        isDisputeJobStatus(row.status) &&
+        !jobRowDashboardCompleted(row)
+      );
+    }).length;
 
     const activeJobWithoutDisputeCount = initialListings.filter((l) => {
       const row = jobByListing[String(l.id)];
-      if (!row || row.status === "cancelled" || row.status === "completed") return false;
+      if (!row || row.status === "cancelled") return false;
+      if (jobRowDashboardCompleted(row)) return false;
       if (isDisputeJobStatus(row.status)) return false;
       return true;
     }).length;
 
     activeTabCount = liveCount + activeJobWithoutDisputeCount;
 
-    completedCount = new Set(
-      jobs.filter((j) => j.status === "completed").map((j) => String(j.listing_id))
-    ).size;
+    completedCount = initialListings.filter((l) =>
+      jobRowDashboardCompleted(jobByListing[String(l.id)])
+    ).length;
 
     paidJobsCount = initialListings.filter((l) =>
       isListerPaidJobListing(jobByListing[String(l.id)])

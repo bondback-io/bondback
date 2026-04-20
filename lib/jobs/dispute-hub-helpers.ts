@@ -66,10 +66,13 @@ export function isDashboardCompletedJob(job: {
   dispute_resolution?: string | null;
   refund_amount?: number | null;
   payment_released_at?: string | null;
+  completed_at?: string | null;
 }): boolean {
   const s = String(job.status ?? "").toLowerCase();
   const ds = String(job.dispute_status ?? "").toLowerCase();
   if (s === "cancelled" || ds === "cancelled") return false;
+  /** Admin / escrow paths set `completed_at` when the job is fully closed — catch status lag. */
+  if (String(job.completed_at ?? "").trim().length > 0) return true;
   if (s === "completed") return true;
   if (s === "refunded" || s === "partially_refunded") return true;
   if (ds === "completed") return true;

@@ -44,6 +44,7 @@ type JobRow = {
   refund_amount?: number | null;
   proposed_refund_amount?: number | null;
   counter_proposal_amount?: number | null;
+  completed_at?: string | null;
 };
 
 export default async function EarningsPage() {
@@ -81,21 +82,9 @@ export default async function EarningsPage() {
   const { data: jobsData } = await jobsClient
     .from("jobs")
     .select(
-      "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_status, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+      "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_status, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, completed_at"
     )
     .eq("winner_id", sessionData.user.id)
-    .in("status", [
-      "accepted",
-      "in_progress",
-      "completed",
-      "completed_pending_approval",
-      "cancelled",
-      "refunded",
-      "partially_refunded",
-      "in_review",
-      "disputed",
-      "dispute_negotiating",
-    ])
     .order("created_at", { ascending: false });
 
   const jobs = (jobsData ?? []) as JobRow[];

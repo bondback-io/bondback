@@ -641,3 +641,36 @@ export async function triggerNewListingJobAlerts(listingId: string) {
   const { notifyNearbyCleanersOfNewListing } = await import("@/lib/actions/sms-notifications");
   return notifyNearbyCleanersOfNewListing(listingId);
 }
+
+const LISTER_MY_LISTINGS_JOB_SELECT =
+  "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at, completed_at" as const;
+
+/**
+ * My Listings (client) job refresh: same fields as the page snapshot, with admin read when available
+ * so dispute-completed / ended-listing jobs are not dropped by RLS on the browser client.
+ */
+export async function fetchListerJobsForMyListingsRefresh(listingIds: string[]) {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false as const, error: "You must be signed in." };
+  }
+  const ids = [...new Set(listingIds.map((id) => String(id).trim()).filter(Boolean))];
+  if (ids.length === 0) {
+    return { ok: true as const, jobs: [] };
+  }
+
+  const client = (createSupabaseAdminClient() ?? supabase) as typeof supabase;
+  const { data, error } = await client
+    .from("jobs")
+    .select(LISTER_MY_LISTINGS_JOB_SELECT)
+    .eq("lister_id", user.id)
+    .in("listing_id", ids as string[]);
+
+  if (error) {
+    return { ok: false as const, error: error.message };
+  }
+  return { ok: true as const, jobs: data ?? [] };
+}

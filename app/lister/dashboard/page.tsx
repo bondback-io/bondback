@@ -98,7 +98,7 @@ async function ListerDashboardContent() {
     ((createSupabaseAdminClient() ?? supabase) as SupabaseClient)
       .from("jobs")
       .select(
-        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at"
+        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at"
       )
       .eq("lister_id", user.id),
     supabase

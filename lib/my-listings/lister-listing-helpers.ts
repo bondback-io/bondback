@@ -2,6 +2,7 @@ import { formatDistanceToNowStrict } from "date-fns";
 import type { ListingRow } from "@/lib/listings";
 import { isListingLiveAt } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
+import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
 
 export type JobSnapshot = {
   jobId: string | number;
@@ -11,7 +12,35 @@ export type JobSnapshot = {
   cleanerConfirmedComplete?: boolean | null;
   cleanerConfirmedAt?: string | null;
   updatedAt?: string | null;
+  dispute_status?: string | null;
+  dispute_resolution?: string | null;
+  refund_amount?: number | null;
+  proposed_refund_amount?: number | null;
+  counter_proposal_amount?: number | null;
+  payment_released_at?: string | null;
+  completed_at?: string | null;
 };
+
+function snapshotToCompletedCheck(
+  job: JobSnapshot | null | undefined
+): Parameters<typeof isDashboardCompletedJob>[0] {
+  if (!job) return {};
+  return {
+    status: job.status,
+    dispute_status: job.dispute_status ?? null,
+    dispute_resolution: job.dispute_resolution ?? null,
+    refund_amount: job.refund_amount ?? null,
+    payment_released_at: job.payment_released_at ?? null,
+    completed_at: job.completed_at ?? null,
+  };
+}
+
+/** Same “completed” semantics as lister/cleaner dashboards (dispute exits, partial refund, etc.). */
+export function isListerMyListingsJobCompleted(
+  job: JobSnapshot | null | undefined
+): boolean {
+  return isDashboardCompletedJob(snapshotToCompletedCheck(job));
+}
 
 export type BadgeTone = "emerald" | "sky" | "amber" | "slate" | "rose" | "violet";
 
@@ -31,6 +60,8 @@ export function jobSuppressesListerAuctionCountdown(
     s === "in_progress" ||
     s === "completed_pending_approval" ||
     s === "completed" ||
+    s === "refunded" ||
+    s === "partially_refunded" ||
     s === "disputed" ||
     s === "in_review" ||
     s === "dispute_negotiating"
@@ -102,7 +133,8 @@ export function isListerJobPipelineActive(
   job: JobSnapshot | null | undefined
 ): boolean {
   const s = String(job?.status ?? "");
-  if (!s || s === "cancelled" || s === "completed") return false;
+  if (!s || s === "cancelled") return false;
+  if (isListerMyListingsJobCompleted(job)) return false;
   return true;
 }
 
@@ -112,14 +144,14 @@ export function classifyListerBadge(
   nowMs: number
 ): { key: string; label: string; tone: BadgeTone } {
   const js = job?.status ?? null;
-  if (js && isDisputedJobStatus(js)) {
-    return { key: "disputed", label: "Disputed", tone: "amber" };
-  }
   if (js === "cancelled") {
     return { key: "cancelled", label: "Cancelled", tone: "slate" };
   }
-  if (js === "completed") {
+  if (job && isListerMyListingsJobCompleted(job)) {
     return { key: "completed", label: "Completed", tone: "emerald" };
+  }
+  if (js && isDisputedJobStatus(js)) {
+    return { key: "disputed", label: "Disputed", tone: "amber" };
   }
   if (
     js === "accepted" ||
@@ -154,12 +186,20 @@ export function classifyListerBadge(
 
 export function buildTimeLabel(listing: ListingRow, job: JobSnapshot | null | undefined, nowMs: number): string {
   const js = job?.status ?? null;
-  if (js === "completed" && job?.cleanerConfirmedAt) {
-    try {
-      return `Completed ${formatDistanceToNowStrict(new Date(job.cleanerConfirmedAt), { addSuffix: true })}`;
-    } catch {
-      return "Completed";
+  if (job && isListerMyListingsJobCompleted(job)) {
+    const ref =
+      job.cleanerConfirmedAt ||
+      job.payment_released_at ||
+      job.updatedAt ||
+      null;
+    if (ref) {
+      try {
+        return `Completed ${formatDistanceToNowStrict(new Date(ref), { addSuffix: true })}`;
+      } catch {
+        return "Completed";
+      }
     }
+    return "Completed";
   }
   const endMs = parseUtcTimestamp(String(listing.end_time ?? ""));
   const st = String(listing.status ?? "").toLowerCase();
@@ -204,7 +244,7 @@ export function buildTimeLabel(listing: ListingRow, job: JobSnapshot | null | un
 export function listingMatchesCompletedTab(
   job: JobSnapshot | null | undefined
 ): boolean {
-  return (job?.status ?? "") === "completed";
+  return isListerMyListingsJobCompleted(job);
 }
 
 /**
@@ -215,7 +255,8 @@ export function isListerPaidJobListing(
   job: JobSnapshot | null | undefined
 ): boolean {
   const s = String(job?.status ?? "");
-  if (!s || s === "cancelled" || s === "completed") return false;
+  if (!s || s === "cancelled") return false;
+  if (isListerMyListingsJobCompleted(job)) return false;
   if (isDisputedJobStatus(s)) return false;
   return (
     s === "accepted" ||

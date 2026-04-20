@@ -11,6 +11,7 @@ export type JobRowForCleanerNet = {
   proposed_refund_amount?: number | null;
   counter_proposal_amount?: number | null;
   payment_released_at?: string | null;
+  completed_at?: string | null;
 };
 
 /**

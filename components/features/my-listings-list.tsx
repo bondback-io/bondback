@@ -29,6 +29,7 @@ import { parseUtcTimestamp } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
 import {
   cancelListing,
+  fetchListerJobsForMyListingsRefresh,
   relistExpiredListing,
   updateListingDetails,
   type RelistExpiredListingOptions,
@@ -72,6 +73,7 @@ import {
   passesListFilter,
   listingMatchesCompletedTab,
   isDisputedJobStatus,
+  isListerMyListingsJobCompleted,
   isListerNoBidsRelistListing,
   isListerPaidJobListing,
   type ListFilter,
@@ -120,6 +122,8 @@ type JobRowState = {
   refund_amount?: number | null;
   proposed_refund_amount?: number | null;
   counter_proposal_amount?: number | null;
+  payment_released_at?: string | null;
+  completed_at?: string | null;
 };
 
 export type MyListingsListProps = {
@@ -147,6 +151,8 @@ export type MyListingsListProps = {
       refund_amount?: number | null;
       proposed_refund_amount?: number | null;
       counter_proposal_amount?: number | null;
+      payment_released_at?: string | null;
+      completed_at?: string | null;
     }
   >;
   tabCounts: {
@@ -268,13 +274,9 @@ export function MyListingsList({
     if (!listingsDeduped.length) return;
     const ids = listingsDeduped.map((l) => l.id as unknown as string | number);
     const loadJobs = async () => {
-      const { data } = await supabase
-        .from("jobs")
-        .select(
-          "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
-        )
-        .in("listing_id", ids as never);
-      const jobs = (data ?? []) as {
+      const refresh = await fetchListerJobsForMyListingsRefresh(ids as string[]);
+      if (!refresh.ok) return;
+      const jobs = (refresh.jobs ?? []) as {
         id: number | string;
         listing_id: string | number;
         winner_id: string | null;
@@ -291,6 +293,8 @@ export function MyListingsList({
         refund_amount?: number | null;
         proposed_refund_amount?: number | null;
         counter_proposal_amount?: number | null;
+        payment_released_at?: string | null;
+        completed_at?: string | null;
       }[];
 
       const jobsByListing = new Map<string, (typeof jobs)[number][]>();
@@ -339,6 +343,8 @@ export function MyListingsList({
           refund_amount: j.refund_amount ?? null,
           proposed_refund_amount: j.proposed_refund_amount ?? null,
           counter_proposal_amount: j.counter_proposal_amount ?? null,
+          payment_released_at: j.payment_released_at ?? null,
+          completed_at: j.completed_at ?? null,
         };
       }
       setActiveJobs(jobMap);
@@ -641,11 +647,11 @@ export function MyListingsList({
   const activeListings = listingsDeduped.filter((l) => activeIdSet.has(String(l.id)));
   const completedListings = activeListings.filter((l) => {
     const info = activeJobs[String(l.id)] ?? null;
-    return info && info.status === "completed";
+    return info && isListerMyListingsJobCompleted(info);
   });
   const activeNonCompletedListings = activeListings.filter((l) => {
     const info = activeJobs[String(l.id)] ?? null;
-    return !info || info.status !== "completed";
+    return !info || !isListerMyListingsJobCompleted(info);
   });
 
   const otherListings = listingsDeduped.filter((l) => !activeIdSet.has(String(l.id)));
@@ -685,9 +691,14 @@ export function MyListingsList({
   }, [activeNonCompletedListings, liveListingsWithBids, noBidLiveListings, activeJobs]);
 
   const disputedTabListings = useMemo(() => {
-    const arr = listingsDeduped.filter((l) =>
-      isDisputedJobStatus(activeJobs[String(l.id)]?.status)
-    );
+    const arr = listingsDeduped.filter((l) => {
+      const j = activeJobs[String(l.id)];
+      return (
+        j &&
+        isDisputedJobStatus(j.status) &&
+        !isListerMyListingsJobCompleted(j)
+      );
+    });
     arr.sort((a, b) => {
       const ja = activeJobs[String(a.id)]?.disputed_at ?? activeJobs[String(a.id)]?.updatedAt;
       const jb = activeJobs[String(b.id)]?.disputed_at ?? activeJobs[String(b.id)]?.updatedAt;
@@ -1121,7 +1132,7 @@ export function MyListingsList({
                 ? "none"
                 : jobPipeline
                   ? "job"
-                  : jobConverted && String(job?.status ?? "") === "completed"
+                  : jobConverted && job && isListerMyListingsJobCompleted(job)
                     ? "job_done"
                     : "none";
               const showEndEarly =
@@ -1154,7 +1165,7 @@ export function MyListingsList({
                 );
 
               let completedCleanerNetCents: number | null = null;
-              if (job && String(job.status ?? "") === "completed") {
+              if (job && isListerMyListingsJobCompleted(job)) {
                 const net = cleanerNetEarnedCents(job, listing.current_lowest_bid_cents);
                 if (net > 0) completedCleanerNetCents = net;
               }
