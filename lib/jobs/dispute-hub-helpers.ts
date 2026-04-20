@@ -45,13 +45,27 @@ export function isDisputeHubCaseClosed(job: {
 }
 
 /** Fields to set on jobs when escrow pays out and an open dispute case should be archived. */
+const SETTLED_DISPUTE_RESOLUTIONS = new Set([
+  "partial_refund_accepted",
+  "counter_accepted_by_lister",
+  "mutual_agreement",
+  "partial_refund",
+  "release_funds",
+  "mediation",
+  "refund",
+]);
+
 /**
  * Jobs that should appear under “Completed” on lister/cleaner dashboards — includes dispute exits
- * where `status` was left as `refunded` or legacy rows with `dispute_status: completed` only.
+ * where `status` lagged (`in_review`, etc.) but settlement fields are present, and rows where
+ * `dispute_status` was not selected in the query (always include `dispute_status` in `select`).
  */
 export function isDashboardCompletedJob(job: {
   status?: string | null;
   dispute_status?: string | null;
+  dispute_resolution?: string | null;
+  refund_amount?: number | null;
+  payment_released_at?: string | null;
 }): boolean {
   const s = String(job.status ?? "").toLowerCase();
   const ds = String(job.dispute_status ?? "").toLowerCase();
@@ -59,7 +73,37 @@ export function isDashboardCompletedJob(job: {
   if (s === "completed") return true;
   if (s === "refunded" || s === "partially_refunded") return true;
   if (ds === "completed") return true;
+  const dr = String(job.dispute_resolution ?? "").toLowerCase();
+  if (dr && SETTLED_DISPUTE_RESOLUTIONS.has(dr)) {
+    const refund = Number(job.refund_amount ?? 0);
+    const released = String(job.payment_released_at ?? "").trim().length > 0;
+    if (refund >= 1 || released) return true;
+  }
   return false;
+}
+
+/** Cleaner earnings / payout UI: settled job (may lack `payment_released_at` after partial refund). */
+export function isCleanerEarningsPaidJob(job: {
+  status?: string | null;
+  dispute_status?: string | null;
+  dispute_resolution?: string | null;
+  refund_amount?: number | null;
+  payment_released_at?: string | null;
+}): boolean {
+  if (!isDashboardCompletedJob(job)) return false;
+  if (String(job.payment_released_at ?? "").trim()) return true;
+  const dr = String(job.dispute_resolution ?? "").toLowerCase();
+  if (
+    (dr === "partial_refund_accepted" ||
+      dr === "counter_accepted_by_lister" ||
+      dr === "mutual_agreement" ||
+      dr === "mediation" ||
+      dr === "refund") &&
+    Number(job.refund_amount ?? 0) >= 1
+  ) {
+    return true;
+  }
+  return String(job.status ?? "").toLowerCase() === "completed";
 }
 
 export function disputeAutoClosePatchOnPaymentRelease(job: {

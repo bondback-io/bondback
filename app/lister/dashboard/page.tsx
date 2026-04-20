@@ -95,10 +95,10 @@ async function ListerDashboardContent() {
       select: LISTING_FULL_SELECT,
       orderBy: { column: "created_at", ascending: false },
     }),
-    supabase
+    ((createSupabaseAdminClient() ?? supabase) as SupabaseClient)
       .from("jobs")
       .select(
-        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at"
       )
       .eq("lister_id", user.id),
     supabase
@@ -501,7 +501,15 @@ async function ListerDashboardContent() {
                         <p className="line-clamp-2 text-base font-semibold text-foreground dark:text-gray-100 md:line-clamp-1">
                           {listing?.title ?? `Job #${job.id}`}
                         </p>
-                        <p className="text-sm text-muted-foreground">Completed</p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
+                          <span>Completed</span>
+                          <span className="text-xs font-medium text-foreground dark:text-gray-200">
+                            Net settled{" "}
+                            {formatCents(
+                              listerNetSettledSpendCents(job, listing?.current_lowest_bid_cents)
+                            )}
+                          </span>
+                        </p>
                       </div>
                       <span className="shrink-0 text-sm font-semibold text-primary">View →</span>
                     </Link>

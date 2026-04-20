@@ -2971,6 +2971,9 @@ export async function acceptRefund(jobId: number): Promise<AcceptRefundResult> {
     });
   }
   revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/earnings");
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/admin/disputes");
   revalidatePath("/disputes");
@@ -3476,6 +3479,9 @@ export async function acceptCounterRefund(jobId: number): Promise<AcceptCounterR
     });
   }
   revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/earnings");
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/admin/disputes");
   revalidatePath("/disputes");

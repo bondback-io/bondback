@@ -11,6 +11,10 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import type { Database } from "@/types/supabase";
 import { adminJobGrossCents } from "@/lib/admin-job-gross";
 import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
+import {
+  isCleanerEarningsPaidJob,
+  isDashboardCompletedJob,
+} from "@/lib/jobs/dispute-hub-helpers";
 
 const PLATFORM_FEE_RATE = 0.12;
 
@@ -35,6 +39,7 @@ type JobRow = {
   agreed_amount_cents?: number | null;
   cleaner_confirmed_complete?: boolean;
   cleaner_confirmed_at?: string | null;
+  dispute_status?: string | null;
   dispute_resolution?: string | null;
   refund_amount?: number | null;
   proposed_refund_amount?: number | null;
@@ -76,7 +81,7 @@ export default async function EarningsPage() {
   const { data: jobsData } = await jobsClient
     .from("jobs")
     .select(
-      "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+      "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_status, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
     )
     .eq("winner_id", sessionData.user.id)
     .in("status", [
@@ -84,6 +89,12 @@ export default async function EarningsPage() {
       "in_progress",
       "completed",
       "completed_pending_approval",
+      "cancelled",
+      "refunded",
+      "partially_refunded",
+      "in_review",
+      "disputed",
+      "dispute_negotiating",
     ])
     .order("created_at", { ascending: false });
 
@@ -126,16 +137,17 @@ export default async function EarningsPage() {
     payoutMethod: "stripe";
   };
   const payoutHistory: PayoutHistoryRow[] = [];
-  const completedWithRelease = jobs.filter(
-    (j) => j.status === "completed" && j.payment_released_at
-  );
-  for (const job of completedWithRelease) {
+  const paidHistoryJobs = jobs.filter((j) => isCleanerEarningsPaidJob(j));
+  for (const job of paidHistoryJobs) {
     const listing = listingsMap.get(job.listing_id);
     const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents);
     if (grossCents <= 0) continue;
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
     const netCents = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents);
-    const releasedAt = job.payment_released_at!;
+    const releasedAt =
+      job.payment_released_at?.trim() ||
+      job.updated_at ||
+      job.created_at;
     payoutHistory.push({
       jobId: job.id,
       title: earningsRowTitle(job, listing),
@@ -154,12 +166,13 @@ export default async function EarningsPage() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const completedJobs = jobs.filter((j) => j.status === "completed");
+  const completedJobs = jobs.filter((j) => isDashboardCompletedJob(j));
   const pendingJobs = jobs.filter(
     (j) =>
-      j.status === "accepted" ||
-      j.status === "in_progress" ||
-      j.status === "completed_pending_approval"
+      !isDashboardCompletedJob(j) &&
+      (j.status === "accepted" ||
+        j.status === "in_progress" ||
+        j.status === "completed_pending_approval")
   );
 
   type TxRow = {
@@ -181,14 +194,13 @@ export default async function EarningsPage() {
     if (grossCents <= 0) continue;
 
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
-    const netCents =
-      job.status === "completed"
-        ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
-        : grossCents;
+    const netCents = isDashboardCompletedJob(job)
+      ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
+      : grossCents;
     const title = earningsRowTitle(job, listing);
 
     let status: "Pending" | "Processing" | "Paid" = "Pending";
-    if (job.status === "completed") status = "Paid";
+    if (isDashboardCompletedJob(job)) status = "Paid";
     else if (job.cleaner_confirmed_complete) status = "Processing";
 
     transactions.push({
@@ -199,10 +211,13 @@ export default async function EarningsPage() {
       feeCents,
       netCents,
       status,
-      payoutDate: job.status === "completed" && (job.payment_released_at ?? job.updated_at) ? (job.payment_released_at ?? job.updated_at ?? null) : null,
+      payoutDate:
+        isDashboardCompletedJob(job) && (job.payment_released_at ?? job.updated_at)
+          ? (job.payment_released_at ?? job.updated_at ?? null)
+          : null,
     });
 
-    if (job.status === "completed") {
+    if (isDashboardCompletedJob(job)) {
       const d = job.payment_released_at || job.updated_at || job.created_at;
       const netForChart = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents);
       chartEvents.push({
@@ -294,10 +309,9 @@ export default async function EarningsPage() {
     const listing = listingsMap.get(job.listing_id);
     const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents);
     if (grossCents <= 0) continue;
-    const netCents =
-      job.status === "completed"
-        ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
-        : grossCents;
+    const netCents = isDashboardCompletedJob(job)
+      ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
+      : grossCents;
     const title = earningsRowTitle(job, listing);
 
     const updatedAt = job.updated_at ? new Date(job.updated_at).getTime() : 0;
@@ -306,8 +320,60 @@ export default async function EarningsPage() {
       : updatedAt;
     const nowMs = now.getTime();
 
+    if (isDashboardCompletedJob(job)) {
+      const releasedAt = job.payment_released_at
+        ? new Date(job.payment_released_at).getTime()
+        : null;
+      const completedMs = releasedAt ?? (updatedAt || confirmedAt || nowMs);
+      const daysSinceCompleted = (nowMs - completedMs) / (24 * 60 * 60 * 1000);
+
+      if (releasedAt) {
+        paidItems.push({
+          jobId: job.id,
+          title,
+          netCents,
+          status: "paid",
+          expectedReleaseAt: null,
+          payoutDate: new Date(releasedAt).toISOString(),
+          progressHoursRemaining: null,
+        });
+      } else if (isCleanerEarningsPaidJob(job)) {
+        paidItems.push({
+          jobId: job.id,
+          title,
+          netCents,
+          status: "paid",
+          expectedReleaseAt: null,
+          payoutDate: new Date(completedMs).toISOString(),
+          progressHoursRemaining: null,
+        });
+      } else if (daysSinceCompleted <= PROCESSING_DAYS) {
+        const expectedReleaseMs =
+          (updatedAt || confirmedAt || nowMs) + REVIEW_WINDOW_MS + 3 * 24 * 60 * 60 * 1000;
+        upcomingPayoutsRaw.push({
+          jobId: job.id,
+          title,
+          netCents,
+          status: "processing",
+          expectedReleaseAt: new Date(expectedReleaseMs).toISOString(),
+          payoutDate: null,
+          progressHoursRemaining: null,
+        });
+      } else {
+        paidItems.push({
+          jobId: job.id,
+          title,
+          netCents,
+          status: "paid",
+          expectedReleaseAt: null,
+          payoutDate: new Date(completedMs).toISOString(),
+          progressHoursRemaining: null,
+        });
+      }
+      continue;
+    }
+
     if (
-      job.status !== "completed" &&
       (job.status === "accepted" ||
         job.status === "in_progress" ||
         job.status === "completed_pending_approval") &&
@@ -346,46 +412,6 @@ export default async function EarningsPage() {
         progressHoursRemaining: hoursRemaining,
       });
       continue;
-    }
-
-    if (job.status === "completed") {
-      const releasedAt = job.payment_released_at ? new Date(job.payment_released_at).getTime() : null;
-      const completedMs = releasedAt ?? (updatedAt || confirmedAt || nowMs);
-      const daysSinceCompleted = (nowMs - completedMs) / (24 * 60 * 60 * 1000);
-
-      if (releasedAt) {
-        paidItems.push({
-          jobId: job.id,
-          title,
-          netCents,
-          status: "paid",
-          expectedReleaseAt: null,
-          payoutDate: new Date(releasedAt).toISOString(),
-          progressHoursRemaining: null,
-        });
-      } else if (daysSinceCompleted <= PROCESSING_DAYS) {
-        const expectedReleaseMs =
-          (updatedAt || confirmedAt || nowMs) + REVIEW_WINDOW_MS + 3 * 24 * 60 * 60 * 1000;
-        upcomingPayoutsRaw.push({
-          jobId: job.id,
-          title,
-          netCents,
-          status: "processing",
-          expectedReleaseAt: new Date(expectedReleaseMs).toISOString(),
-          payoutDate: null,
-          progressHoursRemaining: null,
-        });
-      } else {
-        paidItems.push({
-          jobId: job.id,
-          title,
-          netCents,
-          status: "paid",
-          expectedReleaseAt: null,
-          payoutDate: new Date(completedMs).toISOString(),
-          progressHoursRemaining: null,
-        });
-      }
     }
   }
 

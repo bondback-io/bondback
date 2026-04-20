@@ -124,7 +124,7 @@ async function CleanerDashboardContent() {
   const { data: jobsData } = await jobsClient
     .from("jobs")
     .select(
-      "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+      "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at"
     )
     .eq("winner_id", user.id)
     .in("status", [
@@ -530,9 +530,14 @@ async function CleanerDashboardContent() {
                         <p className="line-clamp-2 text-base font-semibold text-foreground dark:text-gray-100 md:line-clamp-1">
                           {listing?.title?.trim() || job.title?.trim() || `Job #${job.id}`}
                         </p>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                          Completed
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5">
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                            Completed
+                          </span>
+                          <span className="text-xs font-medium text-foreground dark:text-gray-200">
+                            Net paid {formatCents(cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents))}
+                          </span>
                         </p>
                       </div>
                       <span className="shrink-0 text-sm font-semibold text-primary">View →</span>

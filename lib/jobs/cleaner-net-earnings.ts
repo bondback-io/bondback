@@ -1,13 +1,16 @@
 import { adminJobGrossCents } from "@/lib/admin-job-gross";
+import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
 
 /** Job fields needed to subtract lister refunds after partial-refund dispute resolution. */
 export type JobRowForCleanerNet = {
   status?: string | null;
   agreed_amount_cents?: number | null;
+  dispute_status?: string | null;
   dispute_resolution?: string | null;
   refund_amount?: number | null;
   proposed_refund_amount?: number | null;
   counter_proposal_amount?: number | null;
+  payment_released_at?: string | null;
 };
 
 /**
@@ -20,7 +23,7 @@ export function listerRefundCentsFromDisputeJob(job: JobRowForCleanerNet): numbe
   const partial =
     dr === "partial_refund_accepted" || dr === "counter_accepted_by_lister";
 
-  if (st === "completed" && partial) {
+  if (partial && (st === "completed" || isDashboardCompletedJob(job))) {
     const fromRow = Math.max(0, Math.round(Number(job.refund_amount ?? 0) || 0));
     if (fromRow >= 1) return fromRow;
     if (dr === "counter_accepted_by_lister") {
@@ -47,8 +50,7 @@ export function listerRefundCentsFromDisputeJob(job: JobRowForCleanerNet): numbe
  * after completion, agreed/bid minus any recorded lister refund from disputes.
  */
 function jobIsSettledForNet(job: JobRowForCleanerNet): boolean {
-  const s = String(job.status ?? "").toLowerCase();
-  return s === "completed" || s === "refunded" || s === "partially_refunded";
+  return isDashboardCompletedJob(job);
 }
 
 export function cleanerNetEarnedCents(
