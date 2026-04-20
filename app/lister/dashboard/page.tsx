@@ -41,10 +41,7 @@ import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
 import { detailUrlForCardItem, bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
 import ListerDashboardLoading from "./loading";
-import {
-  normalizeProfileRolesFromDb,
-  resolveActiveRoleFromProfile,
-} from "@/lib/profile-roles";
+import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import { listerNetSettledSpendCents } from "@/lib/jobs/cleaner-net-earnings";
 import {
   isDashboardActivePipelineJob,
@@ -87,11 +84,6 @@ async function ListerDashboardContent() {
   const profile = profileData as ProfileRow;
   const roles = normalizeProfileRolesFromDb(profile.roles, true);
   if (!roles.includes("lister")) redirect("/dashboard");
-
-  const resolvedActive = resolveActiveRoleFromProfile(profile);
-  if (resolvedActive === "cleaner" && roles.includes("cleaner")) {
-    redirect("/cleaner/dashboard");
-  }
 
   const [listingsFetched, jobsRes, notificationsRes, globalSettings] = await Promise.all([
     fetchListingsForLister(user.id, {

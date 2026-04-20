@@ -92,6 +92,38 @@ function sessionMayReadJobOrAdmin(
   return sessionMayReadJobRow(job, sessionUserId);
 }
 
+/**
+ * Cleaner can open `/jobs/[id]` when their bid row is `accepted` even if `jobs.winner_id` is null
+ * or stale (matches dashboard merge for accepted listings).
+ */
+async function cleanerMayReadJobByAcceptedBid(
+  supabase: ServerSupabaseClient,
+  job: Pick<JobRow, "listing_id">,
+  sessionUserId: string | undefined
+): Promise<boolean> {
+  const uid = sessionUserId?.trim();
+  if (!uid) return false;
+  const lid = String(job.listing_id);
+  const { data: bidRow } = await supabase
+    .from("bids")
+    .select("id")
+    .eq("listing_id", lid)
+    .eq("cleaner_id", uid)
+    .eq("status", "accepted")
+    .maybeSingle();
+  if (bidRow) return true;
+  const admin = createSupabaseAdminClient();
+  if (!admin) return false;
+  const { data } = await admin
+    .from("bids")
+    .select("id")
+    .eq("listing_id", lid)
+    .eq("cleaner_id", uid)
+    .eq("status", "accepted")
+    .maybeSingle();
+  return data != null;
+}
+
 /** True when a non-cancelled job exists with an assigned cleaner for this listing. */
 export async function listingHasAssignedWinnerJob(
   admin: AdminClient,
@@ -180,6 +212,9 @@ export async function loadJobByNumericIdForSession(
   if (!error && fromUser) {
     const j = fromUser as JobRow;
     if (sessionMayReadJobOrAdmin(j, sessionUserId, isAdmin)) return j;
+    if (!isAdmin && (await cleanerMayReadJobByAcceptedBid(supabase, j, sessionUserId))) {
+      return j;
+    }
   }
 
   const admin = createSupabaseAdminClient();
@@ -207,6 +242,10 @@ export async function loadJobByNumericIdForSession(
 
   const j = full as JobRow;
   if (sessionMayReadJobOrAdmin(j, sessionUserId, isAdmin)) {
+    return j;
+  }
+
+  if (!isAdmin && (await cleanerMayReadJobByAcceptedBid(supabase, j, sessionUserId))) {
     return j;
   }
 

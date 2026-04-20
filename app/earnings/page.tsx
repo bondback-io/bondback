@@ -79,15 +79,46 @@ export default async function EarningsPage() {
 
   /** Same RLS gap as listings: completed jobs may not be visible on the user client. */
   const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+  const jobSelectEarnings =
+    "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_status, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, completed_at" as const;
   const { data: jobsData } = await jobsClient
     .from("jobs")
-    .select(
-      "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_status, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, completed_at"
-    )
+    .select(jobSelectEarnings)
     .eq("winner_id", sessionData.user.id)
     .order("created_at", { ascending: false });
 
-  const jobs = (jobsData ?? []) as JobRow[];
+  let jobs = (jobsData ?? []) as JobRow[];
+  const { data: acceptedBidRows } = await supabase
+    .from("bids")
+    .select("listing_id")
+    .eq("cleaner_id", sessionData.user.id)
+    .eq("status", "accepted");
+  const acceptedListingIds = [
+    ...new Set(
+      (acceptedBidRows ?? [])
+        .map((r) => String((r as { listing_id: string }).listing_id).trim())
+        .filter(Boolean)
+    ),
+  ];
+  if (acceptedListingIds.length > 0) {
+    const { data: jobsFromAcceptedListings } = await jobsClient
+      .from("jobs")
+      .select(jobSelectEarnings)
+      .in("listing_id", acceptedListingIds as string[])
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false });
+    const byId = new Map<number, JobRow>();
+    for (const j of jobs) {
+      byId.set(Number(j.id), j);
+    }
+    for (const j of (jobsFromAcceptedListings ?? []) as JobRow[]) {
+      const id = Number(j.id);
+      if (!byId.has(id)) byId.set(id, j);
+    }
+    jobs = Array.from(byId.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }
   const listingIds = [...new Set(jobs.map((j) => j.listing_id))];
   let listingsMap = new Map<string, ListingRow>();
 

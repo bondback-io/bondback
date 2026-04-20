@@ -38,10 +38,7 @@ import {
 import { ChevronDown, CheckCircle2 } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
-import {
-  normalizeProfileRolesFromDb,
-  resolveActiveRoleFromProfile,
-} from "@/lib/profile-roles";
+import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
@@ -104,11 +101,6 @@ async function CleanerDashboardContent() {
   const roles = normalizeProfileRolesFromDb(profile.roles, true);
   if (!roles.includes("cleaner")) redirect("/dashboard");
 
-  const resolvedActive = resolveActiveRoleFromProfile(profile);
-  if (resolvedActive === "lister" && roles.includes("lister")) {
-    redirect("/lister/dashboard");
-  }
-
   const globalForDash = await getCachedGlobalSettingsForPages();
   const requireStripeRelease =
     (globalForDash as { require_stripe_connect_before_payment_release?: boolean } | null)
@@ -124,15 +116,52 @@ async function CleanerDashboardContent() {
    * read is scoped to `winner_id = auth user` only (same boundary as listing snapshots below).
    */
   const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+  const jobSelectForDashboard =
+    "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at" as const;
+
   const { data: jobsData } = await jobsClient
     .from("jobs")
-    .select(
-      "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at"
-    )
+    .select(jobSelectForDashboard)
     .eq("winner_id", user.id)
     .order("created_at", { ascending: false });
 
-  const jobs = (jobsData ?? []) as JobRow[];
+  let jobs = (jobsData ?? []) as JobRow[];
+
+  /**
+   * Include jobs for listings where this cleaner’s bid is `accepted` even if `jobs.winner_id` is
+   * null/stale (RLS or legacy writes). De-dupe by job id.
+   */
+  const { data: acceptedBidRows } = await supabase
+    .from("bids")
+    .select("listing_id")
+    .eq("cleaner_id", user.id)
+    .eq("status", "accepted");
+  const acceptedListingIds = [
+    ...new Set(
+      (acceptedBidRows ?? [])
+        .map((r) => String((r as { listing_id: string }).listing_id).trim())
+        .filter(Boolean)
+    ),
+  ];
+  if (acceptedListingIds.length > 0) {
+    const { data: jobsFromAcceptedListings } = await jobsClient
+      .from("jobs")
+      .select(jobSelectForDashboard)
+      .in("listing_id", acceptedListingIds as string[])
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false });
+    const byId = new Map<number, JobRow>();
+    for (const j of jobs) {
+      byId.set(Number(j.id), j);
+    }
+    for (const j of (jobsFromAcceptedListings ?? []) as JobRow[]) {
+      const id = Number(j.id);
+      if (!byId.has(id)) byId.set(id, j);
+    }
+    jobs = Array.from(byId.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }
   const listingIds = [...new Set(jobs.map((j) => j.listing_id))];
 
   let listingsMap = new Map<string, ListingRow>();
