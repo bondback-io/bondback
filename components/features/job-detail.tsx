@@ -546,6 +546,11 @@ export type JobDetailProps = {
   hasDisputeResponse?: boolean;
   /** Agreed job amount in cents (for partial refund slider). */
   agreedAmountCents?: number;
+  /**
+   * When the job completed after a partial refund to the lister, net cents from job escrow paid to the cleaner.
+   * Omit when the full agreed amount was released.
+   */
+  completedCleanerEscrowPayoutCents?: number | null;
   /** Lister's proposed refund in cents (when status = dispute_negotiating). */
   proposedRefundAmount?: number | null;
   /** Cleaner's counter proposal in cents. */
@@ -669,6 +674,7 @@ export function JobDetail({
   disputeCleanerCounterUsed = false,
   disputeListerCounterUsed = false,
   adminMediationRequested = false,
+  completedCleanerEscrowPayoutCents = null,
   paymentTimeline = null,
   hasPaymentHold = false,
   isStripeTestMode = false,
@@ -1564,6 +1570,12 @@ export function JobDetail({
 
   const hasAfterPhotos = afterPhotoEntries.length >= 3;
 
+  /** Hide “Raise a dispute” once escrow is released or a dispute outcome is on file (both roles). */
+  const hideRaiseDisputeFromJobHistory =
+    Boolean(paymentTimeline?.paymentReleasedAt?.trim()) ||
+    canLeaveReview ||
+    Boolean(paymentTimeline?.disputeResolution?.trim());
+
   const canListerTopUp = useMemo(
     () =>
       Boolean(
@@ -1584,6 +1596,13 @@ export function JobDetail({
       localJobStatus,
     ]
   );
+
+  useEffect(() => {
+    if (hideRaiseDisputeFromJobHistory) {
+      setShowOpenDisputeForm(false);
+      setShowCleanerDisputeForm(false);
+    }
+  }, [hideRaiseDisputeFromJobHistory]);
 
   const handleFinalizePayment = () => {
     if (!jobId || !isJobLister) return;
@@ -1739,6 +1758,44 @@ export function JobDetail({
     localJobStatus !== "completed" &&
     !cleanerReviewPendingMinimal &&
     !listerReleaseFundsStep;
+
+  const timelineRefundCents =
+    paymentTimeline?.refundAmountCents != null && paymentTimeline.refundAmountCents > 0
+      ? paymentTimeline.refundAmountCents
+      : null;
+  const disputeResolutionFromTimeline = paymentTimeline?.disputeResolution ?? null;
+  const isPartialRefundResolutionFromTimeline =
+    disputeResolutionFromTimeline === "partial_refund_accepted" ||
+    disputeResolutionFromTimeline === "counter_accepted_by_lister";
+  const jobCompletedForEscrow = (localJobStatus ?? jobStatus) === "completed";
+  const derivedNetEscrowFromTimeline =
+    jobCompletedForEscrow &&
+    isPartialRefundResolutionFromTimeline &&
+    timelineRefundCents != null &&
+    agreedAmountCents > 0
+      ? Math.max(0, agreedAmountCents - timelineRefundCents)
+      : null;
+
+  const escrowToCleanerCents = (() => {
+    if (completedCleanerEscrowPayoutCents != null) {
+      return Math.max(0, completedCleanerEscrowPayoutCents);
+    }
+    if (derivedNetEscrowFromTimeline != null) {
+      return derivedNetEscrowFromTimeline;
+    }
+    return agreedAmountCents;
+  })();
+
+  const cleanerReceivedPartialRefund =
+    agreedAmountCents > 0 &&
+    escrowToCleanerCents < agreedAmountCents &&
+    (completedCleanerEscrowPayoutCents != null ||
+      (isPartialRefundResolutionFromTimeline && timelineRefundCents != null));
+
+  const soldGridJobPaymentDisplayCents =
+    localJobStatus === "completed" && isJobCleaner
+      ? escrowToCleanerCents
+      : agreedAmountCents;
 
   /** Full address card for cleaners once the job is underway (maps / travel). Placed under payment timeline. */
   const showCleanerPropertyAddressCard =
@@ -1971,7 +2028,7 @@ export function JobDetail({
                   Payment released
                 </p>
                 <p className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 sm:text-3xl">
-                  {formatCents(agreedAmountCents)}
+                  {formatCents(escrowToCleanerCents)}
                 </p>
                 <p className="text-sm leading-relaxed text-emerald-900 dark:text-emerald-100">
                   Paid to{" "}
@@ -2015,7 +2072,7 @@ export function JobDetail({
                           {localJobStatus === "completed" ? "Job amount (paid)" : "Agreed job price"}
                         </p>
                         <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 sm:text-3xl">
-                          {formatCents(agreedAmountCents)}
+                          {formatCents(soldGridJobPaymentDisplayCents)}
                         </p>
                       </div>
                     )}
@@ -2628,7 +2685,7 @@ export function JobDetail({
                         </p>
                         <p className="text-xl font-semibold leading-snug text-emerald-900 sm:text-2xl dark:text-emerald-100">
                           {`Congratulations! Your payment of ${formatCents(
-                            agreedAmountCents
+                            escrowToCleanerCents
                           )} has been paid to ${
                             cleanerName
                               ? cleanerName.split(" ")[0]
@@ -2662,11 +2719,13 @@ export function JobDetail({
                         </p>
                         <p className="text-xl font-semibold leading-snug text-emerald-900 sm:text-2xl dark:text-emerald-100">
                           {`Payment of ${formatCents(
-                            agreedAmountCents
+                            escrowToCleanerCents
                           )} has been released to you :)`}
                         </p>
                         <p className="text-sm leading-relaxed text-emerald-800 dark:text-emerald-200">
-                          You received the full bid amount. The lister paid the platform fee separately.
+                          {cleanerReceivedPartialRefund
+                            ? "This is the net amount from the job escrow after the agreed partial refund to the lister. The lister paid the platform fee separately."
+                            : "You received the full bid amount. The lister paid the platform fee separately."}
                         </p>
                         <p className="text-sm leading-relaxed text-emerald-800/90 dark:text-emerald-200/90">
                           Funds sent to your Stripe account – automatic payout in 2–7 days, or use Withdraw Now in Settings → Payments.
@@ -3556,8 +3615,8 @@ export function JobDetail({
                     hasAfterPhotos &&
                     allCompleted &&
                     numericJobId &&
+                    !hideRaiseDisputeFromJobHistory &&
                     (localJobStatus === "completed_pending_approval" ||
-                      localJobStatus === "completed" ||
                       (localJobStatus === "in_progress" && cleanerConfirmedComplete)) && (
                       <div className="space-y-2 rounded-lg border border-amber-200/80 bg-amber-50/40 px-3 py-3 dark:border-amber-800/50 dark:bg-amber-950/25">
                         <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
@@ -3707,7 +3766,9 @@ export function JobDetail({
                           </Button>
                         )}
 
-                        {localJobStatus === "completed_pending_approval" && hasAfterPhotos && (
+                        {localJobStatus === "completed_pending_approval" &&
+                          hasAfterPhotos &&
+                          !hideRaiseDisputeFromJobHistory && (
                           <Button
                             type="button"
                             size="lg"
@@ -3760,7 +3821,7 @@ export function JobDetail({
                           </p>
                         )}
                     </div>
-                    {showOpenDisputeForm && (
+                    {showOpenDisputeForm && !hideRaiseDisputeFromJobHistory && (
                       <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
                         <GuidedDisputeForm
                           jobId={numericJobId!}
@@ -4126,6 +4187,7 @@ export function JobDetail({
                                 if (res.ok) {
                                   setLocalJobStatus("completed");
                                   toast({ title: "Refund accepted", description: "Funds have been released." });
+                                  scheduleRouterAction(() => router.refresh());
                                 } else {
                                   toast({ variant: "destructive", title: "Failed", description: res.error });
                                 }
@@ -4323,6 +4385,7 @@ export function JobDetail({
                                 if (res.ok) {
                                   setLocalJobStatus("completed");
                                   toast({ title: "Counter accepted", description: "Job completed." });
+                                  scheduleRouterAction(() => router.refresh());
                                 } else {
                                   toast({ variant: "destructive", title: "Failed", description: res.error });
                                 }
@@ -4816,7 +4879,7 @@ export function JobDetail({
                         Job amount (paid)
                       </p>
                       <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 sm:text-3xl">
-                        {formatCents(agreedAmountCents)}
+                        {formatCents(escrowToCleanerCents)}
                       </p>
                     </div>
                   )}

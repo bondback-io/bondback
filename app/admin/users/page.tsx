@@ -30,7 +30,7 @@ import { AdminUsersFilters } from "@/components/admin/admin-users-filters";
 import { AdminUserVerificationActions } from "@/components/admin/admin-user-verification-actions";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { PROFILE_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
-import { adminJobGrossCents } from "@/lib/admin-job-gross";
+import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
 import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 import { calculateProfileStrengthPercent } from "@/lib/profile-strength";
 
@@ -42,6 +42,10 @@ type JobRow = {
   listing_id: string;
   status: string;
   agreed_amount_cents?: number | null;
+  dispute_resolution?: string | null;
+  refund_amount?: number | null;
+  proposed_refund_amount?: number | null;
+  counter_proposal_amount?: number | null;
 };
 type ListingRow = { id: string; current_lowest_bid_cents: number | null };
 
@@ -97,7 +101,9 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
           .order("id", { ascending: false }),
     serviceRoleMissing
       ? { data: [] as JobRow[], error: null }
-      : supabaseAdmin!.from("jobs").select("id, lister_id, winner_id, listing_id, status, agreed_amount_cents"),
+      : supabaseAdmin!.from("jobs").select(
+          "id, lister_id, winner_id, listing_id, status, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+        ),
     serviceRoleMissing || !supabaseAdmin
       ? Promise.resolve([] as User[])
       : listAllAuthUsersPaginated(supabaseAdmin),
@@ -162,7 +168,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     if (j.winner_id) totalJobsByUser.set(j.winner_id, (totalJobsByUser.get(j.winner_id) ?? 0) + 1);
     if (j.status === "completed" && j.winner_id && j.listing_id) {
       const list = listingsMap.get(j.listing_id);
-      const cents = adminJobGrossCents(j, list?.current_lowest_bid_cents);
+      const cents = cleanerNetEarnedCents(j, list?.current_lowest_bid_cents);
       totalEarningsByUser.set(j.winner_id, (totalEarningsByUser.get(j.winner_id) ?? 0) + (cents || 0));
     }
   }

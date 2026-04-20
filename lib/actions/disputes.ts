@@ -151,6 +151,8 @@ export async function submitCleanerAdditionalPaymentRequest(
       body: threadBody,
       attachment_urls: attachmentLines,
       is_escalation_event: false,
+      visible_to_lister: true,
+      visible_to_cleaner: true,
     });
 
     if (row.lister_id) {
@@ -366,6 +368,8 @@ export async function submitDisputeMessage(
       body,
       attachment_urls: attachmentUrls,
       is_escalation_event: escalate,
+      visible_to_lister: true,
+      visible_to_cleaner: true,
     });
 
     if (escalate) {
@@ -447,14 +451,16 @@ export async function proposeMediation(formData: FormData) {
       mediation_last_activity_at: new Date().toISOString(),
     })
     .eq("id", jobId);
-  await (admin as any).from("dispute_messages").insert({
-    job_id: jobId,
-    author_user_id: userId,
-    author_role: "admin",
-    body: `Mediation proposal\n\n${proposalText}\n\nRefund (cents): ${refundCents} · Top-up (cents): ${additionalPaymentCents}`,
-    attachment_urls: [],
-    is_escalation_event: false,
-  });
+    await (admin as any).from("dispute_messages").insert({
+      job_id: jobId,
+      author_user_id: userId,
+      author_role: "admin",
+      body: `Mediation proposal\n\n${proposalText}\n\nRefund (cents): ${refundCents} · Top-up (cents): ${additionalPaymentCents}`,
+      attachment_urls: [],
+      is_escalation_event: false,
+      visible_to_lister: true,
+      visible_to_cleaner: true,
+    });
 
   const { data: jobRow } = await (admin as any)
     .from("jobs")
@@ -683,6 +689,8 @@ export async function openEscalatedDispute(
           body: "Mediation requested at dispute creation.",
           attachment_urls: [],
           is_escalation_event: true,
+          visible_to_lister: true,
+          visible_to_cleaner: true,
         });
       }
     }
@@ -762,6 +770,10 @@ export async function sendAdminDisputePartyEmail(
       authorUserId: userId,
       authorRole: "admin",
       body: `[Email sent to ${partyLabel}]\nSubject: ${subject}\n\n${body}`,
+      visibility:
+        recipient === "lister"
+          ? { lister: true, cleaner: false }
+          : { lister: false, cleaner: true },
     });
 
     await createNotification(
@@ -775,6 +787,65 @@ export async function sendAdminDisputePartyEmail(
     revalidatePath("/disputes");
     revalidatePath(`/jobs/${jobId}`);
     return { ok: true, success: `Email sent to ${partyLabel}.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+export type AdminCaseNoteState = { ok?: boolean; error?: string; success?: string };
+
+/**
+ * Admin file note on a dispute. Visibility to lister/cleaner is off by default; parties only see the note if checked.
+ */
+export async function addAdminDisputeCaseNote(
+  _prev: AdminCaseNoteState | undefined,
+  formData: FormData
+): Promise<AdminCaseNoteState> {
+  const auth = await requireUserOrError();
+  if ("error" in auth) return { error: auth.error };
+
+  try {
+    const { supabase, userId } = auth;
+    const jobId = Number(formData.get("jobId"));
+    const body = trimText(formData.get("caseNoteBody"));
+    if (!jobId || body.length < 2) {
+      return { error: "Enter a note (at least a couple of characters)." };
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!(profile as { is_admin?: boolean } | null)?.is_admin) {
+      return { error: "Not authorized." };
+    }
+
+    const visibleToLister = formData.get("visibleToLister") === "on";
+    const visibleToCleaner = formData.get("visibleToCleaner") === "on";
+
+    await insertDisputeThreadEntry({
+      jobId,
+      authorUserId: userId,
+      authorRole: "admin",
+      body: `Admin case note\n\n${body}`,
+      visibility: { lister: visibleToLister, cleaner: visibleToCleaner },
+    });
+
+    revalidatePath("/admin/disputes");
+    revalidatePath("/disputes");
+    revalidatePath(`/jobs/${jobId}`);
+
+    const share =
+      visibleToLister && visibleToCleaner
+        ? "Shared with lister and cleaner on their dispute timeline."
+        : visibleToLister
+          ? "Visible to the lister on their dispute timeline."
+          : visibleToCleaner
+            ? "Visible to the cleaner on their dispute timeline."
+            : "Internal note only — not shown to lister or cleaner.";
+
+    return { ok: true, success: `Note saved. ${share}` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
   }

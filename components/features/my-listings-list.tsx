@@ -60,6 +60,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ListerListingCard } from "@/components/my-listings/lister-listing-card";
+import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
 import { ListerDisputedCard } from "@/components/my-listings/lister-disputed-card";
 import { PullToRefresh } from "@/components/my-listings/pull-to-refresh";
 import {
@@ -115,6 +116,10 @@ type JobRowState = {
   dispute_status?: string | null;
   dispute_opened_by?: string | null;
   agreed_amount_cents?: number | null;
+  dispute_resolution?: string | null;
+  refund_amount?: number | null;
+  proposed_refund_amount?: number | null;
+  counter_proposal_amount?: number | null;
 };
 
 export type MyListingsListProps = {
@@ -138,6 +143,10 @@ export type MyListingsListProps = {
       dispute_status?: string | null;
       dispute_opened_by?: string | null;
       agreed_amount_cents?: number | null;
+      dispute_resolution?: string | null;
+      refund_amount?: number | null;
+      proposed_refund_amount?: number | null;
+      counter_proposal_amount?: number | null;
     }
   >;
   tabCounts: {
@@ -262,7 +271,7 @@ export function MyListingsList({
       const { data } = await supabase
         .from("jobs")
         .select(
-          "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents"
+          "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
         )
         .in("listing_id", ids as never);
       const jobs = (data ?? []) as {
@@ -278,6 +287,10 @@ export function MyListingsList({
         dispute_status?: string | null;
         dispute_opened_by?: string | null;
         agreed_amount_cents?: number | null;
+        dispute_resolution?: string | null;
+        refund_amount?: number | null;
+        proposed_refund_amount?: number | null;
+        counter_proposal_amount?: number | null;
       }[];
 
       const jobsByListing = new Map<string, (typeof jobs)[number][]>();
@@ -322,6 +335,10 @@ export function MyListingsList({
           dispute_status: j.dispute_status ?? null,
           dispute_opened_by: j.dispute_opened_by ?? null,
           agreed_amount_cents: j.agreed_amount_cents ?? null,
+          dispute_resolution: j.dispute_resolution ?? null,
+          refund_amount: j.refund_amount ?? null,
+          proposed_refund_amount: j.proposed_refund_amount ?? null,
+          counter_proposal_amount: j.counter_proposal_amount ?? null,
         };
       }
       setActiveJobs(jobMap);
@@ -1136,6 +1153,12 @@ export function MyListingsList({
                     : null
                 );
 
+              let completedCleanerNetCents: number | null = null;
+              if (job && String(job.status ?? "") === "completed") {
+                const net = cleanerNetEarnedCents(job, listing.current_lowest_bid_cents);
+                if (net > 0) completedCleanerNetCents = net;
+              }
+
               return (
                 <ListerListingCard
                   key={String(listing.id)}
@@ -1154,6 +1177,7 @@ export function MyListingsList({
                   onEndEarly={showEndEarly ? () => openCancelListingConfirm(listing) : undefined}
                   onRelist={canRelistFromNoBidsPool ? () => openRelistDialog(listing) : undefined}
                   relistLoading={relistingId === String(listing.id)}
+                  completedCleanerNetCents={completedCleanerNetCents}
                 />
               );
             })}

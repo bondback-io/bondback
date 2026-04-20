@@ -230,6 +230,53 @@ export async function JobDetailPageContent({
     (job as { counter_proposal_amount?: number | null })
       ?.counter_proposal_amount ?? null;
 
+  const disputeResolution = String(job?.dispute_resolution ?? "");
+  const partialRefundResolution =
+    disputeResolution === "partial_refund_accepted" ||
+    disputeResolution === "counter_accepted_by_lister";
+
+  /** Cents returned to lister after partial-refund dispute resolution (matches Stripe / timeline). */
+  function refundToListerAfterPartialResolution(
+    dr: string,
+    refundAmount: unknown,
+    proposed: number | null,
+    counter: number | null
+  ): number {
+    const fromRow = Math.max(0, Math.round(Number(refundAmount ?? 0) || 0));
+    if (fromRow >= 1) return fromRow;
+    if (dr === "counter_accepted_by_lister") {
+      return Math.max(
+        0,
+        Math.round(Number(counter ?? proposed ?? 0) || 0)
+      );
+    }
+    if (dr === "partial_refund_accepted") {
+      return Math.max(
+        0,
+        Math.round(Number(proposed ?? counter ?? 0) || 0)
+      );
+    }
+    return 0;
+  }
+
+  const refundForNet =
+    job?.status === "completed" && partialRefundResolution
+      ? refundToListerAfterPartialResolution(
+          disputeResolution,
+          job?.refund_amount,
+          proposedRefundAmount,
+          counterProposalAmount
+        )
+      : Math.max(0, Math.round(Number(job?.refund_amount ?? 0) || 0));
+
+  const completedCleanerEscrowPayoutCents =
+    job?.status === "completed" &&
+    partialRefundResolution &&
+    refundForNet >= 1 &&
+    agreedAmountCents > 0
+      ? Math.max(0, agreedAmountCents - refundForNet)
+      : null;
+
   const j = job as {
     payment_intent_id?: string | null;
     payment_released_at?: string | null;
@@ -242,6 +289,12 @@ export async function JobDetailPageContent({
   const hasPaymentHold = !!String(j?.payment_intent_id ?? "").trim();
   const canLeaveReview =
     Boolean(job?.status === "completed") && Boolean(j?.payment_released_at);
+  const timelineRefundCentsResolved =
+    job?.status === "completed" && partialRefundResolution
+      ? refundForNet >= 1
+        ? refundForNet
+        : null
+      : null;
   const paymentTimeline =
     job && (j?.payment_intent_id || j?.payment_released_at || j?.dispute_resolution)
       ? {
@@ -251,10 +304,11 @@ export async function JobDetailPageContent({
           disputeResolution: j.dispute_resolution ?? null,
           resolutionAt: j.resolution_at ?? null,
           refundAmountCents:
-            j.refund_amount ??
-            proposedRefundAmount ??
-            counterProposalAmount ??
-            null,
+            timelineRefundCentsResolved ??
+            (j.refund_amount ??
+              proposedRefundAmount ??
+              counterProposalAmount ??
+              null),
         }
       : null;
 
@@ -635,6 +689,7 @@ export async function JobDetailPageContent({
           disputeOpenedBy={disputeOpenedByTyped}
           hasDisputeResponse={!!(job as { dispute_response_at?: string | null })?.dispute_response_at}
           agreedAmountCents={agreedAmountCents}
+          completedCleanerEscrowPayoutCents={completedCleanerEscrowPayoutCents}
           proposedRefundAmount={proposedRefundAmount}
           counterProposalAmount={counterProposalAmount}
           disputeCleanerCounterUsed={

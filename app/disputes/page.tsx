@@ -12,6 +12,7 @@ import { DisputeThreadCard } from "@/components/disputes/dispute-thread-card";
 import { MediationVoteButtons } from "@/components/disputes/mediation-vote-buttons";
 import { serializeDisputeMessagesForClient } from "@/lib/disputes/serialize-dispute-messages";
 import { mergeOpeningMessageFromJobIfMissing } from "@/lib/disputes/dispute-audit-merge";
+import { filterDisputeMessageRowsForPartyViewer } from "@/lib/disputes/filter-dispute-messages-for-viewer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function DisputesPage() {
   const ids = list.map((j) => j.id).filter(Boolean);
 
   const admin = createSupabaseAdminClient();
-  const messagesByJob = new Map<number, any[]>();
+  const messagesByJob = new Map<number, ReturnType<typeof serializeDisputeMessagesForClient>>();
   const paymentReqByJob = new Map<number, any[]>();
   const mediationByJob = new Map<number, any>();
   if (admin && ids.length > 0) {
@@ -49,14 +50,21 @@ export default async function DisputesPage() {
       .select("*")
       .in("job_id", ids)
       .order("created_at", { ascending: true });
+    const rawByJob = new Map<number, any[]>();
     for (const m of msgs ?? []) {
       const key = Number(m.job_id);
-      const arr = messagesByJob.get(key) ?? [];
+      const arr = rawByJob.get(key) ?? [];
       arr.push(m);
-      messagesByJob.set(key, arr);
+      rawByJob.set(key, arr);
     }
-    for (const [jid, arr] of messagesByJob) {
-      messagesByJob.set(jid, serializeDisputeMessagesForClient(arr));
+    for (const job of list) {
+      const jid = Number(job.id);
+      const raw = rawByJob.get(jid) ?? [];
+      const filtered = filterDisputeMessageRowsForPartyViewer(raw, userId, {
+        lister_id: job.lister_id,
+        winner_id: job.winner_id,
+      });
+      messagesByJob.set(jid, serializeDisputeMessagesForClient(filtered));
     }
 
     const { data: reqs } = await (admin as any)

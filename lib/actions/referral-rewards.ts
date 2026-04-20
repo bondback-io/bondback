@@ -8,6 +8,7 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getNotificationPrefs } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/notifications/email";
 import { ReferralReward } from "@/emails/ReferralReward";
+import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
 
 /**
  * When a referred cleaner completes their first paid job (payment released),
@@ -39,7 +40,9 @@ export async function applyReferralRewardsForCompletedJob(jobId: number): Promis
 
   const { data: job, error: jobErr } = await admin
     .from("jobs")
-    .select("id, status, winner_id, agreed_amount_cents, payment_released_at")
+    .select(
+      "id, status, winner_id, agreed_amount_cents, payment_released_at, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+    )
     .eq("id", jobId)
     .maybeSingle();
 
@@ -50,12 +53,16 @@ export async function applyReferralRewardsForCompletedJob(jobId: number): Promis
     winner_id?: string | null;
     agreed_amount_cents?: number | null;
     payment_released_at?: string | null;
+    dispute_resolution?: string | null;
+    refund_amount?: number | null;
+    proposed_refund_amount?: number | null;
+    counter_proposal_amount?: number | null;
   };
 
   if (j.status !== "completed" || !j.payment_released_at || !j.winner_id?.trim()) return;
 
-  const agreed = j.agreed_amount_cents ?? 0;
-  if (agreed < minJobCents) return;
+  const netToCleaner = cleanerNetEarnedCents(j, null);
+  if (netToCleaner < minJobCents) return;
 
   const referredUserId = j.winner_id;
 

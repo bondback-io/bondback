@@ -21,17 +21,45 @@ let loggedMissingServiceRoleForJobLoad = false;
 let loggedMissingServiceRoleForListingLoad = false;
 let loggedMissingServiceRoleForListingUuidJob = false;
 
-const LEGACY_JOB_DETAIL_PAGE_SELECT = JOB_DETAIL_PAGE_SELECT.replace(
-  "secured_via_buy_now, ",
+const JOB_DETAIL_NO_STRIPE_REFUND = JOB_DETAIL_PAGE_SELECT.replace("refund_amount, refund_status, ", "");
+const LEGACY_JOB_DETAIL_PAGE_SELECT = JOB_DETAIL_PAGE_SELECT.replace("secured_via_buy_now, ", "");
+const LEGACY_JOB_DETAIL_NO_STRIPE_REFUND = LEGACY_JOB_DETAIL_PAGE_SELECT.replace(
+  "refund_amount, refund_status, ",
   ""
 );
 
-function isMissingSecuredViaBuyNowColumn(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false;
-  return (
-    error.code === "42703" &&
-    String(error.message ?? "").toLowerCase().includes("secured_via_buy_now")
-  );
+/**
+ * DBs may lag migrations (`secured_via_buy_now`, `refund_amount` / `refund_status`). Retry with
+ * narrower selects when PostgREST reports undefined_column (42703).
+ */
+const JOB_DETAIL_SELECT_VARIANTS = [
+  JOB_DETAIL_PAGE_SELECT,
+  JOB_DETAIL_NO_STRIPE_REFUND,
+  LEGACY_JOB_DETAIL_PAGE_SELECT,
+  LEGACY_JOB_DETAIL_NO_STRIPE_REFUND,
+] as const;
+
+function isPostgresUndefinedColumn(error: { code?: string; message?: string } | null): boolean {
+  return error?.code === "42703";
+}
+
+async function jobRowSelectWithColumnFallbacks<T>(
+  run: (
+    select: string
+  ) => PromiseLike<{ data: T | null; error: { code?: string; message?: string } | null }>
+): Promise<{ data: T | null; error: { code?: string; message?: string } | null }> {
+  let lastError: { code?: string; message?: string } | null = null;
+  for (const select of JOB_DETAIL_SELECT_VARIANTS) {
+    const result = await run(select);
+    if (!result.error) {
+      return result;
+    }
+    lastError = result.error;
+    if (!isPostgresUndefinedColumn(result.error)) {
+      break;
+    }
+  }
+  return { data: null, error: lastError };
 }
 
 function sameUserId(a: unknown, b: unknown): boolean {
@@ -141,21 +169,9 @@ export async function loadJobByNumericIdForSession(
 ): Promise<JobRow | null> {
   const isAdmin = options?.isAdmin === true;
 
-  let { data: fromUser, error } = await supabase
-    .from("jobs")
-    .select(JOB_DETAIL_PAGE_SELECT)
-    .eq("id", jobId)
-    .maybeSingle();
-
-  if (isMissingSecuredViaBuyNowColumn(error)) {
-    const retry = await supabase
-      .from("jobs")
-      .select(LEGACY_JOB_DETAIL_PAGE_SELECT)
-      .eq("id", jobId)
-      .maybeSingle();
-    fromUser = retry.data;
-    error = retry.error;
-  }
+  const { data: fromUser, error } = await jobRowSelectWithColumnFallbacks((select) =>
+    supabase.from("jobs").select(select).eq("id", jobId).maybeSingle()
+  );
 
   if (error) {
     console.warn("[loadJobByNumericIdForSession] user-scoped jobs read error", error.code, error.message);
@@ -177,19 +193,12 @@ export async function loadJobByNumericIdForSession(
     return null;
   }
 
-  let { data: full, error: adminError } = await admin
-    .from("jobs")
-    .select(JOB_DETAIL_PAGE_SELECT)
-    .eq("id", jobId)
-    .maybeSingle();
+  const { data: full, error: adminError } = await jobRowSelectWithColumnFallbacks((select) =>
+    admin.from("jobs").select(select).eq("id", jobId).maybeSingle()
+  );
 
-  if (isMissingSecuredViaBuyNowColumn(adminError)) {
-    const retry = await admin
-      .from("jobs")
-      .select(LEGACY_JOB_DETAIL_PAGE_SELECT)
-      .eq("id", jobId)
-      .maybeSingle();
-    full = retry.data as typeof full;
+  if (adminError) {
+    console.warn("[loadJobByNumericIdForSession] admin jobs read error", adminError.code, adminError.message);
   }
 
   if (!full) {
@@ -370,27 +379,16 @@ export async function loadJobForListingDetailPage(
 ): Promise<JobRow | null> {
   const isAdmin = options?.isAdmin === true;
 
-  let { data: fromUser, error } = await supabase
-    .from("jobs")
-    .select(JOB_DETAIL_PAGE_SELECT)
-    .eq("listing_id", listingId)
-    .neq("status", "cancelled")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (isMissingSecuredViaBuyNowColumn(error)) {
-    const retry = await supabase
+  const { data: fromUser, error } = await jobRowSelectWithColumnFallbacks((select) =>
+    supabase
       .from("jobs")
-      .select(LEGACY_JOB_DETAIL_PAGE_SELECT)
+      .select(select)
       .eq("listing_id", listingId)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
       .limit(1)
-      .maybeSingle();
-    fromUser = retry.data;
-    error = retry.error;
-  }
+      .maybeSingle()
+  );
 
   if (!error && fromUser) {
     const j = fromUser as JobRow;
@@ -408,25 +406,19 @@ export async function loadJobForListingDetailPage(
     return null;
   }
 
-  let { data: full, error: adminError } = await admin
-    .from("jobs")
-    .select(JOB_DETAIL_PAGE_SELECT)
-    .eq("listing_id", listingId)
-    .neq("status", "cancelled")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (isMissingSecuredViaBuyNowColumn(adminError)) {
-    const retry = await admin
+  const { data: full, error: adminError } = await jobRowSelectWithColumnFallbacks((select) =>
+    admin
       .from("jobs")
-      .select(LEGACY_JOB_DETAIL_PAGE_SELECT)
+      .select(select)
       .eq("listing_id", listingId)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
       .limit(1)
-      .maybeSingle();
-    full = retry.data as typeof full;
+      .maybeSingle()
+  );
+
+  if (adminError) {
+    console.warn("[loadJobForListingDetailPage] admin jobs read error", adminError.code, adminError.message);
   }
 
   if (!full) {

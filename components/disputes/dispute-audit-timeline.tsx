@@ -17,9 +17,12 @@ function roleBadgeClass(role: string): string {
 export function DisputeAuditTimeline({
   jobId,
   messages,
+  /** When true (admin console), show visibility badges for admin-authored rows. */
+  isAdminConsole = false,
 }: {
   jobId: number;
   messages: SerializableDisputeMessage[];
+  isAdminConsole?: boolean;
 }) {
   const sorted = [...messages].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -40,7 +43,12 @@ export function DisputeAuditTimeline({
           </p>
         ) : (
           <ul className="relative space-y-4 border-l-2 border-amber-200/80 pl-4 dark:border-amber-900/60">
-            {sorted.map((m) => (
+            {sorted.map((m) => {
+              const isAdminAuthor = m.author_role.toLowerCase() === "admin";
+              const vL = m.visible_to_lister === true;
+              const vC = m.visible_to_cleaner === true;
+              const internalOnly = isAdminAuthor && !vL && !vC;
+              return (
               <li key={m.id || `${m.created_at}-${m.body.slice(0, 24)}`} className="relative">
                 <span
                   className="absolute -left-[21px] top-2 h-2.5 w-2.5 rounded-full bg-amber-500 ring-4 ring-background dark:bg-amber-400 dark:ring-gray-950"
@@ -57,6 +65,17 @@ export function DisputeAuditTimeline({
                     <Badge variant="outline" className="text-[10px] dark:border-amber-700 dark:text-amber-200">
                       Escalation
                     </Badge>
+                  ) : null}
+                  {isAdminConsole && isAdminAuthor ? (
+                    internalOnly ? (
+                      <Badge variant="outline" className="text-[10px] border-slate-500 text-slate-700 dark:border-slate-600 dark:text-slate-300">
+                        Internal — not on party timeline
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] border-sky-600/50 text-sky-800 dark:border-sky-700 dark:text-sky-200">
+                        Shared: {[vL && "lister", vC && "cleaner"].filter(Boolean).join(" · ") || "—"}
+                      </Badge>
+                    )
                   ) : null}
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground dark:text-gray-100">
@@ -83,7 +102,8 @@ export function DisputeAuditTimeline({
                   </ul>
                 ) : null}
               </li>
-            ))}
+            );
+            })}
           </ul>
         )}
       </CardContent>

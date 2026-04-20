@@ -2903,6 +2903,16 @@ export async function acceptRefund(jobId: number): Promise<AcceptRefundResult> {
     return { ok: false, error: refundResult.error };
   }
 
+  {
+    const { error: refundPersistErr } = await supabase
+      .from("jobs")
+      .update({ refund_amount: refundCents } as Partial<JobRow> as never)
+      .eq("id", jobId);
+    if (refundPersistErr) {
+      console.error("[acceptRefund] persist refund_amount", refundPersistErr);
+    }
+  }
+
   const listingIdForJob =
     (job as { listing_id?: string | number | null }).listing_id ?? null;
   if (listingIdForJob) {
@@ -3398,6 +3408,20 @@ export async function acceptCounterRefund(jobId: number): Promise<AcceptCounterR
   const refundResult = await executeRefund(jobId, counterCents);
   if (!refundResult.ok) {
     return { ok: false, error: refundResult.error };
+  }
+
+  {
+    const postRefund: Partial<JobRow> = { counter_proposal_amount: null };
+    if (counterCents >= 1) {
+      postRefund.refund_amount = counterCents;
+    }
+    const { error: refundPersistErr } = await supabase
+      .from("jobs")
+      .update(postRefund as never)
+      .eq("id", jobId);
+    if (refundPersistErr) {
+      console.error("[acceptCounterRefund] persist refund_amount", refundPersistErr);
+    }
   }
 
   if (j.listing_id) {

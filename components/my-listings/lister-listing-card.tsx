@@ -50,6 +50,11 @@ export type ListerListingCardProps = {
   onDiscardDraft?: () => void;
   /** When set, card is a local draft resume row (not a DB listing) */
   isLocalDraft?: boolean;
+  /**
+   * Completed jobs: net amount paid to the cleaner from escrow (after dispute refunds).
+   * When set, replaces the auction “highest bid” figure so listers see what actually went to the cleaner.
+   */
+  completedCleanerNetCents?: number | null;
 };
 
 export function ListerListingCard({
@@ -70,9 +75,12 @@ export function ListerListingCard({
   relistLoading = false,
   onDiscardDraft,
   isLocalDraft = false,
+  completedCleanerNetCents = null,
 }: ListerListingCardProps) {
   const openCtaLabel =
     cardAccent === "job" || cardAccent === "job_done" ? "Open job" : "Open listing";
+  const showNetToCleaner =
+    completedCleanerNetCents != null && completedCleanerNetCents > 0;
   const auctionOpenOnMarket = isListingLive(listing);
   const showNotLivePhotoBadge =
     !isLocalDraft &&
@@ -222,9 +230,11 @@ export function ListerListingCard({
               <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">{bidCount}</p>
             </div>
             <div>
-              <p className="font-medium text-muted-foreground dark:text-gray-400">Top bid</p>
+              <p className="font-medium text-muted-foreground dark:text-gray-400">
+                {showNetToCleaner ? "Paid to cleaner" : "Top bid"}
+              </p>
               <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
-                {formatCents(highestBidCents)}
+                {formatCents(showNetToCleaner ? completedCleanerNetCents! : highestBidCents)}
               </p>
             </div>
             {buyNowCents != null && buyNowCents > 0 && (
@@ -243,8 +253,12 @@ export function ListerListingCard({
               <p className="text-sm font-semibold tabular-nums">{bidCount}</p>
             </div>
             <div>
-              <p className="text-[11px] font-medium text-muted-foreground">Highest bid</p>
-              <p className="text-sm font-semibold tabular-nums">{formatCents(highestBidCents)}</p>
+              <p className="text-[11px] font-medium text-muted-foreground">
+                {showNetToCleaner ? "Paid to cleaner" : "Highest bid"}
+              </p>
+              <p className="text-sm font-semibold tabular-nums">
+                {formatCents(showNetToCleaner ? completedCleanerNetCents! : highestBidCents)}
+              </p>
             </div>
             <div>
               <p className="text-[11px] font-medium text-muted-foreground">Buy now</p>

@@ -140,6 +140,10 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
           dispute_status?: string | null;
           dispute_opened_by?: string | null;
           agreed_amount_cents?: number | null;
+          dispute_resolution?: string | null;
+          refund_amount?: number | null;
+          proposed_refund_amount?: number | null;
+          counter_proposal_amount?: number | null;
         }
       >
     | undefined;
@@ -154,7 +158,7 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
     const { data: jobsData } = await supabase
       .from("jobs")
       .select(
-        "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents"
+        "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
       )
       .in("listing_id", listingIds);
     const jobs = (jobsData ?? []) as {
@@ -170,6 +174,10 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
       dispute_status?: string | null;
       dispute_opened_by?: string | null;
       agreed_amount_cents?: number | null;
+      dispute_resolution?: string | null;
+      refund_amount?: number | null;
+      proposed_refund_amount?: number | null;
+      counter_proposal_amount?: number | null;
     }[];
 
     const winnerIds = [
@@ -211,6 +219,10 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
         dispute_status: j.dispute_status ?? null,
         dispute_opened_by: j.dispute_opened_by ?? null,
         agreed_amount_cents: j.agreed_amount_cents ?? null,
+        dispute_resolution: j.dispute_resolution ?? null,
+        refund_amount: j.refund_amount ?? null,
+        proposed_refund_amount: j.proposed_refund_amount ?? null,
+        counter_proposal_amount: j.counter_proposal_amount ?? null,
       };
     }
     initialActiveJobsSnapshot = jobByListing;

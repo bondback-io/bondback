@@ -9,6 +9,7 @@ import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { fetchPlatformFeePercentForListing } from "@/lib/platform-fee";
 import { releaseJobFunds, executeRefund } from "@/lib/actions/jobs";
+import { insertDisputeThreadEntry } from "@/lib/disputes/dispute-thread-and-notify";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
 import { adminDeleteListingByIdCascade } from "@/lib/actions/admin-listings";
@@ -265,6 +266,14 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
     if (j.lister_id) await createNotification(j.lister_id, "dispute_resolved", numericJobId, msg);
     if (j.winner_id) await createNotification(j.winner_id, "dispute_resolved", numericJobId, msg);
 
+    await insertDisputeThreadEntry({
+      jobId: numericJobId,
+      authorUserId: adminId,
+      authorRole: "admin",
+      body: `Admin resolution: return_to_review — lister review timer reset (${hrs}h).`,
+      visibility: { lister: true, cleaner: true },
+    });
+
     await logAdminActivity({
       adminId,
       actionType: "dispute_resolved",
@@ -274,6 +283,8 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
     });
 
     revalidatePath("/admin/disputes");
+    revalidatePath("/disputes");
+    revalidatePath("/dashboard");
     revalidatePath(`/jobs/${numericJobId}`);
     return;
   }
@@ -334,6 +345,18 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
   if (j.winner_id) await recomputeVerificationBadgesForUser(j.winner_id);
   if (j.lister_id) await recomputeVerificationBadgesForUser(j.lister_id);
 
+  const auditRefund =
+    resolution === "partial_refund" && refundAmountCents != null && refundAmountCents > 0
+      ? ` Refund to lister: $${(refundAmountCents / 100).toFixed(2)} AUD.`
+      : "";
+  await insertDisputeThreadEntry({
+    jobId: numericJobId,
+    authorUserId: adminId,
+    authorRole: "admin",
+    body: `Admin resolution: ${resolution}.${auditRefund}`,
+    visibility: { lister: true, cleaner: true },
+  });
+
   await logAdminActivity({
     adminId,
     actionType: "dispute_resolved",
@@ -346,6 +369,8 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
+  revalidatePath("/dashboard");
   revalidatePath(`/jobs/${numericJobId}`);
 }
 

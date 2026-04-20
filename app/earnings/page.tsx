@@ -7,6 +7,8 @@ import { EarningsPageClient } from "@/components/features/earnings-page-client";
 import { getEffectivePayoutSchedule, getNextPayoutEstimate, formatPayoutScheduleLabel } from "@/lib/payout-schedule";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import type { Database } from "@/types/supabase";
+import { adminJobGrossCents } from "@/lib/admin-job-gross";
+import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
 
 const PLATFORM_FEE_RATE = 0.12;
 
@@ -30,15 +32,11 @@ type JobRow = {
   agreed_amount_cents?: number | null;
   cleaner_confirmed_complete?: boolean;
   cleaner_confirmed_at?: string | null;
+  dispute_resolution?: string | null;
+  refund_amount?: number | null;
+  proposed_refund_amount?: number | null;
+  counter_proposal_amount?: number | null;
 };
-
-/** Match payout history: agreed amount wins when set. */
-function jobGrossCents(job: JobRow, listing: ListingRow | undefined): number {
-  const agreed = job.agreed_amount_cents;
-  if (typeof agreed === "number" && agreed > 0) return agreed;
-  const low = listing?.current_lowest_bid_cents;
-  return typeof low === "number" && low > 0 ? low : 0;
-}
 
 export default async function EarningsPage() {
   const sessionData = await getSessionWithProfile();
@@ -72,7 +70,9 @@ export default async function EarningsPage() {
 
   const { data: jobsData } = await supabase
     .from("jobs")
-    .select("id, listing_id, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at")
+    .select(
+      "id, listing_id, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+    )
     .eq("winner_id", sessionData.user.id)
     .in("status", [
       "accepted",
@@ -112,10 +112,10 @@ export default async function EarningsPage() {
   );
   for (const job of completedWithRelease) {
     const listing = listingsMap.get(job.listing_id);
-    const grossCents = jobGrossCents(job, listing);
+    const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents);
     if (grossCents <= 0) continue;
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
-    const netCents = grossCents;
+    const netCents = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents);
     const releasedAt = job.payment_released_at!;
     payoutHistory.push({
       jobId: job.id,
@@ -158,11 +158,14 @@ export default async function EarningsPage() {
 
   for (const job of jobs) {
     const listing = listingsMap.get(job.listing_id);
-    const grossCents = jobGrossCents(job, listing);
+    const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents);
     if (grossCents <= 0) continue;
 
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
-    const netCents = grossCents; // Cleaner receives full bid amount; platform fee is paid by the lister
+    const netCents =
+      job.status === "completed"
+        ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
+        : grossCents;
     const title = listing?.title ?? `Job #${job.id}`;
 
     let status: "Pending" | "Processing" | "Paid" = "Pending";
@@ -182,22 +185,23 @@ export default async function EarningsPage() {
 
     if (job.status === "completed") {
       const d = job.payment_released_at || job.updated_at || job.created_at;
+      const netForChart = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents);
       chartEvents.push({
         date: d,
         grossCents,
-        netCents,
+        netCents: netForChart,
       });
     }
   }
 
   const totalEarningsCents = completedJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    return sum + jobGrossCents(j, listing);
+    return sum + cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents);
   }, 0);
 
   const thisMonthCents = completedJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    const c = jobGrossCents(j, listing);
+    const c = cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents);
     const jobDate = new Date(j.updated_at || j.created_at);
     if (jobDate >= monthStart && jobDate <= now) return sum + c;
     return sum;
@@ -205,7 +209,7 @@ export default async function EarningsPage() {
 
   const pendingPayoutsCents = pendingJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    return sum + jobGrossCents(j, listing);
+    return sum + adminJobGrossCents(j, listing?.current_lowest_bid_cents);
   }, 0);
 
   const paidCount = completedJobs.length;
@@ -223,10 +227,10 @@ export default async function EarningsPage() {
 
   completedJobs.forEach((j) => {
     const listing = listingsMap.get(j.listing_id);
-    const grossCents = jobGrossCents(j, listing);
+    const grossCents = adminJobGrossCents(j, listing?.current_lowest_bid_cents);
     if (grossCents <= 0) return;
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
-    const netCents = grossCents; // Cleaner receives full bid amount; platform fee is paid by the lister
+    const netCents = cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents);
     const jobDate = new Date(j.updated_at || j.created_at);
 
     periodBreakdown.lifetime.grossCents += grossCents;
@@ -269,9 +273,12 @@ export default async function EarningsPage() {
 
   for (const job of jobs) {
     const listing = listingsMap.get(job.listing_id);
-    const grossCents = jobGrossCents(job, listing);
+    const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents);
     if (grossCents <= 0) continue;
-    const netCents = grossCents; // Cleaner receives full bid amount; platform fee is paid by the lister
+    const netCents =
+      job.status === "completed"
+        ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
+        : grossCents;
     const title = listing?.title ?? `Job #${job.id}`;
 
     const updatedAt = job.updated_at ? new Date(job.updated_at).getTime() : 0;

@@ -16,6 +16,8 @@ export function escapeHtmlForEmail(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+export type DisputeMessagePartyVisibility = { lister: boolean; cleaner: boolean };
+
 export async function insertDisputeThreadEntry(params: {
   jobId: number;
   authorUserId: string | null;
@@ -23,12 +25,19 @@ export async function insertDisputeThreadEntry(params: {
   body: string;
   attachmentUrls?: string[];
   isEscalationEvent?: boolean;
+  /** For admin posts: who may see this on party timelines. Default admin=false/false, other roles=true/true. */
+  visibility?: DisputeMessagePartyVisibility;
 }): Promise<void> {
   const admin = createSupabaseAdminClient();
   if (!admin) {
     console.warn("[dispute thread] admin client not configured; skipping thread insert");
     return;
   }
+  const role = String(params.authorRole ?? "").toLowerCase();
+  const vis: DisputeMessagePartyVisibility =
+    params.visibility ??
+    (role === "admin" ? { lister: false, cleaner: false } : { lister: true, cleaner: true });
+
   const { error } = await admin.from("dispute_messages").insert({
     job_id: params.jobId,
     author_user_id: params.authorUserId,
@@ -36,6 +45,8 @@ export async function insertDisputeThreadEntry(params: {
     body: params.body,
     attachment_urls: params.attachmentUrls ?? [],
     is_escalation_event: params.isEscalationEvent ?? false,
+    visible_to_lister: vis.lister,
+    visible_to_cleaner: vis.cleaner,
   } as never);
   if (error) {
     console.error("[dispute thread] insert failed:", error.message);

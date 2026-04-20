@@ -9,6 +9,9 @@ export type SerializableDisputeMessage = {
   created_at: string;
   is_escalation_event?: boolean | null;
   attachment_urls?: string[];
+  /** Admin-authored row: party visibility (admin console may show internal notes). */
+  visible_to_lister?: boolean;
+  visible_to_cleaner?: boolean;
 };
 
 export function serializeDisputeMessagesForClient(raw: unknown): SerializableDisputeMessage[] {
@@ -20,10 +23,13 @@ export function serializeDisputeMessagesForClient(raw: unknown): SerializableDis
     const attachment_urls = Array.isArray(att)
       ? att.map((u) => String(u)).filter(Boolean).slice(0, 12)
       : [];
-    return {
+    const authorRole = String(row.author_role ?? "user");
+    const vL = row.visible_to_lister === true;
+    const vC = row.visible_to_cleaner === true;
+    const base: SerializableDisputeMessage = {
       id: idRaw != null ? String(idRaw as string | number | bigint) : "",
       body: String(row.body ?? ""),
-      author_role: String(row.author_role ?? "user"),
+      author_role: authorRole,
       created_at:
         row.created_at == null
           ? ""
@@ -33,5 +39,9 @@ export function serializeDisputeMessagesForClient(raw: unknown): SerializableDis
       is_escalation_event: Boolean(row.is_escalation_event),
       ...(attachment_urls.length > 0 ? { attachment_urls } : {}),
     };
+    if (authorRole.toLowerCase() === "admin") {
+      return { ...base, visible_to_lister: vL, visible_to_cleaner: vC };
+    }
+    return base;
   });
 }

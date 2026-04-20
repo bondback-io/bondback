@@ -43,6 +43,7 @@ import {
   resolveActiveRoleFromProfile,
 } from "@/lib/profile-roles";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
+import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import { bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
@@ -117,7 +118,7 @@ async function CleanerDashboardContent() {
   const { data: jobsData } = await supabase
     .from("jobs")
     .select(
-      "id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments"
+      "id, listing_id, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
     )
     .eq("winner_id", user.id)
     .in("status", ["accepted", "in_progress", "completed", "completed_pending_approval", "cancelled"])
@@ -191,9 +192,9 @@ async function CleanerDashboardContent() {
 
   const totalEarningsThisMonthCents = completedJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id as string);
-    const gross = listing?.current_lowest_bid_cents ?? 0;
     const jobDate = new Date(j.updated_at || j.created_at);
-    return jobDate >= monthStart && jobDate <= now ? sum + gross : sum;
+    if (!(jobDate >= monthStart && jobDate <= now)) return sum;
+    return sum + cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents);
   }, 0);
 
   const cleanerAvgRaw = (profile as { cleaner_avg_rating?: number | string | null })
