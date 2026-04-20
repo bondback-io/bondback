@@ -76,8 +76,26 @@ export function isDashboardCompletedJob(job: {
   if (s === "completed") return true;
   if (s === "refunded" || s === "partially_refunded") return true;
   if (ds === "completed") return true;
+  /** Admin closed case as resolved (wording varies in DB). */
+  if (ds === "resolved" && (s === "completed" || s === "refunded" || s === "partially_refunded")) {
+    return true;
+  }
   const dr = String(job.dispute_resolution ?? "").toLowerCase();
   if (dr && SETTLED_DISPUTE_RESOLUTIONS.has(dr)) {
+    /**
+     * If the job row is already terminal, do not require refund_amount / payment_released_at
+     * (Stripe persist or webhooks can lag; lister/cleaner should still see Completed).
+     * Do not use `dispute_status === resolved` alone — mutual_agreement uses that while still
+     * `completed_pending_approval`.
+     */
+    if (
+      s === "completed" ||
+      s === "refunded" ||
+      s === "partially_refunded" ||
+      ds === "completed"
+    ) {
+      return true;
+    }
     const refund = Number(job.refund_amount ?? 0);
     const released = String(job.payment_released_at ?? "").trim().length > 0;
     if (refund >= 1 || released) return true;

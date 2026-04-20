@@ -125,12 +125,9 @@ async function ListerDashboardContent() {
   const bidCountByListingId =
     listingIds.length > 0 ? await bidCountsForListingIds(listingIds) : {};
 
+  /** Any non-cancelled job reserves the listing (includes disputes and completed). */
   const listingIdsWithActiveJob = new Set(
-    jobs
-      .filter((j) =>
-        ["accepted", "in_progress", "completed", "completed_pending_approval"].includes(j.status)
-      )
-      .map((j) => String(j.listing_id))
+    jobs.filter((j) => j.status !== "cancelled").map((j) => String(j.listing_id))
   );
 
   const cancelledJobListingIds = listingIdsWithCancelledJobs(jobs);
