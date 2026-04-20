@@ -663,11 +663,31 @@ export async function fetchListerJobsForMyListingsRefresh(listingIds: string[]) 
   }
 
   const client = (createSupabaseAdminClient() ?? supabase) as typeof supabase;
+
+  /**
+   * Match `/my-listings` SSR: load jobs by `listing_id` for this lister’s listings only.
+   * Do **not** require `jobs.lister_id = user.id` — that column can be wrong/stale in edge cases
+   * (e.g. test accounts, migrations); excluding it made client refresh wipe jobs that SSR had loaded.
+   */
+  const { data: ownedListings, error: ownedErr } = await client
+    .from("listings")
+    .select("id")
+    .eq("lister_id", user.id)
+    .in("id", ids as string[]);
+  if (ownedErr) {
+    return { ok: false as const, error: ownedErr.message };
+  }
+  const safeIds = (ownedListings ?? [])
+    .map((r) => String((r as { id: string }).id).trim())
+    .filter(Boolean);
+  if (safeIds.length === 0) {
+    return { ok: true as const, jobs: [] };
+  }
+
   const { data, error } = await client
     .from("jobs")
     .select(LISTER_MY_LISTINGS_JOB_SELECT)
-    .eq("lister_id", user.id)
-    .in("listing_id", ids as string[]);
+    .in("listing_id", safeIds as string[]);
 
   if (error) {
     return { ok: false as const, error: error.message };

@@ -143,7 +143,37 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
   const allowTwoMinuteAuctionTest =
     (globalSettings as { allow_two_minute_auction_test?: boolean } | null)?.allow_two_minute_auction_test === true;
 
-  const initialListings = await fetchListingsForLister(user.id);
+  let initialListings = await fetchListingsForLister(user.id);
+  const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+
+  /** Include listings only referenced on `jobs.lister_id` rows if they were missing (rare sync skew). */
+  const ownedListingIdSet = new Set(initialListings.map((l) => String(l.id)));
+  const { data: listerJobListingRows } = await jobsClient
+    .from("jobs")
+    .select("listing_id")
+    .eq("lister_id", user.id);
+  const jobLinkedListingIds = [
+    ...new Set(
+      (listerJobListingRows ?? [])
+        .map((r) => String((r as { listing_id: string }).listing_id).trim())
+        .filter(Boolean)
+    ),
+  ];
+  const missingListingIds = jobLinkedListingIds.filter((id) => !ownedListingIdSet.has(id));
+  if (missingListingIds.length > 0) {
+    const { data: extraListings } = await jobsClient
+      .from("listings")
+      .select("*")
+      .eq("lister_id", user.id)
+      .in("id", missingListingIds as string[]);
+    if (extraListings?.length) {
+      initialListings = [...initialListings, ...(extraListings as ListingRow[])];
+      for (const row of extraListings) {
+        ownedListingIdSet.add(String((row as ListingRow).id));
+      }
+    }
+  }
+
   const listingIds = initialListings.map((l) => l.id);
 
   let initialActiveJobsSnapshot:
@@ -179,11 +209,10 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
   let noBidsCount = 0;
 
   if (listingIds.length > 0) {
-    const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
     const { data: jobsData } = await jobsClient
       .from("jobs")
       .select(
-        "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at"
+        "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at, completed_at"
       )
       .in("listing_id", listingIds);
     const jobs = (jobsData ?? []) as {
