@@ -80,6 +80,14 @@ export function isDashboardCompletedJob(job: {
   if (ds === "resolved" && (s === "completed" || s === "refunded" || s === "partially_refunded")) {
     return true;
   }
+  /**
+   * Match dispute hub closure: {@link isDisputeHubCaseClosed} treats payout as settled. Mediation /
+   * partial-refund paths may set `payment_released_at` while `status` or `dispute_resolution` still
+   * lags — lister “My listings” / Completed must still include the job.
+   */
+  if (String(job.payment_released_at ?? "").trim().length > 0) {
+    return true;
+  }
   const dr = String(job.dispute_resolution ?? "").toLowerCase();
   if (dr && SETTLED_DISPUTE_RESOLUTIONS.has(dr)) {
     /**
