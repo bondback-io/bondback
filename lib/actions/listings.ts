@@ -677,9 +677,22 @@ export async function fetchListerJobsForMyListingsRefresh(listingIds: string[]) 
   if (ownedErr) {
     return { ok: false as const, error: ownedErr.message };
   }
-  const safeIds = (ownedListings ?? [])
-    .map((r) => String((r as { id: string }).id).trim())
-    .filter(Boolean);
+  const safeIdSet = new Set(
+    (ownedListings ?? [])
+      .map((r) => String((r as { id: string }).id).trim())
+      .filter(Boolean)
+  );
+  /** Listing rows owned by another user id (data drift) still have jobs with `lister_id` = this user — keep those ids so refresh matches SSR. */
+  const { data: listerJobLinks } = await client
+    .from("jobs")
+    .select("listing_id")
+    .eq("lister_id", user.id)
+    .in("listing_id", ids as string[]);
+  for (const r of listerJobLinks ?? []) {
+    const lid = String((r as { listing_id: string }).listing_id).trim();
+    if (lid) safeIdSet.add(lid);
+  }
+  const safeIds = [...safeIdSet];
   if (safeIds.length === 0) {
     return { ok: true as const, jobs: [] };
   }

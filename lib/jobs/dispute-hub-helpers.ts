@@ -68,9 +68,10 @@ export function isDashboardCompletedJob(job: {
   payment_released_at?: string | null;
   completed_at?: string | null;
 }): boolean {
-  const s = String(job.status ?? "").toLowerCase();
-  const ds = String(job.dispute_status ?? "").toLowerCase();
-  if (s === "cancelled" || ds === "cancelled") return false;
+  const s = String(job.status ?? "").trim().toLowerCase();
+  const ds = String(job.dispute_status ?? "").trim().toLowerCase();
+  /** Only job `status` cancels the row. `dispute_status` may be `cancelled` (e.g. legacy admin paths) while the job is still terminal `completed`. */
+  if (s === "cancelled") return false;
   /** Admin / escrow paths set `completed_at` when the job is fully closed — catch status lag. */
   if (String(job.completed_at ?? "").trim().length > 0) return true;
   if (s === "completed") return true;

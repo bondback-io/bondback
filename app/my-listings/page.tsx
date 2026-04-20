@@ -161,10 +161,10 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
   ];
   const missingListingIds = jobLinkedListingIds.filter((id) => !ownedListingIdSet.has(id));
   if (missingListingIds.length > 0) {
+    /** `jobs.lister_id` is authoritative here; `listings.lister_id` can drift — do not filter by listing owner or the row never loads. */
     const { data: extraListings } = await jobsClient
       .from("listings")
       .select("*")
-      .eq("lister_id", user.id)
       .in("id", missingListingIds as string[]);
     if (extraListings?.length) {
       initialListings = [...initialListings, ...(extraListings as ListingRow[])];

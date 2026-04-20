@@ -45,6 +45,8 @@ export async function adminForceCompleteJob(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/jobs");
   revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/my-listings");
 }
 
 export async function adminReinstateJob(formData: FormData): Promise<void> {
@@ -87,6 +89,8 @@ export async function adminReinstateJob(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/jobs");
   revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/my-listings");
 }
 
 export type RefundJobResult = { ok: true } | { ok: false; error: string };
@@ -291,6 +295,8 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
     revalidatePath("/admin/disputes");
     revalidatePath("/disputes");
     revalidatePath("/dashboard");
+    revalidatePath("/lister/dashboard");
+    revalidatePath("/my-listings");
     revalidatePath(`/jobs/${numericJobId}`);
     return;
   }
@@ -377,6 +383,8 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
   revalidatePath("/admin/disputes");
   revalidatePath("/disputes");
   revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/my-listings");
   revalidatePath(`/jobs/${numericJobId}`);
 }
 
