@@ -17,7 +17,13 @@ import {
 } from "@/components/ui/table";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminDeleteJobButton } from "@/components/admin/admin-delete-job-button";
-import { adminForceCompleteJob, adminRefundJob, adminResetAllJobs, adminReinstateJob } from "@/lib/actions/admin-jobs";
+import {
+  adminBackfillJobWinnersFromAcceptedBidsForm,
+  adminForceCompleteJob,
+  adminRefundJob,
+  adminResetAllJobs,
+  adminReinstateJob,
+} from "@/lib/actions/admin-jobs";
 import { AdminJobsPendingReviewTable } from "@/components/admin/admin-jobs-pending-review-table";
 import { JOB_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
@@ -369,6 +375,26 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
               })}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+      <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold dark:text-gray-100">
+            Data repair: backfill job winners
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-xs text-muted-foreground dark:text-gray-300">
+          <p>
+            Sets <code className="rounded bg-muted px-1">jobs.winner_id</code> from the only{" "}
+            <code className="rounded bg-muted px-1">accepted</code> bid on the same listing when{" "}
+            <code className="rounded bg-muted px-1">winner_id</code> is null (non-cancelled jobs).
+            Same logic as <code className="rounded bg-muted px-1">sql/20260418120000_backfill_job_winner_from_accepted_bid.sql</code>.
+          </p>
+          <form action={adminBackfillJobWinnersFromAcceptedBidsForm}>
+            <Button type="submit" size="sm" variant="secondary">
+              Run winner backfill
+            </Button>
+          </form>
         </CardContent>
       </Card>
       <Card className="border-border bg-card/80 shadow-sm dark:border-gray-800 dark:bg-gray-900">

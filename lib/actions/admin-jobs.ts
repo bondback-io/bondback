@@ -719,3 +719,54 @@ export async function overrideTimer(
   return { ok: true };
 }
 
+/**
+ * Repair: set `winner_id` when null and the listing has exactly one `accepted` bid (same rule as
+ * `sql/20260418120000_backfill_job_winner_from_accepted_bid.sql`).
+ */
+export async function adminBackfillJobWinnersFromAcceptedBidsForm(): Promise<void> {
+  const { adminId } = await requireAdmin();
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+
+  const { data: jobs, error: jErr } = await admin
+    .from("jobs")
+    .select("id, listing_id")
+    .is("winner_id", null)
+    .neq("status", "cancelled");
+
+  if (jErr || !jobs?.length) {
+    revalidatePath("/admin/jobs");
+    return;
+  }
+
+  let updated = 0;
+  for (const row of jobs) {
+    const r = row as { id: number; listing_id: string };
+    const { data: bids, error: bErr } = await admin
+      .from("bids")
+      .select("cleaner_id")
+      .eq("listing_id", r.listing_id)
+      .eq("status", "accepted");
+    if (bErr || !bids || bids.length !== 1) continue;
+    const cleanerId = (bids[0] as { cleaner_id: string }).cleaner_id;
+    const { error: upErr } = await admin
+      .from("jobs")
+      .update({ winner_id: cleanerId, updated_at: new Date().toISOString() } as never)
+      .eq("id", r.id)
+      .is("winner_id", null);
+    if (!upErr) updated += 1;
+  }
+
+  await logAdminActivity({
+    adminId,
+    actionType: "job_backfill_winner_from_bid",
+    targetType: "jobs",
+    targetId: "batch",
+    details: { updated, scanned: jobs.length },
+  });
+
+  revalidatePath("/admin/jobs");
+  revalidatePath("/jobs");
+  revalidatePath("/cleaner/dashboard");
+}
+

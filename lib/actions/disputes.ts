@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
 import { createNotification } from "@/lib/actions/notifications";
-import { createJobTopUpCheckoutSession, openDispute } from "@/lib/actions/jobs";
+import { createJobTopUpCheckoutSession, executeRefund, openDispute } from "@/lib/actions/jobs";
 import { sendEmail } from "@/lib/notifications/email";
 import { getSiteUrl } from "@/lib/site";
 import { countJobAfterPhotosFromStorage } from "@/lib/jobs/after-photo-storage-count";
@@ -540,6 +540,56 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
     if (u.lister_accepted === true && u.cleaner_accepted === true) {
       const additionalCents = Number(u.additional_payment_cents ?? 0);
       const refundCents = Number(u.refund_cents ?? 0);
+
+      const { data: jobMediationState } = await (admin as any)
+        .from("jobs")
+        .select("dispute_mediation_status, resolution_type")
+        .eq("id", jobId)
+        .maybeSingle();
+      const jms = jobMediationState as {
+        dispute_mediation_status?: string | null;
+        resolution_type?: string | null;
+      } | null;
+      if (
+        jms?.dispute_mediation_status === "accepted" &&
+        jms?.resolution_type === "mediation"
+      ) {
+        return { ok: true, success: "This mediation was already finalized." };
+      }
+
+      if (refundCents >= 1) {
+        const { data: refundState } = await (admin as any)
+          .from("jobs")
+          .select("refund_amount")
+          .eq("id", jobId)
+          .maybeSingle();
+        const prevRefund = Number((refundState as { refund_amount?: number | null } | null)?.refund_amount ?? 0);
+        if (prevRefund < refundCents) {
+          const refundResult = await executeRefund(jobId, refundCents);
+          if (!refundResult.ok) {
+            return {
+              error:
+                refundResult.error ??
+                "Stripe refund failed. Mediation was not finalized — fix payment state or adjust the refund amount.",
+            };
+          }
+          await insertDisputeThreadEntry({
+            jobId,
+            authorUserId: null,
+            authorRole: "system",
+            body: `Mediation: $${(refundCents / 100).toFixed(2)} AUD refunded to the lister via Stripe (per admin proposal).`,
+          });
+        }
+        await (admin as any)
+          .from("jobs")
+          .update({
+            refund_amount: refundCents,
+            proposed_refund_amount: refundCents,
+            updated_at: new Date().toISOString(),
+          } as never)
+          .eq("id", jobId);
+      }
+
       await insertDisputeThreadEntry({
         jobId,
         authorUserId: null,
@@ -549,6 +599,12 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
             ? "Mediation proposal accepted by both parties. The lister must pay the approved additional amount to continue; the job stays open until that payment completes."
             : "Mediation proposal accepted by both parties. Job completed per admin settlement.",
       });
+
+      const mediationJobPatch = {
+        proposed_refund_amount: refundCents,
+        counter_proposal_amount: null,
+        ...(refundCents >= 1 ? { refund_amount: refundCents } : {}),
+      };
 
       /**
        * Top-up checkout requires job status `in_progress` or `completed_pending_approval` and a
@@ -563,8 +619,7 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
             dispute_status: "completed",
             resolution_type: "mediation",
             resolution_at: new Date().toISOString(),
-            proposed_refund_amount: refundCents,
-            counter_proposal_amount: null,
+            ...mediationJobPatch,
           })
           .eq("id", jobId);
 
@@ -625,8 +680,7 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
           dispute_status: "completed",
           resolution_type: "mediation",
           resolution_at: new Date().toISOString(),
-          proposed_refund_amount: refundCents,
-          counter_proposal_amount: null,
+          ...mediationJobPatch,
         })
         .eq("id", jobId);
 
