@@ -88,7 +88,7 @@ export async function resolveExpiredLiveAuctions(
 
     const { data: bidRows } = await admin
       .from("bids")
-      .select("id, amount_cents, cleaner_id, status")
+      .select("id, amount_cents, cleaner_id, status, pending_confirmation_expires_at")
       .eq("listing_id", listingId);
 
     const bids = (bidRows ?? []) as {
@@ -96,6 +96,7 @@ export async function resolveExpiredLiveAuctions(
       amount_cents: number;
       cleaner_id: string;
       status: string;
+      pending_confirmation_expires_at: string | null;
     }[];
 
     if (bids.length === 0) {
@@ -126,12 +127,22 @@ export async function resolveExpiredLiveAuctions(
       continue;
     }
 
-    const activeBids = bids
-      .filter((b) => b.status === "active")
-      .sort((a, b) => {
-        if (a.amount_cents !== b.amount_cents) return a.amount_cents - b.amount_cents;
-        return String(a.id).localeCompare(String(b.id));
-      });
+    const nowMs = Date.now();
+    /** Same pool as buy-now / bid UIs: `active` plus unexpired `pending_confirmation` (email early-accept flow). */
+    const eligibleAuctionBids = bids.filter((b) => {
+      if (b.status === "active") return true;
+      if (b.status !== "pending_confirmation") return false;
+      const exp = b.pending_confirmation_expires_at
+        ? Date.parse(String(b.pending_confirmation_expires_at))
+        : NaN;
+      if (!Number.isFinite(exp)) return true;
+      return exp >= nowMs;
+    });
+
+    const activeBids = eligibleAuctionBids.sort((a, b) => {
+      if (a.amount_cents !== b.amount_cents) return a.amount_cents - b.amount_cents;
+      return String(a.id).localeCompare(String(b.id));
+    });
 
     if (activeBids.length === 0) {
       const { error: upErr } = await admin

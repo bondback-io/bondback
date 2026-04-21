@@ -98,13 +98,28 @@ async function applyAcceptedBidListingSideEffects(
 ) {
   const acceptedId = trimStr(acceptedBidId);
   if (!acceptedId) return;
-  await admin
+  const { error: cancelSiblingsErr } = await admin
     .from("bids")
     .update({ status: "cancelled" } as never)
     .eq("listing_id", listingId)
     .neq("id", acceptedId);
-  await admin.from("bids").update({ status: "accepted" } as never).eq("id", acceptedId);
-  await admin.from("listings").update({ status: "ended" } as never).eq("id", listingId);
+  if (cancelSiblingsErr) {
+    console.error("[applyAcceptedBidListingSideEffects] cancel sibling bids", listingId, cancelSiblingsErr);
+  }
+  const { error: acceptErr } = await admin
+    .from("bids")
+    .update({ status: "accepted" } as never)
+    .eq("id", acceptedId);
+  if (acceptErr) {
+    console.error("[applyAcceptedBidListingSideEffects] mark bid accepted", listingId, acceptErr);
+  }
+  const { error: listingErr } = await admin
+    .from("listings")
+    .update({ status: "ended" } as never)
+    .eq("id", listingId);
+  if (listingErr) {
+    console.error("[applyAcceptedBidListingSideEffects] end listing", listingId, listingErr);
+  }
 }
 
 function revalidateAfterListerAcceptedBid(listingId: string, jobId: number | string) {

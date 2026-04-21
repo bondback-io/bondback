@@ -692,6 +692,15 @@ export async function fetchListerJobsForMyListingsRefresh(listingIds: string[]) 
     const lid = String((r as { listing_id: string }).listing_id).trim();
     if (lid) safeIdSet.add(lid);
   }
+  /** Every listing tied to this user on `jobs.lister_id` — client `ids` can be stale after navigation/refresh. */
+  const { data: allListerJobListingIds } = await client
+    .from("jobs")
+    .select("listing_id")
+    .eq("lister_id", user.id);
+  for (const r of allListerJobListingIds ?? []) {
+    const lid = String((r as { listing_id: string }).listing_id).trim();
+    if (lid) safeIdSet.add(lid);
+  }
   const safeIds = [...safeIdSet];
   if (safeIds.length === 0) {
     return { ok: true as const, jobs: [] };
