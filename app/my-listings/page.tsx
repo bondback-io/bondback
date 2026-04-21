@@ -5,7 +5,11 @@ import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { applyListingAuctionOutcomes, fetchListingsForLister } from "@/lib/actions/listings";
+import {
+  applyListingAuctionOutcomes,
+  fetchAllListerListingIds,
+  fetchListingsForLister,
+} from "@/lib/actions/listings";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import type { Database } from "@/types/supabase";
 import { MyListingsList, type ListerViewTab } from "@/components/features/my-listings-list";
@@ -148,6 +152,9 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
 
   /** Include listings only referenced on `jobs.lister_id` rows if they were missing (rare sync skew). */
   const ownedListingIdSet = new Set(initialListings.map((l) => String(l.id)));
+  for (const id of await fetchAllListerListingIds(user.id)) {
+    ownedListingIdSet.add(id);
+  }
   const { data: listerJobListingRows } = await jobsClient
     .from("jobs")
     .select("listing_id")
@@ -174,7 +181,7 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
     }
   }
 
-  const listingIds = initialListings.map((l) => l.id);
+  const listingIdsForJobs = [...ownedListingIdSet];
 
   let initialActiveJobsSnapshot:
     | Record<
@@ -208,14 +215,10 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
   let paidJobsCount = 0;
   let noBidsCount = 0;
 
-  if (listingIds.length > 0) {
-    const { data: jobsData } = await jobsClient
-      .from("jobs")
-      .select(
-        "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at, completed_at"
-      )
-      .in("listing_id", listingIds);
-    const jobs = (jobsData ?? []) as {
+  if (listingIdsForJobs.length > 0) {
+    const jobSelectMyListings =
+      "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at, completed_at" as const;
+    type JobRowMyListings = {
       id: string | number;
       listing_id: string | number;
       winner_id: string | null;
@@ -234,7 +237,18 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
       counter_proposal_amount?: number | null;
       payment_released_at?: string | null;
       completed_at?: string | null;
-    }[];
+    };
+
+    const jobs: JobRowMyListings[] = [];
+    const chunkSize = 120;
+    for (let i = 0; i < listingIdsForJobs.length; i += chunkSize) {
+      const slice = listingIdsForJobs.slice(i, i + chunkSize);
+      const { data: jobsData } = await jobsClient
+        .from("jobs")
+        .select(jobSelectMyListings)
+        .in("listing_id", slice as string[]);
+      jobs.push(...((jobsData ?? []) as JobRowMyListings[]));
+    }
 
     const winnerIds = [
       ...new Set(jobs.map((j) => j.winner_id).filter((id): id is string => Boolean(id))),

@@ -27,7 +27,7 @@ import {
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
-import { fetchListingsForLister } from "@/lib/actions/listings";
+import { fetchAllListerListingIds, fetchListingsForLister } from "@/lib/actions/listings";
 import {
   LISTING_FULL_SELECT,
   NOTIFICATION_FEED_SELECT,
@@ -122,20 +122,34 @@ async function ListerDashboardContent() {
     }
   };
 
+  const mergeJobsByListingIdChunks = async (listingIds: string[]) => {
+    const unique = [...new Set(listingIds.map((id) => String(id).trim()).filter(Boolean))];
+    const chunkSize = 120;
+    for (let i = 0; i < unique.length; i += chunkSize) {
+      const slice = unique.slice(i, i + chunkSize);
+      const { data } = await jobsClient
+        .from("jobs")
+        .select(listerJobSelect)
+        .in("listing_id", slice as string[]);
+      mergeJobRows((data ?? []) as JobRow[]);
+    }
+  };
+
   const { data: jobsByListerRow } = await jobsClient
     .from("jobs")
     .select(listerJobSelect)
     .eq("lister_id", user.id);
   mergeJobRows((jobsByListerRow ?? []) as JobRow[]);
 
-  const ownedListingIdSet = new Set(listings.map((l) => String(l.id)));
-  if (ownedListingIdSet.size > 0) {
-    const { data: jobsByOwnedListing } = await jobsClient
-      .from("jobs")
-      .select(listerJobSelect)
-      .in("listing_id", [...ownedListingIdSet]);
-    mergeJobRows((jobsByOwnedListing ?? []) as JobRow[]);
+  const ownedListingIdSet = new Set<string>();
+  for (const l of listings) {
+    ownedListingIdSet.add(String(l.id));
   }
+  for (const id of await fetchAllListerListingIds(user.id)) {
+    ownedListingIdSet.add(id);
+  }
+
+  await mergeJobsByListingIdChunks([...ownedListingIdSet]);
 
   const jobListingIds = [...new Set([...jobById.values()].map((j) => String(j.listing_id)))];
   const missingListingIds = jobListingIds.filter((id) => !ownedListingIdSet.has(id));
@@ -146,18 +160,16 @@ async function ListerDashboardContent() {
       .in("id", missingListingIds as string[]);
     if (extraListings?.length) {
       listings = [...listings, ...(extraListings as ListingRow[])];
+      const addedIds: string[] = [];
       for (const row of extraListings as ListingRow[]) {
-        ownedListingIdSet.add(String(row.id));
+        const lid = String(row.id);
+        if (!ownedListingIdSet.has(lid)) addedIds.push(lid);
+        ownedListingIdSet.add(lid);
+      }
+      if (addedIds.length > 0) {
+        await mergeJobsByListingIdChunks(addedIds);
       }
     }
-  }
-
-  if (ownedListingIdSet.size > 0) {
-    const { data: jobsAfterOrphans } = await jobsClient
-      .from("jobs")
-      .select(listerJobSelect)
-      .in("listing_id", [...ownedListingIdSet]);
-    mergeJobRows((jobsAfterOrphans ?? []) as JobRow[]);
   }
 
   const jobs = Array.from(jobById.values()).sort(
@@ -197,7 +209,7 @@ async function ListerDashboardContent() {
     return true;
   });
   const totalCancelledItems = cancelledJobs.length + cancelledEarlyListings.length;
-  const listingMap = new Map(listings.map((l) => [l.id, l]));
+  const listingMap = new Map(listings.map((l) => [String(l.id), l]));
 
   const activeJobPreview = activeJobs.slice(0, 5);
   const winnerIds = [
@@ -271,11 +283,11 @@ async function ListerDashboardContent() {
   );
 
   const totalSpentCents = completedJobs.reduce((sum, job) => {
-    const listing = listingMap.get(job.listing_id as string);
+    const listing = listingMap.get(String(job.listing_id));
     return sum + listerNetSettledSpendCents(job, listing?.current_lowest_bid_cents);
   }, 0);
   const totalFeesCents = completedJobs.reduce((sum, job) => {
-    const listing = listingMap.get(job.listing_id as string);
+    const listing = listingMap.get(String(job.listing_id));
     const netSpend = listerNetSettledSpendCents(job, listing?.current_lowest_bid_cents);
     if (netSpend <= 0) return sum;
     const pct = resolvePlatformFeePercent(listing?.platform_fee_percentage, feePercentage);
@@ -441,7 +453,7 @@ async function ListerDashboardContent() {
           ) : (
             <ListerActiveJobsList
               items={activeJobPreview.map((job) => {
-                const listing = listingMap.get(job.listing_id);
+                const listing = listingMap.get(String(job.listing_id));
                 const j = job as JobRow & {
                   agreed_amount_cents?: number | null;
                   payment_intent_id?: string | null;
@@ -522,7 +534,7 @@ async function ListerDashboardContent() {
           ) : (
             <ul className="space-y-2">
               {completedJobs.slice(0, 5).map((job) => {
-                const listing = listingMap.get(job.listing_id);
+                const listing = listingMap.get(String(job.listing_id));
                 const href = detailUrlForCardItem({
                   id: job.id,
                   listing_id: job.listing_id,
@@ -597,7 +609,7 @@ async function ListerDashboardContent() {
               {cancelledRows.map((row) => {
                 if (row.kind === "job") {
                   const { job } = row;
-                  const listing = listingMap.get(job.listing_id);
+                  const listing = listingMap.get(String(job.listing_id));
                   const jobRow = job as { updated_at?: string | null };
                   const cancelledAt = jobRow.updated_at
                     ? format(new Date(jobRow.updated_at), "d MMM yyyy")

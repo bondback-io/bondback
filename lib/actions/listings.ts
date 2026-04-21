@@ -161,6 +161,39 @@ export async function fetchListingsForLister(
   return (data ?? []) as unknown as ListingRow[];
 }
 
+/**
+ * Paginated `listings.id` for a lister. PostgREST typically returns at most ~1000 rows per request;
+ * uncapped `fetchListingsForLister` calls still hit that limit, so job merges that use `.in(listing_id,
+ * …)` must not rely on the first page of listing rows alone.
+ */
+export async function fetchAllListerListingIds(userId: string): Promise<string[]> {
+  const supabase = await createServerSupabaseClient();
+  const admin = createSupabaseAdminClient();
+  /** Admin + SSR clients differ in TS generics; both support this listings query. */
+  const client = (admin ?? supabase) as Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  const out = new Set<string>();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await client
+      .from("listings")
+      .select("id")
+      .eq("lister_id", userId)
+      .order("created_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) {
+      console.warn("[fetchAllListerListingIds]", error.message);
+      break;
+    }
+    const rows = data ?? [];
+    for (const r of rows) {
+      const id = String((r as { id: string }).id).trim();
+      if (id) out.add(id);
+    }
+    if (rows.length < pageSize) break;
+  }
+  return [...out];
+}
+
 export type UpdateListingDetailsResult =
   | { ok: true }
   | { ok: false; error: string };
