@@ -27,20 +27,21 @@ export function listerRefundCentsFromDisputeJob(job: JobRowForCleanerNet): numbe
   if (partial && (st === "completed" || isDashboardCompletedJob(job))) {
     const fromRow = Math.max(0, Math.round(Number(job.refund_amount ?? 0) || 0));
     if (fromRow >= 1) return fromRow;
-    if (dr === "counter_accepted_by_lister") {
-      return Math.max(
-        0,
-        Math.round(
-          Number(job.counter_proposal_amount ?? job.proposed_refund_amount ?? 0) || 0
-        )
-      );
-    }
-    return Math.max(
-      0,
-      Math.round(
-        Number(job.proposed_refund_amount ?? job.counter_proposal_amount ?? 0) || 0
-      )
-    );
+    const fromProposal =
+      dr === "counter_accepted_by_lister"
+        ? Math.max(
+            0,
+            Math.round(
+              Number(job.counter_proposal_amount ?? job.proposed_refund_amount ?? 0) || 0
+            )
+          )
+        : Math.max(
+            0,
+            Math.round(
+              Number(job.proposed_refund_amount ?? job.counter_proposal_amount ?? 0) || 0
+            )
+          );
+    if (fromProposal >= 1) return fromProposal;
   }
 
   return Math.max(0, Math.round(Number(job.refund_amount ?? 0) || 0));

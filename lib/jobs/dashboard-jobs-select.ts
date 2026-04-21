@@ -22,22 +22,28 @@ function isSchemaColumnMissingError(error: { code?: string; message?: string } |
   return false;
 }
 
-const LISTER_DASHBOARD_JOB_SELECT_FALLBACK =
+const LISTER_DASHBOARD_JOB_SELECT_MINIMAL =
   "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, dispute_status, payment_released_at, completed_at";
 
 const LISTER_DASHBOARD_JOB_SELECT_VARIANTS: readonly string[] = [
   "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at",
   "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at",
-  LISTER_DASHBOARD_JOB_SELECT_FALLBACK,
+  "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, dispute_resolution, refund_amount, dispute_status, payment_released_at, completed_at",
+  "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, refund_amount, dispute_status, payment_released_at, completed_at",
+  LISTER_DASHBOARD_JOB_SELECT_MINIMAL,
 ];
 
-const CLEANER_DASHBOARD_JOB_SELECT_FALLBACK =
+/** Last resort only — omits refund columns; net-paid math will be wrong for partial refunds. */
+const CLEANER_DASHBOARD_JOB_SELECT_MINIMAL =
   "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, dispute_status, payment_released_at, completed_at";
 
 const CLEANER_DASHBOARD_JOB_SELECT_VARIANTS: readonly string[] = [
   "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at",
   "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at",
-  CLEANER_DASHBOARD_JOB_SELECT_FALLBACK,
+  /** DBs missing `proposed_refund_amount` / `counter_proposal_amount` but still record `refund_amount`. */
+  "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, dispute_resolution, refund_amount, dispute_status, payment_released_at, completed_at",
+  "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, refund_amount, dispute_status, payment_released_at, completed_at",
+  CLEANER_DASHBOARD_JOB_SELECT_MINIMAL,
 ];
 
 /** `/earnings` — same wide-select failure mode as dashboards (missing dispute/refund columns). */
@@ -48,6 +54,8 @@ const EARNINGS_JOB_SELECT_VARIANTS: readonly string[] = [
   "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_status, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, completed_at",
   "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, cleaner_confirmed_at, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at",
   "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, cleaner_confirmed_at, agreed_amount_cents, winner_id, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at",
+  "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, cleaner_confirmed_at, agreed_amount_cents, winner_id, dispute_resolution, refund_amount, dispute_status, payment_released_at, completed_at",
+  "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, cleaner_confirmed_at, agreed_amount_cents, winner_id, refund_amount, dispute_status, payment_released_at, completed_at",
   EARNINGS_JOB_SELECT_FALLBACK,
 ];
 
@@ -67,10 +75,10 @@ export async function resolveListerDashboardJobSelect(
         code: error.code,
         message: error.message,
       });
-      return LISTER_DASHBOARD_JOB_SELECT_FALLBACK;
+      return LISTER_DASHBOARD_JOB_SELECT_MINIMAL;
     }
   }
-  return LISTER_DASHBOARD_JOB_SELECT_FALLBACK;
+  return LISTER_DASHBOARD_JOB_SELECT_MINIMAL;
 }
 
 export async function resolveCleanerDashboardJobSelect(
@@ -85,10 +93,10 @@ export async function resolveCleanerDashboardJobSelect(
         code: error.code,
         message: error.message,
       });
-      return CLEANER_DASHBOARD_JOB_SELECT_FALLBACK;
+      return CLEANER_DASHBOARD_JOB_SELECT_MINIMAL;
     }
   }
-  return CLEANER_DASHBOARD_JOB_SELECT_FALLBACK;
+  return CLEANER_DASHBOARD_JOB_SELECT_MINIMAL;
 }
 
 export async function resolveCleanerEarningsJobSelect(
