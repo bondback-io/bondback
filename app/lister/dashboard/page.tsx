@@ -85,17 +85,11 @@ async function ListerDashboardContent() {
   const roles = normalizeProfileRolesFromDb(profile.roles, true);
   if (!roles.includes("lister")) redirect("/dashboard");
 
-  const [listingsFetched, jobsRes, notificationsRes, globalSettings] = await Promise.all([
+  const [listingsFetched, notificationsRes, globalSettings] = await Promise.all([
     fetchListingsForLister(user.id, {
       select: LISTING_FULL_SELECT,
       orderBy: { column: "created_at", ascending: false },
     }),
-    ((createSupabaseAdminClient() ?? supabase) as SupabaseClient)
-      .from("jobs")
-      .select(
-        "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at"
-      )
-      .eq("lister_id", user.id),
     supabase
       .from("notifications")
       .select(NOTIFICATION_FEED_SELECT)
@@ -109,9 +103,66 @@ async function ListerDashboardContent() {
     globalSettings?.fee_percentage ??
     12;
 
-  const listings = listingsFetched as ListingRow[];
-  const jobs = (jobsRes.data ?? []) as JobRow[];
+  let listings = listingsFetched as ListingRow[];
   const notifications = (notificationsRes.data ?? []) as NotificationRow[];
+
+  /**
+   * Jobs for this lister must match `/my-listings`: merge by `jobs.lister_id` **and** by
+   * `listing_id` for owned listings. `jobs.lister_id` can drift from `listings.lister_id`; querying
+   * only `lister_id` hides assigned work from both dashboards.
+   */
+  const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
+  const listerJobSelect =
+    "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at" as const;
+
+  const jobById = new Map<number, JobRow>();
+  const mergeJobRows = (rows: JobRow[]) => {
+    for (const j of rows) {
+      jobById.set(Number(j.id), j);
+    }
+  };
+
+  const { data: jobsByListerRow } = await jobsClient
+    .from("jobs")
+    .select(listerJobSelect)
+    .eq("lister_id", user.id);
+  mergeJobRows((jobsByListerRow ?? []) as JobRow[]);
+
+  const ownedListingIdSet = new Set(listings.map((l) => String(l.id)));
+  if (ownedListingIdSet.size > 0) {
+    const { data: jobsByOwnedListing } = await jobsClient
+      .from("jobs")
+      .select(listerJobSelect)
+      .in("listing_id", [...ownedListingIdSet]);
+    mergeJobRows((jobsByOwnedListing ?? []) as JobRow[]);
+  }
+
+  const jobListingIds = [...new Set([...jobById.values()].map((j) => String(j.listing_id)))];
+  const missingListingIds = jobListingIds.filter((id) => !ownedListingIdSet.has(id));
+  if (missingListingIds.length > 0) {
+    const { data: extraListings } = await jobsClient
+      .from("listings")
+      .select(LISTING_FULL_SELECT)
+      .in("id", missingListingIds as string[]);
+    if (extraListings?.length) {
+      listings = [...listings, ...(extraListings as ListingRow[])];
+      for (const row of extraListings as ListingRow[]) {
+        ownedListingIdSet.add(String(row.id));
+      }
+    }
+  }
+
+  if (ownedListingIdSet.size > 0) {
+    const { data: jobsAfterOrphans } = await jobsClient
+      .from("jobs")
+      .select(listerJobSelect)
+      .in("listing_id", [...ownedListingIdSet]);
+    mergeJobRows((jobsAfterOrphans ?? []) as JobRow[]);
+  }
+
+  const jobs = Array.from(jobById.values()).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 
   const listingIds = listings.map((l) => l.id);
   const bidCountByListingId =

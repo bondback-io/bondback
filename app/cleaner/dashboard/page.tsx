@@ -137,7 +137,7 @@ async function CleanerDashboardContent() {
     .from("bids")
     .select("listing_id")
     .eq("cleaner_id", user.id)
-    .eq("status", "accepted");
+    .in("status", ["accepted", "pending_confirmation"]);
   const acceptedListingIds = [
     ...new Set(
       (acceptedBidRows ?? [])

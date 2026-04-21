@@ -121,16 +121,23 @@ type DashboardJobPhaseFields = Parameters<typeof isDashboardCompletedJob>[0];
  */
 export function isDashboardActivePipelineJob(job: DashboardJobPhaseFields & { status?: string | null }): boolean {
   if (isDashboardCompletedJob(job)) return false;
-  const s = String(job.status ?? "");
+  const s = String(job.status ?? "").trim().toLowerCase();
   if (s === "cancelled") return false;
-  return (
+  if (
     s === "accepted" ||
     s === "in_progress" ||
     s === "completed_pending_approval" ||
     s === "disputed" ||
     s === "in_review" ||
     s === "dispute_negotiating"
-  );
+  ) {
+    return true;
+  }
+  /**
+   * Assigned jobs must not disappear from both Active and Completed because of an empty/legacy/unknown
+   * `status` value (`isDashboardCompletedJob` already returned false).
+   */
+  return true;
 }
 
 /** Cleaner earnings / payout UI: settled job (may lack `payment_released_at` after partial refund). */
