@@ -40,6 +40,17 @@ const CLEANER_DASHBOARD_JOB_SELECT_VARIANTS: readonly string[] = [
   CLEANER_DASHBOARD_JOB_SELECT_FALLBACK,
 ];
 
+/** `/earnings` — same wide-select failure mode as dashboards (missing dispute/refund columns). */
+const EARNINGS_JOB_SELECT_FALLBACK =
+  "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_status, dispute_resolution, refund_amount, completed_at";
+
+const EARNINGS_JOB_SELECT_VARIANTS: readonly string[] = [
+  "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_status, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, completed_at",
+  "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, cleaner_confirmed_at, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at",
+  "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, cleaner_confirmed_at, agreed_amount_cents, winner_id, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at",
+  EARNINGS_JOB_SELECT_FALLBACK,
+];
+
 /**
  * Probe which `jobs` select list works for this DB, so dashboards do not return **zero rows** when
  * one optional column is missing (job detail already falls back; dashboards used a single wide select).
@@ -78,6 +89,24 @@ export async function resolveCleanerDashboardJobSelect(
     }
   }
   return CLEANER_DASHBOARD_JOB_SELECT_FALLBACK;
+}
+
+export async function resolveCleanerEarningsJobSelect(
+  client: SupabaseClient,
+  userId: string
+): Promise<string> {
+  for (const sel of EARNINGS_JOB_SELECT_VARIANTS) {
+    const { error } = await client.from("jobs").select(sel).eq("winner_id", userId).limit(1);
+    if (!error) return sel;
+    if (!isSchemaColumnMissingError(error)) {
+      console.warn("[earnings] jobs select probe failed (non-schema)", {
+        code: error.code,
+        message: error.message,
+      });
+      return EARNINGS_JOB_SELECT_FALLBACK;
+    }
+  }
+  return EARNINGS_JOB_SELECT_FALLBACK;
 }
 
 const MY_LISTINGS_JOB_SELECT_FALLBACK =

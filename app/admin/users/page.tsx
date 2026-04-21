@@ -47,7 +47,12 @@ type JobRow = {
   proposed_refund_amount?: number | null;
   counter_proposal_amount?: number | null;
 };
-type ListingRow = { id: string; current_lowest_bid_cents: number | null };
+type ListingRow = {
+  id: string;
+  current_lowest_bid_cents: number | null;
+  buy_now_cents?: number | null;
+  reserve_cents?: number | null;
+};
 
 interface AdminUsersPageProps {
   searchParams?: Promise<{
@@ -156,7 +161,10 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   const listingsQuery =
     serviceRoleMissing || listingIds.length === 0
       ? { data: [] as ListingRow[] }
-      : await supabaseAdmin!.from("listings").select("id, current_lowest_bid_cents").in("id", listingIds);
+      : await supabaseAdmin!
+          .from("listings")
+          .select("id, current_lowest_bid_cents, buy_now_cents, reserve_cents")
+          .in("id", listingIds);
   const { data: listingsData } = listingsQuery;
   const listingsMap = new Map<string, ListingRow>();
   (listingsData ?? []).forEach((l: any) => listingsMap.set(l.id, l as ListingRow));
@@ -168,7 +176,10 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     if (j.winner_id) totalJobsByUser.set(j.winner_id, (totalJobsByUser.get(j.winner_id) ?? 0) + 1);
     if (j.status === "completed" && j.winner_id && j.listing_id) {
       const list = listingsMap.get(j.listing_id);
-      const cents = cleanerNetEarnedCents(j, list?.current_lowest_bid_cents);
+      const cents = cleanerNetEarnedCents(j, list?.current_lowest_bid_cents, {
+        buy_now_cents: list?.buy_now_cents,
+        reserve_cents: list?.reserve_cents,
+      });
       totalEarningsByUser.set(j.winner_id, (totalEarningsByUser.get(j.winner_id) ?? 0) + (cents || 0));
     }
   }

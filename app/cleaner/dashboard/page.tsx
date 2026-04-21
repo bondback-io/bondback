@@ -230,7 +230,11 @@ async function CleanerDashboardContent() {
     const listing = listingsMap.get(j.listing_id as string);
     const jobDate = new Date(j.updated_at || j.created_at);
     if (!(jobDate >= monthStart && jobDate <= now)) return sum;
-    return sum + cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents);
+    return sum +
+      cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents, {
+        buy_now_cents: listing?.buy_now_cents,
+        reserve_cents: listing?.reserve_cents,
+      });
   }, 0);
 
   const cleanerAvgRaw = (profile as { cleaner_avg_rating?: number | string | null })
@@ -553,7 +557,13 @@ async function CleanerDashboardContent() {
                             Completed
                           </span>
                           <span className="text-xs font-medium text-foreground dark:text-gray-200">
-                            Net paid {formatCents(cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents))}
+                            Net paid{" "}
+                            {formatCents(
+                              cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, {
+                                buy_now_cents: listing?.buy_now_cents,
+                                reserve_cents: listing?.reserve_cents,
+                              })
+                            )}
                           </span>
                         </p>
                       </div>

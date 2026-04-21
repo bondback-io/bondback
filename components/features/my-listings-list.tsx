@@ -1219,7 +1219,10 @@ export function MyListingsList({
 
               let completedCleanerNetCents: number | null = null;
               if (job && isListerMyListingsJobCompleted(job)) {
-                const net = cleanerNetEarnedCents(job, listing.current_lowest_bid_cents);
+                const net = cleanerNetEarnedCents(job, listing.current_lowest_bid_cents, {
+                  buy_now_cents: listing.buy_now_cents,
+                  reserve_cents: listing.reserve_cents,
+                });
                 if (net > 0) completedCleanerNetCents = net;
               }
 

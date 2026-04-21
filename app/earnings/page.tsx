@@ -15,6 +15,16 @@ import {
   isCleanerEarningsPaidJob,
   isDashboardCompletedJob,
 } from "@/lib/jobs/dispute-hub-helpers";
+import { resolveCleanerEarningsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
+import type { ListingPriceFallbackCents } from "@/lib/admin-job-gross";
+
+function listingPriceExtras(listing: ListingRow | undefined): ListingPriceFallbackCents | undefined {
+  if (!listing) return undefined;
+  return {
+    buy_now_cents: listing.buy_now_cents,
+    reserve_cents: listing.reserve_cents,
+  };
+}
 
 const PLATFORM_FEE_RATE = 0.12;
 
@@ -79,15 +89,20 @@ export default async function EarningsPage() {
 
   /** Same RLS gap as listings: completed jobs may not be visible on the user client. */
   const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
-  const jobSelectEarnings =
-    "id, listing_id, title, status, created_at, updated_at, payment_released_at, agreed_amount_cents, cleaner_confirmed_complete, cleaner_confirmed_at, dispute_status, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, completed_at" as const;
-  const { data: jobsData } = await jobsClient
+  const jobSelectEarnings = await resolveCleanerEarningsJobSelect(jobsClient, sessionData.user.id);
+  const { data: jobsData, error: jobsLoadError } = await jobsClient
     .from("jobs")
-    .select(jobSelectEarnings)
+    .select(jobSelectEarnings as never)
     .eq("winner_id", sessionData.user.id)
     .order("created_at", { ascending: false });
 
-  let jobs = (jobsData ?? []) as JobRow[];
+  if (jobsLoadError) {
+    console.warn("[earnings] jobs load failed", {
+      code: jobsLoadError.code,
+      message: jobsLoadError.message,
+    });
+  }
+  let jobs = (jobsData ?? []) as unknown as JobRow[];
   const { data: acceptedBidRows } = await jobsClient
     .from("bids")
     .select("listing_id")
@@ -103,7 +118,7 @@ export default async function EarningsPage() {
   if (acceptedListingIds.length > 0) {
     const { data: jobsFromAcceptedListings } = await jobsClient
       .from("jobs")
-      .select(jobSelectEarnings)
+      .select(jobSelectEarnings as never)
       .in("listing_id", acceptedListingIds as string[])
       .neq("status", "cancelled")
       .order("created_at", { ascending: false });
@@ -111,7 +126,7 @@ export default async function EarningsPage() {
     for (const j of jobs) {
       byId.set(Number(j.id), j);
     }
-    for (const j of (jobsFromAcceptedListings ?? []) as JobRow[]) {
+    for (const j of (jobsFromAcceptedListings ?? []) as unknown as JobRow[]) {
       const id = Number(j.id);
       if (!byId.has(id)) byId.set(id, j);
     }
@@ -132,7 +147,7 @@ export default async function EarningsPage() {
     const listingsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
     const { data: listingsData } = await listingsClient
       .from("listings")
-      .select("id, title, current_lowest_bid_cents")
+      .select("id, title, current_lowest_bid_cents, buy_now_cents, reserve_cents")
       .in("id", listingIds as string[]);
     (listingsData ?? []).forEach((l: { id: string }) => {
       listingsMap.set(l.id, l as ListingRow);
@@ -160,10 +175,10 @@ export default async function EarningsPage() {
   const paidHistoryJobs = jobs.filter((j) => isCleanerEarningsPaidJob(j));
   for (const job of paidHistoryJobs) {
     const listing = listingsMap.get(job.listing_id);
-    const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents);
+    const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) continue;
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
-    const netCents = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents);
+    const netCents = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     const releasedAt =
       job.payment_released_at?.trim() ||
       job.updated_at ||
@@ -210,12 +225,12 @@ export default async function EarningsPage() {
 
   for (const job of jobs) {
     const listing = listingsMap.get(job.listing_id);
-    const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents);
+    const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) continue;
 
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
     const netCents = isDashboardCompletedJob(job)
-      ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
+      ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing))
       : grossCents;
     const title = earningsRowTitle(job, listing);
 
@@ -239,7 +254,7 @@ export default async function EarningsPage() {
 
     if (isDashboardCompletedJob(job)) {
       const d = job.payment_released_at || job.updated_at || job.created_at;
-      const netForChart = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents);
+      const netForChart = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
       chartEvents.push({
         date: d,
         grossCents,
@@ -250,12 +265,12 @@ export default async function EarningsPage() {
 
   const totalEarningsCents = completedJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    return sum + cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents);
+    return sum + cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
   }, 0);
 
   const thisMonthCents = completedJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    const c = cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents);
+    const c = cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     const jobDate = new Date(j.updated_at || j.created_at);
     if (jobDate >= monthStart && jobDate <= now) return sum + c;
     return sum;
@@ -263,7 +278,7 @@ export default async function EarningsPage() {
 
   const pendingPayoutsCents = pendingJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    return sum + adminJobGrossCents(j, listing?.current_lowest_bid_cents);
+    return sum + adminJobGrossCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
   }, 0);
 
   const paidCount = completedJobs.length;
@@ -281,10 +296,10 @@ export default async function EarningsPage() {
 
   completedJobs.forEach((j) => {
     const listing = listingsMap.get(j.listing_id);
-    const grossCents = adminJobGrossCents(j, listing?.current_lowest_bid_cents);
+    const grossCents = adminJobGrossCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) return;
     const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
-    const netCents = cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents);
+    const netCents = cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     const jobDate = new Date(j.updated_at || j.created_at);
 
     periodBreakdown.lifetime.grossCents += grossCents;
@@ -327,10 +342,10 @@ export default async function EarningsPage() {
 
   for (const job of jobs) {
     const listing = listingsMap.get(job.listing_id);
-    const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents);
+    const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) continue;
     const netCents = isDashboardCompletedJob(job)
-      ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents)
+      ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing))
       : grossCents;
     const title = earningsRowTitle(job, listing);
 

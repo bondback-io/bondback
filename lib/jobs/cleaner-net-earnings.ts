@@ -1,4 +1,4 @@
-import { adminJobGrossCents } from "@/lib/admin-job-gross";
+import { adminJobGrossCents, type ListingPriceFallbackCents } from "@/lib/admin-job-gross";
 import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
 
 /** Job fields needed to subtract lister refunds after partial-refund dispute resolution. */
@@ -56,9 +56,10 @@ function jobIsSettledForNet(job: JobRowForCleanerNet): boolean {
 
 export function cleanerNetEarnedCents(
   job: JobRowForCleanerNet,
-  listingCurrentLowestBidCents: number | null | undefined
+  listingCurrentLowestBidCents: number | null | undefined,
+  listingExtras?: ListingPriceFallbackCents | null
 ): number {
-  const gross = adminJobGrossCents(job, listingCurrentLowestBidCents);
+  const gross = adminJobGrossCents(job, listingCurrentLowestBidCents, listingExtras);
   if (gross <= 0) return 0;
   if (!jobIsSettledForNet(job)) return gross;
   const refund = listerRefundCentsFromDisputeJob(job);
@@ -71,9 +72,10 @@ export function cleanerNetEarnedCents(
  */
 export function listerNetSettledSpendCents(
   job: JobRowForCleanerNet,
-  listingCurrentLowestBidCents: number | null | undefined
+  listingCurrentLowestBidCents: number | null | undefined,
+  listingExtras?: ListingPriceFallbackCents | null
 ): number {
-  const gross = adminJobGrossCents(job, listingCurrentLowestBidCents);
+  const gross = adminJobGrossCents(job, listingCurrentLowestBidCents, listingExtras);
   if (gross <= 0) return 0;
   if (!jobIsSettledForNet(job)) return gross;
   const refund = listerRefundCentsFromDisputeJob(job);
