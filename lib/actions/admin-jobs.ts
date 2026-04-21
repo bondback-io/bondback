@@ -388,6 +388,114 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
   revalidatePath(`/jobs/${numericJobId}`);
 }
 
+/**
+ * Clears dispute metadata on the job, deletes `dispute_messages` and `dispute_mediation_votes` for the job,
+ * and removes it from the admin disputes queue (`disputed_at` null). Does not undo Stripe refunds/releases.
+ * If the job is still in a dispute-only workflow status, moves it back to `completed_pending_approval` (when the
+ * cleaner already marked complete) or `in_progress`.
+ */
+export async function adminPurgeJobDisputeRecord(formData: FormData): Promise<void> {
+  const jobIdRaw = formData.get("jobId");
+  if (!jobIdRaw) return;
+  const numericJobId = Number(jobIdRaw);
+  if (!Number.isFinite(numericJobId) || numericJobId < 1) return;
+
+  const { adminId } = await requireAdmin();
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    throw new Error("Removing a dispute record requires SUPABASE_SERVICE_ROLE_KEY on the server.");
+  }
+
+  const { data: job, error: fetchError } = await admin
+    .from("jobs")
+    .select("id, status, cleaner_confirmed_complete, disputed_at, payment_released_at")
+    .eq("id", numericJobId)
+    .maybeSingle();
+
+  if (fetchError || !job) {
+    throw new Error("Job not found.");
+  }
+
+  const row = job as {
+    status: string;
+    cleaner_confirmed_complete?: boolean | null;
+    disputed_at?: string | null;
+    payment_released_at?: string | null;
+  };
+
+  if (!row.disputed_at) {
+    return;
+  }
+
+  await admin.from("dispute_messages").delete().eq("job_id", numericJobId);
+  await admin.from("dispute_mediation_votes").delete().eq("job_id", numericJobId);
+
+  let nextStatus = row.status;
+  if (["disputed", "dispute_negotiating", "in_review"].includes(row.status)) {
+    if (row.payment_released_at) {
+      nextStatus = "completed";
+    } else if (row.cleaner_confirmed_complete) {
+      nextStatus = "completed_pending_approval";
+    } else {
+      nextStatus = "in_progress";
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: updateError } = await admin
+    .from("jobs")
+    .update({
+      status: nextStatus,
+      updated_at: nowIso,
+      disputed_at: null,
+      dispute_reason: null,
+      dispute_photos: null,
+      dispute_evidence: null,
+      dispute_opened_by: null,
+      dispute_status: null,
+      dispute_priority: "medium",
+      dispute_escalated: false,
+      dispute_mediation_status: "none",
+      mediation_proposal: null,
+      mediation_last_activity_at: null,
+      proposed_refund_amount: null,
+      counter_proposal_amount: null,
+      dispute_cleaner_counter_used: false,
+      dispute_lister_counter_used: false,
+      admin_mediation_requested: false,
+      admin_mediation_requested_at: null,
+      dispute_resolution: null,
+      resolution_type: null,
+      resolution_at: null,
+      resolution_by: null,
+      dispute_response_reason: null,
+      dispute_response_evidence: null,
+      dispute_response_message: null,
+      dispute_response_at: null,
+    } as never)
+    .eq("id", numericJobId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  await logAdminActivity({
+    adminId,
+    actionType: "dispute_record_purged",
+    targetType: "job",
+    targetId: String(numericJobId),
+    details: { previous_status: row.status, next_status: nextStatus },
+  });
+
+  revalidatePath("/admin/disputes");
+  revalidatePath(`/admin/disputes/${numericJobId}`);
+  revalidatePath("/disputes");
+  revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/my-listings");
+  revalidatePath(`/jobs/${numericJobId}`);
+}
+
 export async function adminDeleteJob(formData: FormData): Promise<void> {
   const jobIdRaw = formData.get("jobId");
   if (!jobIdRaw) throw new Error("Missing jobId");

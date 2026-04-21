@@ -7,17 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { proposeMediation } from "@/lib/actions/disputes";
-import { DisputeJobCaseSummary } from "@/components/disputes/dispute-job-case-summary";
-import { DisputeAuditTimeline } from "@/components/disputes/dispute-audit-timeline";
-import { serializeDisputeMessagesForClient } from "@/lib/disputes/serialize-dispute-messages";
-import { mergeOpeningMessageFromJobIfMissing } from "@/lib/disputes/dispute-audit-merge";
-import { AdminDisputePartyEmailForms } from "@/components/admin/admin-dispute-party-email-forms";
-import { AdminDisputeResolvePanel } from "@/components/admin/admin-dispute-resolve-panel";
-import { AdminDisputeCaseNoteForm } from "@/components/admin/admin-dispute-case-note-form";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { AdminPurgeDisputeButton } from "@/components/admin/admin-purge-dispute-button";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -182,27 +180,6 @@ export default async function AdminDisputesPage({
       const resolutionMatch = reso.includes(query);
       return idMatch || listerMatch || cleanerMatch || reasonMatch || resolutionMatch;
     });
-  }
-
-  const admin = createSupabaseAdminClient();
-  const byJobMessages = new Map<number, ReturnType<typeof serializeDisputeMessagesForClient>>();
-  if (admin && filtered.length > 0) {
-    const ids = filtered.map((j) => j.id);
-    const { data: msgs } = await (admin as any)
-      .from("dispute_messages")
-      .select("*")
-      .in("job_id", ids)
-      .order("created_at", { ascending: true });
-    const rawByJob = new Map<number, any[]>();
-    for (const m of msgs ?? []) {
-      const key = Number(m.job_id);
-      const arr = rawByJob.get(key) ?? [];
-      arr.push(m);
-      rawByJob.set(key, arr);
-    }
-    for (const [jid, arr] of rawByJob) {
-      byJobMessages.set(jid, serializeDisputeMessagesForClient(arr));
-    }
   }
 
   const filterQs = new URLSearchParams();
@@ -429,125 +406,93 @@ export default async function AdminDisputesPage({
                 No disputes match this filter.
               </div>
             ) : (
-              <div className="space-y-3">
-                {filtered.map((job) => {
-                  const lister = profilesMap.get(job.lister_id);
-                  const cleaner = profilesMap.get(job.winner_id);
-                  const auditMessages = mergeOpeningMessageFromJobIfMissing(
-                    job,
-                    byJobMessages.get(Number(job.id)) ?? []
-                  );
-                  const suggestedRefund =
-                    Math.max(0, Number(job.counter_proposal_amount ?? 0)) ||
-                    Math.max(0, Number(job.proposed_refund_amount ?? 0));
-                  const agreed = Math.max(0, Number(job.agreed_amount_cents ?? 0));
-                  return (
-                    <Card key={job.id} className="border-border dark:border-gray-800 dark:bg-gray-900/60">
-                      <CardContent className="space-y-3 p-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold">Job #{job.id}</p>
-                          <Badge variant="outline">{job.status}</Badge>
-                          {job.dispute_status ? (
-                            <Badge variant="secondary" className="text-[10px] capitalize">
-                              dispute: {String(job.dispute_status).replace(/_/g, " ")}
-                            </Badge>
-                          ) : null}
-                          <Badge variant="secondary">{job.dispute_priority ?? "medium"}</Badge>
-                          {job.dispute_escalated ? <Badge className="bg-red-600 text-white">Escalated</Badge> : null}
-                          {job.dispute_mediation_status && job.dispute_mediation_status !== "none" ? (
-                            <Badge className="bg-violet-600 text-white">Mediation: {job.dispute_mediation_status}</Badge>
-                          ) : null}
-                          {job.dispute_resolution ? (
-                            <Badge className="border border-emerald-600/50 bg-emerald-950/40 text-emerald-100">
-                              Outcome: {String(job.dispute_resolution).replace(/_/g, " ")}
-                            </Badge>
-                          ) : null}
-                          <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
-                            <Link href={`/jobs/${job.id}#dispute`} target="_blank" rel="noopener noreferrer">
-                              Open job
+              <div className="overflow-x-auto rounded-md border border-border dark:border-gray-800">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="dark:border-gray-800 hover:bg-transparent">
+                      <TableHead className="whitespace-nowrap dark:text-gray-200">Job</TableHead>
+                      <TableHead className="min-w-[140px] dark:text-gray-200">Parties</TableHead>
+                      <TableHead className="whitespace-nowrap dark:text-gray-200">Opened</TableHead>
+                      <TableHead className="whitespace-nowrap dark:text-gray-200">Updated</TableHead>
+                      <TableHead className="min-w-[200px] dark:text-gray-200">Status</TableHead>
+                      <TableHead className="text-right whitespace-nowrap dark:text-gray-200">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((job) => {
+                      const lister = profilesMap.get(job.lister_id);
+                      const cleaner = profilesMap.get(job.winner_id);
+                      const filterSuffix = filterQs.toString() ? `?${filterQs.toString()}` : "";
+                      return (
+                        <TableRow key={job.id} className="dark:border-gray-800">
+                          <TableCell className="font-medium dark:text-gray-100">
+                            <Link
+                              href={`/admin/disputes/${job.id}${filterSuffix}`}
+                              className="text-primary hover:underline"
+                            >
+                              #{job.id}
                             </Link>
-                          </Button>
-                        </div>
-                        {job.resolution_at ? (
-                          <p className="text-[11px] text-muted-foreground">
-                            Resolution recorded: {new Date(job.resolution_at).toLocaleString()}
-                          </p>
-                        ) : null}
-                        <p className="text-xs text-muted-foreground">
-                          {lister?.full_name ?? "Lister"} vs {cleaner?.full_name ?? "Cleaner"}
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/20 px-3 py-2 dark:border-gray-700 dark:bg-gray-900/40">
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              id={`admin-med-${job.id}`}
-                              checked={Boolean(job.admin_mediation_requested)}
-                              disabled
-                              aria-readonly
-                            />
-                            <Label htmlFor={`admin-med-${job.id}`} className="text-xs font-normal cursor-default">
-                              Admin mediation requested
-                            </Label>
-                          </div>
-                          {job.admin_mediation_requested_at ? (
-                            <span className="text-[11px] text-muted-foreground tabular-nums">
-                              {new Date(job.admin_mediation_requested_at).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground dark:text-gray-300">
+                            <span className="line-clamp-2">
+                              {lister?.full_name ?? "Lister"} vs {cleaner?.full_name ?? "Cleaner"}
                             </span>
-                          ) : null}
-                          {job.dispute_cleaner_counter_used ? (
-                            <Badge variant="outline" className="text-[10px]">
-                              Cleaner counter used
-                            </Badge>
-                          ) : null}
-                          {job.dispute_lister_counter_used ? (
-                            <Badge variant="outline" className="text-[10px]">
-                              Lister counter used
-                            </Badge>
-                          ) : null}
-                        </div>
-
-                        <DisputeJobCaseSummary job={job} />
-                        <AdminDisputeCaseNoteForm jobId={Number(job.id)} />
-                        <DisputeAuditTimeline
-                          jobId={Number(job.id)}
-                          messages={auditMessages}
-                          isAdminConsole
-                        />
-
-                        <AdminDisputeResolvePanel
-                          jobId={Number(job.id)}
-                          jobStatus={String(job.status)}
-                          suggestedRefundCents={suggestedRefund}
-                          agreedAmountCents={agreed}
-                        />
-
-                        <AdminDisputePartyEmailForms jobId={Number(job.id)} />
-
-                        <form
-                          action={proposeMediation}
-                          className="grid gap-2 rounded-lg border border-violet-300/70 bg-violet-50/70 p-3 dark:border-violet-800 dark:bg-violet-950/20"
-                        >
-                          <input type="hidden" name="jobId" value={job.id} />
-                          <Label className="text-xs">Mediation proposal</Label>
-                          <Textarea name="proposalText" rows={2} required placeholder="Propose a fair settlement..." />
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <Input name="refundCents" type="number" min={0} step={50} placeholder="Refund cents (optional)" />
-                            <Input
-                              name="additionalPaymentCents"
-                              type="number"
-                              min={0}
-                              step={50}
-                              placeholder="Top-up cents (optional)"
-                            />
-                          </div>
-                          <Button type="submit" size="sm" className="w-fit">
-                            Send mediation proposal
-                          </Button>
-                        </form>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground dark:text-gray-400">
+                            {job.disputed_at ? new Date(job.disputed_at).toLocaleString() : "—"}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground dark:text-gray-400">
+                            {job.updated_at ? new Date(job.updated_at).toLocaleString() : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              <Badge variant="outline" className="text-[10px] capitalize">
+                                {job.status}
+                              </Badge>
+                              {job.dispute_status ? (
+                                <Badge variant="secondary" className="text-[10px] capitalize">
+                                  {String(job.dispute_status).replace(/_/g, " ")}
+                                </Badge>
+                              ) : null}
+                              <Badge variant="secondary" className="text-[10px]">
+                                {job.dispute_priority ?? "medium"}
+                              </Badge>
+                              {job.admin_mediation_requested ? (
+                                <Badge className="bg-sky-700 text-[10px] text-white">Admin help</Badge>
+                              ) : null}
+                              {job.dispute_mediation_status && job.dispute_mediation_status !== "none" ? (
+                                <Badge className="bg-violet-700 text-[10px] text-white">
+                                  {job.dispute_mediation_status}
+                                </Badge>
+                              ) : null}
+                              {job.dispute_resolution ? (
+                                <Badge className="border border-emerald-600/50 bg-emerald-950/50 text-[10px] text-emerald-100">
+                                  {String(job.dispute_resolution).replace(/_/g, " ")}
+                                </Badge>
+                              ) : null}
+                              {job.dispute_escalated ? (
+                                <Badge className="bg-red-600 text-[10px] text-white">Escalated</Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <Button asChild size="sm" variant="secondary" className="h-8">
+                                <Link href={`/admin/disputes/${job.id}${filterSuffix}`}>Console</Link>
+                              </Button>
+                              <Button asChild size="sm" variant="ghost" className="h-8 text-xs">
+                                <Link href={`/jobs/${job.id}#dispute`} target="_blank" rel="noopener noreferrer">
+                                  Job page
+                                </Link>
+                              </Button>
+                              <AdminPurgeDisputeButton jobId={Number(job.id)} />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </CardContent>
