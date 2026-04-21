@@ -18,6 +18,7 @@ import {
   isListerPaidJobListing,
 } from "@/lib/my-listings/lister-listing-helpers";
 import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
+import { resolveListerMyListingsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -216,8 +217,10 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
   let noBidsCount = 0;
 
   if (listingIdsForJobs.length > 0) {
-    const jobSelectMyListings =
-      "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at, completed_at" as const;
+    const jobSelectMyListings = await resolveListerMyListingsJobSelect(
+      jobsClient,
+      listingIdsForJobs[0] ?? null
+    );
     type JobRowMyListings = {
       id: string | number;
       listing_id: string | number;
@@ -245,9 +248,9 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
       const slice = listingIdsForJobs.slice(i, i + chunkSize);
       const { data: jobsData } = await jobsClient
         .from("jobs")
-        .select(jobSelectMyListings)
+        .select(jobSelectMyListings as never)
         .in("listing_id", slice as string[]);
-      jobs.push(...((jobsData ?? []) as JobRowMyListings[]));
+      jobs.push(...((jobsData ?? []) as unknown as JobRowMyListings[]));
     }
 
     const winnerIds = [

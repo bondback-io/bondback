@@ -46,6 +46,7 @@ import {
   isDashboardActivePipelineJob,
   isDashboardCompletedJob,
 } from "@/lib/jobs/dispute-hub-helpers";
+import { resolveCleanerDashboardJobSelect } from "@/lib/jobs/dashboard-jobs-select";
 import { bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
@@ -116,8 +117,7 @@ async function CleanerDashboardContent() {
    * read is scoped to `winner_id = auth user` only (same boundary as listing snapshots below).
    */
   const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
-  const jobSelectForDashboard =
-    "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at" as const;
+  const jobSelectForDashboard = await resolveCleanerDashboardJobSelect(jobsClient, user.id);
 
   const { data: jobsData } = await jobsClient
     .from("jobs")
@@ -125,7 +125,7 @@ async function CleanerDashboardContent() {
     .eq("winner_id", user.id)
     .order("created_at", { ascending: false });
 
-  let jobs = (jobsData ?? []) as JobRow[];
+  let jobs = (jobsData ?? []) as unknown as JobRow[];
 
   /**
    * Include jobs for listings where this cleaner’s bid is `accepted` even if `jobs.winner_id` is
@@ -156,7 +156,7 @@ async function CleanerDashboardContent() {
     for (const j of jobs) {
       byId.set(Number(j.id), j);
     }
-    for (const j of (jobsFromAcceptedListings ?? []) as JobRow[]) {
+    for (const j of (jobsFromAcceptedListings ?? []) as unknown as JobRow[]) {
       const id = Number(j.id);
       if (!byId.has(id)) byId.set(id, j);
     }

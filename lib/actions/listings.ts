@@ -14,6 +14,8 @@ import {
 } from "@/lib/listings";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { isListerRelistPoolListingStatus } from "@/lib/my-listings/lister-listing-helpers";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveListerMyListingsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
 
 type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -675,9 +677,6 @@ export async function triggerNewListingJobAlerts(listingId: string) {
   return notifyNearbyCleanersOfNewListing(listingId);
 }
 
-const LISTER_MY_LISTINGS_JOB_SELECT =
-  "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at, completed_at" as const;
-
 /**
  * My Listings (client) job refresh: same fields as the page snapshot, with admin read when available
  * so dispute-completed / ended-listing jobs are not dropped by RLS on the browser client.
@@ -739,9 +738,14 @@ export async function fetchListerJobsForMyListingsRefresh(listingIds: string[]) 
     return { ok: true as const, jobs: [] };
   }
 
+  const myListingsJobSelect = await resolveListerMyListingsJobSelect(
+    client as unknown as SupabaseClient,
+    safeIds[0] ?? null
+  );
+
   const { data, error } = await client
     .from("jobs")
-    .select(LISTER_MY_LISTINGS_JOB_SELECT)
+    .select(myListingsJobSelect)
     .in("listing_id", safeIds as string[]);
 
   if (error) {

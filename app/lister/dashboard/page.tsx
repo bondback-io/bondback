@@ -47,6 +47,7 @@ import {
   isDashboardActivePipelineJob,
   isDashboardCompletedJob,
 } from "@/lib/jobs/dispute-hub-helpers";
+import { resolveListerDashboardJobSelect } from "@/lib/jobs/dashboard-jobs-select";
 import type { SupabaseClient } from "@supabase/supabase-js";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -112,8 +113,7 @@ async function ListerDashboardContent() {
    * only `lister_id` hides assigned work from both dashboards.
    */
   const jobsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
-  const listerJobSelect =
-    "id, listing_id, status, created_at, updated_at, agreed_amount_cents, payment_intent_id, winner_id, cleaner_confirmed_complete, top_up_payments, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, completed_at" as const;
+  const listerJobSelect = await resolveListerDashboardJobSelect(jobsClient, user.id);
 
   const jobById = new Map<number, JobRow>();
   const mergeJobRows = (rows: JobRow[]) => {
@@ -131,7 +131,7 @@ async function ListerDashboardContent() {
         .from("jobs")
         .select(listerJobSelect)
         .in("listing_id", slice as string[]);
-      mergeJobRows((data ?? []) as JobRow[]);
+      mergeJobRows((data ?? []) as unknown as JobRow[]);
     }
   };
 
@@ -139,7 +139,7 @@ async function ListerDashboardContent() {
     .from("jobs")
     .select(listerJobSelect)
     .eq("lister_id", user.id);
-  mergeJobRows((jobsByListerRow ?? []) as JobRow[]);
+  mergeJobRows((jobsByListerRow ?? []) as unknown as JobRow[]);
 
   const ownedListingIdSet = new Set<string>();
   for (const l of listings) {

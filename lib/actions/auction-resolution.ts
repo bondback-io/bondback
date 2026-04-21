@@ -171,6 +171,12 @@ export async function resolveExpiredLiveAuctions(
     });
 
     if (!result.ok) {
+      console.error("[listing→job] auction end: finalizeBidAcceptanceCore failed", {
+        listingId,
+        cleanerId: winningBid.cleaner_id,
+        bidId: winningBid.id,
+        error: result.error,
+      });
       const { error: upErr } = await admin
         .from("listings")
         .update({ status: "ended" } as never)

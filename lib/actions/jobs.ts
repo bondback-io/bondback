@@ -91,35 +91,65 @@ function isPostgresUniqueViolation(
   );
 }
 
+type ListingJobSideEffectsResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * After `jobs` insert: cancel other bids, mark winner accepted, end listing. Fail-fast so callers
+ * can rollback the job row and surface a clear error (avoids “job exists but listing still live”).
+ */
 async function applyAcceptedBidListingSideEffects(
   admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
   listingId: string,
   acceptedBidId: string
-) {
+): Promise<ListingJobSideEffectsResult> {
   const acceptedId = trimStr(acceptedBidId);
-  if (!acceptedId) return;
+  if (!acceptedId) {
+    return { ok: false, error: "Missing accepted bid id." };
+  }
   const { error: cancelSiblingsErr } = await admin
     .from("bids")
     .update({ status: "cancelled" } as never)
     .eq("listing_id", listingId)
     .neq("id", acceptedId);
   if (cancelSiblingsErr) {
-    console.error("[applyAcceptedBidListingSideEffects] cancel sibling bids", listingId, cancelSiblingsErr);
+    console.error(
+      "[listing→job] cancel sibling bids failed",
+      { listingId, acceptedBidId: acceptedId, code: cancelSiblingsErr.code, message: cancelSiblingsErr.message }
+    );
+    return {
+      ok: false,
+      error: `Could not cancel other bids: ${cancelSiblingsErr.message}`,
+    };
   }
   const { error: acceptErr } = await admin
     .from("bids")
     .update({ status: "accepted" } as never)
     .eq("id", acceptedId);
   if (acceptErr) {
-    console.error("[applyAcceptedBidListingSideEffects] mark bid accepted", listingId, acceptErr);
+    console.error(
+      "[listing→job] mark winning bid accepted failed",
+      { listingId, acceptedBidId: acceptedId, code: acceptErr.code, message: acceptErr.message }
+    );
+    return {
+      ok: false,
+      error: `Could not mark winning bid accepted: ${acceptErr.message}`,
+    };
   }
   const { error: listingErr } = await admin
     .from("listings")
     .update({ status: "ended" } as never)
     .eq("id", listingId);
   if (listingErr) {
-    console.error("[applyAcceptedBidListingSideEffects] end listing", listingId, listingErr);
+    console.error(
+      "[listing→job] end listing failed",
+      { listingId, acceptedBidId: acceptedId, code: listingErr.code, message: listingErr.message }
+    );
+    return {
+      ok: false,
+      error: `Could not end listing: ${listingErr.message}`,
+    };
   }
+  return { ok: true };
 }
 
 function revalidateAfterListerAcceptedBid(listingId: string, jobId: number | string) {
@@ -379,6 +409,9 @@ export async function finalizeBidAcceptanceCore(params: {
     .maybeSingle();
 
   let jobId: number | string;
+  /** False when we reused an existing row after a unique race — do not delete that row on side-effect failure. */
+  let insertedThisRequest = false;
+
   if (insertError || !inserted) {
     if (insertError && isPostgresUniqueViolation(insertError)) {
       const { data: racedJob } = await admin
@@ -389,26 +422,56 @@ export async function finalizeBidAcceptanceCore(params: {
         .maybeSingle();
       const rj = racedJob as { id: number | string; winner_id: string | null } | null;
       if (rj && sameUuid(rj.winner_id, cleanerId)) {
-        await applyAcceptedBidListingSideEffects(admin, params.listingId, params.acceptedBidId);
         jobId = rj.id;
-        const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
-        revalidateAfterListerAcceptedBid(params.listingId, jobId);
-        return { ok: true, jobId };
-      }
-      if (rj) {
+        insertedThisRequest = false;
+      } else if (rj) {
         return { ok: false, error: "A job already exists for this listing." };
+      } else {
+        return {
+          ok: false,
+          error: insertError?.message ?? "Failed to create job.",
+        };
       }
+    } else {
+      return {
+        ok: false,
+        error: insertError?.message ?? "Failed to create job.",
+      };
     }
-    return {
-      ok: false,
-      error: insertError?.message ?? "Failed to create job.",
-    };
+  } else {
+    jobId = (inserted as { id: number | string }).id;
+    insertedThisRequest = true;
   }
 
-  jobId = (inserted as { id: number | string }).id;
-  const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
+  const sideFx = await applyAcceptedBidListingSideEffects(
+    admin,
+    params.listingId,
+    params.acceptedBidId
+  );
+  if (!sideFx.ok) {
+    if (insertedThisRequest) {
+      const idForDelete = typeof jobId === "number" ? jobId : Number(jobId);
+      const { error: delErr } = await admin.from("jobs").delete().eq("id", idForDelete);
+      if (delErr) {
+        console.error("[listing→job] rollback job delete failed after side-effects error", {
+          listingId: params.listingId,
+          jobId,
+          sideFxError: sideFx.error,
+          code: delErr.code,
+          message: delErr.message,
+        });
+      }
+    } else {
+      console.error("[listing→job] side-effects failed; job may exist from concurrent insert", {
+        listingId: params.listingId,
+        jobId,
+        sideFxError: sideFx.error,
+      });
+    }
+    return { ok: false, error: sideFx.error };
+  }
 
-  await applyAcceptedBidListingSideEffects(admin, params.listingId, params.acceptedBidId);
+  const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
   const listingTitle = params.listingTitle ?? listRow.title ?? null;
   try {
@@ -612,11 +675,23 @@ export async function secureJobAtPrice(
       }
     }
 
-    await admin
+    const { error: endListingErr } = await admin
       .from("listings")
       .update({ status: "ended" } as never)
       .eq("id", listRow.id)
       .eq("status", "live");
+    if (endListingErr) {
+      console.error("[listing→job] buy-now: end listing failed after job + bid updates", {
+        listingId: listRow.id,
+        jobId: numericJobId,
+        code: endListingErr.code,
+        message: endListingErr.message,
+      });
+      return {
+        ok: false,
+        error: `Could not close the listing after buy now: ${endListingErr.message}. A job may exist — contact support if this persists.`,
+      };
+    }
   }
 
   if (!skipBuyNowWinnerNotifications) {
