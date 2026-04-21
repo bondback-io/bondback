@@ -167,6 +167,44 @@ export type MyListingsListProps = {
   allowTwoMinuteAuctionTest?: boolean;
 };
 
+/** Treat unknown/null job status as in-pipeline; only explicit cancelled drops from Active. */
+function jobRowIsNonCancelled(
+  info: { status: string | null } | null | undefined
+): boolean {
+  if (!info) return false;
+  return String(info.status ?? "").toLowerCase() !== "cancelled";
+}
+
+function snapshotToActiveJobsRecord(
+  snap: NonNullable<MyListingsListProps["initialActiveJobsSnapshot"]>
+): Record<string, JobRowState> {
+  const out: Record<string, JobRowState> = {};
+  for (const [listingId, row] of Object.entries(snap)) {
+    if (!row) continue;
+    out[String(listingId)] = {
+      jobId: row.jobId,
+      winnerId: row.winnerId,
+      winnerName: row.winnerName,
+      status: row.status,
+      cleanerConfirmedComplete: row.cleanerConfirmedComplete ?? null,
+      cleanerConfirmedAt: row.cleanerConfirmedAt ?? null,
+      updatedAt: row.updatedAt ?? null,
+      disputed_at: row.disputed_at ?? null,
+      dispute_reason: row.dispute_reason ?? null,
+      dispute_status: row.dispute_status ?? null,
+      dispute_opened_by: row.dispute_opened_by ?? null,
+      agreed_amount_cents: row.agreed_amount_cents ?? null,
+      dispute_resolution: row.dispute_resolution ?? null,
+      refund_amount: row.refund_amount ?? null,
+      proposed_refund_amount: row.proposed_refund_amount ?? null,
+      counter_proposal_amount: row.counter_proposal_amount ?? null,
+      payment_released_at: row.payment_released_at ?? null,
+      completed_at: row.completed_at ?? null,
+    };
+  }
+  return out;
+}
+
 export function MyListingsList({
   initialListings,
   listerId,
@@ -178,18 +216,33 @@ export function MyListingsList({
   allowTwoMinuteAuctionTest = false,
 }: MyListingsListProps) {
   const [listings, setListings] = useState<ListingRow[]>(initialListings);
-  const [activeJobs, setActiveJobs] = useState<Record<string, JobRowState>>(() => {
-    const snap = initialActiveJobsSnapshot;
-    if (!snap) return {};
-    const out: Record<string, JobRowState> = {};
-    for (const l of initialListings) {
-      const row = snap[String(l.id)];
-      if (row) {
-        out[String(l.id)] = row;
-      }
-    }
-    return out;
-  });
+  const [activeJobs, setActiveJobs] = useState<Record<string, JobRowState>>(() =>
+    initialActiveJobsSnapshot
+      ? snapshotToActiveJobsRecord(initialActiveJobsSnapshot)
+      : {}
+  );
+
+  const serverListingsAndJobsKey = useMemo(() => {
+    const lk = initialListings
+      .map((l) => `${l.id}:${(l as { updated_at?: string }).updated_at ?? ""}`)
+      .sort()
+      .join("|");
+    const jk = initialActiveJobsSnapshot
+      ? Object.entries(initialActiveJobsSnapshot)
+          .map(([k, v]) => `${k}:${v?.jobId}:${v?.status ?? ""}:${v?.updatedAt ?? ""}`)
+          .sort()
+          .join("|")
+      : "";
+    return `${lk}@@${jk}`;
+  }, [initialListings, initialActiveJobsSnapshot]);
+
+  useEffect(() => {
+    setListings(initialListings);
+    setActiveJobs(
+      initialActiveJobsSnapshot ? snapshotToActiveJobsRecord(initialActiveJobsSnapshot) : {}
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync when server payload changes (see serverListingsAndJobsKey), not on every new array ref from parent.
+  }, [serverListingsAndJobsKey]);
   const [bidCounts, setBidCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
   const [listFilter, setListFilter] = useState<ListFilter>("all");
@@ -632,7 +685,7 @@ export function MyListingsList({
   const activeIdSet = useMemo(() => {
     const s = new Set<string>();
     for (const [lid, info] of Object.entries(activeJobs)) {
-      if (info?.status != null && info.status !== "cancelled") {
+      if (jobRowIsNonCancelled(info)) {
         s.add(String(lid));
       }
     }
