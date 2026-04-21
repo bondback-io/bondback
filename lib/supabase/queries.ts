@@ -35,6 +35,13 @@ export const JOB_TYPED_SELECT =
   "id, listing_id, lister_id, winner_id, status, title, agreed_amount_cents, secured_via_buy_now, payment_intent_id, top_up_payments, lister_payment_due_at, payment_released_at, stripe_transfer_id, cleaner_confirmed_complete, cleaner_confirmed_at, auto_release_at, auto_release_at_original, review_extension_used_at, completed_at, disputed_at, dispute_reason, dispute_photos, dispute_evidence, dispute_status, dispute_opened_by, proposed_refund_amount, counter_proposal_amount, refund_amount, refund_status, dispute_resolution, resolution_type, resolution_at, resolution_by, dispute_cleaner_counter_used, dispute_lister_counter_used, admin_mediation_requested, admin_mediation_requested_at, created_at, updated_at";
 
 /**
+ * Last-resort job row for `/jobs/[id]` when the DB is behind `JOB_TYPED_SELECT` (missing dispute /
+ * refund / mediation columns). Prefer loading something over 404 for lister + cleaner.
+ */
+export const JOB_DETAIL_MINIMAL_SELECT =
+  "id, listing_id, lister_id, winner_id, status, title, agreed_amount_cents, payment_intent_id, payment_released_at, stripe_transfer_id, cleaner_confirmed_complete, cleaner_confirmed_at, auto_release_at, auto_release_at_original, completed_at, disputed_at, dispute_reason, dispute_status, proposed_refund_amount, counter_proposal_amount, refund_amount, dispute_resolution, created_at, updated_at";
+
+/**
  * Job detail + `/api/jobs/[id]` — typed columns for `jobs`.
  * If your DB has dispute/refund columns not yet in `types/supabase.ts`, regenerate types or
  * append them here (see `docs/DISPUTE_MIGRATION.sql` / `docs/STRIPE_REFUND_MIGRATION.sql`).

@@ -2,7 +2,11 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { JOB_DETAIL_PAGE_SELECT, LISTING_FULL_SELECT } from "@/lib/supabase/queries";
+import {
+  JOB_DETAIL_MINIMAL_SELECT,
+  JOB_DETAIL_PAGE_SELECT,
+  LISTING_FULL_SELECT,
+} from "@/lib/supabase/queries";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -29,18 +33,39 @@ const LEGACY_JOB_DETAIL_NO_STRIPE_REFUND = LEGACY_JOB_DETAIL_PAGE_SELECT.replace
 );
 
 /**
- * DBs may lag migrations (`secured_via_buy_now`, `refund_amount` / `refund_status`). Retry with
- * narrower selects when PostgREST reports undefined_column (42703).
+ * DBs may lag migrations (`secured_via_buy_now`, dispute/mediation columns, `refund_status`, …).
+ * Retry with narrower selects when the error indicates a missing/unknown column (see
+ * {@link isSchemaColumnMissingError}).
  */
 const JOB_DETAIL_SELECT_VARIANTS = [
   JOB_DETAIL_PAGE_SELECT,
   JOB_DETAIL_NO_STRIPE_REFUND,
   LEGACY_JOB_DETAIL_PAGE_SELECT,
   LEGACY_JOB_DETAIL_NO_STRIPE_REFUND,
+  JOB_DETAIL_MINIMAL_SELECT,
 ] as const;
 
-function isPostgresUndefinedColumn(error: { code?: string; message?: string } | null): boolean {
-  return error?.code === "42703";
+/**
+ * Keep trying narrower `select()` lists when the DB (or PostgREST) reports a missing/unknown column.
+ * Supabase often does not surface PostgreSQL `42703` as `error.code`; without this, job detail 404s
+ * for everyone after adding columns locally that production has not migrated yet.
+ */
+function isSchemaColumnMissingError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  const code = String(error.code ?? "");
+  if (code === "42703") return true;
+  const msg = String(error.message ?? "").toLowerCase();
+  if (msg.includes("42703")) return true;
+  if (msg.includes("undefined_column")) return true;
+  if (msg.includes("does not exist")) return true;
+  if (
+    msg.includes("column") &&
+    (msg.includes("not exist") || msg.includes("unknown") || msg.includes("could not find"))
+  ) {
+    return true;
+  }
+  if (msg.includes("schema cache") && msg.includes("column")) return true;
+  return false;
 }
 
 async function jobRowSelectWithColumnFallbacks<T>(
@@ -55,7 +80,7 @@ async function jobRowSelectWithColumnFallbacks<T>(
       return result;
     }
     lastError = result.error;
-    if (!isPostgresUndefinedColumn(result.error)) {
+    if (!isSchemaColumnMissingError(result.error)) {
       break;
     }
   }
