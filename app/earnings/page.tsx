@@ -88,7 +88,7 @@ export default async function EarningsPage() {
     .order("created_at", { ascending: false });
 
   let jobs = (jobsData ?? []) as JobRow[];
-  const { data: acceptedBidRows } = await supabase
+  const { data: acceptedBidRows } = await jobsClient
     .from("bids")
     .select("listing_id")
     .eq("cleaner_id", sessionData.user.id)

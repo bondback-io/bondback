@@ -130,8 +130,10 @@ async function CleanerDashboardContent() {
   /**
    * Include jobs for listings where this cleaner’s bid is `accepted` even if `jobs.winner_id` is
    * null/stale (RLS or legacy writes). De-dupe by job id.
+   * Use the same client as jobs: RLS can hide `bids` rows for ended listings (see
+   * {@link cleanerMayReadJobByAcceptedBid} admin fallback on job detail).
    */
-  const { data: acceptedBidRows } = await supabase
+  const { data: acceptedBidRows } = await jobsClient
     .from("bids")
     .select("listing_id")
     .eq("cleaner_id", user.id)

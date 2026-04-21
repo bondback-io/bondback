@@ -40,15 +40,24 @@ export function listingCommentAuthorRoleLabel(params: {
   return "Member";
 }
 
-/** Whether the lister may use Reply on this root (not a lister-only / legacy lister root). */
+/**
+ * Whether the lister may use Reply on this thread (matches server `postListingComment` rules:
+ * replies only on non–lister-only roots).
+ */
 export function rootThreadAllowsListerReply(params: {
   rootUserId: string;
   listerId: string;
   posted_as_role: ListingCommentPostedAsRole | null | undefined;
 }): boolean {
   const { rootUserId, listerId, posted_as_role } = params;
-  if (posted_as_role === "lister") return false;
-  if (posted_as_role === "cleaner" || posted_as_role === "member") return true;
-  // Legacy rows: infer from UUID only
-  return String(rootUserId) !== String(listerId);
+  const rootPosted =
+    parsePostedAsRole(posted_as_role as string | null | undefined) ??
+    inferLegacyPostedAsRole({
+      userId: rootUserId,
+      listerId,
+      parentCommentId: null,
+    });
+  const rootThreadIsListerOnly =
+    rootPosted === "lister" || (rootPosted == null && String(rootUserId) === String(listerId));
+  return !rootThreadIsListerOnly;
 }

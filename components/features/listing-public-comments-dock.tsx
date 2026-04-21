@@ -173,9 +173,11 @@ function CommentBlock({
     Boolean(currentUserId) && String(currentUserId) === String(root.user_id);
   const canReplyAsThreadOwner = canThreadOwnerReply;
   const canReply = showReplyButton || canReplyAsThreadOwner;
+  const replyDisabled = Boolean(c.author_banned && !commenterIsCurrentUser);
   const canModerate = ownerListerSession && String(c.user_id) !== String(currentUserId);
   const canBan = canModerate && String(c.author_role_label).toLowerCase() === "cleaner";
-  const hasActions = canReply || canModerate;
+  /** ⋯ menu: moderation only — Reply is a separate visible control so listers find it easily. */
+  const showModerationMenu = canModerate;
 
   const isCleaner = c.author_role_label === "Cleaner";
   const verified =
@@ -253,62 +255,66 @@ function CommentBlock({
 
         <QaMessageBody text={c.message_text} />
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <time
             className="text-[11px] text-muted-foreground dark:text-gray-500"
             dateTime={c.created_at}
           >
             {rel}
           </time>
-          {hasActions ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                  aria-label="Message actions"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[10rem] dark:border-gray-800 dark:bg-gray-900">
-                {canReply ? (
-                  <DropdownMenuItem
-                    onClick={() => onReply(c.id)}
-                    disabled={c.author_banned && !commenterIsCurrentUser}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {canReply ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-8 touch-manipulation px-3 text-xs font-medium"
+                disabled={replyDisabled}
+                onClick={() => onReply(c.id)}
+              >
+                Reply
+              </Button>
+            ) : null}
+            {showModerationMenu ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                    aria-label="Moderation and more"
                   >
-                    Reply
-                  </DropdownMenuItem>
-                ) : null}
-                {canBan ? (
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => onBan(c.user_id)}
-                  >
-                    Ban cleaner
-                  </DropdownMenuItem>
-                ) : null}
-                {canModerate ? (
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[10rem] dark:border-gray-800 dark:bg-gray-900">
+                  {canBan ? (
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => onBan(c.user_id)}
+                    >
+                      Ban cleaner
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive"
                     onClick={() => onRemoveComment(c.id)}
                   >
                     Remove post
                   </DropdownMenuItem>
-                ) : null}
-                {canModerate && c.parent_comment_id == null ? (
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => onRemoveThread(c.id)}
-                  >
-                    Remove thread
-                  </DropdownMenuItem>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
+                  {c.parent_comment_id == null ? (
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => onRemoveThread(c.id)}
+                    >
+                      Remove thread
+                    </DropdownMenuItem>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
         </div>
         {c.optimistic ? (
           <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-500">
@@ -411,7 +417,7 @@ function GroupedCommentThreads({
                     root={root}
                     currentUserId={currentUserId}
                     ownerListerSession={ownerListerSession}
-                    showReplyButton={false}
+                    showReplyButton={canListerReply}
                     onReply={onReply}
                     onBan={onBan}
                     onRemoveComment={onRemoveComment}
