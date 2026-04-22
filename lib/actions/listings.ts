@@ -10,6 +10,7 @@ import { createNotification, notifyListerListingLive } from "@/lib/actions/notif
 import {
   relistDurationMsFromDurationDays,
   clampAuctionDurationDays,
+  normalizeListingPhotoUrlArray,
   type ListingInsertPayload,
 } from "@/lib/listings";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
@@ -297,8 +298,103 @@ export async function updateListingInitialPhotos(
   }
 
   revalidatePath("/my-listings");
+  revalidatePath(`/listings/${listingId}`);
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath("/listings/new");
+  revalidateJobsBrowseCaches();
+
+  return { ok: true };
+}
+
+/**
+ * Append URLs to `initial_photos` for a **live** listing (lister only). Used when adding condition
+ * photos after the listing is already published.
+ */
+export async function appendListingInitialPhotos(
+  listingId: string,
+  additionalUrls: string[]
+): Promise<UpdateListingInitialPhotosResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { ok: false, error: "You must be logged in." };
+  }
+
+  const access = await getListerListingWriteClient(listingId, user.id);
+  if (!access.ok) {
+    return access;
+  }
+
+  const add = normalizeListingPhotoUrlArray(additionalUrls);
+  if (add.length === 0) {
+    return { ok: false, error: "No photo URLs to add." };
+  }
+
+  const { data: row, error: readError } = await access.client
+    .from("listings")
+    .select("initial_photos, status, cancelled_early_at")
+    .eq("id", listingId)
+    .maybeSingle();
+
+  if (readError || !row) {
+    return { ok: false, error: "Listing not found." };
+  }
+
+  const lr = row as {
+    initial_photos?: unknown;
+    status?: string | null;
+    cancelled_early_at?: string | null;
+  };
+  if (lr.cancelled_early_at != null) {
+    return { ok: false, error: "This listing was cancelled." };
+  }
+  if (String(lr.status ?? "").toLowerCase() !== "live") {
+    return {
+      ok: false,
+      error: "You can only add initial condition photos while the auction is live.",
+    };
+  }
+
+  const current = normalizeListingPhotoUrlArray(lr.initial_photos);
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const u of current) {
+    const s = u.trim();
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    merged.push(s);
+  }
+  for (const u of add) {
+    const s = u.trim();
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    merged.push(s);
+  }
+
+  if (merged.length > PHOTO_LIMITS.LISTING_INITIAL) {
+    return {
+      ok: false,
+      error: `Too many condition photos (max ${PHOTO_LIMITS.LISTING_INITIAL}).`,
+    };
+  }
+
+  const { error: updateError } = await access.client
+    .from("listings")
+    .update({ initial_photos: merged.length > 0 ? merged : null } as ListingUpdate as never)
+    .eq("id", listingId);
+
+  if (updateError) {
+    return { ok: false, error: updateError.message };
+  }
+
+  revalidatePath("/my-listings");
+  revalidatePath(`/listings/${listingId}`);
+  revalidatePath(`/jobs/${listingId}`);
+  revalidatePath("/listings/new");
+  revalidateJobsBrowseCaches();
 
   return { ok: true };
 }
@@ -338,6 +434,7 @@ export async function updateListingCoverPhoto(
   }
 
   revalidatePath("/my-listings");
+  revalidatePath(`/listings/${listingId}`);
   revalidatePath(`/jobs/${listingId}`);
 
   return { ok: true };

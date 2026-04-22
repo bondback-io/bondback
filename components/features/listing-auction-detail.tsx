@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,11 +28,13 @@ import {
   Sparkles,
   ChevronDown,
   Loader2,
+  ImagePlus,
 } from "lucide-react";
 import {
   collectListingPhotoUrls,
   formatCents,
   mergePhotoUrlLists,
+  normalizeListingPhotoUrlArray,
   orderCoverPhotoFirst,
   isListingLive,
   type ListingRow,
@@ -46,6 +48,8 @@ import {
   BidHistoryTable,
   type BidWithBidder,
 } from "@/components/features/bid-history-table";
+import { appendListingInitialPhotos } from "@/lib/actions/listings";
+import { uploadProcessedPhotos } from "@/lib/actions/upload-photos";
 import { requestEarlyBidAcceptance } from "@/lib/actions/early-bid-acceptance";
 import { scrollToTopAfterBidAccepted } from "@/lib/deferred-router";
 import { resolveAuctionEndForListing } from "@/lib/actions/auction-resolution";
@@ -69,6 +73,13 @@ import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction
 import { isListerNoBidsRelistListing } from "@/lib/my-listings/lister-listing-helpers";
 import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
 import { isListingAddonSpecialArea } from "@/lib/listing-special-areas";
+import {
+  PHOTO_LIMITS,
+  PHOTO_VALIDATION,
+  validatePhotoFiles,
+  checkImageHeader,
+} from "@/lib/photo-validation";
+import { compressImage } from "@/lib/utils/compressImage";
 
 export type ListingAuctionDetailProps = {
   listing: ListingRow;
@@ -126,37 +137,35 @@ export function ListingAuctionDetail({
   const [locationMapOpen, setLocationMapOpen] = useState(false);
   /** Same source as job detail: list storage so we show every file even if DB arrays are incomplete. */
   const [storageInitialUrls, setStorageInitialUrls] = useState<string[] | null>(null);
+  const [initialPhotosUploading, setInitialPhotosUploading] = useState(false);
+  const liveInitialPhotosInputRef = useRef<HTMLInputElement>(null);
+
+  const loadStorageInitialUrls = useCallback(async () => {
+    const supabase = createBrowserSupabaseClient();
+    const { data, error } = await supabase.storage
+      .from("condition-photos")
+      .list(`listings/${listing.id}/initial`, { limit: 100 });
+    if (error || !data) {
+      setStorageInitialUrls([]);
+      return;
+    }
+    const urls = data
+      .filter((f) => f.name && !f.name.startsWith("thumb_"))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((f) => {
+        const {
+          data: { publicUrl },
+        } = supabase.storage
+          .from("condition-photos")
+          .getPublicUrl(`listings/${listing.id}/initial/${f.name}`);
+        return publicUrl;
+      });
+    setStorageInitialUrls(urls);
+  }, [listing.id]);
 
   useEffect(() => {
-    const supabase = createBrowserSupabaseClient();
-    let cancelled = false;
-    const load = async () => {
-      const { data, error } = await supabase.storage
-        .from("condition-photos")
-        .list(`listings/${listing.id}/initial`, { limit: 100 });
-      if (cancelled) return;
-      if (error || !data) {
-        setStorageInitialUrls([]);
-        return;
-      }
-      const urls = data
-        .filter((f) => f.name && !f.name.startsWith("thumb_"))
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((f) => {
-          const {
-            data: { publicUrl },
-          } = supabase.storage
-            .from("condition-photos")
-            .getPublicUrl(`listings/${listing.id}/initial/${f.name}`);
-          return publicUrl;
-        });
-      setStorageInitialUrls(urls);
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [listing.id]);
+    void loadStorageInitialUrls();
+  }, [loadStorageInitialUrls]);
 
   const isLive = isListingLive(listing);
 
@@ -337,6 +346,112 @@ export function ListingAuctionDetail({
     !showPreferredFromMoveOut && preferredDatesFormatted.length > 0;
 
   const canManageListingAsLister = isListerOwner && isListerSessionActive;
+
+  const initialPhotosCountTowardLimit = useMemo(() => {
+    const db = normalizeListingPhotoUrlArray(listing.initial_photos).length;
+    const st = storageInitialUrls?.length ?? 0;
+    return Math.max(db, st);
+  }, [listing.initial_photos, storageInitialUrls]);
+
+  /** Extra condition photos while the auction clock is still running (lister + lister mode). */
+  const canAddInitialPhotosWhileLive =
+    canManageListingAsLister && !isListingCancelled && isLive;
+
+  const handleLiveInitialPhotosChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files?.length) return;
+      const incoming = Array.from(files);
+      const { validFiles, errors } = validatePhotoFiles(incoming, {
+        maxFiles: PHOTO_LIMITS.LISTING_INITIAL,
+        existingCount: initialPhotosCountTowardLimit,
+        minFiles: 1,
+      });
+      errors.forEach((err) =>
+        toast({ variant: "destructive", title: "Photo validation", description: err })
+      );
+      if (validFiles.length === 0) {
+        e.target.value = "";
+        return;
+      }
+      setInitialPhotosUploading(true);
+      try {
+        const prepared: File[] = [];
+        for (const f of validFiles) {
+          try {
+            const compressed = await compressImage(f);
+            const header = await checkImageHeader(compressed);
+            if (!header.valid) {
+              toast({
+                variant: "destructive",
+                title: "Photo validation",
+                description: `${f.name}: ${header.error}`,
+              });
+              continue;
+            }
+            prepared.push(compressed);
+          } catch {
+            toast({
+              variant: "destructive",
+              title: "Couldn't prepare photo",
+              description: `${f.name}: try another image.`,
+            });
+          }
+        }
+        if (prepared.length === 0) return;
+
+        const fd = new FormData();
+        for (const f of prepared) fd.append("files", f);
+        const pack = await uploadProcessedPhotos(fd, {
+          bucket: "condition-photos",
+          pathPrefix: `listings/${listing.id}/initial`,
+          maxFiles: PHOTO_LIMITS.LISTING_INITIAL,
+          existingCount: initialPhotosCountTowardLimit,
+        });
+        const newUrls = pack.results.map((r) => r.url).filter((u): u is string => Boolean(u));
+        if (newUrls.length === 0) {
+          toast({
+            variant: "destructive",
+            title: "Upload failed",
+            description: pack.error ?? pack.results[0]?.error ?? "Could not upload photos.",
+          });
+          return;
+        }
+        const appendRes = await appendListingInitialPhotos(String(listing.id), newUrls);
+        if (!appendRes.ok) {
+          toast({
+            variant: "destructive",
+            title: "Could not save photos",
+            description: appendRes.error,
+          });
+          return;
+        }
+        toast({
+          title: "Photos added",
+          description: `${newUrls.length} condition photo${newUrls.length === 1 ? "" : "s"} added to your listing.`,
+        });
+        await loadStorageInitialUrls();
+        router.refresh();
+      } catch (err) {
+        logClientError("listingAuction.appendInitialPhotos", err, { listingId: listing.id });
+        toast({
+          variant: "destructive",
+          title: "Upload failed",
+          description: err instanceof Error ? err.message : "Something went wrong.",
+        });
+      } finally {
+        setInitialPhotosUploading(false);
+        e.target.value = "";
+      }
+    },
+    [
+      initialPhotosCountTowardLimit,
+      listing.id,
+      loadStorageInitialUrls,
+      router,
+      toast,
+    ]
+  );
 
   /** Ended auction with no job: strong “closed” visuals — skip when a bid was accepted (job exists). */
   const showEndedListingVisual =
@@ -1082,7 +1197,7 @@ export function ListingAuctionDetail({
       )}
 
       {/* Initial condition photos */}
-      {photoUrls.length > 0 && (
+      {(photoUrls.length > 0 || canAddInitialPhotosWhileLive) && (
         <Card id="listing-photos">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -1091,31 +1206,82 @@ export function ListingAuctionDetail({
             </CardTitle>
             <p className="text-sm text-muted-foreground dark:text-gray-400">
               Photos supplied by the lister before the clean — tap to enlarge.
+              {canAddInitialPhotosWhileLive ? (
+                <>
+                  {" "}
+                  You can add more while the auction is live if you missed any angles (max{" "}
+                  {PHOTO_LIMITS.LISTING_INITIAL} total).
+                </>
+              ) : null}
             </p>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:gap-3">
-              {photoUrls.map((url, i) => (
-                <button
-                  key={`${url}-${i}`}
-                  type="button"
-                  onClick={() =>
-                    setPhotoLightbox({ urls: [...photoUrls], index: i })
-                  }
-                  className="group relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-muted ring-offset-background transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-gray-800"
-                >
-                  <Image
-                    src={url}
-                    alt={`Property photo ${i + 1}`}
-                    fill
-                    className="object-cover transition duration-200 group-hover:scale-[1.02]"
-                    sizes="(max-width: 640px) 50vw, 280px"
-                    placeholder="blur"
-                    blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
-                  />
-                </button>
-              ))}
-            </div>
+          <CardContent className="space-y-4">
+            {canAddInitialPhotosWhileLive ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                <input
+                  ref={liveInitialPhotosInputRef}
+                  type="file"
+                  accept={PHOTO_VALIDATION.ACCEPT}
+                  multiple
+                  onChange={handleLiveInitialPhotosChange}
+                  className="sr-only"
+                  tabIndex={-1}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={
+                      initialPhotosUploading ||
+                      initialPhotosCountTowardLimit >= PHOTO_LIMITS.LISTING_INITIAL
+                    }
+                    onClick={() => liveInitialPhotosInputRef.current?.click()}
+                  >
+                    {initialPhotosUploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <ImagePlus className="h-4 w-4" aria-hidden />
+                    )}
+                    {initialPhotosUploading ? "Uploading…" : "Add photos"}
+                  </Button>
+                  <span className="text-xs text-muted-foreground dark:text-gray-500">
+                    {initialPhotosCountTowardLimit}/{PHOTO_LIMITS.LISTING_INITIAL} · JPG, PNG or WebP, max{" "}
+                    {PHOTO_VALIDATION.MAX_FILE_LABEL} each
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            {photoUrls.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:gap-3">
+                {photoUrls.map((url, i) => (
+                  <button
+                    key={`${url}-${i}`}
+                    type="button"
+                    onClick={() =>
+                      setPhotoLightbox({ urls: [...photoUrls], index: i })
+                    }
+                    className="group relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-muted ring-offset-background transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-gray-800"
+                  >
+                    <Image
+                      src={url}
+                      alt={`Property photo ${i + 1}`}
+                      fill
+                      className="object-cover transition duration-200 group-hover:scale-[1.02]"
+                      sizes="(max-width: 640px) 50vw, 280px"
+                      placeholder="blur"
+                      blurDataURL={REMOTE_IMAGE_BLUR_DATA_URL}
+                    />
+                  </button>
+                ))}
+              </div>
+            ) : canAddInitialPhotosWhileLive ? (
+              <p className="text-sm text-muted-foreground dark:text-gray-400">
+                No condition photos yet — use <strong className="font-medium">Add photos</strong> to upload
+                some so cleaners can see the property.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       )}
