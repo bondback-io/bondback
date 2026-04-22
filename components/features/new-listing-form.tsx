@@ -303,6 +303,8 @@ export function NewListingForm({
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishFailureHint, setPublishFailureHint] = useState<string | null>(null);
   const publishRedirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Kept mounted for all steps so listers can add condition photos after step 3 without going back first. */
+  const initialPhotosInputRef = useRef<HTMLInputElement>(null);
 
   // Suburb autocomplete
   const [suburbQuery, setSuburbQuery] = useState("");
@@ -912,6 +914,17 @@ export function NewListingForm({
           noValidate
           className="space-y-8 md:space-y-6"
         >
+          <input
+            ref={initialPhotosInputRef}
+            id="listing-initial-condition-photos"
+            type="file"
+            accept={PHOTO_VALIDATION.ACCEPT}
+            multiple
+            onChange={handlePhotosChange}
+            className="sr-only"
+            tabIndex={-1}
+          />
+
           {/* Step 1: Property basics */}
           {step === 1 && (
             <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -1236,7 +1249,8 @@ export function NewListingForm({
                 </CardTitle>
                 <CardDescription className="dark:text-gray-400">
                   Upload clear before photos of the entire property. You need at least{" "}
-                  {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} photos to publish; you can move on and come back. Select one photo as the cover—it will be shown on job cards.
+                  {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} photos to publish; you can move on and add more from the next
+                  steps before you publish. Select one photo as the cover—it will be shown on job cards.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 p-5 pt-0 md:p-6 md:pt-0">
@@ -1256,19 +1270,11 @@ export function NewListingForm({
                 <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 dark:border-gray-700 dark:bg-gray-800/50">
                   <div className="flex flex-wrap items-center gap-3">
                     <Button type="button" variant="outline" size="lg" className="min-h-12 w-full gap-2 sm:w-auto md:min-h-0" asChild>
-                      <label htmlFor="photos" className="cursor-pointer">
+                      <label htmlFor="listing-initial-condition-photos" className="cursor-pointer">
                         <ImagePlus className="h-5 w-5 md:h-4 md:w-4" />
                         Upload photos (3 to publish, max {PHOTO_LIMITS.LISTING_INITIAL})
                       </label>
                     </Button>
-                    <input
-                      id="photos"
-                      type="file"
-                      accept={PHOTO_VALIDATION.ACCEPT}
-                      multiple
-                      onChange={handlePhotosChange}
-                      className="hidden"
-                    />
                     <span className="text-xs text-muted-foreground dark:text-gray-400">
                       {initialPhotoFiles.length}/{PHOTO_LIMITS.LISTING_INITIAL} photos · JPG, PNG or WebP, max {PHOTO_VALIDATION.MAX_FILE_LABEL} each
                     </span>
@@ -1439,6 +1445,67 @@ export function NewListingForm({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
+                <div className="rounded-lg border border-border bg-muted/25 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                        Initial condition photos
+                      </p>
+                      <p className="text-xs text-muted-foreground dark:text-gray-400">
+                        {initialPhotoFiles.length}/{PHOTO_LIMITS.LISTING_INITIAL} photos
+                        {initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH
+                          ? ` · at least ${PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} required to publish`
+                          : ""}
+                        . Add any you missed here, or go back to step 3 to remove photos or change the cover.
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={
+                          uploading ||
+                          photoStagingCount > 0 ||
+                          initialPhotoFiles.length >= PHOTO_LIMITS.LISTING_INITIAL
+                        }
+                        onClick={() => initialPhotosInputRef.current?.click()}
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Add more photos
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setStep(3)}>
+                        Step 3 — cover &amp; remove
+                      </Button>
+                    </div>
+                  </div>
+                  {initialPhotoPreviews.length > 0 && (
+                    <div className="mt-3 flex max-w-full gap-2 overflow-x-auto pb-1">
+                      {initialPhotoPreviews.map((url, i) => (
+                        <div
+                          key={`${url}-${i}`}
+                          className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-border bg-muted dark:border-gray-600"
+                        >
+                          <Image
+                            src={url}
+                            alt=""
+                            fill
+                            className="object-cover"
+                            sizes="56px"
+                            unoptimized
+                          />
+                          {coverPhotoIndex === i && (
+                            <span className="absolute bottom-0 left-0 right-0 bg-primary/90 py-0.5 text-center text-[9px] font-medium text-primary-foreground">
+                              Cover
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-800 dark:bg-emerald-950/40">
                   <p className="text-xs font-medium uppercase tracking-wide text-emerald-800 dark:text-emerald-200 max-md:text-sm">
                     Estimated price
@@ -1608,6 +1675,67 @@ export function NewListingForm({
                   )}
                 </CardHeader>
                 <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
+                <div className="rounded-lg border border-border bg-muted/25 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                        Initial condition photos
+                      </p>
+                      <p className="text-xs text-muted-foreground dark:text-gray-400">
+                        {initialPhotoFiles.length}/{PHOTO_LIMITS.LISTING_INITIAL} photos
+                        {initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH
+                          ? ` · at least ${PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} required to publish`
+                          : ""}
+                        . Add more before you publish if you forgot any angles.
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={
+                          uploading ||
+                          photoStagingCount > 0 ||
+                          initialPhotoFiles.length >= PHOTO_LIMITS.LISTING_INITIAL
+                        }
+                        onClick={() => initialPhotosInputRef.current?.click()}
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Add more photos
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setStep(3)}>
+                        Step 3 — cover &amp; remove
+                      </Button>
+                    </div>
+                  </div>
+                  {initialPhotoPreviews.length > 0 && (
+                    <div className="mt-3 flex max-w-full gap-2 overflow-x-auto pb-1">
+                      {initialPhotoPreviews.map((url, i) => (
+                        <div
+                          key={`quick-${url}-${i}`}
+                          className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-border bg-muted dark:border-gray-600"
+                        >
+                          <Image
+                            src={url}
+                            alt=""
+                            fill
+                            className="object-cover"
+                            sizes="56px"
+                            unoptimized
+                          />
+                          {coverPhotoIndex === i && (
+                            <span className="absolute bottom-0 left-0 right-0 bg-primary/90 py-0.5 text-center text-[9px] font-medium text-primary-foreground">
+                              Cover
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {allowLowAmountListings && (
                   <Alert className="border-sky-200 bg-sky-50/90 text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
                     <AlertDescription className="text-xs sm:text-sm">
