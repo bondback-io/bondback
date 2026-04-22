@@ -757,8 +757,7 @@ export async function JobDetailPageContent({
             !!user &&
             !!job &&
             sameUserId(user.id, job.lister_id) &&
-            roles.includes("lister") &&
-            isListerActive
+            roles.includes("lister")
           }
           isListingOwner={
             !!user &&
@@ -767,7 +766,10 @@ export async function JobDetailPageContent({
             isListerActive
           }
           isJobCleaner={
-            !!user && !!job && sameUserId(user.id, job.winner_id) && isCleaner
+            !!user &&
+            !!job &&
+            sameUserId(user.id, job.winner_id) &&
+            roles.includes("cleaner")
           }
           hasReviewedCleaner={hasReviewedCleaner}
           hasReviewedLister={hasReviewedLister}

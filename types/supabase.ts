@@ -572,6 +572,38 @@ export interface Database {
           }
         ];
       };
+      job_checklist_items: {
+        Row: {
+          id: number;
+          job_id: number;
+          label: string;
+          is_completed: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          job_id: number;
+          label: string;
+          is_completed?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          job_id?: number;
+          label?: string;
+          is_completed?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "job_checklist_items_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
+            referencedRelation: "jobs";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       job_messages: {
         Row: {
           id: number;
