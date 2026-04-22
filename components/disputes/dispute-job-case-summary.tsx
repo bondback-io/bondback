@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/listings";
 import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
+import { coerceDisputePhotoUrls } from "@/lib/disputes/coerce-dispute-photo-urls";
 
 export type DisputeJobCaseJobFields = {
   id: number;
@@ -37,13 +38,10 @@ function shouldShowDisputeCase(job: DisputeJobCaseJobFields): boolean {
 export function DisputeJobCaseSummary({ job }: { job: DisputeJobCaseJobFields }) {
   if (!shouldShowDisputeCase(job)) return null;
 
-  const evidenceUrls = [
-    ...new Set(
-      [...(job.dispute_evidence ?? []), ...(job.dispute_photos ?? [])]
-        .map((u) => String(u ?? "").trim())
-        .filter(Boolean)
-    ),
-  ];
+  const evidenceUrls = coerceDisputePhotoUrls(
+    job.dispute_evidence,
+    job.dispute_photos
+  ).slice(0, 12);
 
   const opener = disputeOpenerRole({
     dispute_opened_by: job.dispute_opened_by,

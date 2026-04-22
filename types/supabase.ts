@@ -191,6 +191,8 @@ export interface Database {
           description: string | null;
           /** Lister narrative for cleaners (public); separate from special_instructions. */
           property_description: string | null;
+          /** Full street address; shown to assigned cleaner / lister on job detail (optional). */
+          property_address: string | null;
           suburb: string;
           /** Australian state/territory (e.g. QLD); optional on older rows. */
           state: string | null;
@@ -232,6 +234,7 @@ export interface Database {
           title: string;
           description?: string | null;
           property_description?: string | null;
+          property_address?: string | null;
           suburb: string;
           state?: string | null;
           postcode: string;
@@ -263,6 +266,7 @@ export interface Database {
           title?: string;
           description?: string | null;
           property_description?: string | null;
+          property_address?: string | null;
           suburb?: string;
           state?: string | null;
           postcode?: string;

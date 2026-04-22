@@ -266,6 +266,9 @@ export function GuidedDisputeForm({
             generateThumb: true,
           });
           urls = (results ?? []).map((r) => r?.url).filter(Boolean) as string[];
+          if (urls.length > 0) {
+            setUploadedUrls(urls);
+          }
           if (error && urls.length === 0) {
             setErrorPhotos("Upload failed. Please try again.");
             announceError("Photo upload failed. Please try again.");

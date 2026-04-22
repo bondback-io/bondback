@@ -119,11 +119,19 @@ export type NotificationType =
   | "listing_assigned_buy_now"
   | "listing_expired_no_bids";
 
+export type SendEmailAttachment = {
+  filename: string;
+  /** Raw bytes; Resend accepts Buffer in Node. */
+  content: Buffer;
+};
+
 export type SendEmailOptions = {
   /** When set, logs to email_logs (and always logs a masked line to console). */
   log?: { userId: string; kind: string };
   /** Optional raw email headers (e.g. In-Reply-To, References) for threading. */
   headers?: Record<string, string>;
+  /** MIME attachments (e.g. dispute evidence images). Resend total limit applies (~40MB). */
+  attachments?: SendEmailAttachment[];
 };
 
 /**
@@ -190,6 +198,7 @@ export async function sendEmail(
       html: string;
       reply_to?: string;
       headers?: Record<string, string>;
+      attachments?: { filename: string; content: Buffer }[];
     } = {
       from: FROM,
       to: [to],
@@ -199,6 +208,12 @@ export async function sendEmail(
     if (REPLY_TO) payload.reply_to = REPLY_TO;
     if (options?.headers && Object.keys(options.headers).length > 0) {
       payload.headers = options.headers;
+    }
+    if (options?.attachments?.length) {
+      payload.attachments = options.attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+      }));
     }
 
     const { data, error } = await resend.emails.send(payload);

@@ -80,6 +80,21 @@ export async function POST(request: Request) {
           .update({ stripe_onboarding_complete: onboardingComplete } as never)
           .eq("stripe_connect_id", account.id);
         if (error) console.error("[stripe/webhook] account.updated profile update failed", error);
+        if (onboardingComplete) {
+          try {
+            const { data: profs } = await admin
+              .from("profiles")
+              .select("id")
+              .eq("stripe_connect_id", account.id);
+            const { armAutoReleaseTimersAfterCleanerStripeReady } = await import("@/lib/actions/jobs");
+            for (const p of profs ?? []) {
+              const uid = String((p as { id: string }).id);
+              if (uid) await armAutoReleaseTimersAfterCleanerStripeReady(uid);
+            }
+          } catch (e) {
+            console.warn("[stripe/webhook] arm auto-release (non-fatal)", e);
+          }
+        }
         break;
       }
 

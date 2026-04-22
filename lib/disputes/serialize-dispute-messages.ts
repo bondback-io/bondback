@@ -1,3 +1,5 @@
+import { coerceDisputePhotoUrls } from "@/lib/disputes/coerce-dispute-photo-urls";
+
 /**
  * RSC → client props must be JSON-serializable. Supabase may return bigint for
  * `job_id` on related rows; never pass raw rows into client components.
@@ -19,10 +21,7 @@ export function serializeDisputeMessagesForClient(raw: unknown): SerializableDis
   return raw.map((m) => {
     const row = m as Record<string, unknown>;
     const idRaw = row.id;
-    const att = row.attachment_urls;
-    const attachment_urls = Array.isArray(att)
-      ? att.map((u) => String(u)).filter(Boolean).slice(0, 12)
-      : [];
+    const attachment_urls = coerceDisputePhotoUrls(row.attachment_urls).slice(0, 12);
     const authorRole = String(row.author_role ?? "user");
     const vL = row.visible_to_lister === true;
     const vC = row.visible_to_cleaner === true;

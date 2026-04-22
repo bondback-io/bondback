@@ -1,4 +1,5 @@
 import type { SerializableDisputeMessage } from "@/lib/disputes/serialize-dispute-messages";
+import { coerceDisputePhotoUrls } from "@/lib/disputes/coerce-dispute-photo-urls";
 
 type JobFieldsForLegacyAudit = {
   id: number;
@@ -23,13 +24,10 @@ export function mergeOpeningMessageFromJobIfMissing(
   const hasTime = Boolean(job.disputed_at);
   if (!reason && !hasTime) return messages;
 
-  const evidenceUrls = [
-    ...new Set(
-      [...(job.dispute_evidence ?? []), ...(job.dispute_photos ?? [])]
-        .map((u) => String(u ?? "").trim())
-        .filter(Boolean)
-    ),
-  ].slice(0, 12);
+  const evidenceUrls = coerceDisputePhotoUrls(
+    job.dispute_evidence,
+    job.dispute_photos
+  ).slice(0, 12);
 
   const lines: string[] = ["Original dispute submission (case record on file; no separate thread row exists)."];
   if (reason) lines.push(reason);

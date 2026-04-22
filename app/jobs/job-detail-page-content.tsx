@@ -163,6 +163,30 @@ export async function JobDetailPageContent({
     job = await loadJobForListingDetailPage(supabase, listingId, sessionUserId, detailLoadOpts);
   }
 
+  if (job && String(job.status ?? "") === "completed_pending_approval") {
+    const jid = typeof job.id === "number" ? job.id : Number(job.id);
+    if (Number.isFinite(jid) && jid > 0) {
+      const { syncAutoReleaseTimerForStripeEligibility } = await import(
+        "@/lib/actions/jobs"
+      );
+      await syncAutoReleaseTimerForStripeEligibility(jid);
+      const refreshed = isNumericJobId
+        ? await loadJobByNumericIdForSession(
+            supabase,
+            jid,
+            sessionUserId,
+            detailLoadOpts
+          )
+        : await loadJobForListingDetailPage(
+            supabase,
+            listingId,
+            sessionUserId,
+            detailLoadOpts
+          );
+      if (refreshed) job = refreshed as JobRow;
+    }
+  }
+
   const listingLoaded = await loadListingFullForSession(
     supabase,
     listingId,
@@ -332,38 +356,61 @@ export async function JobDetailPageContent({
   }
 
   let initialChecklist: JobChecklistItemRow[] | null = null;
+  let initialAfterPhotos: { name: string; url: string }[] | null = null;
+
   if (job?.id != null) {
     const checklistSelect = "id, job_id, label, is_completed";
-    const [viewerChecklistRes, adminChecklistRes] = await Promise.all([
-      supabase
-        .from("job_checklist_items")
-        .select(checklistSelect)
-        .eq("job_id", job.id)
-        .order("id", { ascending: true }),
-      sessionIsAdmin
-        ? createSupabaseAdminClient()
-            ?.from("job_checklist_items")
-            .select(checklistSelect)
-            .eq("job_id", job.id)
-            .order("id", { ascending: true })
-        : Promise.resolve(null),
-    ]);
+    const { data: viewerChecklistData, error: viewerChecklistErr } = await supabase
+      .from("job_checklist_items")
+      .select(checklistSelect)
+      .eq("job_id", job.id)
+      .order("id", { ascending: true });
 
-    const viewerChecklist =
-      !viewerChecklistRes.error && Array.isArray(viewerChecklistRes.data)
-        ? (viewerChecklistRes.data as JobChecklistItemRow[])
-        : null;
-    const adminChecklist =
-      adminChecklistRes && !adminChecklistRes.error && Array.isArray(adminChecklistRes.data)
-        ? (adminChecklistRes.data as JobChecklistItemRow[])
+    let checklistRows: JobChecklistItemRow[] | null =
+      !viewerChecklistErr &&
+      Array.isArray(viewerChecklistData) &&
+      viewerChecklistData.length > 0
+        ? (viewerChecklistData as JobChecklistItemRow[])
         : null;
 
-    initialChecklist = (viewerChecklist ?? adminChecklist ?? null)?.map((item) => ({
-      id: item.id,
-      job_id: item.job_id,
-      label: item.label,
-      is_completed: item.is_completed,
-    })) ?? null;
+    const canHydrateJobPartyExtras =
+      !!sessionUserId &&
+      (sameUserId(job.lister_id, sessionUserId) ||
+        sameUserId(job.winner_id, sessionUserId) ||
+        sessionIsAdmin);
+
+    if (!checklistRows && canHydrateJobPartyExtras) {
+      const admin = createSupabaseAdminClient();
+      if (admin) {
+        const { data: adminChecklist, error: adminChecklistErr } = await admin
+          .from("job_checklist_items")
+          .select(checklistSelect)
+          .eq("job_id", job.id)
+          .order("id", { ascending: true });
+        if (
+          !adminChecklistErr &&
+          Array.isArray(adminChecklist) &&
+          adminChecklist.length > 0
+        ) {
+          checklistRows = adminChecklist as JobChecklistItemRow[];
+        }
+      }
+    }
+
+    initialChecklist =
+      checklistRows?.map((item) => ({
+        id: item.id,
+        job_id: item.job_id,
+        label: item.label,
+        is_completed: item.is_completed,
+      })) ?? null;
+
+    if (hasActiveJob && canHydrateJobPartyExtras) {
+      const { listJobAfterPhotoEntries } = await import(
+        "@/lib/jobs/job-after-photo-entries"
+      );
+      initialAfterPhotos = await listJobAfterPhotoEntries(job.id);
+    }
   }
 
   let listerName: string | null = null;
@@ -732,6 +779,7 @@ export async function JobDetailPageContent({
             Boolean((job as JobRow | null)?.secured_via_buy_now) === true
           }
           initialChecklist={initialChecklist}
+          initialAfterPhotos={initialAfterPhotos}
           expandListerReviewOfCleaner={expandListerReviewOfCleaner}
           winnerStripePayoutReady={winnerStripePayoutReady}
           requireStripeConnectBeforePaymentRelease={requireStripeConnectBeforePaymentRelease}

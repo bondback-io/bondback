@@ -417,6 +417,13 @@ export async function handleConnectSuccess(
     console.warn("[handleConnectSuccess] payout schedule (non-fatal)", scheduleErr);
   }
 
+  try {
+    const { armAutoReleaseTimersAfterCleanerStripeReady } = await import("@/lib/actions/jobs");
+    await armAutoReleaseTimersAfterCleanerStripeReady(userId);
+  } catch (armErr) {
+    console.warn("[handleConnectSuccess] arm auto-release (non-fatal)", armErr);
+  }
+
   return { ok: true };
 }
 

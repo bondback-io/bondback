@@ -1900,6 +1900,25 @@ export async function markJobChecklistFinished(
   const nowIso = new Date().toISOString();
   const settings = await getGlobalSettings();
   const autoReleaseHours = settings?.auto_release_hours ?? 48;
+  const requireConnectForAutoRelease =
+    settings?.require_stripe_connect_before_payment_release !== false;
+
+  let winnerPayoutReadyForAutoRelease = true;
+  if (requireConnectForAutoRelease && trimStr(row.winner_id)) {
+    const adminForProf = createSupabaseAdminClient();
+    const profileClient = (adminForProf ?? supabase) as SupabaseClient<Database>;
+    const { data: winnerProf } = await profileClient
+      .from("profiles")
+      .select("stripe_connect_id, stripe_onboarding_complete")
+      .eq("id", row.winner_id as string)
+      .maybeSingle();
+    winnerPayoutReadyForAutoRelease = isProfileStripePayoutReady(
+      winnerProf as {
+        stripe_connect_id?: string | null;
+        stripe_onboarding_complete?: boolean | null;
+      } | null
+    );
+  }
 
   // If the cleaner already confirmed completion earlier, keep the same baseline
   // using `cleaner_confirmed_at` rather than "now".
@@ -1908,6 +1927,11 @@ export async function markJobChecklistFinished(
   const autoReleaseAtIso = new Date(
     baselineMs + autoReleaseHours * 60 * 60 * 1000
   ).toISOString();
+
+  const shouldScheduleAutoRelease =
+    !requireConnectForAutoRelease ||
+    !trimStr(row.winner_id) ||
+    winnerPayoutReadyForAutoRelease;
 
   if (
     isAlreadyCompletedPending &&
@@ -1924,8 +1948,8 @@ export async function markJobChecklistFinished(
         cleaner_confirmed_complete: true,
         cleaner_confirmed_at: row.cleaner_confirmed_at ?? nowIso,
         status: "completed_pending_approval",
-        auto_release_at: autoReleaseAtIso,
-        auto_release_at_original: autoReleaseAtIso,
+        auto_release_at: shouldScheduleAutoRelease ? autoReleaseAtIso : null,
+        auto_release_at_original: shouldScheduleAutoRelease ? autoReleaseAtIso : null,
         // completed_at is set when payment is released (status completed), not at review-pending.
       } as Partial<JobRow> as never
     )
@@ -1956,6 +1980,140 @@ export async function markJobChecklistFinished(
   revalidatePath(`/jobs/${row.id}`);
 
   return { ok: true };
+}
+
+/**
+ * Align lister-review `auto_release_at` with Stripe Connect gating. When payout setup is required
+ * but the winner is not ready, timers are cleared so cron/UI do not count down prematurely.
+ * When the winner becomes ready and no timer exists, schedules from `cleaner_confirmed_at`.
+ */
+export async function syncAutoReleaseTimerForStripeEligibility(
+  jobId: number,
+  options?: { supabase?: SupabaseClient<Database> }
+): Promise<void> {
+  const admin =
+    (options?.supabase as SupabaseClient<Database> | undefined) ??
+    createSupabaseAdminClient();
+  if (!admin) return;
+
+  const settings = await getGlobalSettings();
+  const manualPayoutMode = settings?.manual_payout_mode ?? false;
+  const autoReleaseHours = settings?.auto_release_hours ?? 0;
+  const requireConnect =
+    settings?.require_stripe_connect_before_payment_release !== false;
+
+  if (manualPayoutMode || !autoReleaseHours || autoReleaseHours < 1) {
+    return;
+  }
+
+  const { data: job, error } = await admin
+    .from("jobs")
+    .select(
+      "id, status, winner_id, cleaner_confirmed_at, auto_release_at, auto_release_at_original, payment_released_at"
+    )
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (error || !job) return;
+
+  const j = job as {
+    id: number;
+    status: string | null;
+    winner_id: string | null;
+    cleaner_confirmed_at: string | null;
+    auto_release_at: string | null;
+    auto_release_at_original: string | null;
+    payment_released_at: string | null;
+  };
+
+  if (String(j.status ?? "") !== "completed_pending_approval") return;
+  const confirmedAt = trimStr(j.cleaner_confirmed_at);
+  if (!confirmedAt) return;
+  if (trimStr(j.payment_released_at)) return;
+
+  let winnerReady = true;
+  if (requireConnect && trimStr(j.winner_id)) {
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("stripe_connect_id, stripe_onboarding_complete")
+      .eq("id", j.winner_id as string)
+      .maybeSingle();
+    winnerReady = isProfileStripePayoutReady(
+      prof as {
+        stripe_connect_id?: string | null;
+        stripe_onboarding_complete?: boolean | null;
+      } | null
+    );
+  }
+
+  const hasTimer = !!(trimStr(j.auto_release_at) || trimStr(j.auto_release_at_original));
+
+  if (requireConnect && trimStr(j.winner_id) && !winnerReady) {
+    if (hasTimer) {
+      await admin
+        .from("jobs")
+        .update({
+          auto_release_at: null,
+          auto_release_at_original: null,
+          updated_at: new Date().toISOString(),
+        } as Partial<JobRow> as never)
+        .eq("id", jobId);
+      revalidatePath("/dashboard");
+      revalidatePath("/cleaner/dashboard");
+      revalidatePath("/lister/dashboard");
+      revalidatePath(`/jobs/${jobId}`);
+    }
+    return;
+  }
+
+  if (!hasTimer) {
+    const baselineMs = new Date(confirmedAt).getTime();
+    const autoReleaseAtIso = new Date(
+      baselineMs + autoReleaseHours * 60 * 60 * 1000
+    ).toISOString();
+    await admin
+      .from("jobs")
+      .update({
+        auto_release_at: autoReleaseAtIso,
+        auto_release_at_original: autoReleaseAtIso,
+        updated_at: new Date().toISOString(),
+      } as Partial<JobRow> as never)
+      .eq("id", jobId);
+    revalidatePath("/dashboard");
+    revalidatePath("/cleaner/dashboard");
+    revalidatePath("/lister/dashboard");
+    revalidatePath(`/jobs/${jobId}`);
+  }
+}
+
+/**
+ * After Stripe Connect onboarding completes, start auto-release timers for jobs awaiting lister
+ * review that had no countdown while payout setup was incomplete.
+ */
+export async function armAutoReleaseTimersAfterCleanerStripeReady(
+  cleanerUserId: string
+): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+
+  const { data: jobs } = await admin
+    .from("jobs")
+    .select("id")
+    .eq("winner_id", cleanerUserId)
+    .eq("status", "completed_pending_approval")
+    .eq("cleaner_confirmed_complete", true)
+    .is("payment_released_at", null);
+
+  for (const row of jobs ?? []) {
+    const id = typeof row.id === "number" ? row.id : Number(row.id);
+    if (Number.isFinite(id) && id > 0) {
+      await syncAutoReleaseTimerForStripeEligibility(id, { supabase: admin });
+    }
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/lister/dashboard");
 }
 
 export type ReleaseJobFundsResult =
@@ -2616,9 +2774,37 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
     return new Date(atIso).getTime();
   };
 
+  const requireConnectForCron =
+    settings?.require_stripe_connect_before_payment_release !== false;
+  const winnerIds = [
+    ...new Set(
+      list
+        .map((j) => trimStr(j.winner_id))
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const payoutReadyByWinner = new Map<string, boolean>();
+  if (requireConnectForCron && winnerIds.length > 0) {
+    const { data: profs } = await admin
+      .from("profiles")
+      .select("id, stripe_connect_id, stripe_onboarding_complete")
+      .in("id", winnerIds);
+    for (const p of profs ?? []) {
+      const id = String((p as { id: string }).id);
+      payoutReadyByWinner.set(id, isProfileStripePayoutReady(p as never));
+    }
+  }
+
   const dueJobs = list.filter((job) => {
     const releaseAtMs = getReleaseAtMs(job);
-    return releaseAtMs != null && releaseAtMs <= nowMs;
+    if (releaseAtMs == null || releaseAtMs > nowMs) return false;
+    if (requireConnectForCron) {
+      const wid = trimStr(job.winner_id);
+      if (wid && !(payoutReadyByWinner.get(wid) ?? false)) {
+        return false;
+      }
+    }
+    return true;
   });
   const jobIds: number[] = [];
   const errors: string[] = [];
@@ -2906,7 +3092,9 @@ export async function openDispute(
       : {}),
   };
 
-  const { error: updateError } = await supabase
+  const adminForDispute = createSupabaseAdminClient();
+  const dbForJobUpdate = (adminForDispute ?? supabase) as SupabaseClient<Database>;
+  const { error: updateError } = await dbForJobUpdate
     .from("jobs")
     .update(updatePayload as Partial<JobRow> as never)
     .eq("id", jobId);
@@ -2930,7 +3118,7 @@ export async function openDispute(
 
   after(async () => {
     const { notifyAdminDisputeOpened } = await import("@/lib/actions/admin-notify-email");
-    await notifyAdminDisputeOpened(jobId).catch(() => {});
+    await notifyAdminDisputeOpened(jobId, { fallbackEvidenceUrls: photoUrls }).catch(() => {});
   });
 
   const otherUserId = isLister ? j.winner_id : j.lister_id;

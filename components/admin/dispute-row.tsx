@@ -44,6 +44,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
+import { coerceDisputePhotoUrls } from "@/lib/disputes/coerce-dispute-photo-urls";
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
@@ -101,7 +102,9 @@ export function DisputeRow({
 
   const agreedRefundCents = job.counter_proposal_amount ?? job.proposed_refund_amount ?? 0;
 
-  const responseEvidence = (job.dispute_response_evidence as string[] | null) ?? [];
+  const responseEvidence = coerceDisputePhotoUrls(
+    job.dispute_response_evidence
+  );
 
   const statusBadge =
     job.status === "disputed"

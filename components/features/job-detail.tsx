@@ -587,6 +587,8 @@ export type JobDetailProps = {
   securedViaBuyNow?: boolean;
   /** Server-hydrated checklist rows for admin/readonly views where client RLS can block reads. */
   initialChecklist?: ChecklistItem[] | null;
+  /** Server-hydrated after-photo URLs (`jobs/{id}/after`); listers often cannot `storage.list` without service role. */
+  initialAfterPhotos?: { name: string; url: string }[] | null;
   /** When true, opens the lister→cleaner review form on first paint (completed job + payment released). */
   expandListerReviewOfCleaner?: boolean;
   /** False when winning cleaner has not completed Stripe Connect (server-loaded). */
@@ -688,6 +690,7 @@ export function JobDetail({
   topUpPayments = [],
   securedViaBuyNow = false,
   initialChecklist = null,
+  initialAfterPhotos = null,
   expandListerReviewOfCleaner = false,
   winnerStripePayoutReady = true,
   requireStripeConnectBeforePaymentRelease = true,
@@ -787,9 +790,18 @@ export function JobDetail({
     cleanerConfirmedAt
   );
   type AfterPhotoEntry = { name: string; url: string };
-  const [afterPhotoEntries, setAfterPhotoEntries] = useState<AfterPhotoEntry[]>([]);
+  const [afterPhotoEntries, setAfterPhotoEntries] = useState<AfterPhotoEntry[]>(
+    () => initialAfterPhotos ?? []
+  );
   const [afterPhotosLoading, setAfterPhotosLoading] = useState(false);
   const [afterPhotosUploading, setAfterPhotosUploading] = useState(false);
+
+  useEffect(() => {
+    if (initialAfterPhotos != null) {
+      setAfterPhotoEntries(initialAfterPhotos);
+    }
+  }, [initialAfterPhotos]);
+
   const [initialPhotoEntries, setInitialPhotoEntries] = useState<InitialPhotoEntry[]>([]);
   const [initialPhotosLoading, setInitialPhotosLoading] = useState(false);
   const [requestingPayment, setRequestingPayment] = useState(false);
@@ -1492,8 +1504,8 @@ export function JobDetail({
     confirmedAt != null ? format(new Date(confirmedAt), "d MMM yyyy") : null;
 
   const propertyAddress: string | null =
-    ((listing as any).property_address as string | null) ??
-    ((listing as any).propertyAddress as string | null) ??
+    (listing.property_address as string | null) ??
+    ((listing as { propertyAddress?: string | null }).propertyAddress as string | null) ??
     null;
 
   const listingHeroUrls = useMemo(() => {
@@ -1680,7 +1692,19 @@ export function JobDetail({
       ? getBondGuidelineForState(getStateFromPostcode(listing.postcode))
       : null;
 
-  const autoReleaseMs = autoReleaseAt ? new Date(autoReleaseAt).getTime() : null;
+  /** Don't count down in UI until the cleaner can receive payouts (matches DB sync in jobs actions). */
+  const autoReleaseTimerSuspendedForStripeConnect =
+    requireStripeConnectBeforePaymentRelease &&
+    !winnerStripePayoutReady &&
+    localJobStatus === "completed_pending_approval";
+
+  const autoReleaseAtEffective = autoReleaseTimerSuspendedForStripeConnect
+    ? null
+    : autoReleaseAt;
+
+  const autoReleaseMs = autoReleaseAtEffective
+    ? new Date(autoReleaseAtEffective).getTime()
+    : null;
   const autoReleaseMsLeft =
     autoReleaseMs != null ? Math.max(0, autoReleaseMs - nowMs) : null;
   const autoReleaseHoursLeft =
@@ -1708,7 +1732,7 @@ export function JobDetail({
   const canExtendListerReview =
     isJobLister &&
     localJobStatus === "completed_pending_approval" &&
-    !!autoReleaseAt?.trim() &&
+    !!autoReleaseAtEffective?.trim() &&
     !reviewExtensionUsedAt;
 
   /** Larger type, spacing, and highlighted panels for cleaner or lister job-detail views. */
@@ -1911,7 +1935,7 @@ export function JobDetail({
                         {listerReleaseFundsStep && propertyAddress?.trim()
                           ? `${propertyAddress.trim()} · ${addressLine}`
                           : isJobCleaner && propertyAddress?.trim()
-                            ? propertyAddress.trim()
+                            ? `${propertyAddress.trim()} · ${addressLine}`
                             : addressLine}
                       </span>
                     </p>
@@ -2471,7 +2495,9 @@ export function JobDetail({
                 />
                 <span
                   className={cn(
-                    listerReleaseFundsStep && propertyAddress?.trim() && "flex flex-col gap-0.5"
+                    propertyAddress?.trim() &&
+                      (listerReleaseFundsStep || isJobCleaner) &&
+                      "flex flex-col gap-0.5"
                   )}
                 >
                   {listerReleaseFundsStep && propertyAddress?.trim() ? (
@@ -2482,7 +2508,12 @@ export function JobDetail({
                       <span>{formatLocationWithState(listing.suburb, listing.postcode)}</span>
                     </>
                   ) : isJobCleaner && propertyAddress?.trim() ? (
-                    propertyAddress.trim()
+                    <>
+                      <span className="text-foreground dark:text-gray-100">
+                        {propertyAddress.trim()}
+                      </span>
+                      <span>{formatLocationWithState(listing.suburb, listing.postcode)}</span>
+                    </>
                   ) : (
                     formatLocationWithState(listing.suburb, listing.postcode)
                   )}
@@ -2645,12 +2676,14 @@ export function JobDetail({
                       Lister review window
                     </p>
                     <p className="mt-1 text-sm leading-relaxed text-amber-900/95 dark:text-amber-200/95">
-                      {autoReleaseAt && autoReleaseMsLeft != null
-                        ? `If the lister doesn't approve or raise a dispute, your payment auto-releases when this timer hits zero.`
-                        : `Auto-release is paused (e.g. dispute open or admin hold). You'll be notified when the review timer resumes.`}
+                      {autoReleaseTimerSuspendedForStripeConnect
+                        ? `Finish Stripe payout setup (Profile → Payments) so the lister's review window can start. Until then, auto-release is on hold.`
+                        : autoReleaseAtEffective && autoReleaseMsLeft != null
+                          ? `If the lister doesn't approve or raise a dispute, your payment auto-releases when this timer hits zero.`
+                          : `Auto-release is paused (e.g. dispute open or admin hold). You'll be notified when the review timer resumes.`}
                     </p>
                   </div>
-                  {autoReleaseAt && autoReleaseMsLeft != null ? (
+                  {autoReleaseAtEffective && autoReleaseMsLeft != null ? (
                     <Badge
                       className={cn(
                         "shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums",
@@ -2663,11 +2696,11 @@ export function JobDetail({
                     </Badge>
                   ) : (
                     <Badge className="shrink-0 rounded-full border-amber-300 bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
-                      Paused
+                      {autoReleaseTimerSuspendedForStripeConnect ? "Waiting on your Stripe" : "Paused"}
                     </Badge>
                   )}
                 </div>
-                {autoReleaseAt && autoReleaseMsLeft != null && autoReleaseMsLeft > 0 && (
+                {autoReleaseAtEffective && autoReleaseMsLeft != null && autoReleaseMsLeft > 0 && (
                   <Progress value={autoReleaseProgressValue} className="mt-3 h-2.5" />
                 )}
               </div>
@@ -3266,7 +3299,6 @@ export function JobDetail({
                 <>
                   {!(isJobCleaner && cleanerReviewPendingMinimal) && (
                     <>
-                  {!(isJobLister && listerReleaseFundsStep) && (
                   <details
                     className={cn(
                       "rounded-xl border bg-background/60 px-4 py-3 text-muted-foreground dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400",
@@ -3288,7 +3320,6 @@ export function JobDetail({
                       <ChecklistHistoryGrid items={checklist} detailUiBoost={detailUiBoost} />
                     </div>
                   </details>
-                  )}
                   {localJobStatus === "completed" ? (
                   !listerCompletedBoostTidy && (
                   <p
@@ -3314,7 +3345,10 @@ export function JobDetail({
                   )}
                     </>
                   )}
-                  {isJobLister && afterPhotoEntries.length > 0 && (
+                  {isJobLister &&
+                    (localJobStatus === "completed_pending_approval" ||
+                      localJobStatus === "completed") &&
+                    (afterPhotoEntries.length > 0 || afterPhotosLoading) && (
                     <div
                       id="job-after-photos"
                       className="mt-3 scroll-mt-24 rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-50/90 to-transparent px-4 py-4 dark:border-emerald-800 dark:from-emerald-950/40 sm:px-5"
@@ -3327,6 +3361,11 @@ export function JobDetail({
                           ? "Saved from when the job was completed."
                           : "Review the after photos before you finalize and release funds."}
                       </p>
+                      {afterPhotosLoading && afterPhotoEntries.length === 0 ? (
+                        <p className="mt-2 text-sm text-muted-foreground dark:text-gray-400">
+                          Loading photos…
+                        </p>
+                      ) : null}
                       <div className="mt-2 flex flex-wrap gap-2">
                         {afterPhotoEntries.map((entry, idx) => (
                           <div
@@ -3687,7 +3726,11 @@ export function JobDetail({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium dark:text-gray-100">Approve &amp; Release Funds</p>
                   {localJobStatus === "completed_pending_approval" &&
-                    (autoReleaseAt && autoReleaseMsLeft != null ? (
+                    (autoReleaseTimerSuspendedForStripeConnect ? (
+                      <Badge className="shrink-0 rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
+                        Timer starts after cleaner Stripe
+                      </Badge>
+                    ) : autoReleaseAtEffective && autoReleaseMsLeft != null ? (
                       <Badge
                         className={cn(
                           "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums",
@@ -3705,14 +3748,16 @@ export function JobDetail({
                     ))}
                 </div>
                 {localJobStatus === "completed_pending_approval" &&
-                  autoReleaseAt &&
+                  autoReleaseAtEffective &&
                   autoReleaseMsLeft != null &&
                   autoReleaseMsLeft > 0 && (
                     <Progress value={autoReleaseProgressValue} className="h-2" />
                   )}
                 <p className="text-[11px] leading-snug text-muted-foreground dark:text-gray-400 sm:text-xs">
                   {localJobStatus === "completed_pending_approval"
-                    ? "Review after-photos, then release or raise a dispute. A dispute pauses auto-release until it is resolved."
+                    ? autoReleaseTimerSuspendedForStripeConnect
+                      ? "The review countdown and auto-release start only after your cleaner finishes Stripe payout setup. You'll see the timer here once they're ready to receive payment."
+                      : "Review after-photos, then release or raise a dispute. A dispute pauses auto-release until it is resolved."
                     : `After the cleaner requests payment, you have ${autoReleaseHours} hours to approve or dispute once after-photos are in.`}
                 </p>
                 {releaseBlockedByCleanerStripe && (

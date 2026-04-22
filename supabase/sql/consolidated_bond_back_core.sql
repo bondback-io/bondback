@@ -122,7 +122,8 @@ ALTER TABLE public.listings
   ADD COLUMN IF NOT EXISTS cover_photo_url text,
   ADD COLUMN IF NOT EXISTS buy_now_cents integer,
   ADD COLUMN IF NOT EXISTS platform_fee_percentage double precision NOT NULL DEFAULT 10,
-  ADD COLUMN IF NOT EXISTS cancelled_early_at timestamptz;
+  ADD COLUMN IF NOT EXISTS cancelled_early_at timestamptz,
+  ADD COLUMN IF NOT EXISTS property_address text;
 
 -- -----------------------------------------------------------------------------
 -- 3) JOBS (dispute + payment + auto-release live on this table)

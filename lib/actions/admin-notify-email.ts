@@ -13,6 +13,9 @@ import {
 } from "@/emails/AdminNotificationEmail";
 import { formatDateTimeForEmail } from "@/lib/email-datetime";
 import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
+import { coerceDisputePhotoUrls } from "@/lib/disputes/coerce-dispute-photo-urls";
+import { fetchImageAttachmentsForEmail } from "@/lib/email/fetch-image-attachments";
+import type { SendEmailAttachment } from "@/lib/notifications/email";
 
 function maskAbn(digits: string): string {
   if (digits.length !== 11) return digits;
@@ -103,13 +106,21 @@ async function sendAdminHtml(params: {
   html: string;
   logKind: string;
   logUserId: string | null;
+  attachments?: SendEmailAttachment[];
 }): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
   const { sendEmail } = await import("@/lib/notifications/email");
   const log =
     params.logUserId != null
       ? { userId: params.logUserId, kind: params.logKind }
       : undefined;
-  return sendEmail(params.to, params.subject, params.html, log ? { log } : undefined);
+  const attachments =
+    params.attachments && params.attachments.length > 0
+      ? params.attachments
+      : undefined;
+  return sendEmail(params.to, params.subject, params.html, {
+    ...(log ? { log } : {}),
+    ...(attachments ? { attachments } : {}),
+  });
 }
 
 async function renderAdminEmail(props: AdminNotificationEmailProps): Promise<string> {
@@ -249,7 +260,10 @@ export async function notifyAdminNewListing(listingId: string): Promise<void> {
   });
 }
 
-export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
+export async function notifyAdminDisputeOpened(
+  jobId: number,
+  options?: { fallbackEvidenceUrls?: string[] }
+): Promise<void> {
   if (!(await shouldSendAdminNotification("dispute"))) return;
   const { email, logUserId } = await resolveAdminNotificationRecipient();
   if (!email) return;
@@ -260,7 +274,7 @@ export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
   const { data: job } = await admin
     .from("jobs")
     .select(
-      "id, listing_id, lister_id, winner_id, dispute_reason, disputed_at, dispute_opened_by"
+      "id, listing_id, lister_id, winner_id, dispute_reason, disputed_at, dispute_opened_by, dispute_photos, dispute_evidence"
     )
     .eq("id", jobId)
     .maybeSingle();
@@ -273,6 +287,8 @@ export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
     dispute_reason?: string | null;
     disputed_at?: string | null;
     dispute_opened_by?: string | null;
+    dispute_photos?: string[] | null;
+    dispute_evidence?: string[] | null;
   } | null;
 
   if (!j) return;
@@ -304,6 +320,24 @@ export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
     raw.length > 400 ? `${raw.slice(0, 397)}…` : raw || "—";
 
   const openedAt = j.disputed_at ? new Date(j.disputed_at) : new Date();
+  const evidencePhotoUrls = coerceDisputePhotoUrls(
+    j.dispute_evidence,
+    j.dispute_photos,
+    options?.fallbackEvidenceUrls
+  ).slice(0, 5);
+
+  let mimeAttachments: SendEmailAttachment[] = [];
+  if (evidencePhotoUrls.length > 0) {
+    const fetched = await fetchImageAttachmentsForEmail(
+      evidencePhotoUrls,
+      `dispute-job-${jobId}-evidence`
+    );
+    mimeAttachments = fetched.map((f) => ({
+      filename: f.filename,
+      content: f.content,
+    }));
+  }
+
   const props: AdminNotificationEmailProps = {
     eventType: "dispute_opened",
     jobId,
@@ -313,6 +347,10 @@ export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
     openedAtFormatted: formatDateTimeForEmail(openedAt, {
       appendTimeZoneName: true,
     }),
+    ...(evidencePhotoUrls.length > 0 ? { evidencePhotoUrls } : {}),
+    ...(mimeAttachments.length > 0
+      ? { evidenceMimeAttachedCount: mimeAttachments.length }
+      : {}),
   };
 
   const subject = `Dispute Opened — Job #${jobId}`;
@@ -323,6 +361,7 @@ export async function notifyAdminDisputeOpened(jobId: number): Promise<void> {
     html,
     logKind: "admin_notification:dispute_opened",
     logUserId,
+    attachments: mimeAttachments.length > 0 ? mimeAttachments : undefined,
   });
 }
 
@@ -403,6 +442,10 @@ export async function sendTestAdminNotificationEmail(
       openedAtFormatted: formatDateTimeForEmail(new Date(), {
         appendTimeZoneName: true,
       }),
+      evidencePhotoUrls: [
+        "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400",
+        "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400",
+      ],
     };
   }
 

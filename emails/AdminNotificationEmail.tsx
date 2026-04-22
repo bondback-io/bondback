@@ -3,6 +3,7 @@ import {
   Container,
   Head,
   Html,
+  Img,
   Link,
   Section,
   Text,
@@ -47,6 +48,10 @@ export type AdminNotificationEmailProps =
       openedByLabel: string;
       reasonSnippet: string;
       openedAtFormatted: string;
+      /** Public URLs of evidence photos (same as job dispute_evidence / dispute_photos). */
+      evidencePhotoUrls?: string[];
+      /** Number of MIME attachments successfully fetched for this message (inline + attachment). */
+      evidenceMimeAttachedCount?: number;
     };
 
 const HEADER_GRADIENT = "linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 55%, #059669 100%)";
@@ -174,6 +179,32 @@ export function AdminNotificationEmail(props: AdminNotificationEmailProps) {
             <br />
             {props.reasonSnippet}
           </Text>
+          {props.evidencePhotoUrls && props.evidencePhotoUrls.length > 0 ? (
+            <Section style={evidenceSection}>
+              <Text style={evidenceHeading}>Evidence photos (submitted with dispute)</Text>
+              {props.evidenceMimeAttachedCount != null && props.evidenceMimeAttachedCount > 0 ? (
+                <Text style={evidenceAttachNote}>
+                  Full-resolution copies ({props.evidenceMimeAttachedCount}) are attached to this email as
+                  files — use them if inline images do not load in your client.
+                </Text>
+              ) : null}
+              {props.evidencePhotoUrls.map((url) => (
+                <Section key={url} style={evidenceItem}>
+                  <Img
+                    src={url}
+                    alt="Dispute evidence"
+                    width={400}
+                    style={evidenceImg}
+                  />
+                  <Text style={evidenceLinkWrap}>
+                    <Link href={url} style={ctaLink}>
+                      Open full image
+                    </Link>
+                  </Text>
+                </Section>
+              ))}
+            </Section>
+          ) : null}
           <Section style={ctaWrap}>
             <Link href={emailJobUrl(props.jobId)} style={ctaLink}>
               View job
@@ -287,6 +318,45 @@ const reasonBlock = {
   border: "1px solid #e5e7eb",
   padding: "14px 16px",
   margin: "0 0 16px 0",
+};
+
+const evidenceSection = {
+  backgroundColor: "#ffffff",
+  borderRadius: "8px",
+  border: "1px solid #e5e7eb",
+  padding: "14px 16px",
+  margin: "0 0 16px 0",
+};
+
+const evidenceHeading = {
+  color: "#111827",
+  fontSize: "13px",
+  fontWeight: "600" as const,
+  margin: "0 0 12px 0",
+};
+
+const evidenceAttachNote = {
+  color: "#4b5563",
+  fontSize: "12px",
+  lineHeight: 1.5,
+  margin: "0 0 12px 0",
+};
+
+const evidenceItem = {
+  margin: "0 0 14px 0",
+};
+
+const evidenceImg = {
+  display: "block" as const,
+  maxWidth: "100%",
+  height: "auto",
+  borderRadius: "6px",
+  border: "1px solid #e5e7eb",
+};
+
+const evidenceLinkWrap = {
+  margin: "8px 0 0 0",
+  fontSize: "12px",
 };
 
 const ctaWrap = {
