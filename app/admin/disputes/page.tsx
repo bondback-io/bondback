@@ -372,6 +372,7 @@ export default async function AdminDisputesPage({
                   <option value="proposed">proposed</option>
                   <option value="accepted">accepted</option>
                   <option value="rejected">rejected</option>
+                  <option value="awaiting_admin_final">awaiting admin final</option>
                 </select>
               </div>
               <div className="space-y-1.5">

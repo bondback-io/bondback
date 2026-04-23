@@ -13,7 +13,12 @@ import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { fetchPlatformFeePercentForListing } from "@/lib/platform-fee";
 import { releaseJobFunds, executeRefund } from "@/lib/actions/jobs";
-import { insertDisputeThreadEntry } from "@/lib/disputes/dispute-thread-and-notify";
+import {
+  escapeHtmlForEmail,
+  insertDisputeThreadEntry,
+  notifyAdminUsersAboutJob,
+} from "@/lib/disputes/dispute-thread-and-notify";
+import { getSiteUrl } from "@/lib/site";
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
 import { adminDeleteListingByIdCascade } from "@/lib/actions/admin-listings";
@@ -1126,6 +1131,14 @@ export async function adminSubmitMediationSettlement(
     } catch {
       // non-fatal
     }
+
+    const adminConsoleUrl = `${getSiteUrl().origin}/admin/disputes/${jobId}`;
+    await notifyAdminUsersAboutJob({
+      jobId,
+      subject: `[Bond Back] Job #${jobId}: binding mediation settlement applied`,
+      htmlBody: `<p>An admin applied a <strong>binding mediation settlement</strong> for job #${jobId}.</p><p>Refund to lister: $${(refundCents / 100).toFixed(2)} AUD · Remaining escrow released to the cleaner · job completed.</p><p style="white-space:pre-wrap;">${escapeHtmlForEmail(proposalText)}</p><p><a href="${adminConsoleUrl}">Admin dispute record</a></p>`,
+      inAppMessage: `Job #${jobId}: binding mediation settlement applied — dispute closed.`,
+    });
 
     await logAdminActivity({
       adminId,

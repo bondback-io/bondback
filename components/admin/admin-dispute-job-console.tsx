@@ -11,6 +11,7 @@ import type { SerializableDisputeMessage } from "@/lib/disputes/serialize-disput
 import { AdminDisputePartyEmailForms } from "@/components/admin/admin-dispute-party-email-forms";
 import { AdminDisputeResolvePanel } from "@/components/admin/admin-dispute-resolve-panel";
 import { AdminDisputeCaseNoteForm } from "@/components/admin/admin-dispute-case-note-form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type Profile = { full_name: string | null; profile_photo_url: string | null };
 
@@ -105,6 +106,23 @@ export function AdminDisputeJobConsole({
         </div>
 
         <DisputeJobCaseSummary job={job as DisputeJobCaseJobFields} />
+        {String(job.dispute_mediation_status ?? "") === "awaiting_admin_final" ? (
+          <Alert className="border-amber-300/70 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-950/35">
+            <AlertDescription className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">
+              A party <strong>declined</strong> the mediation proposal. Apply{" "}
+              <strong>Binding settlement (admin override)</strong> with top-up $0 to refund the lister (if any),
+              release the remainder to the cleaner, and complete the job — lister and cleaner are not asked to
+              approve this final step. You can instead send a new collaborative proposal if that fits the case.
+            </AlertDescription>
+          </Alert>
+        ) : String(job.dispute_mediation_status ?? "") === "rejected" ? (
+          <Alert className="border-amber-300/70 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-950/35">
+            <AlertDescription className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">
+              Mediation shows as <strong>rejected</strong> (older jobs). Use binding settlement or a new proposal as
+              appropriate.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <AdminDisputeCaseNoteForm jobId={Number(job.id)} />
         <DisputeAuditTimeline jobId={Number(job.id)} messages={auditMessages} isAdminConsole />
 

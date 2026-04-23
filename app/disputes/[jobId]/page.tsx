@@ -54,6 +54,9 @@ export default async function DisputeCaseDetailPage({
 
   const isLister = job.lister_id === userId;
   const isCleaner = job.winner_id === userId;
+  const mediationState = String(
+    (jobRow as { dispute_mediation_status?: string | null }).dispute_mediation_status ?? "none"
+  );
 
   const admin = createSupabaseAdminClient();
   let messages = [] as ReturnType<typeof serializeDisputeMessagesForClient>;
@@ -158,7 +161,15 @@ export default async function DisputeCaseDetailPage({
               Refund ${(Number(latestMediation.refund_cents ?? 0) / 100).toFixed(2)} • Additional payment $
               {(Number(latestMediation.additional_payment_cents ?? 0) / 100).toFixed(2)}
             </p>
-            {(isLister || isCleaner) && <MediationVoteButtons jobId={numericId} />}
+            {mediationState === "proposed" && (isLister || isCleaner) ? (
+              <MediationVoteButtons jobId={numericId} />
+            ) : mediationState === "awaiting_admin_final" || mediationState === "rejected" ? (
+              <p className="text-sm text-muted-foreground dark:text-gray-400">
+                {mediationState === "rejected"
+                  ? "This proposal was declined. An admin will make a final decision to close the dispute — you do not need to approve that step."
+                  : "A party declined this proposal. Bond Back admin will apply a final settlement to close the dispute. You will be notified when it is complete — no further approval is required from you."}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

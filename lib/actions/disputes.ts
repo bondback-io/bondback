@@ -12,6 +12,7 @@ import {
   disputeHubLinksHtml,
   escapeHtmlForEmail,
   insertDisputeThreadEntry,
+  notifyAdminUsersAboutJob,
   sendDisputeActivityEmail,
 } from "@/lib/disputes/dispute-thread-and-notify";
 
@@ -50,6 +51,14 @@ export type DisputeActionState = {
   success?: string;
   /** Lister accepted cleaner payment request — open Stripe Checkout */
   checkoutUrl?: string;
+  /** Mediation accept/decline — drives dispute hub UI messaging */
+  mediationVoteOutcome?:
+    | "pending_other_party"
+    | "completed"
+    | "lister_checkout_redirect"
+    | "cleaner_waiting_lister_topup"
+    | "already_finalized"
+    | "declined";
 };
 
 async function requireUserOrError(): Promise<
@@ -427,7 +436,7 @@ export type InsertAdminMediationProposalParams = {
 };
 
 /**
- * Record a mediation package and notify parties (lister + cleaner must both accept unless admin uses binding settlement elsewhere).
+ * Record a mediation package and notify parties (both must accept unless a party declines — then admin applies a binding final settlement, or admin sends a new proposal).
  */
 export async function insertAdminMediationProposalRecords(
   params: InsertAdminMediationProposalParams
@@ -526,10 +535,14 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
 
     const { data: job } = await supabase
       .from("jobs")
-      .select("id, lister_id, winner_id")
+      .select("id, lister_id, winner_id, dispute_mediation_status")
       .eq("id", jobId)
       .maybeSingle();
-    const j = job as { lister_id?: string; winner_id?: string | null } | null;
+    const j = job as {
+      lister_id?: string;
+      winner_id?: string | null;
+      dispute_mediation_status?: string | null;
+    } | null;
     if (!j) return { error: "Job not found." };
     const isLister = userId === j.lister_id;
     const isCleaner = userId === j.winner_id;
@@ -537,6 +550,16 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
 
     const admin = createSupabaseAdminClient();
     if (!admin) return { error: "Server configuration error. Try again later." };
+
+    const mediationStatus = String(j.dispute_mediation_status ?? "none");
+    if (mediationStatus !== "proposed") {
+      return {
+        error:
+          mediationStatus === "awaiting_admin_final"
+            ? "A mediation proposal was declined. An admin will issue a final decision — you do not need to respond again."
+            : "There is no active mediation proposal to respond to.",
+      };
+    }
 
     const { data: latest } = await (admin as any)
       .from("dispute_mediation_votes")
@@ -579,7 +602,11 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
         jms?.dispute_mediation_status === "accepted" &&
         jms?.resolution_type === "mediation"
       ) {
-        return { ok: true, success: "This mediation was already finalized." };
+        return {
+          ok: true,
+          success: "This mediation was already finalized.",
+          mediationVoteOutcome: "already_finalized",
+        };
       }
 
       if (refundCents >= 1) {
@@ -667,6 +694,7 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
             ok: true,
             success: "Redirecting to pay the mediation top-up…",
             checkoutUrl: topUp.url,
+            mediationVoteOutcome: "lister_checkout_redirect",
           };
         }
 
@@ -694,6 +722,7 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
           ok: true,
           success:
             "Mediation accepted. The lister has been asked to pay the additional amount from the job page.",
+          mediationVoteOutcome: "cleaner_waiting_lister_topup",
         };
       }
 
@@ -715,42 +744,81 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
       revalidatePath("/my-listings");
       revalidatePath("/lister/dashboard");
       revalidatePath("/cleaner/dashboard");
-      return { ok: true, success: "Mediation accepted. The job has been updated." };
+      return {
+        ok: true,
+        success: "Mediation accepted. The job has been updated.",
+        mediationVoteOutcome: "completed",
+      };
     }
     if (vote === false) {
+      const declinerLabel = isLister ? "lister" : "cleaner";
       await insertDisputeThreadEntry({
         jobId,
         authorUserId: userId,
         authorRole: isLister ? "lister" : "cleaner",
-        body: `${isLister ? "Lister" : "Cleaner"} declined the admin mediation proposal.`,
+        body: `${isLister ? "Lister" : "Cleaner"} declined the admin mediation proposal. The case returns to admin for a binding final decision.`,
         isEscalationEvent: true,
       });
-      const otherRej = isLister ? j.winner_id : j.lister_id;
-      if (otherRej) {
-        await createNotification(
-          otherRej,
-          "dispute_opened",
-          jobId,
-          "The other party declined the admin mediation proposal."
-        );
-        await sendDisputeActivityEmail({
-          jobId,
-          toUserId: otherRej,
-          subject: `[Bond Back] Job #${jobId}: mediation declined`,
-          htmlBody: `<p>The other party <strong>declined</strong> the admin mediation proposal for job #${jobId}.</p>${disputeHubLinksHtml(jobId)}`,
-        });
-      }
+      const nowIso = new Date().toISOString();
       await (admin as any)
         .from("jobs")
         .update({
-          dispute_mediation_status: "rejected",
+          dispute_mediation_status: "awaiting_admin_final",
           status: "in_review",
           dispute_status: "in_review",
+          mediation_last_activity_at: nowIso,
         })
         .eq("id", jobId);
+
+      const otherId = isLister ? j.winner_id : j.lister_id;
+      if (otherId) {
+        await createNotification(
+          otherId,
+          "dispute_opened",
+          jobId,
+          `The ${declinerLabel} declined the admin mediation proposal. An admin will issue a final decision — no approval needed from you.`
+        );
+        await sendDisputeActivityEmail({
+          jobId,
+          toUserId: otherId,
+          subject: `[Bond Back] Job #${jobId}: mediation declined — admin will decide`,
+          htmlBody: `<p>The ${declinerLabel} <strong>declined</strong> the admin mediation proposal.</p><p>An admin will apply a <strong>final settlement</strong> (refund and/or release to cleaner) to close this dispute. You do not need to approve that decision.</p>${disputeHubLinksHtml(jobId)}`,
+        });
+      }
+
+      await createNotification(
+        userId,
+        "dispute_opened",
+        jobId,
+        "You declined the mediation proposal. An admin will make a final decision and notify everyone when the dispute is closed."
+      );
+      await sendDisputeActivityEmail({
+        jobId,
+        toUserId: userId,
+        subject: `[Bond Back] Job #${jobId}: your response recorded`,
+        htmlBody: `<p>You <strong>declined</strong> the admin mediation proposal.</p><p>Our team will review the case and apply a <strong>final settlement</strong>. You will be notified when the dispute is closed.</p>${disputeHubLinksHtml(jobId)}`,
+      });
+
+      const adminConsoleUrl = `${getSiteUrl().origin}/admin/disputes/${jobId}`;
+      await notifyAdminUsersAboutJob({
+        jobId,
+        subject: `[Bond Back] Job #${jobId}: mediation declined — final admin decision required`,
+        htmlBody: `<p>The ${declinerLabel} <strong>declined</strong> the admin mediation proposal on job #${jobId}.</p><p>Use <strong>Binding settlement (admin override)</strong> in the mediation panel (top-up $0) to refund the lister if needed, release the remainder to the cleaner, and complete the job — lister and cleaner are not asked to approve this final step. Alternatively, send a new collaborative proposal if appropriate.</p><p><a href="${adminConsoleUrl}">Open admin dispute</a></p>${disputeHubLinksHtml(jobId)}`,
+        inAppMessage: `Job #${jobId}: mediation proposal declined — apply binding final settlement or send a new proposal.`,
+      });
+
+      revalidatePath(`/jobs/${jobId}`);
       revalidatePath("/disputes");
       revalidatePath("/admin/disputes");
-      return { ok: true, success: "You rejected this proposal." };
+      revalidatePath("/dashboard");
+      revalidatePath("/lister/dashboard");
+      revalidatePath("/cleaner/dashboard");
+      return {
+        ok: true,
+        success:
+          "You declined this proposal. An admin will make a final decision and notify all parties when the dispute is closed.",
+        mediationVoteOutcome: "declined",
+      };
     }
 
     await insertDisputeThreadEntry({
@@ -777,7 +845,11 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
 
     revalidatePath("/disputes");
     revalidatePath("/admin/disputes");
-    return { ok: true, success: "Your response was recorded." };
+    return {
+      ok: true,
+      success: "Your response was recorded.",
+      mediationVoteOutcome: "pending_other_party",
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Something went wrong.";
     return { error: msg };
