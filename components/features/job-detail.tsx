@@ -87,6 +87,7 @@ import {
   ChevronDown,
   Loader2,
   Landmark,
+  UserRound,
 } from "lucide-react";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { ImageLightboxGallery } from "@/components/ui/image-lightbox-gallery";
@@ -139,6 +140,7 @@ import { JobPaymentBreakdown } from "@/components/features/job-payment-breakdown
 import { ListerJobTopUpModal } from "@/components/features/lister-job-top-up-modal";
 import type { JobTopUpPaymentRecord } from "@/lib/job-top-up";
 import { VerificationBadges } from "@/components/shared/verification-badges";
+import { normalizeVerificationBadges } from "@/lib/verification-badges";
 import { hydrateBidderProfilesForListing } from "@/lib/actions/bidder-profile";
 
 /** Some mobile/gallery pickers repeat files in a multi-select; dedupe by stable identity. */
@@ -645,6 +647,152 @@ type ChecklistItem = {
   label: string;
   is_completed: boolean;
 };
+
+function PartyMetaCell({
+  icon,
+  accent,
+  label,
+  name,
+  badges,
+  detailUiBoost,
+}: {
+  icon: ReactNode;
+  accent: "primary" | "emerald" | "amber";
+  label: string;
+  name: string;
+  badges?: ReactNode;
+  detailUiBoost: boolean;
+}) {
+  const accentRing =
+    accent === "primary"
+      ? "bg-primary/10 text-primary shadow-sm shadow-primary/5 dark:bg-sky-500/15 dark:text-sky-400"
+      : accent === "emerald"
+        ? "bg-emerald-500/10 text-emerald-700 shadow-sm shadow-emerald-500/10 dark:bg-emerald-500/15 dark:text-emerald-300"
+        : "bg-amber-500/10 text-amber-800 shadow-sm shadow-amber-500/10 dark:text-amber-200/95 dark:bg-amber-500/12";
+
+  const labelClass = cn(
+    "text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground dark:text-gray-500",
+    detailUiBoost && "md:text-[11px]"
+  );
+  const nameClass = cn(
+    "font-semibold leading-snug tracking-tight text-foreground dark:text-gray-50",
+    detailUiBoost ? "text-base" : "text-sm",
+    "break-words [overflow-wrap:anywhere]"
+  );
+
+  return (
+    <div className="flex gap-3.5 p-4 sm:gap-4 sm:p-5">
+      <div
+        className={cn(
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/10",
+          accentRing
+        )}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className={labelClass}>{label}</p>
+        <p className={nameClass}>{name}</p>
+        {badges ? <div className="pt-1">{badges}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+/** Lister, assigned cleaner, and acceptance date — shared between main card and footer copy. */
+function JobPartiesSummaryStrip({
+  listerName,
+  cleanerName,
+  listerVerificationBadges,
+  cleanerVerificationBadges,
+  jobAcceptedAt,
+  detailUiBoost,
+}: {
+  listerName: string | null;
+  cleanerName: string | null;
+  listerVerificationBadges: string[] | null;
+  cleanerVerificationBadges: string[] | null;
+  jobAcceptedAt: string | null;
+  detailUiBoost: boolean;
+}) {
+  if (!listerName && !cleanerName) return null;
+
+  const showDate = Boolean(cleanerName && jobAcceptedAt);
+  const segmentCount = [
+    Boolean(listerName),
+    Boolean(cleanerName),
+    showDate,
+  ].filter(Boolean).length;
+  const gridCols =
+    segmentCount >= 3
+      ? "md:grid-cols-3"
+      : segmentCount === 2
+        ? "md:grid-cols-2"
+        : "";
+
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-muted/40 via-muted/20 to-transparent shadow-sm ring-1 ring-black/[0.03] dark:border-gray-800 dark:from-gray-900/60 dark:via-gray-950/45 dark:to-transparent dark:ring-white/[0.04]",
+        detailUiBoost && "shadow-md"
+      )}
+    >
+      <div
+        className={cn(
+          "grid grid-cols-1 divide-y divide-border/70 dark:divide-gray-800",
+          gridCols,
+          "md:divide-x md:divide-y-0"
+        )}
+      >
+        {listerName ? (
+          <PartyMetaCell
+            icon={<Landmark className="h-4 w-4" aria-hidden />}
+            accent="primary"
+            label="Property lister"
+            name={listerName}
+            detailUiBoost={detailUiBoost}
+            badges={
+              normalizeVerificationBadges(listerVerificationBadges).length > 0 ? (
+                <VerificationBadges
+                  badges={listerVerificationBadges}
+                  showLabel={false}
+                  size="sm"
+                />
+              ) : undefined
+            }
+          />
+        ) : null}
+        {cleanerName ? (
+          <PartyMetaCell
+            icon={<UserRound className="h-4 w-4" aria-hidden />}
+            accent="emerald"
+            label="Assigned to"
+            name={cleanerName}
+            detailUiBoost={detailUiBoost}
+            badges={
+              normalizeVerificationBadges(cleanerVerificationBadges).length > 0 ? (
+                <VerificationBadges
+                  badges={cleanerVerificationBadges}
+                  showLabel={false}
+                  size="sm"
+                />
+              ) : undefined
+            }
+          />
+        ) : null}
+        {showDate ? (
+          <PartyMetaCell
+            icon={<Calendar className="h-4 w-4" aria-hidden />}
+            accent="amber"
+            label="Job accepted"
+            name={format(new Date(jobAcceptedAt as string), "d MMM yyyy")}
+            detailUiBoost={detailUiBoost}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 export function JobDetail({
   listingId,
@@ -2531,45 +2679,15 @@ export function JobDetail({
           {hasActiveJob &&
             (listerName || cleanerName) &&
             !listerCompletedBoostTidy && (
-            <div
-              className={cn(
-                "border-b border-border pb-3 text-muted-foreground dark:border-gray-700 dark:text-gray-400",
-                detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
-              )}
-            >
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-                {listerName && (
-                  <span className="inline-flex flex-wrap items-center gap-1.5">
-                    <span>Property Lister: {listerName}</span>
-                    <VerificationBadges
-                      badges={listerVerificationBadges}
-                      showLabel={false}
-                      size="sm"
-                    />
-                  </span>
-                )}
-                {listerName && cleanerName && (
-                  <span className="opacity-60" aria-hidden>
-                    ·
-                  </span>
-                )}
-                {cleanerName && (
-                  <span className="inline-flex flex-wrap items-center gap-1.5">
-                    <span>Assigned to: {cleanerName}</span>
-                    <VerificationBadges
-                      badges={cleanerVerificationBadges}
-                      showLabel={false}
-                      size="sm"
-                    />
-                    {jobAcceptedAt && (
-                      <span>
-                        <span className="mx-1.5">·</span>
-                        Accepted on {format(new Date(jobAcceptedAt), "d MMM yyyy")}
-                      </span>
-                    )}
-                  </span>
-                )}
-              </div>
+            <div className="border-b border-border pb-4 dark:border-gray-700">
+              <JobPartiesSummaryStrip
+                listerName={listerName}
+                cleanerName={cleanerName}
+                listerVerificationBadges={listerVerificationBadges}
+                cleanerVerificationBadges={cleanerVerificationBadges}
+                jobAcceptedAt={jobAcceptedAt}
+                detailUiBoost={detailUiBoost}
+              />
             </div>
           )}
           {isLive &&
@@ -5345,45 +5463,15 @@ export function JobDetail({
             </div>
           )}
           {(listerName || cleanerName) && (
-            <div
-              className={cn(
-                "mt-4 border-t border-border pt-4 text-muted-foreground dark:border-gray-700 dark:text-gray-400",
-                detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
-              )}
-            >
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-                {listerName && (
-                  <span className="inline-flex flex-wrap items-center gap-1.5">
-                    <span>Property Lister: {listerName}</span>
-                    <VerificationBadges
-                      badges={listerVerificationBadges}
-                      showLabel={false}
-                      size="sm"
-                    />
-                  </span>
-                )}
-                {listerName && cleanerName && (
-                  <span className="opacity-60" aria-hidden>
-                    ·
-                  </span>
-                )}
-                {cleanerName && (
-                  <span className="inline-flex flex-wrap items-center gap-1.5">
-                    <span>Assigned to: {cleanerName}</span>
-                    <VerificationBadges
-                      badges={cleanerVerificationBadges}
-                      showLabel={false}
-                      size="sm"
-                    />
-                    {jobAcceptedAt && (
-                      <span>
-                        <span className="mx-1.5">·</span>
-                        Accepted on {format(new Date(jobAcceptedAt), "d MMM yyyy")}
-                      </span>
-                    )}
-                  </span>
-                )}
-              </div>
+            <div className="mt-4 border-t border-border pt-4 dark:border-gray-700">
+              <JobPartiesSummaryStrip
+                listerName={listerName}
+                cleanerName={cleanerName}
+                listerVerificationBadges={listerVerificationBadges}
+                cleanerVerificationBadges={cleanerVerificationBadges}
+                jobAcceptedAt={jobAcceptedAt}
+                detailUiBoost={detailUiBoost}
+              />
             </div>
           )}
           {bondGuideline && (
