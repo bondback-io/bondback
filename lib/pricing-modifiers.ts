@@ -12,6 +12,7 @@
  */
 
 import type { ListingAddonKey } from "@/lib/listing-addon-prices";
+import { SERVICE_TYPES, type ServiceTypeKey } from "@/lib/service-types";
 
 export type PropertyConditionKey =
   | "excellent_very_good"
@@ -46,6 +47,30 @@ export const LEGACY_DEFAULT_BASE_RATE_PER_BEDROOM_AUD = 85;
  * Normalize `global_settings.pricing_base_rate_per_bedroom_aud` for display and quoting.
  * Rows that still have the old default **85** are treated as the current recommended rate (131).
  */
+/**
+ * Parse `global_settings.pricing_base_rate_per_bedroom_by_service_type` (jsonb).
+ * Each known service type gets a rate ≥ 1; unknown/missing keys use `fallbackAud`.
+ */
+export function resolveBaseRatePerBedroomByServiceFromGlobal(
+  raw: unknown,
+  fallbackAud: number
+): Record<ServiceTypeKey, number> {
+  const fb = Math.max(1, Number.isFinite(fallbackAud) ? fallbackAud : DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud);
+  const obj = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const out = {} as Record<ServiceTypeKey, number>;
+  for (const k of SERVICE_TYPES) {
+    const v = obj[k];
+    const n =
+      typeof v === "number" && Number.isFinite(v)
+        ? v
+        : typeof v === "string" && v.trim() !== ""
+          ? Number(v)
+          : NaN;
+    out[k] = Number.isFinite(n) && n >= 1 ? Math.max(1, n) : fb;
+  }
+  return out;
+}
+
 export function normalizeBaseRatePerBedroomFromGlobal(raw: unknown): number {
   if (raw == null || raw === "") {
     return DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud;
@@ -87,7 +112,10 @@ export const DEFAULT_PRICING_MODIFIERS = {
 } as const;
 
 export type PricingModifiersConfig = {
+  /** Legacy column: default when per-service JSON has no entry (also used as fallback while resolving). */
   baseRatePerBedroomAud: number;
+  /** Effective AUD per bedroom for each `listings.service_type` on the new listing flow. */
+  baseRatePerBedroomByServiceAud: Record<ServiceTypeKey, number>;
   baseMultiplier: number;
   carpetSteamPerBedroomAud: number;
   wallsPerBedroomAud: number;
@@ -121,8 +149,13 @@ export function resolvePricingModifiersFromGlobal(
     return d;
   };
   const D = DEFAULT_PRICING_MODIFIERS;
+  const baseFallback = normalizeBaseRatePerBedroomFromGlobal(g["pricing_base_rate_per_bedroom_aud"]);
   return {
-    baseRatePerBedroomAud: normalizeBaseRatePerBedroomFromGlobal(g["pricing_base_rate_per_bedroom_aud"]),
+    baseRatePerBedroomAud: baseFallback,
+    baseRatePerBedroomByServiceAud: resolveBaseRatePerBedroomByServiceFromGlobal(
+      g["pricing_base_rate_per_bedroom_by_service_type"],
+      baseFallback
+    ),
     baseMultiplier: Math.max(0.01, n("pricing_base_multiplier", D.baseMultiplier)),
     carpetSteamPerBedroomAud: Math.max(0, n("pricing_carpet_steam_per_bedroom_aud", D.carpetSteamPerBedroomAud)),
     wallsPerBedroomAud: Math.max(0, n("pricing_walls_per_bedroom_aud", D.wallsPerBedroomAud)),
@@ -172,10 +205,14 @@ export function computeBaseListingPriceAud(
     bedrooms: number;
     condition: PropertyConditionKey;
     levels: PropertyLevelsKey;
+    serviceType: ServiceTypeKey;
   }
 ): number {
   const beds = Math.max(1, Math.min(6, Math.round(Number(input.bedrooms)) || 1));
-  const rate = Math.max(0, mod.baseRatePerBedroomAud);
+  const rate = Math.max(
+    0,
+    mod.baseRatePerBedroomByServiceAud[input.serviceType] ?? mod.baseRatePerBedroomAud
+  );
   const raw =
     rate *
     beds *

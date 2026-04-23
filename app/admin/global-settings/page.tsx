@@ -10,6 +10,7 @@ import { parseDefaultSiteThemeFromSettings } from "@/lib/global-settings-default
 import {
   DEFAULT_PRICING_MODIFIERS,
   normalizeBaseRatePerBedroomFromGlobal,
+  resolvePricingModifiersFromGlobal,
 } from "@/lib/pricing-modifiers";
 import { parsePlatformFeePercentByServiceType } from "@/lib/platform-fee";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -126,6 +127,9 @@ export default async function AdminGlobalSettingsPage() {
         pricingBaseRatePerBedroomAud: normalizeBaseRatePerBedroomFromGlobal(
           (existing as { pricing_base_rate_per_bedroom_aud?: number | null }).pricing_base_rate_per_bedroom_aud
         ),
+        pricingBaseRatePerBedroomByServiceType: resolvePricingModifiersFromGlobal(
+          existing as Record<string, unknown>
+        ).baseRatePerBedroomByServiceAud,
         pricingBaseMultiplier:
           (existing as { pricing_base_multiplier?: number | null }).pricing_base_multiplier ??
           DEFAULT_PRICING_MODIFIERS.baseMultiplier,

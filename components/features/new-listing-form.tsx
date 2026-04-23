@@ -125,6 +125,7 @@ import {
   RECURRING_FREQUENCIES,
   SERVICE_TYPES,
   deepCleanPurposeLabel,
+  normalizeServiceType,
   recurringFrequencyMultiplier,
   recurringFrequencyShortLabel,
   serviceTypeLabel,
@@ -316,6 +317,7 @@ function calculatePricingParts(
     bedrooms: values.bedrooms,
     condition: values.propertyCondition as PropertyConditionKey,
     levels: values.propertyLevels as PropertyLevelsKey,
+    serviceType: normalizeServiceType(values.serviceType),
   });
   const beds = values.bedrooms;
   const extrasAud = (values.addons ?? []).reduce(
@@ -472,6 +474,7 @@ export function NewListingForm({
       bedrooms: 2,
       condition: "excellent_very_good",
       levels: "1",
+      serviceType: "bond_cleaning",
     }),
     minReserveAud
   );

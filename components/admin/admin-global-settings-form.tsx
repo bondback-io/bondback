@@ -225,6 +225,18 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [pricingBaseRatePerBedroomAud, setPricingBaseRatePerBedroomAud] = React.useState(
     initial?.pricingBaseRatePerBedroomAud ?? DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud
   );
+  const [pricingBaseByService, setPricingBaseByService] = React.useState<
+    Record<ServiceTypeKey, string>
+  >(() => {
+    const by = initial?.pricingBaseRatePerBedroomByServiceType ?? {};
+    const fb = String(initial?.pricingBaseRatePerBedroomAud ?? DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud);
+    const o = {} as Record<ServiceTypeKey, string>;
+    for (const k of SERVICE_TYPES) {
+      const v = by[k];
+      o[k] = typeof v === "number" && Number.isFinite(v) ? String(v) : fb;
+    }
+    return o;
+  });
   const [pricingBaseMultiplier, setPricingBaseMultiplier] = React.useState(
     initial?.pricingBaseMultiplier ?? DEFAULT_PRICING_MODIFIERS.baseMultiplier
   );
@@ -310,6 +322,19 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       platformFeePercentageByServiceType[k] = Math.round(n * 100) / 100;
     }
 
+    const fbRate = Math.max(
+      1,
+      Number(pricingBaseRatePerBedroomAud) || DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud
+    );
+    const pricingBaseRatePerBedroomByServiceType: Partial<Record<ServiceTypeKey, number>> = {};
+    for (const k of SERVICE_TYPES) {
+      const raw = (pricingBaseByService[k] ?? "").trim();
+      const n = raw === "" ? fbRate : Number(raw);
+      if (Number.isFinite(n) && n >= 1) {
+        pricingBaseRatePerBedroomByServiceType[k] = Math.max(1, n);
+      }
+    }
+
     const payload: SaveGlobalSettingsInput = {
       feePercentage: Math.max(0, Math.min(30, Number(feePercentage) || 0)),
       platformFeePercentageByServiceType,
@@ -375,7 +400,8 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       smsTypeEnabled,
       maxSmsPerUserPerDay: maxSmsPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxSmsPerUserPerDay, 10) || 5)) : undefined,
       maxPushPerUserPerDay: maxPushPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxPushPerUserPerDay, 10) || 5)) : undefined,
-      pricingBaseRatePerBedroomAud: Math.max(1, Number(pricingBaseRatePerBedroomAud) || DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud),
+      pricingBaseRatePerBedroomAud: fbRate,
+      pricingBaseRatePerBedroomByServiceType,
       pricingBaseMultiplier: Math.max(
         0.01,
         Number(pricingBaseMultiplier) || DEFAULT_PRICING_MODIFIERS.baseMultiplier
@@ -888,13 +914,15 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             <span className="font-mono text-[10px] sm:text-[11px]">
               (base rate × bedrooms) × condition × levels × base multiplier
             </span>
-            , then selected add-ons (carpet steam, walls, and windows use rate × bedrooms; others are flat amounts below).
+            . Base rate is chosen by listing <strong className="text-foreground dark:text-gray-200">service type</strong> (below); the default
+            rate is the fallback when a per-type value is missing. Then add-ons (carpet steam, walls, and windows use rate × bedrooms; others are
+            flat amounts below).
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Label htmlFor="pricing-base-rate" className="text-xs font-medium shrink-0">
-              Base rate per bedroom (AUD)
+              Default base rate per bedroom (AUD)
             </Label>
             <Input
               id="pricing-base-rate"
@@ -906,6 +934,33 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               onChange={(e) => setPricingBaseRatePerBedroomAud(Number(e.target.value))}
               className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
             />
+          </div>
+          <p className="text-[10px] text-muted-foreground dark:text-gray-500">
+            Fallback for legacy data and any service type without its own rate below.
+          </p>
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+            <p className="text-[11px] font-medium text-foreground dark:text-gray-200">Base rate per bedroom by service type (AUD)</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {SERVICE_TYPES.map((k) => (
+                <div key={k} className="flex flex-col gap-1.5">
+                  <Label htmlFor={`pricing-base-svc-${k}`} className="text-[11px] font-medium">
+                    {serviceTypeLabel(k)}
+                  </Label>
+                  <Input
+                    id={`pricing-base-svc-${k}`}
+                    type="number"
+                    min={1}
+                    step={1}
+                    inputMode="decimal"
+                    value={pricingBaseByService[k]}
+                    onChange={(e) =>
+                      setPricingBaseByService((prev) => ({ ...prev, [k]: e.target.value }))
+                    }
+                    className="h-9 dark:bg-gray-900 dark:border-gray-700"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Label htmlFor="pricing-base-multiplier" className="text-xs font-medium shrink-0">
