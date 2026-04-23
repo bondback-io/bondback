@@ -38,7 +38,7 @@ import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
 import { isSpecialAreaForJobChecklist } from "@/lib/listing-special-areas";
 import { sameUuid, trimStr } from "@/lib/utils";
 import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
-import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
+import { isCleanerStripeReleaseBlockingError, isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
 import { disputeOpenedByLister } from "@/lib/jobs/dispute-opened-by";
 import { disputeAutoClosePatchOnPaymentRelease } from "@/lib/jobs/dispute-hub-helpers";
@@ -1130,6 +1130,135 @@ export async function createJobTopUpCheckoutSession(
 }
 
 /**
+ * When both parties accepted admin mediation with a lister top-up, the job waits in `completed_pending_approval`
+ * until the lister pays. After top-up is recorded, release escrow and complete the job.
+ */
+async function maybeFinalizeJobAfterMediationTopUp(
+  jobId: number,
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>
+): Promise<boolean> {
+  const { data: row, error } = await (admin as SupabaseClient<Database>)
+    .from("jobs")
+    .select(
+      "id, lister_id, winner_id, listing_id, status, resolution_type, dispute_mediation_status, dispute_status, payment_released_at, proposed_refund_amount, refund_amount"
+    )
+    .eq("id", jobId)
+    .maybeSingle();
+  if (error || !row) return false;
+  const r = row as unknown as {
+    lister_id: string;
+    winner_id: string | null;
+    listing_id: string | null;
+    status: string;
+    resolution_type: string | null;
+    dispute_mediation_status: string | null;
+    dispute_status: string | null;
+    payment_released_at: string | null;
+    proposed_refund_amount: number | null;
+    refund_amount: number | null;
+  };
+  if (trimStr(r.payment_released_at)) return false;
+  if (String(r.resolution_type ?? "") !== "mediation") return false;
+  if (String(r.dispute_mediation_status ?? "") !== "accepted") return false;
+  if (String(r.dispute_status ?? "") !== "completed") return false;
+  if (String(r.status ?? "") !== "completed_pending_approval") return false;
+
+  const refundCents = Math.max(
+    Number(r.refund_amount ?? 0),
+    Number(r.proposed_refund_amount ?? 0)
+  );
+
+  const releaseResult = await releaseJobFunds(jobId, { supabase: admin });
+  if (!releaseResult.ok) {
+    if (r.winner_id && isCleanerStripeReleaseBlockingError(releaseResult.error ?? "")) {
+      const duped = await hasRecentJobNotification(r.winner_id, "job_won_complete_payout", jobId, 24);
+      if (!duped) {
+        const msg = `The lister paid the mediation top-up for Job #${jobId}, but escrow could not be released because your Stripe payout setup is not complete. Open Profile → Payments to connect your bank.`;
+        await createNotification(r.winner_id, "job_won_complete_payout", jobId, msg, {
+          persistTitle: `Finish Stripe setup · Job #${jobId}`,
+          persistBody: msg,
+        });
+      }
+    }
+    console.error("[maybeFinalizeJobAfterMediationTopUp] release failed", jobId, releaseResult.error);
+    return false;
+  }
+
+  const nowIso = new Date().toISOString();
+
+  await insertDisputeThreadEntry({
+    jobId,
+    authorUserId: null,
+    authorRole: "system",
+    body: "Lister paid the mediation top-up. Escrow has been released to the cleaner. The job is complete and the dispute is closed.",
+  });
+
+  const { error: updErr } = await admin
+    .from("jobs")
+    .update({
+      status: "completed",
+      completed_at: nowIso,
+      dispute_resolution: "mediation",
+      updated_at: nowIso,
+    } as never)
+    .eq("id", jobId);
+  if (updErr) {
+    console.error("[maybeFinalizeJobAfterMediationTopUp] job update failed", updErr);
+    return false;
+  }
+
+  const listingId = trimStr(r.listing_id);
+  if (listingId) {
+    await admin.from("listings").update({ status: "ended" } as never).eq("id", listingId);
+  }
+
+  const listerMsg =
+    refundCents >= 1
+      ? `The mediation top-up payment is complete. $${(refundCents / 100).toFixed(2)} was refunded earlier per the proposal; the remaining balance was released to the cleaner. The dispute is closed.`
+      : `The mediation top-up payment is complete. Payment was released to the cleaner. The dispute is closed.`;
+  const cleanerMsg =
+    refundCents >= 1
+      ? `The lister paid the mediation top-up. A partial refund was applied to the lister earlier; your payout (including the top-up) has been released. The dispute is closed.`
+      : `The lister paid the mediation top-up. Your payout has been released. The dispute is closed.`;
+
+  await createNotification(r.lister_id, "dispute_resolved", jobId, listerMsg);
+  await sendDisputeActivityEmail({
+    jobId,
+    toUserId: r.lister_id,
+    subject: `[Bond Back] Job #${jobId}: dispute closed — mediation complete`,
+    htmlBody: `<p>${escapeHtmlForEmail(listerMsg)}</p>${disputeHubLinksHtml(jobId)}`,
+  });
+  if (r.winner_id) {
+    await createNotification(r.winner_id, "dispute_resolved", jobId, cleanerMsg);
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: r.winner_id,
+      subject: `[Bond Back] Job #${jobId}: dispute closed — payout released`,
+      htmlBody: `<p>${escapeHtmlForEmail(cleanerMsg)}</p>${disputeHubLinksHtml(jobId)}`,
+    });
+  }
+
+  if (r.winner_id) await recomputeVerificationBadgesForUser(r.winner_id);
+  await recomputeVerificationBadgesForUser(r.lister_id);
+  try {
+    await applyReferralRewardsForCompletedJob(jobId);
+  } catch {
+    // non-fatal
+  }
+
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/disputes");
+  revalidatePath("/admin/disputes");
+  revalidatePath(`/admin/disputes/${jobId}`);
+  revalidatePath("/my-listings");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/dashboard");
+  revalidatePath("/earnings");
+  return true;
+}
+
+/**
  * After lister returns from Stripe Checkout for a job top-up: record PI, bump agreed_amount_cents, notify cleaner.
  */
 export async function fulfillJobTopUpFromSession(
@@ -1261,7 +1390,9 @@ export async function fulfillJobTopUpFromSession(
       return { ok: false, error: updateError.message };
     }
 
-    if (j.winner_id) {
+    const mediationClosedJob = await maybeFinalizeJobAfterMediationTopUp(numericJobId, admin);
+
+    if (j.winner_id && !mediationClosedJob) {
       const extra = `$${(agreedFromMeta / 100).toFixed(2)}`;
       const msg = `The lister added ${extra} for additional work. Funds are held in escrow until final release.`;
       try {

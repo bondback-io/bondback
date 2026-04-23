@@ -3,8 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
-import { createNotification } from "@/lib/actions/notifications";
-import { createJobTopUpCheckoutSession, executeRefund, openDispute } from "@/lib/actions/jobs";
+import { createNotification, sendRefundReceiptEmail } from "@/lib/actions/notifications";
+import {
+  createJobTopUpCheckoutSession,
+  executeRefund,
+  openDispute,
+  releaseJobFunds,
+} from "@/lib/actions/jobs";
+import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
+import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
+import { isCleanerStripeReleaseBlockingError } from "@/lib/stripe-payout-ready";
+import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
 import { sendEmail } from "@/lib/notifications/email";
 import { getSiteUrl } from "@/lib/site";
 import { countJobAfterPhotosFromStorage } from "@/lib/jobs/after-photo-storage-count";
@@ -32,6 +41,22 @@ function audDollarsInputToCents(v: unknown): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.round(n * 100);
+}
+
+async function maybeNotifyCleanerCollaborativeMediationReleaseFailed(
+  cleanerId: string | null | undefined,
+  jobId: number,
+  releaseError: string
+): Promise<void> {
+  if (!cleanerId || !releaseError) return;
+  if (!isCleanerStripeReleaseBlockingError(releaseError)) return;
+  const duped = await hasRecentJobNotification(cleanerId, "job_won_complete_payout", jobId, 24);
+  if (duped) return;
+  const msg = `You and the lister accepted mediation for Job #${jobId}, but escrow could not be released because your Stripe payout setup is not complete. Open Profile → Payments to connect your bank.`;
+  await createNotification(cleanerId, "job_won_complete_payout", jobId, msg, {
+    persistTitle: `Finish Stripe setup · Job #${jobId}`,
+    persistBody: msg,
+  });
 }
 
 async function requireSession() {
@@ -535,12 +560,13 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
 
     const { data: job } = await supabase
       .from("jobs")
-      .select("id, lister_id, winner_id, dispute_mediation_status")
+      .select("id, lister_id, winner_id, listing_id, dispute_mediation_status")
       .eq("id", jobId)
       .maybeSingle();
     const j = job as {
       lister_id?: string;
       winner_id?: string | null;
+      listing_id?: string | null;
       dispute_mediation_status?: string | null;
     } | null;
     if (!j) return { error: "Job not found." };
@@ -642,16 +668,6 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
           .eq("id", jobId);
       }
 
-      await insertDisputeThreadEntry({
-        jobId,
-        authorUserId: null,
-        authorRole: "system",
-        body:
-          additionalCents > 0
-            ? "Mediation proposal accepted by both parties. The lister must pay the approved additional amount to continue; the job stays open until that payment completes."
-            : "Mediation proposal accepted by both parties. Job completed per admin settlement.",
-      });
-
       const mediationJobPatch = {
         proposed_refund_amount: refundCents,
         counter_proposal_amount: null,
@@ -663,12 +679,19 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
        * logged-in lister. Do not set `status: completed` before top-up — that blocks checkout.
        */
       if (additionalCents > 0) {
+        await insertDisputeThreadEntry({
+          jobId,
+          authorUserId: null,
+          authorRole: "system",
+          body: "Mediation proposal accepted by both parties. The lister must pay the approved additional amount to continue; the job stays open until that payment completes.",
+        });
         await (admin as any)
           .from("jobs")
           .update({
             dispute_mediation_status: "accepted",
             status: "completed_pending_approval",
             dispute_status: "completed",
+            dispute_resolution: "mediation",
             resolution_type: "mediation",
             resolution_at: new Date().toISOString(),
             ...mediationJobPatch,
@@ -718,6 +741,7 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
         revalidatePath(`/jobs/${jobId}`);
         revalidatePath("/disputes");
         revalidatePath("/admin/disputes");
+        revalidatePath(`/admin/disputes/${jobId}`);
         return {
           ok: true,
           success:
@@ -726,27 +750,123 @@ export async function respondToMediationProposal(formData: FormData): Promise<Di
         };
       }
 
+      const nowIso = new Date().toISOString();
+      const releaseResult = await releaseJobFunds(jobId, { supabase: admin });
+      if (!releaseResult.ok) {
+        await maybeNotifyCleanerCollaborativeMediationReleaseFailed(
+          j.winner_id,
+          jobId,
+          releaseResult.error ?? ""
+        );
+        return {
+          error:
+            releaseResult.error ??
+            "Escrow could not be released to the cleaner. Mediation was not finalized — check Stripe and Connect setup.",
+        };
+      }
+
+      const refundPart =
+        refundCents >= 1
+          ? `$${(refundCents / 100).toFixed(2)} AUD was refunded to the lister (per the mediation proposal). `
+          : "";
+      await insertDisputeThreadEntry({
+        jobId,
+        authorUserId: null,
+        authorRole: "system",
+        body: `Mediation proposal accepted by both parties. ${refundPart}Remaining escrow has been released to the cleaner. The job is complete and the dispute is closed.`,
+      });
+
       await (admin as any)
         .from("jobs")
         .update({
           dispute_mediation_status: "accepted",
           status: "completed",
+          completed_at: nowIso,
           dispute_status: "completed",
+          dispute_resolution: "mediation",
           resolution_type: "mediation",
-          resolution_at: new Date().toISOString(),
+          resolution_at: nowIso,
           ...mediationJobPatch,
         })
         .eq("id", jobId);
 
+      const listingId = trimText(j.listing_id);
+      if (listingId) {
+        await (admin as any).from("listings").update({ status: "ended" } as never).eq("id", listingId);
+      }
+
+      const listerId = trimText(j.lister_id);
+      const winnerId = trimText(j.winner_id);
+      const listerMsg =
+        refundCents >= 1
+          ? `You and the cleaner accepted the mediation proposal. $${(refundCents / 100).toFixed(2)} has been refunded to you; the remaining payment was released to the cleaner. The dispute is closed.`
+          : `You and the cleaner accepted the mediation proposal. Payment was released to the cleaner. The dispute is closed.`;
+      const cleanerMsg =
+        refundCents >= 1
+          ? `You and the lister accepted the mediation proposal. A partial refund was issued to the lister; your payout for the remaining balance has been released. The dispute is closed.`
+          : `You and the lister accepted the mediation proposal. Your payout has been released. The dispute is closed.`;
+
+      if (listerId) {
+        await createNotification(listerId, "dispute_resolved", jobId, listerMsg);
+        await sendDisputeActivityEmail({
+          jobId,
+          toUserId: listerId,
+          subject: `[Bond Back] Job #${jobId}: dispute closed — mediation accepted`,
+          htmlBody: `<p>${escapeHtmlForEmail(listerMsg)}</p>${disputeHubLinksHtml(jobId)}`,
+        });
+      }
+      if (winnerId) {
+        await createNotification(winnerId, "dispute_resolved", jobId, cleanerMsg);
+        await sendDisputeActivityEmail({
+          jobId,
+          toUserId: winnerId,
+          subject: `[Bond Back] Job #${jobId}: dispute closed — payout released`,
+          htmlBody: `<p>${escapeHtmlForEmail(cleanerMsg)}</p>${disputeHubLinksHtml(jobId)}`,
+        });
+      }
+
+      if (refundCents >= 1 && listerId) {
+        let jobTitle: string | null = null;
+        if (listingId) {
+          const { data: listing } = await (admin as any)
+            .from("listings")
+            .select("title")
+            .eq("id", listingId)
+            .maybeSingle();
+          jobTitle = (listing as { title?: string } | null)?.title ?? null;
+        }
+        await sendRefundReceiptEmail({
+          jobId,
+          listerId,
+          refundCents,
+          jobTitle,
+          dateIso: nowIso,
+        });
+      }
+
+      if (winnerId) await recomputeVerificationBadgesForUser(winnerId);
+      if (listerId) await recomputeVerificationBadgesForUser(listerId);
+      try {
+        await applyReferralRewardsForCompletedJob(jobId);
+      } catch {
+        // non-fatal
+      }
+
       revalidatePath(`/jobs/${jobId}`);
       revalidatePath("/disputes");
       revalidatePath("/admin/disputes");
+      revalidatePath(`/admin/disputes/${jobId}`);
       revalidatePath("/my-listings");
       revalidatePath("/lister/dashboard");
       revalidatePath("/cleaner/dashboard");
+      revalidatePath("/dashboard");
+      revalidatePath("/earnings");
       return {
         ok: true,
-        success: "Mediation accepted. The job has been updated.",
+        success:
+          refundCents >= 1
+            ? "Mediation accepted. Refund processed, escrow released to the cleaner, and the dispute is closed."
+            : "Mediation accepted. Escrow released to the cleaner and the dispute is closed.",
         mediationVoteOutcome: "completed",
       };
     }
