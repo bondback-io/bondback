@@ -175,7 +175,11 @@ export async function getPaymentsOverview(): Promise<PaymentsOverview> {
 
   jobs.forEach((job) => {
     const listing = listingMap.get(String(job.listing_id));
-    const feePercent = resolvePlatformFeePercent(listing?.platform_fee_percentage, settings);
+    const feePercent = resolvePlatformFeePercent(
+      listing?.platform_fee_percentage,
+      settings,
+      listing?.service_type ?? null
+    );
     const amountCents = jobAmountCents(job, listing);
     if (amountCents <= 0) return;
 
@@ -220,7 +224,11 @@ export async function getPaymentsOverview(): Promise<PaymentsOverview> {
     .map((job) => {
       const listing = listingMap.get(String(job.listing_id));
       const amountCents = jobAmountCents(job, listing);
-      const feePercent = resolvePlatformFeePercent(listing?.platform_fee_percentage, settings);
+      const feePercent = resolvePlatformFeePercent(
+        listing?.platform_fee_percentage,
+        settings,
+        listing?.service_type ?? null
+      );
       const feeCv = feeCents(amountCents, feePercent);
       const payoutCents = amountCents - feeCv;
       return { job, amountCents, feeCents: feeCv, payoutCents };
@@ -236,7 +244,11 @@ export async function getPaymentsOverview(): Promise<PaymentsOverview> {
 
     const listing = listingMap.get(String(job.listing_id));
     const amountCents = jobAmountCents(job, listing);
-    const feePercent = resolvePlatformFeePercent(listing?.platform_fee_percentage, settings);
+    const feePercent = resolvePlatformFeePercent(
+      listing?.platform_fee_percentage,
+      settings,
+      listing?.service_type ?? null
+    );
     const platformFeeCents = feeCents(amountCents, feePercent);
     if (platformFeeCents <= 0 && amountCents <= 0) continue;
 
@@ -264,7 +276,11 @@ export async function getPaymentsOverview(): Promise<PaymentsOverview> {
   let potentialLiveListingsFeeCents = 0;
 
   for (const listing of liveListings) {
-    const feePercent = resolvePlatformFeePercent(listing.platform_fee_percentage, settings);
+    const feePercent = resolvePlatformFeePercent(
+      listing.platform_fee_percentage,
+      settings,
+      listing.service_type ?? null
+    );
     const estimatedJobAmountCents =
       (listing.current_lowest_bid_cents ?? 0) > 0
         ? (listing.current_lowest_bid_cents as number)
@@ -296,7 +312,11 @@ export async function getPaymentsOverview(): Promise<PaymentsOverview> {
 
     const listing = listingMap.get(String(job.listing_id));
     const amountCents = jobAmountCents(job, listing);
-    const feePercent = resolvePlatformFeePercent(listing?.platform_fee_percentage, settings);
+    const feePercent = resolvePlatformFeePercent(
+      listing?.platform_fee_percentage,
+      settings,
+      listing?.service_type ?? null
+    );
     if (amountCents <= 0) continue;
 
     const estFee = feeCents(amountCents, feePercent);

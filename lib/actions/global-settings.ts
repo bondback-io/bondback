@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/admin";
 import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
 import { DEFAULT_RESEND_FROM } from "@/lib/email-default-from";
+import { SERVICE_TYPES } from "@/lib/service-types";
 
 /** When to send the email. instant = immediately; 5m, 1h, 1d etc. = delayed (requires worker); on_dob = on user's date of birth (birthday template only). */
 export type SendAfterOption = "instant" | "5m" | "15m" | "30m" | "1h" | "2h" | "1d" | "2d" | "3d" | "5d" | "7d" | "10d" | "14d" | "21d" | "30d" | "60d" | "on_dob";
@@ -23,6 +24,7 @@ type GlobalSettingsRow = {
   id: number;
   platform_fee_percentage?: number;
   fee_percentage?: number;
+  platform_fee_percentage_by_service_type?: unknown;
   require_abn?: boolean;
   min_profile_completion?: number;
   auto_release_hours?: number;
@@ -112,6 +114,20 @@ type GlobalSettingsRow = {
 /** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
 function normalizeRequireAbn(v: unknown): boolean {
   return v === true || v === "true" || v === 1;
+}
+
+function sanitizePlatformFeeByServiceTypeForDb(
+  input: Partial<Record<string, number>> | null | undefined
+): Record<string, number> {
+  if (!input || typeof input !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const k of SERVICE_TYPES) {
+    const v = input[k];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100) {
+      out[k] = Math.round(v * 100) / 100;
+    }
+  }
+  return out;
 }
 
 /**
@@ -287,6 +303,11 @@ export async function getEmailTemplateOverrides(): Promise<{
 
 export type SaveGlobalSettingsInput = {
   feePercentage: number;
+  /**
+   * Optional Service Fee % per `listings.service_type`. Only keys 0–100 are stored;
+   * omitted service types use `feePercentage`.
+   */
+  platformFeePercentageByServiceType?: Partial<Record<string, number>> | null;
   requireAbn: boolean;
   requireStripeConnectBeforeBidding?: boolean;
   /** Default ON: block releasing escrow until cleaner finishes Connect onboarding. */
@@ -377,6 +398,9 @@ export async function saveGlobalSettings(
     id: 1,
     platform_fee_percentage: data.feePercentage,
     fee_percentage: data.feePercentage,
+    platform_fee_percentage_by_service_type: sanitizePlatformFeeByServiceTypeForDb(
+      data.platformFeePercentageByServiceType
+    ),
     require_abn: data.requireAbn,
     require_stripe_connect_before_bidding: data.requireStripeConnectBeforeBidding ?? false,
     require_stripe_connect_before_payment_release: data.requireStripeConnectBeforePaymentRelease !== false,

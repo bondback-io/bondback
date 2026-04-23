@@ -202,7 +202,8 @@ export default async function ListingDetailPage({
     (settings as { stripe_test_mode?: boolean } | null)?.stripe_test_mode === true;
   const feePercentage = resolvePlatformFeePercent(
     listingRow.platform_fee_percentage,
-    settings
+    settings,
+    listingRow.service_type ?? null
   );
   const jobAgreed = jobRow?.agreed_amount_cents;
   const listingBuyNow = listingRow.buy_now_cents;

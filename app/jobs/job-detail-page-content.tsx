@@ -237,7 +237,8 @@ export async function JobDetailPageContent({
   const autoReleaseHours = (settings?.auto_release_hours ?? 48) as number;
   const feePercentage = resolvePlatformFeePercent(
     listingRow.platform_fee_percentage,
-    settings
+    settings,
+    listingRow.service_type ?? null
   );
 
   const jobId = job?.id ?? null;

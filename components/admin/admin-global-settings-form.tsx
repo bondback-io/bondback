@@ -35,6 +35,11 @@ import { sendNoBidListingRemindersManual } from "@/lib/actions/sms-notifications
 import { NotificationCronStatusButton } from "@/components/admin/notification-cron-status-dialog";
 import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
 import { getListingAddonLabel } from "@/lib/listing-addon-prices";
+import {
+  SERVICE_TYPES,
+  serviceTypeLabel,
+  type ServiceTypeKey,
+} from "@/lib/service-types";
 
 const SMS_TYPE_CONTROLS: { key: string; label: string }[] = [
   { key: "new_bid", label: "New bid" },
@@ -55,6 +60,17 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [feePercentage, setFeePercentage] = React.useState(
     initial?.feePercentage ?? 12
   );
+  const [feePctByService, setFeePctByService] = React.useState<
+    Record<ServiceTypeKey, string>
+  >(() => {
+    const init = initial?.platformFeePercentageByServiceType ?? {};
+    const o = {} as Record<ServiceTypeKey, string>;
+    for (const k of SERVICE_TYPES) {
+      const v = init[k];
+      o[k] = typeof v === "number" && Number.isFinite(v) ? String(v) : "";
+    }
+    return o;
+  });
   const [requireAbn, setRequireAbn] = React.useState(
     initial?.requireAbn ?? true
   );
@@ -285,8 +301,18 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
     e.preventDefault();
     setError(null);
 
+    const platformFeePercentageByServiceType: Partial<Record<ServiceTypeKey, number>> = {};
+    for (const k of SERVICE_TYPES) {
+      const raw = (feePctByService[k] ?? "").trim();
+      if (raw === "") continue;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0 || n > 100) continue;
+      platformFeePercentageByServiceType[k] = Math.round(n * 100) / 100;
+    }
+
     const payload: SaveGlobalSettingsInput = {
       feePercentage: Math.max(0, Math.min(30, Number(feePercentage) || 0)),
+      platformFeePercentageByServiceType,
       requireAbn,
       requireStripeConnectBeforeBidding,
       requireStripeConnectBeforePaymentRelease,
@@ -1104,6 +1130,43 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             <p className="text-[11px] text-muted-foreground dark:text-gray-400">
               Charged to the lister on top of the job price. Cleaner receives the full bid amount.
             </p>
+            <div className="mt-4 space-y-3 border-t border-border pt-4 dark:border-gray-800">
+              <p className="text-[11px] font-medium text-foreground dark:text-gray-200">
+                By service type (optional)
+              </p>
+              <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+                Leave blank to use the default rate above. Used when resolving fees from global settings for that
+                service type. Each listing still stores its own % snapshot when it is created.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {SERVICE_TYPES.map((k) => (
+                  <div key={k} className="flex items-center justify-between gap-2">
+                    <Label
+                      htmlFor={`fee-svc-${k}`}
+                      className="max-w-[60%] text-[11px] font-normal leading-tight text-muted-foreground dark:text-gray-400"
+                    >
+                      {serviceTypeLabel(k)}
+                    </Label>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Input
+                        id={`fee-svc-${k}`}
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                        placeholder="—"
+                        value={feePctByService[k]}
+                        onChange={(e) =>
+                          setFeePctByService((prev) => ({ ...prev, [k]: e.target.value }))
+                        }
+                        className="h-8 w-[4.5rem] text-right text-xs dark:bg-gray-900 dark:border-gray-700"
+                      />
+                      <span className="text-[10px] text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
 

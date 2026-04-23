@@ -124,6 +124,7 @@ import {
   recurringFrequencyMultiplier,
   recurringFrequencyShortLabel,
   serviceTypeLabel,
+  type ServiceTypeKey,
 } from "@/lib/service-types";
 
 const listingAddonZodEnum = z.enum(
@@ -339,6 +340,8 @@ export type NewListingFormProps = {
   listerSuburb: string;
   listerPostcode?: string | null;
   feePercentage?: number;
+  /** Optional admin overrides per service type; missing keys use `feePercentage`. */
+  feePercentageByService?: Partial<Record<ServiceTypeKey, number>>;
   pricingModifiers: PricingModifiersConfig;
   /** When true (admin global setting), starting price may be below $100 for live payment tests. */
   allowLowAmountListings?: boolean;
@@ -374,6 +377,7 @@ export function NewListingForm({
   listerSuburb,
   listerPostcode = "",
   feePercentage = 12,
+  feePercentageByService,
   pricingModifiers,
   allowLowAmountListings = false,
   allowTwoMinuteAuctionTest = false,
@@ -470,6 +474,14 @@ export function NewListingForm({
   });
 
   const serviceTypeWatched = form.watch("serviceType");
+  const effectiveFeePercent = useMemo(() => {
+    const hit = feePercentageByService?.[serviceTypeWatched as ServiceTypeKey];
+    if (typeof hit === "number" && Number.isFinite(hit) && hit >= 0 && hit <= 100) {
+      return hit;
+    }
+    return feePercentage;
+  }, [feePercentageByService, serviceTypeWatched, feePercentage]);
+
   useEffect(() => {
     if (serviceTypeWatched !== "recurring_house_cleaning") {
       form.setValue("recurringFrequency", undefined, { shouldValidate: true });
@@ -490,9 +502,9 @@ export function NewListingForm({
     () =>
       platformFeeCents(
         typeof reservePriceWatched === "number" && reservePriceWatched > 0 ? reservePriceWatched : 0,
-        feePercentage
+        effectiveFeePercent
       ),
-    [reservePriceWatched, feePercentage]
+    [reservePriceWatched, effectiveFeePercent]
   );
   const buyNowNum =
     typeof buyNowPriceWatched === "string" && buyNowPriceWatched.trim() !== ""
@@ -504,9 +516,9 @@ export function NewListingForm({
     () =>
       platformFeeCents(
         Number.isFinite(buyNowNum) && buyNowNum > 0 ? buyNowNum : 0,
-        feePercentage
+        effectiveFeePercent
       ),
-    [buyNowNum, feePercentage]
+    [buyNowNum, effectiveFeePercent]
   );
   const estimatedPrice = useMemo(
     () => calculateEstimatedPrice(watchedValues, pricingModifiers),
@@ -765,6 +777,16 @@ export function NewListingForm({
       setPublishProgress(12);
       await new Promise((r) => setTimeout(r, 120));
 
+      const svcKey = values.serviceType as ServiceTypeKey;
+      const mappedFee = feePercentageByService?.[svcKey];
+      const platformFeeSnap =
+        typeof mappedFee === "number" &&
+        Number.isFinite(mappedFee) &&
+        mappedFee >= 0 &&
+        mappedFee <= 100
+          ? mappedFee
+          : feePercentage;
+
       const row = buildListingInsertRow({
         lister_id: listerId,
         title,
@@ -791,7 +813,7 @@ export function NewListingForm({
         status: "live",
         end_time: endTime,
         end_date: endTime.slice(0, 10),
-        platform_fee_percentage: Math.max(0, Math.min(30, Number(feePercentage) || 12)),
+        platform_fee_percentage: Math.max(0, Math.min(30, platformFeeSnap)),
         preferred_dates: moveOutDateStr ? [moveOutDateStr] : null,
         property_condition: values.propertyCondition,
         property_levels: values.propertyLevels,
@@ -2105,8 +2127,8 @@ export function NewListingForm({
                     </div>
                   </dl>
                   <p className="mt-2 text-[11px] text-muted-foreground dark:text-gray-500">
-                    Service Fee stays {feePercentage}% for all service types. Your starting price below may match or
-                    differ from this suggestion.
+                    Service Fee for this job type is {effectiveFeePercent}% (admin default or per-type override). Your
+                    starting price below may match or differ from this suggestion.
                   </p>
                 </div>
 
@@ -2192,7 +2214,7 @@ export function NewListingForm({
                           </div>
                           <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                             <dt className="text-muted-foreground dark:text-gray-400">
-                              Service Fee ({feePercentage}%)
+                              Service Fee ({effectiveFeePercent}%)
                             </dt>
                             <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                               {formatAudFromCents(reserveFeeCents)}
@@ -2309,7 +2331,7 @@ export function NewListingForm({
                         </div>
                         <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                           <dt className="text-muted-foreground dark:text-gray-400">
-                            Service Fee ({feePercentage}%)
+                            Service Fee ({effectiveFeePercent}%)
                           </dt>
                           <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                             {formatAudFromCents(buyNowFeeCents)}

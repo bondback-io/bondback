@@ -103,7 +103,8 @@ export async function GET(
   const stripeTestMode = (settings as { stripe_test_mode?: boolean } | null)?.stripe_test_mode === true;
   const feePercentage = resolvePlatformFeePercent(
     (listing as { platform_fee_percentage?: number | null }).platform_fee_percentage,
-    settings
+    settings,
+    (listing as { service_type?: string | null }).service_type ?? null
   );
 
   const job = jobRow as Record<string, unknown> | null;

@@ -11,6 +11,7 @@ import {
   DEFAULT_PRICING_MODIFIERS,
   normalizeBaseRatePerBedroomFromGlobal,
 } from "@/lib/pricing-modifiers";
+import { parsePlatformFeePercentByServiceType } from "@/lib/platform-fee";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 async function requireAdmin() {
@@ -51,6 +52,10 @@ export default async function AdminGlobalSettingsPage() {
     ? {
         feePercentage:
           (existing.platform_fee_percentage ?? existing.fee_percentage) ?? 12,
+        platformFeePercentageByServiceType: parsePlatformFeePercentByServiceType(
+          (existing as { platform_fee_percentage_by_service_type?: unknown })
+            .platform_fee_percentage_by_service_type
+        ),
         requireAbn: existing.require_abn ?? true,
         requireStripeConnectBeforeBidding: existing.require_stripe_connect_before_bidding ?? false,
         requireStripeConnectBeforePaymentRelease:

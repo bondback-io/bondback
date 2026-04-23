@@ -816,7 +816,9 @@ export async function createJobCheckoutSession(
 
   const { data: listing } = await supabase
     .from("listings")
-    .select("id, title, suburb, postcode, buy_now_cents, reserve_cents, platform_fee_percentage")
+    .select(
+      "id, title, suburb, postcode, buy_now_cents, reserve_cents, platform_fee_percentage, service_type"
+    )
     .eq("id", row.listing_id)
     .maybeSingle();
 
@@ -843,7 +845,8 @@ export async function createJobCheckoutSession(
   const settings = await getGlobalSettings();
   const feePercent = resolvePlatformFeePercent(
     (listing as { platform_fee_percentage?: number | null }).platform_fee_percentage,
-    settings
+    settings,
+    (listing as { service_type?: string | null }).service_type ?? null
   );
 
   const { data: listerProfile } = await supabase
@@ -2787,9 +2790,9 @@ async function netRefundableCentsForPaymentIntent(
     const ch = await stripe.charges.retrieve(id);
     net += Math.max(0, (ch.amount ?? 0) - (ch.amount_refunded ?? 0));
   }
-  if (net > 0) return net;
-
-  return Math.max(0, Number(pi.amount_received ?? 0));
+  // Never fall back to `amount_received` — it does not decrease when refunds are issued and causes
+  // executeRefund to ask Stripe for a refund on an already-refunded charge ("already been refunded").
+  return net;
 }
 
 /**
@@ -2841,7 +2844,6 @@ export async function executeRefund(
     (await fetchPlatformFeePercentForListing(supabase, j.listing_id, settings)) / 100;
   const feeCents = Math.round(agreedCents * feePct);
   const chargeTotalCents = agreedCents + feeCents;
-  let remaining = Math.min(refundCents, Math.max(1, chargeTotalCents));
 
   let stripe;
   try {
@@ -2851,6 +2853,16 @@ export async function executeRefund(
   }
 
   try {
+    let totalRefundableAcrossLegs = 0;
+    for (const leg of legs) {
+      totalRefundableAcrossLegs += await netRefundableCentsForPaymentIntent(
+        stripe,
+        leg.paymentIntentId
+      );
+    }
+    /** Cap to what Stripe can still return; never use agreed+fee alone (can exceed charge after prior refunds). */
+    let remaining = Math.min(refundCents, totalRefundableAcrossLegs);
+
     for (const leg of legs) {
       if (remaining < 1) break;
       const piId = leg.paymentIntentId;
@@ -2858,16 +2870,45 @@ export async function executeRefund(
       if (refundableOnLeg < 1) continue;
       const slice = Math.min(remaining, refundableOnLeg);
       if (slice < 1) continue;
-      await stripe.refunds.create({
-        payment_intent: piId,
-        amount: slice,
-        reason: "requested_by_customer",
-        metadata: { job_id: String(jobId), leg: String(leg.topUpIndex) },
-      });
+      const idemKey = `bondback:refund:job:${jobId}:leg:${leg.topUpIndex}:amt:${slice}`;
+      try {
+        await stripe.refunds.create(
+          {
+            payment_intent: piId,
+            amount: slice,
+            reason: "requested_by_customer",
+            metadata: { job_id: String(jobId), leg: String(leg.topUpIndex) },
+          },
+          { idempotencyKey: idemKey.slice(0, 255) }
+        );
+      } catch (refundErr) {
+        const re = refundErr as { code?: string; message?: string; type?: string };
+        const msg = String(re.message ?? "");
+        const code = String(re.code ?? "");
+        const already =
+          code === "charge_already_refunded" ||
+          /already been refunded/i.test(msg) ||
+          /already fully refunded/i.test(msg);
+        if (already) {
+          const after = await netRefundableCentsForPaymentIntent(stripe, piId);
+          if (after >= 1) {
+            throw refundErr;
+          }
+          continue;
+        }
+        throw refundErr;
+      }
       remaining -= slice;
     }
 
     if (remaining > 0) {
+      let finalRefundable = 0;
+      for (const leg of legs) {
+        finalRefundable += await netRefundableCentsForPaymentIntent(stripe, leg.paymentIntentId);
+      }
+      if (finalRefundable < 1) {
+        return { ok: true };
+      }
       return {
         ok: false,
         error:
@@ -3108,13 +3149,18 @@ export async function finalizeJobPayment(
     if (row.listing_id) {
       const { data: listing } = await supabase
         .from("listings")
-        .select("title, platform_fee_percentage")
+        .select("title, platform_fee_percentage, service_type")
         .eq("id", row.listing_id)
         .maybeSingle();
-      const lr = listing as { title?: string; platform_fee_percentage?: number | null } | null;
+      const lr = listing as {
+        title?: string;
+        platform_fee_percentage?: number | null;
+        service_type?: string | null;
+      } | null;
       jobTitle = lr?.title ?? null;
       feePct =
-        resolvePlatformFeePercent(lr?.platform_fee_percentage, settings) / 100;
+        resolvePlatformFeePercent(lr?.platform_fee_percentage, settings, lr?.service_type ?? null) /
+        100;
     }
     const feeCents = Math.round(agreedCents * feePct);
     const totalCents = agreedCents + feeCents;
@@ -3290,12 +3336,18 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
       if (job.listing_id) {
         const { data: listing } = await admin
           .from("listings")
-          .select("title, platform_fee_percentage")
+          .select("title, platform_fee_percentage, service_type")
           .eq("id", job.listing_id)
           .maybeSingle();
-        const lr = listing as { title?: string; platform_fee_percentage?: number | null } | null;
+        const lr = listing as {
+          title?: string;
+          platform_fee_percentage?: number | null;
+          service_type?: string | null;
+        } | null;
         jobTitle = lr?.title ?? null;
-        feePct = resolvePlatformFeePercent(lr?.platform_fee_percentage, settings) / 100;
+        feePct =
+          resolvePlatformFeePercent(lr?.platform_fee_percentage, settings, lr?.service_type ?? null) /
+          100;
       }
       const feeCents = Math.round(agreedCents * feePct);
       const totalCents = agreedCents + feeCents;

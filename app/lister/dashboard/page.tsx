@@ -104,6 +104,7 @@ async function ListerDashboardContent() {
     globalSettings?.platform_fee_percentage ??
     globalSettings?.fee_percentage ??
     12;
+  const feeResolveSource = globalSettings ?? feePercentage;
 
   let listings = listingsFetched as ListingRow[];
   const notifications = (notificationsRes.data ?? []) as NotificationRow[];
@@ -291,7 +292,11 @@ async function ListerDashboardContent() {
     const listing = listingMap.get(String(job.listing_id));
     const netSpend = listerNetSettledSpendCents(job, listing?.current_lowest_bid_cents);
     if (netSpend <= 0) return sum;
-    const pct = resolvePlatformFeePercent(listing?.platform_fee_percentage, feePercentage);
+    const pct = resolvePlatformFeePercent(
+      listing?.platform_fee_percentage,
+      feeResolveSource,
+      listing?.service_type ?? null
+    );
     return sum + Math.round((netSpend * pct) / 100);
   }, 0);
 
@@ -419,7 +424,8 @@ async function ListerDashboardContent() {
                 isUrgent,
                 feePercentage: resolvePlatformFeePercent(
                   listing.platform_fee_percentage,
-                  feePercentage
+                  feeResolveSource,
+                  listing.service_type ?? null
                 ),
               };
             })}

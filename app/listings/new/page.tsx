@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { parsePlatformFeePercentByServiceType } from "@/lib/platform-fee";
 import { resolvePricingModifiersFromGlobal } from "@/lib/pricing-modifiers";
 import { NewListingFormLazy } from "./new-listing-form-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,6 +100,10 @@ const NewListingPage = async () => {
       settings.fee_percentage > 0 &&
       settings.fee_percentage) ||
     12;
+  const feePercentageByService = parsePlatformFeePercentByServiceType(
+    (settings as { platform_fee_percentage_by_service_type?: unknown } | null)
+      ?.platform_fee_percentage_by_service_type
+  );
 
   const pricingModifiers = resolvePricingModifiersFromGlobal(
     settings as Record<string, unknown> | null
@@ -114,6 +119,7 @@ const NewListingPage = async () => {
       listerSuburb={profile.suburb ?? undefined}
       listerPostcode={profile.postcode ?? ""}
       feePercentage={feePercentage}
+      feePercentageByService={feePercentageByService}
       pricingModifiers={pricingModifiers}
       allowLowAmountListings={allowLowAmountListings}
       allowTwoMinuteAuctionTest={allowTwoMinuteAuctionTest}
