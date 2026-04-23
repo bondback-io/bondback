@@ -12,6 +12,7 @@ import { AdminDisputePartyEmailForms } from "@/components/admin/admin-dispute-pa
 import { AdminDisputeResolvePanel } from "@/components/admin/admin-dispute-resolve-panel";
 import { AdminDisputeCaseNoteForm } from "@/components/admin/admin-dispute-case-note-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { isAdminDisputeSettlementInactive } from "@/lib/jobs/dispute-hub-helpers";
 
 type Profile = { full_name: string | null; profile_photo_url: string | null };
 
@@ -35,6 +36,12 @@ export function AdminDisputeJobConsole({
     Boolean(job.admin_mediation_requested) ||
     Boolean(job.dispute_escalated) ||
     (String(job.status ?? "") === "in_review" && Number(job.proposed_refund_amount ?? 0) > 0);
+
+  const mediationInactive = isAdminDisputeSettlementInactive({
+    status: job.status != null ? String(job.status) : null,
+    dispute_status: job.dispute_status != null ? String(job.dispute_status) : null,
+    dispute_resolution: job.dispute_resolution != null ? String(job.dispute_resolution) : null,
+  });
 
   return (
     <Card className="border-border dark:border-gray-800 dark:bg-gray-900/60">
@@ -106,7 +113,7 @@ export function AdminDisputeJobConsole({
         </div>
 
         <DisputeJobCaseSummary job={job as DisputeJobCaseJobFields} />
-        {String(job.dispute_mediation_status ?? "") === "awaiting_admin_final" ? (
+        {!mediationInactive && String(job.dispute_mediation_status ?? "") === "awaiting_admin_final" ? (
           <Alert className="border-amber-300/70 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-950/35">
             <AlertDescription className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">
               A party <strong>declined</strong> the mediation proposal. Apply{" "}
@@ -115,7 +122,7 @@ export function AdminDisputeJobConsole({
               approve this final step. You can instead send a new collaborative proposal if that fits the case.
             </AlertDescription>
           </Alert>
-        ) : String(job.dispute_mediation_status ?? "") === "rejected" ? (
+        ) : !mediationInactive && String(job.dispute_mediation_status ?? "") === "rejected" ? (
           <Alert className="border-amber-300/70 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-950/35">
             <AlertDescription className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">
               Mediation shows as <strong>rejected</strong> (older jobs). Use binding settlement or a new proposal as
@@ -135,13 +142,35 @@ export function AdminDisputeJobConsole({
 
         <AdminDisputePartyEmailForms jobId={Number(job.id)} />
 
-        <AdminMediationSettlementPanel
-          jobId={Number(job.id)}
-          agreedAmountCents={agreed}
-          proposedRefundCents={Math.max(0, Number(job.proposed_refund_amount ?? 0))}
-          counterRefundCents={Math.max(0, Number(job.counter_proposal_amount ?? 0))}
-          jobStatus={String(job.status ?? "")}
-        />
+        {mediationInactive ? null : (
+          <AdminMediationSettlementPanel
+            key={`mediation-${String(job.status ?? "")}-${String(job.dispute_status ?? "")}-${String(job.dispute_resolution ?? "")}`}
+            jobId={Number(job.id)}
+            agreedAmountCents={agreed}
+            proposedRefundCents={Math.max(0, Number(job.proposed_refund_amount ?? 0))}
+            counterRefundCents={Math.max(0, Number(job.counter_proposal_amount ?? 0))}
+            jobStatus={String(job.status ?? "")}
+            disputeStatus={job.dispute_status != null ? String(job.dispute_status) : undefined}
+            disputeResolution={job.dispute_resolution != null ? String(job.dispute_resolution) : undefined}
+          />
+        )}
+
+        {mediationInactive ? (
+          <Alert variant="info" className="mt-1">
+            <AlertDescription className="text-xs leading-relaxed">
+              <span className="font-semibold text-foreground">Dispute closed.</span> This case is completed — mediation
+              and binding settlement tools are no longer available. The audit trail above includes the final
+              settlement and notifications.
+              {job.resolution_at ? (
+                <>
+                  {" "}
+                  Resolution recorded:{" "}
+                  <span className="tabular-nums">{new Date(String(job.resolution_at)).toLocaleString()}</span>.
+                </>
+              ) : null}
+            </AlertDescription>
+          </Alert>
+        ) : null}
       </CardContent>
     </Card>
   );

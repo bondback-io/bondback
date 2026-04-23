@@ -12,7 +12,7 @@ import {
   adminSubmitMediationSettlement,
   fetchMediationSettlementAiSuggestion,
 } from "@/lib/actions/admin-jobs";
-import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
+import { isAdminDisputeSettlementInactive } from "@/lib/jobs/dispute-hub-helpers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Sparkles } from "lucide-react";
 
@@ -36,15 +36,22 @@ export function AdminMediationSettlementPanel({
   proposedRefundCents,
   counterRefundCents,
   jobStatus,
+  disputeStatus,
+  disputeResolution,
 }: {
   jobId: number;
   agreedAmountCents: number;
   proposedRefundCents: number;
   counterRefundCents: number;
   jobStatus: string;
+  disputeStatus?: string | null;
+  disputeResolution?: string | null;
 }) {
-  const st = String(jobStatus ?? "").toLowerCase();
-  const isTerminal = st === "completed" || isJobCancelledStatus(st);
+  const isTerminal = isAdminDisputeSettlementInactive({
+    status: jobStatus,
+    dispute_status: disputeStatus ?? null,
+    dispute_resolution: disputeResolution ?? null,
+  });
 
   const [refundAud, setRefundAud] = useState(() => {
     const c = Math.max(proposedRefundCents, counterRefundCents);
@@ -69,7 +76,7 @@ export function AdminMediationSettlementPanel({
   if (isTerminal) {
     return (
       <p className="text-xs text-muted-foreground dark:text-gray-500">
-        Mediation tools are hidden because this job is already completed or cancelled.
+        Mediation settlement is not available — this dispute case is closed or the job is no longer active.
       </p>
     );
   }

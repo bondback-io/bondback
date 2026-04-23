@@ -46,6 +46,25 @@ export function isDisputeHubCaseClosed(job: {
   return false;
 }
 
+/**
+ * Admin dispute console: hide mediation settlement tools when the case is finished
+ * (job terminal, dispute archived, or binding mediation outcome recorded).
+ */
+export function isAdminDisputeSettlementInactive(job: {
+  status?: string | null;
+  dispute_status?: string | null;
+  dispute_resolution?: string | null;
+}): boolean {
+  const st = String(job.status ?? "").trim().toLowerCase();
+  if (st === "completed" || isJobCancelledStatus(st)) return true;
+  const ds = String(job.dispute_status ?? "").trim().toLowerCase();
+  /** `resolved` alone can mean return_to_review (job still active) — only terminal dispute rows hide tools. */
+  if (ds === "completed" || ds === "cancelled") return true;
+  const dr = String(job.dispute_resolution ?? "").trim().toLowerCase();
+  if (dr === "admin_mediation_final") return true;
+  return false;
+}
+
 /** Fields to set on jobs when escrow pays out and an open dispute case should be archived. */
 const SETTLED_DISPUTE_RESOLUTIONS = new Set([
   "partial_refund_accepted",

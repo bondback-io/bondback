@@ -338,6 +338,7 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
     });
 
     revalidatePath("/admin/disputes");
+    revalidatePath(`/admin/disputes/${numericJobId}`);
     revalidatePath("/disputes");
     revalidatePath("/dashboard");
     revalidatePath("/lister/dashboard");
@@ -434,6 +435,7 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/disputes");
+  revalidatePath(`/admin/disputes/${numericJobId}`);
   revalidatePath("/disputes");
   revalidatePath("/dashboard");
   revalidatePath("/lister/dashboard");
@@ -1188,6 +1190,7 @@ export async function adminSubmitMediationSettlement(
     });
 
     revalidatePath("/admin/disputes");
+    revalidatePath(`/admin/disputes/${jobId}`);
     revalidatePath("/disputes");
     revalidatePath("/dashboard");
     revalidatePath("/lister/dashboard");
@@ -1230,6 +1233,7 @@ export async function adminSubmitMediationSettlement(
   });
 
   revalidatePath("/admin/disputes");
+  revalidatePath(`/admin/disputes/${jobId}`);
   revalidatePath("/disputes");
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/dashboard");
