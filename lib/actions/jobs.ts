@@ -2750,22 +2750,45 @@ export const captureAndTransfer = releaseJobFunds;
 export type ExecuteRefundResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Remaining lister-refundable balance for a PaymentIntent (after prior refunds on the charge).
- * `amount_received` alone is wrong here: it does not decrease when refunds are issued.
+ * Net refundable cents for a PaymentIntent: sum of (charge.amount − charge.amount_refunded) on every
+ * charge for this PI. Always re-fetches each Charge by id (expanded PI payloads can omit or stale fields).
+ * Falls back to `charges.list({ payment_intent })` when `latest_charge` is missing, then `amount_received`
+ * only as a last resort (does not decrease after refunds — avoid when possible).
  */
-async function refundableCentsForLoadedPaymentIntent(
+async function netRefundableCentsForPaymentIntent(
   stripe: Stripe,
-  pi: Stripe.PaymentIntent
+  piId: string
 ): Promise<number> {
+  let pi = await stripe.paymentIntents.retrieve(piId, { expand: ["latest_charge"] });
+  if (pi.status === "requires_capture") {
+    await stripe.paymentIntents.capture(piId);
+    pi = await stripe.paymentIntents.retrieve(piId, { expand: ["latest_charge"] });
+  }
+
+  const chargeIds = new Set<string>();
+  const addChargeId = (id: string | null | undefined) => {
+    const t = trimStr(id);
+    if (t) chargeIds.add(t);
+  };
+
   const lc = pi.latest_charge;
-  if (lc && typeof lc === "object") {
-    const ch = lc as Stripe.Charge;
-    return Math.max(0, (ch.amount ?? 0) - (ch.amount_refunded ?? 0));
+  if (typeof lc === "string") addChargeId(lc);
+  else if (lc && typeof lc === "object" && "id" in lc) {
+    addChargeId(String((lc as { id?: string }).id ?? ""));
   }
-  if (typeof lc === "string" && lc.length > 0) {
-    const ch = await stripe.charges.retrieve(lc);
-    return Math.max(0, (ch.amount ?? 0) - (ch.amount_refunded ?? 0));
+
+  if (chargeIds.size === 0) {
+    const listed = await stripe.charges.list({ payment_intent: piId, limit: 25 });
+    for (const ch of listed.data) addChargeId(ch.id);
   }
+
+  let net = 0;
+  for (const id of chargeIds) {
+    const ch = await stripe.charges.retrieve(id);
+    net += Math.max(0, (ch.amount ?? 0) - (ch.amount_refunded ?? 0));
+  }
+  if (net > 0) return net;
+
   return Math.max(0, Number(pi.amount_received ?? 0));
 }
 
@@ -2831,12 +2854,7 @@ export async function executeRefund(
     for (const leg of legs) {
       if (remaining < 1) break;
       const piId = leg.paymentIntentId;
-      let pi = await stripe.paymentIntents.retrieve(piId, { expand: ["latest_charge"] });
-      if (pi.status === "requires_capture") {
-        await stripe.paymentIntents.capture(piId);
-        pi = await stripe.paymentIntents.retrieve(piId, { expand: ["latest_charge"] });
-      }
-      const refundableOnLeg = await refundableCentsForLoadedPaymentIntent(stripe, pi);
+      const refundableOnLeg = await netRefundableCentsForPaymentIntent(stripe, piId);
       if (refundableOnLeg < 1) continue;
       const slice = Math.min(remaining, refundableOnLeg);
       if (slice < 1) continue;

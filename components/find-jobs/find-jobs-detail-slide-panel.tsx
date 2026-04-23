@@ -24,6 +24,11 @@ import {
   recurringFrequencyShortLabel,
   serviceTypeLabel,
 } from "@/lib/service-types";
+import { cn } from "@/lib/utils";
+
+/** Shared surface treatment: mobile bottom sheet + desktop map overlay. */
+export const FIND_JOBS_DETAIL_SURFACE_CLASS =
+  "rounded-t-2xl border-t border-border bg-background shadow-[0_-8px_30px_rgba(0,0,0,0.12)] dark:border-gray-800 dark:bg-gray-950 dark:shadow-[0_-8px_30px_rgba(0,0,0,0.25)]";
 
 export type FindJobsDetailPanelBodyProps = {
   listing: ListingRow;

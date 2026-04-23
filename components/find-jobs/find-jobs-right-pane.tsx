@@ -5,7 +5,10 @@ import dynamic from "next/dynamic";
 import { motion, useReducedMotion } from "framer-motion";
 import { useFindJobsMap } from "@/components/find-jobs/find-jobs-map-context";
 import { FindJobsMapPaneSkeleton } from "@/components/find-jobs/find-jobs-map-skeleton";
-import { FindJobsDetailPanelBody } from "@/components/find-jobs/find-jobs-detail-slide-panel";
+import {
+  FindJobsDetailPanelBody,
+  FIND_JOBS_DETAIL_SURFACE_CLASS,
+} from "@/components/find-jobs/find-jobs-detail-slide-panel";
 import { useFindJobsDesktopDetailOverlay } from "@/components/find-jobs/use-find-jobs-desktop-detail";
 import { cn } from "@/lib/utils";
 
@@ -53,10 +56,13 @@ export function FindJobsRightPane({ centerLat, centerLon, radiusKm }: FindJobsRi
       {showDetailOverlay && detailListing ? (
         <motion.div
           key={`fj-detail-${detailListing.id}`}
-          initial={reduceMotion ? false : { opacity: 0, x: 16 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute inset-0 z-10 flex min-h-0 flex-col overflow-hidden bg-background"
+          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          className={cn(
+            "absolute inset-0 z-10 flex min-h-0 flex-col overflow-hidden",
+            FIND_JOBS_DETAIL_SURFACE_CLASS
+          )}
         >
           <FindJobsDetailPanelBody
             listing={detailListing}
