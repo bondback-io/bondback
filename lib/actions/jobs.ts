@@ -2965,7 +2965,13 @@ export async function processAutoDisputeEscalation(): Promise<ProcessAutoDispute
 
     const { error: updateErr } = await admin
       .from("jobs")
-      .update({ status: "in_review", dispute_status: "in_review" } as Partial<JobRow> as never)
+      .update({
+        status: "in_review",
+        dispute_status: "in_review",
+        dispute_escalated: true,
+        admin_mediation_requested: true,
+        admin_mediation_requested_at: nowIso,
+      } as Partial<JobRow> as never)
       .eq("id", job.id);
     if (updateErr) {
       errors.push(`Job ${job.id}: ${updateErr.message}`);
@@ -3584,6 +3590,7 @@ export async function rejectCounterOfferByLister(jobId: number): Promise<RejectC
   if (session.user.id !== j.lister_id) return { ok: false, error: "Only the lister can decline this offer." };
   if ((j.counter_proposal_amount ?? 0) < 1) return { ok: false, error: "There is no active counter-offer to decline." };
 
+  const nowIsoLister = new Date().toISOString();
   const { error: updateError } = await supabase
     .from("jobs")
     .update({
@@ -3591,6 +3598,10 @@ export async function rejectCounterOfferByLister(jobId: number): Promise<RejectC
       counter_proposal_amount: null,
       dispute_status: "in_review",
       dispute_escalated: true,
+      admin_mediation_requested: true,
+      admin_mediation_requested_at: nowIsoLister,
+      dispute_mediation_status: "requested",
+      mediation_last_activity_at: nowIsoLister,
     } as Partial<JobRow> as never)
     .eq("id", jobId);
 
@@ -3727,20 +3738,37 @@ export async function rejectRefund(jobId: number): Promise<RejectRefundResult> {
 
   const { data: job, error: fetchError } = await supabase
     .from("jobs")
-    .select("id, lister_id, winner_id, status, dispute_opened_by")
+    .select("id, lister_id, winner_id, status, dispute_opened_by, proposed_refund_amount")
     .eq("id", jobId)
     .maybeSingle();
 
   if (fetchError || !job) return { ok: false, error: "Job not found." };
-  const j = job as { lister_id: string; winner_id: string | null; status: string; dispute_opened_by?: string };
+  const j = job as {
+    lister_id: string;
+    winner_id: string | null;
+    status: string;
+    dispute_opened_by?: string;
+    proposed_refund_amount?: number | null;
+  };
   if (j.status !== "dispute_negotiating" && j.status !== "disputed") {
     return { ok: false, error: "This job is not in refund negotiation." };
   }
   if (session.user.id !== j.winner_id) return { ok: false, error: "Only the cleaner can reject the refund proposal." };
 
+  const nowIso = new Date().toISOString();
+  const proposed = Math.max(0, Math.round(Number(j.proposed_refund_amount ?? 0) || 0));
   const { error: updateError } = await supabase
     .from("jobs")
-    .update({ status: "in_review", counter_proposal_amount: null, dispute_status: "in_review" } as Partial<JobRow> as never)
+    .update({
+      status: "in_review",
+      counter_proposal_amount: null,
+      dispute_status: "in_review",
+      dispute_escalated: true,
+      admin_mediation_requested: true,
+      admin_mediation_requested_at: nowIso,
+      dispute_mediation_status: "requested",
+      mediation_last_activity_at: nowIso,
+    } as Partial<JobRow> as never)
     .eq("id", jobId);
 
   if (updateError) return { ok: false, error: updateError.message };
@@ -3762,6 +3790,18 @@ export async function rejectRefund(jobId: number): Promise<RejectRefundResult> {
       htmlBody: `<p>The cleaner declined your partial refund proposal. The dispute has been escalated for admin review.</p>${disputeHubLinksHtml(jobId)}`,
     });
   }
+
+  await notifyAdminUsersAboutJob({
+    jobId,
+    subject: `[Bond Back] Job #${jobId}: cleaner declined refund — admin review`,
+    inAppMessage: `Job #${jobId}: cleaner rejected the lister’s partial refund — needs admin review.`,
+    htmlBody: `<p>The cleaner <strong>declined</strong> the lister’s partial refund proposal on job #${jobId}.</p>${
+      proposed > 0
+        ? `<p>Lister had requested approximately <strong>$${(proposed / 100).toFixed(2)} AUD</strong> back from escrow.</p>`
+        : ""
+    }<p>This job is now in <strong>admin review</strong>. Please open the admin dispute console.</p>${disputeHubLinksHtml(jobId)}`,
+  });
+
   revalidatePath("/dashboard");
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/admin/disputes");

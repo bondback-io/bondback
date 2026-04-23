@@ -45,6 +45,20 @@ function selectClassName() {
   );
 }
 
+/** Matches admin console “review / mediation flagged” (includes cleaner-reject before flag column existed). */
+function jobNeedsAdminReviewAttention(j: {
+  admin_mediation_requested?: boolean | null;
+  dispute_escalated?: boolean | null;
+  status?: string | null;
+  proposed_refund_amount?: number | null;
+}): boolean {
+  return (
+    Boolean(j.admin_mediation_requested) ||
+    Boolean(j.dispute_escalated) ||
+    (String(j.status ?? "") === "in_review" && Number(j.proposed_refund_amount ?? 0) > 0)
+  );
+}
+
 export default async function AdminDisputesPage({
   searchParams,
 }: {
@@ -138,7 +152,7 @@ export default async function AdminDisputesPage({
   }
   if (adminHelpFilter !== "all") {
     const want = adminHelpFilter === "yes";
-    filtered = filtered.filter((j) => Boolean(j.admin_mediation_requested) === want);
+    filtered = filtered.filter((j) => jobNeedsAdminReviewAttention(j) === want);
   }
 
   const userIds = Array.from(
@@ -457,8 +471,8 @@ export default async function AdminDisputesPage({
                               <Badge variant="secondary" className="text-[10px]">
                                 {job.dispute_priority ?? "medium"}
                               </Badge>
-                              {job.admin_mediation_requested ? (
-                                <Badge className="bg-sky-700 text-[10px] text-white">Admin help</Badge>
+                              {jobNeedsAdminReviewAttention(job) ? (
+                                <Badge className="bg-sky-700 text-[10px] text-white">Admin queue</Badge>
                               ) : null}
                               {job.dispute_mediation_status && job.dispute_mediation_status !== "none" ? (
                                 <Badge className="bg-violet-700 text-[10px] text-white">

@@ -37,7 +37,8 @@ export function JobProgressTimeline({
   isJobCleaner,
 }: JobProgressTimelineProps) {
   const status = localJobStatus ?? "";
-  const isDispute = status === "disputed" || status === "in_review";
+  const isDispute =
+    status === "disputed" || status === "in_review" || status === "dispute_negotiating";
   const isCompleted = status === "completed";
 
   const inProgressOrLater =
@@ -47,6 +48,37 @@ export function JobProgressTimeline({
     isDispute;
 
   const fundsReleased = isCompleted;
+
+  const paidStepTitle =
+    isCompleted
+      ? "Funds released"
+      : status === "in_review"
+        ? "Bond Back review"
+        : status === "dispute_negotiating" || status === "disputed"
+          ? "Refund / dispute"
+          : "Funds released";
+
+  const paidHintLister =
+    isCompleted
+      ? "Payment goes to the cleaner after you release from escrow."
+      : status === "in_review"
+        ? "An admin will decide how escrow is released. Do not use Approve & release — wait for Bond Back’s decision."
+        : status === "dispute_negotiating" || status === "disputed"
+          ? "Use the dispute section below to negotiate a refund with the cleaner or wait for escalation."
+          : status === "completed_pending_approval"
+            ? "Review photos, then Approve & release — or open a dispute if needed."
+            : "Payment goes to the cleaner after you release from escrow.";
+
+  const paidHintCleaner =
+    isCompleted
+      ? "Payout goes to your connected account after the lister releases."
+      : status === "in_review"
+        ? "Bond Back is reviewing. Funds stay in escrow until support decides."
+        : status === "dispute_negotiating" || status === "disputed"
+          ? "Respond to the lister’s refund request below, or the case may go to Bond Back."
+          : status === "completed_pending_approval"
+            ? "The lister is reviewing. You’ll be paid when they approve or when the timer ends."
+            : "Payout goes to your connected account after the lister releases.";
 
   const steps: StepDef[] = [
     {
@@ -84,16 +116,10 @@ export function JobProgressTimeline({
     },
     {
       id: "paid",
-      title: "Funds released",
+      title: paidStepTitle,
       done: fundsReleased,
-      hintLister:
-        status === "completed_pending_approval"
-          ? "Review photos, then Approve & release — or open a dispute if needed."
-          : "Payment goes to the cleaner after you release from escrow.",
-      hintCleaner:
-        status === "completed_pending_approval"
-          ? "The lister is reviewing. You’ll be paid when they approve or when the timer ends."
-          : "Payout goes to your connected account after the lister releases.",
+      hintLister: paidHintLister,
+      hintCleaner: paidHintCleaner,
     },
   ];
 
@@ -197,7 +223,9 @@ export function JobProgressTimeline({
 
       {isDispute && (
         <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs leading-snug text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100">
-          A dispute is open — resolve it below. Progress above shows where things stood.
+          {status === "in_review"
+            ? "This job is with Bond Back for review. Escrow stays on hold until an admin resolves the dispute — details below."
+            : "A dispute or refund negotiation is open — work through it below. Progress above shows where the job stood before the dispute."}
         </p>
       )}
 

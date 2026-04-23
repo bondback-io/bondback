@@ -31,6 +31,11 @@ export function AdminDisputeJobConsole({
     Math.max(0, Number(job.counter_proposal_amount ?? 0)) ||
     Math.max(0, Number(job.proposed_refund_amount ?? 0));
   const agreed = Math.max(0, Number(job.agreed_amount_cents ?? 0));
+  /** Cleaner reject / lister decline / cron escalation may set in_review without the explicit flag on older rows. */
+  const adminReviewFlagged =
+    Boolean(job.admin_mediation_requested) ||
+    Boolean(job.dispute_escalated) ||
+    (String(job.status ?? "") === "in_review" && Number(job.proposed_refund_amount ?? 0) > 0);
 
   return (
     <Card className="border-border dark:border-gray-800 dark:bg-gray-900/60">
@@ -72,17 +77,21 @@ export function AdminDisputeJobConsole({
           <div className="flex items-center gap-2">
             <Checkbox
               id={`admin-med-${job.id}`}
-              checked={Boolean(job.admin_mediation_requested)}
+              checked={adminReviewFlagged}
               disabled
               aria-readonly
             />
             <Label htmlFor={`admin-med-${job.id}`} className="text-xs font-normal cursor-default">
-              Admin mediation requested
+              Admin review / mediation flagged
             </Label>
           </div>
           {job.admin_mediation_requested_at ? (
             <span className="text-[11px] text-muted-foreground tabular-nums">
-              {new Date(String(job.admin_mediation_requested_at)).toLocaleString()}
+              Mediation requested: {new Date(String(job.admin_mediation_requested_at)).toLocaleString()}
+            </span>
+          ) : adminReviewFlagged ? (
+            <span className="text-[11px] text-muted-foreground">
+              Escalated or in review — see status and thread (timestamp may be missing on older jobs).
             </span>
           ) : null}
           {job.dispute_cleaner_counter_used ? (

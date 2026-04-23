@@ -4022,105 +4022,163 @@ export function JobDetail({
             </div>
           )}
 
-          {/* Disputed: Respond to Dispute (cleaner when lister opened, or lister when cleaner opened) */}
+          {/* Dispute: evidence response (classic) OR Bond Back review after refund escalation */}
           {hasActiveJob &&
             numericJobId &&
             (localJobStatus === "disputed" || localJobStatus === "in_review") &&
             (isJobLister || isJobCleaner) && (
               <div id="dispute" className="scroll-mt-6 space-y-3 rounded-md border border-amber-200 bg-amber-50/50 px-4 py-4 dark:border-amber-800/60 dark:bg-amber-950/30">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                  Dispute opened – {disputeOpenedBy === "lister" ? "cleaner" : "lister"} can respond with evidence
-                </p>
-                <p className="text-xs text-amber-800 dark:text-amber-200">
-                  Respond with your side, photos and a message.
-                </p>
-                {/* Responder: show form if they haven't responded yet */}
-                {((disputeOpenedBy === "lister" && isJobCleaner) || (disputeOpenedBy === "cleaner" && isJobLister)) &&
-                  !hasDisputeResponse &&
-                  !responseSubmitted && (
-                    <div className="mt-3 space-y-3 rounded border border-amber-300/60 bg-white/60 p-3 dark:border-amber-700 dark:bg-amber-950/40">
-                      <Label>Your response</Label>
-                      <Select value={disputeResponseReason} onValueChange={setDisputeResponseReason}>
-                        <SelectTrigger className="dark:bg-gray-800">
-                          <SelectValue placeholder="Counter-reason…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="quality">Quality</SelectItem>
-                          <SelectItem value="timeliness">Timeliness</SelectItem>
-                          <SelectItem value="damage">Damage</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Textarea
-                        placeholder="Message to the other party (optional)"
-                        value={disputeResponseMessage}
-                        onChange={(e) => setDisputeResponseMessage(e.target.value)}
-                        rows={2}
-                        className="dark:bg-gray-800"
-                      />
-                      <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" size="sm" asChild>
-                          <label className="flex cursor-pointer items-center gap-1">
-                            <ImagePlus className="h-4 w-4" />
-                            Add evidence photos
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp"
-                              multiple
-                              className="hidden"
-                              onChange={(e) => {
-                                const files = e.target.files ? Array.from(e.target.files).slice(0, 5) : [];
-                                setDisputeResponsePhotos(files);
-                              }}
-                            />
-                          </label>
-                        </Button>
-                        {disputeResponsePhotos.length > 0 && (
-                          <span className="text-xs text-muted-foreground">{disputeResponsePhotos.length} photo(s)</span>
-                        )}
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={!disputeResponseReason || disputeResponsePhotos.length === 0 || isSubmittingResponse}
-                        onClick={() => {
-                          startSubmitResponse(async () => {
-                            let urls: string[] = [];
-                            if (disputeResponsePhotos.length > 0) {
-                              const fd = new FormData();
-                              disputeResponsePhotos.forEach((f) => fd.append("file", f));
-                              const { results, error } = await uploadProcessedPhotos(fd, {
-                                bucket: "condition-photos",
-                                pathPrefix: `disputes/${numericJobId}/response`,
-                                maxFiles: 5,
-                                generateThumb: true,
-                              });
-                              urls = (results ?? []).map((r) => r?.url).filter(Boolean) as string[];
-                              if (error && urls.length === 0) {
-                                toast({ variant: "destructive", title: "Upload failed", description: error });
-                                return;
-                              }
-                            }
-                            const res = await respondToDispute(numericJobId, {
-                              reason: disputeResponseReason,
-                              photoUrls: urls,
-                              message: disputeResponseMessage.trim() || undefined,
-                            });
-                            if (res.ok) {
-                              setResponseSubmitted(true);
-                              toast({ title: "Response submitted", description: "The other party has been notified." });
-                            } else {
-                              toast({ variant: "destructive", title: "Failed", description: res.error });
-                            }
-                          });
-                        }}
-                      >
-                        {isSubmittingResponse ? "Submitting…" : "Submit response"}
+                {localJobStatus === "in_review" && (proposedRefundAmount ?? 0) > 0 ? (
+                  <>
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      {isJobLister ? "With Bond Back for review" : "Bond Back is reviewing this dispute"}
+                    </p>
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      {isJobLister
+                        ? disputeCleanerCounterUsed
+                          ? "Negotiation ended without a mutual agreement (for example, a counter-offer was declined). Your payment stays in escrow until support decides how much is refunded and how much is released to the cleaner. You should not use Approve & release on this page."
+                          : "The cleaner did not accept your partial refund request. Your payment stays in escrow until support decides the outcome. You should not use Approve & release on this page."
+                        : "You did not accept the lister’s refund terms, or the lister escalated after a counter-offer. Bond Back will review the dispute thread and evidence. You can still add context in the dispute hub if needed."}
+                    </p>
+                    <p className="text-xs text-amber-900 dark:text-amber-100">
+                      Lister refund figure on file:{" "}
+                      <strong>{formatCents(proposedRefundAmount ?? 0)}</strong>
+                      {agreedAmountCents > 0 ? (
+                        <>
+                          {" "}
+                          · Agreed job payment (escrow basis): {formatCents(agreedAmountCents)}
+                        </>
+                      ) : null}
+                    </p>
+                    <p className="text-[11px] font-medium text-violet-900 dark:text-violet-200">
+                      Bond Back support will review this in the admin dispute console. Escrow stays on hold until then
+                      {adminMediationRequested ? " (mediation requested flag is on for admins)." : "."}
+                    </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Button type="button" variant="default" size="sm" asChild>
+                        <Link href={`/disputes/${numericJobId}`}>Open dispute hub</Link>
                       </Button>
                     </div>
-                  )}
-                {(hasDisputeResponse || responseSubmitted) && (
-                  <p className="text-xs text-amber-800 dark:text-amber-200">Response submitted. Waiting for resolution or admin review.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      Dispute opened –{" "}
+                      {disputeOpenedBy === "lister"
+                        ? isJobLister
+                          ? "waiting for the cleaner’s response"
+                          : "you can respond with evidence"
+                        : isJobCleaner
+                          ? "waiting for the lister’s response"
+                          : "you can respond with evidence"}
+                    </p>
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      {((disputeOpenedBy === "lister" && isJobCleaner) ||
+                        (disputeOpenedBy === "cleaner" && isJobLister)) &&
+                      !hasDisputeResponse &&
+                      !responseSubmitted
+                        ? "Respond with your side, photos and a message."
+                        : "The other party may still be preparing their response."}
+                    </p>
+                    {/* Responder: show form if they haven't responded yet */}
+                    {((disputeOpenedBy === "lister" && isJobCleaner) ||
+                      (disputeOpenedBy === "cleaner" && isJobLister)) &&
+                      !hasDisputeResponse &&
+                      !responseSubmitted && (
+                        <div className="mt-3 space-y-3 rounded border border-amber-300/60 bg-white/60 p-3 dark:border-amber-700 dark:bg-amber-950/40">
+                          <Label>Your response</Label>
+                          <Select value={disputeResponseReason} onValueChange={setDisputeResponseReason}>
+                            <SelectTrigger className="dark:bg-gray-800">
+                              <SelectValue placeholder="Counter-reason…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="quality">Quality</SelectItem>
+                              <SelectItem value="timeliness">Timeliness</SelectItem>
+                              <SelectItem value="damage">Damage</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Textarea
+                            placeholder="Message to the other party (optional)"
+                            value={disputeResponseMessage}
+                            onChange={(e) => setDisputeResponseMessage(e.target.value)}
+                            rows={2}
+                            className="dark:bg-gray-800"
+                          />
+                          <div className="flex items-center gap-2">
+                            <Button type="button" variant="outline" size="sm" asChild>
+                              <label className="flex cursor-pointer items-center gap-1">
+                                <ImagePlus className="h-4 w-4" />
+                                Add evidence photos
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  multiple
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const files = e.target.files ? Array.from(e.target.files).slice(0, 5) : [];
+                                    setDisputeResponsePhotos(files);
+                                  }}
+                                />
+                              </label>
+                            </Button>
+                            {disputeResponsePhotos.length > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                {disputeResponsePhotos.length} photo(s)
+                              </span>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={
+                              !disputeResponseReason || disputeResponsePhotos.length === 0 || isSubmittingResponse
+                            }
+                            onClick={() => {
+                              startSubmitResponse(async () => {
+                                let urls: string[] = [];
+                                if (disputeResponsePhotos.length > 0) {
+                                  const fd = new FormData();
+                                  disputeResponsePhotos.forEach((f) => fd.append("file", f));
+                                  const { results, error } = await uploadProcessedPhotos(fd, {
+                                    bucket: "condition-photos",
+                                    pathPrefix: `disputes/${numericJobId}/response`,
+                                    maxFiles: 5,
+                                    generateThumb: true,
+                                  });
+                                  urls = (results ?? []).map((r) => r?.url).filter(Boolean) as string[];
+                                  if (error && urls.length === 0) {
+                                    toast({ variant: "destructive", title: "Upload failed", description: error });
+                                    return;
+                                  }
+                                }
+                                const res = await respondToDispute(numericJobId, {
+                                  reason: disputeResponseReason,
+                                  photoUrls: urls,
+                                  message: disputeResponseMessage.trim() || undefined,
+                                });
+                                if (res.ok) {
+                                  setResponseSubmitted(true);
+                                  toast({
+                                    title: "Response submitted",
+                                    description: "The other party has been notified.",
+                                  });
+                                } else {
+                                  toast({ variant: "destructive", title: "Failed", description: res.error });
+                                }
+                              });
+                            }}
+                          >
+                            {isSubmittingResponse ? "Submitting…" : "Submit response"}
+                          </Button>
+                        </div>
+                      )}
+                    {(hasDisputeResponse || responseSubmitted) && (
+                      <p className="text-xs text-amber-800 dark:text-amber-200">
+                        Response submitted. Waiting for resolution or admin review.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -4368,6 +4426,7 @@ export function JobDetail({
                                         setLocalJobStatus("in_review");
                                         setShowRejectDialog(false);
                                         toast({ title: "Escalated", description: "Dispute has been sent for review." });
+                                        scheduleRouterAction(() => router.refresh());
                                       } else {
                                         toast({ variant: "destructive", title: "Failed", description: res.error });
                                       }
