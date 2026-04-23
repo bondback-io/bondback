@@ -54,15 +54,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import type { LucideIcon } from "lucide-react";
 import {
+  Building2,
   CalendarIcon,
   CheckCircle2,
   CircleHelp,
   ImagePlus,
+  KeyRound,
   MapPin,
   Hash,
   ChevronRight,
   ChevronLeft,
+  Repeat2,
   X,
   Sparkles,
 } from "lucide-react";
@@ -132,6 +136,38 @@ const listingAddonZodEnum = z.enum(
 );
 
 const serviceTypeZodEnum = z.enum(SERVICE_TYPES as unknown as [string, ...string[]]);
+
+const SERVICE_TYPE_PICKER_OPTIONS: {
+  value: ServiceTypeKey;
+  title: string;
+  subtitle: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    value: "bond_cleaning",
+    title: "Bond cleaning",
+    subtitle: "End of lease & bond return",
+    icon: KeyRound,
+  },
+  {
+    value: "recurring_house_cleaning",
+    title: "Recurring clean",
+    subtitle: "Weekly, fortnightly, or monthly",
+    icon: Repeat2,
+  },
+  {
+    value: "airbnb_turnover",
+    title: "Airbnb turnover",
+    subtitle: "Short-stay & guest-ready",
+    icon: Building2,
+  },
+  {
+    value: "deep_clean",
+    title: "Deep / spring clean",
+    subtitle: "Move-in & thorough refresh",
+    icon: Sparkles,
+  },
+];
 const recurringFreqZodEnum = z.enum(
   RECURRING_FREQUENCIES as unknown as [string, ...string[]]
 );
@@ -1079,26 +1115,94 @@ export function NewListingForm({
               control={form.control}
               name="serviceType"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger
-                    id="serviceType"
-                    className="h-12 text-base dark:bg-gray-800 dark:border-gray-700"
+                <>
+                  <div className="md:hidden">
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger
+                        id="serviceType"
+                        className="h-12 text-base dark:bg-gray-800 dark:border-gray-700"
+                      >
+                        <SelectValue placeholder="Select service type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bond_cleaning">
+                          Bond cleaning (end of lease)
+                        </SelectItem>
+                        <SelectItem value="recurring_house_cleaning">
+                          Recurring house cleaning
+                        </SelectItem>
+                        <SelectItem value="airbnb_turnover">
+                          Airbnb / short-stay turnover
+                        </SelectItem>
+                        <SelectItem value="deep_clean">
+                          Deep / spring / move-in cleaning
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div
+                    className="hidden md:grid md:grid-cols-2 md:gap-3 lg:grid-cols-4 lg:gap-4"
+                    role="radiogroup"
+                    aria-label="Service type"
                   >
-                    <SelectValue placeholder="Select service type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bond_cleaning">Bond cleaning (end of lease)</SelectItem>
-                    <SelectItem value="recurring_house_cleaning">Recurring house cleaning</SelectItem>
-                    <SelectItem value="airbnb_turnover">Airbnb / short-stay turnover</SelectItem>
-                    <SelectItem value="deep_clean">Deep / spring / move-in cleaning</SelectItem>
-                  </SelectContent>
-                </Select>
+                    {SERVICE_TYPE_PICKER_OPTIONS.map((opt) => {
+                      const selected = field.value === opt.value;
+                      const Icon = opt.icon;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => field.onChange(opt.value)}
+                          className={cn(
+                            "group flex flex-col items-center rounded-2xl border-2 bg-card p-4 text-center shadow-sm transition-all duration-200",
+                            "hover:border-emerald-400/70 hover:bg-emerald-50/50 hover:shadow-md",
+                            "dark:bg-gray-900/60 dark:hover:bg-emerald-950/35 dark:hover:border-emerald-600/50",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-950",
+                            selected
+                              ? "border-emerald-500 bg-emerald-50/90 shadow-md ring-2 ring-emerald-500/25 dark:border-emerald-500 dark:bg-emerald-950/45 dark:ring-emerald-400/20"
+                              : "border-border dark:border-gray-700"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "mb-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl transition-colors",
+                              "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
+                              selected &&
+                                "bg-emerald-600 text-white dark:bg-emerald-600 dark:text-white"
+                            )}
+                          >
+                            <Icon className="h-8 w-8" strokeWidth={1.75} aria-hidden />
+                          </span>
+                          <span className="text-sm font-semibold leading-snug text-foreground dark:text-gray-100">
+                            {opt.title}
+                          </span>
+                          <span className="mt-1 text-xs leading-snug text-muted-foreground dark:text-gray-400">
+                            {opt.subtitle}
+                          </span>
+                          {selected ? (
+                            <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                              Selected
+                            </span>
+                          ) : (
+                            <span className="mt-2 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 dark:text-gray-500">
+                              Choose
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             />
             {form.formState.errors.serviceType && (
               <p className="text-xs text-destructive">{form.formState.errors.serviceType.message}</p>
             )}
-            <p className="text-xs text-muted-foreground dark:text-gray-500">
+            <p className="text-xs text-muted-foreground dark:text-gray-500 md:hidden">
               Selected:{" "}
               <span className="font-medium text-foreground dark:text-gray-300">
                 {serviceTypeLabel(serviceTypeWatched)}
