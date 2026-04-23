@@ -418,28 +418,30 @@ export async function submitDisputeMessage(
   }
 }
 
-export async function proposeMediation(formData: FormData) {
-  const { supabase, userId } = await requireUser();
-  const jobId = Number(formData.get("jobId"));
-  const proposalText = trimText(formData.get("proposalText"));
-  const refundCents = toCents(formData.get("refundCents"));
-  const additionalPaymentCents = toCents(formData.get("additionalPaymentCents"));
-  if (!jobId || !proposalText) throw new Error("Missing proposal.");
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("is_admin")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!(profile as any)?.is_admin) throw new Error("Not authorized.");
+export type InsertAdminMediationProposalParams = {
+  jobId: number;
+  adminUserId: string;
+  proposalText: string;
+  refundCents: number;
+  additionalPaymentCents: number;
+};
 
+/**
+ * Record a mediation package and notify parties (lister + cleaner must both accept unless admin uses binding settlement elsewhere).
+ */
+export async function insertAdminMediationProposalRecords(
+  params: InsertAdminMediationProposalParams
+): Promise<void> {
+  const { jobId, adminUserId, proposalText, refundCents, additionalPaymentCents } = params;
   const admin = createSupabaseAdminClient();
   if (!admin) throw new Error("Missing admin client.");
+
   await (admin as any).from("dispute_mediation_votes").insert({
     job_id: jobId,
     proposal_text: proposalText,
     refund_cents: refundCents,
     additional_payment_cents: additionalPaymentCents,
-    created_by: userId,
+    created_by: adminUserId,
     lister_accepted: null,
     cleaner_accepted: null,
   });
@@ -451,16 +453,16 @@ export async function proposeMediation(formData: FormData) {
       mediation_last_activity_at: new Date().toISOString(),
     })
     .eq("id", jobId);
-    await (admin as any).from("dispute_messages").insert({
-      job_id: jobId,
-      author_user_id: userId,
-      author_role: "admin",
-      body: `Mediation proposal\n\n${proposalText}\n\nRefund (cents): ${refundCents} · Top-up (cents): ${additionalPaymentCents}`,
-      attachment_urls: [],
-      is_escalation_event: false,
-      visible_to_lister: true,
-      visible_to_cleaner: true,
-    });
+  await (admin as any).from("dispute_messages").insert({
+    job_id: jobId,
+    author_user_id: adminUserId,
+    author_role: "admin",
+    body: `Mediation proposal\n\n${proposalText}\n\nRefund (cents): ${refundCents} · Top-up (cents): ${additionalPaymentCents}`,
+    attachment_urls: [],
+    is_escalation_event: false,
+    visible_to_lister: true,
+    visible_to_cleaner: true,
+  });
 
   const { data: jobRow } = await (admin as any)
     .from("jobs")
@@ -484,6 +486,29 @@ export async function proposeMediation(formData: FormData) {
       htmlBody: `<p>An admin posted a <strong>mediation proposal</strong> for job #${jobId}.</p><p style="white-space:pre-wrap;">${escapeHtmlForEmail(proposalText)}</p><p>Refund: $${(refundCents / 100).toFixed(2)} · Top-up: $${(additionalPaymentCents / 100).toFixed(2)}</p>${disputeHubLinksHtml(jobId)}`,
     });
   }
+}
+
+export async function proposeMediation(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const jobId = Number(formData.get("jobId"));
+  const proposalText = trimText(formData.get("proposalText"));
+  const refundCents = toCents(formData.get("refundCents"));
+  const additionalPaymentCents = toCents(formData.get("additionalPaymentCents"));
+  if (!jobId || !proposalText) throw new Error("Missing proposal.");
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!(profile as any)?.is_admin) throw new Error("Not authorized.");
+
+  await insertAdminMediationProposalRecords({
+    jobId,
+    adminUserId: userId,
+    proposalText,
+    refundCents,
+    additionalPaymentCents,
+  });
 
   revalidatePath("/admin/disputes");
   revalidatePath("/disputes");

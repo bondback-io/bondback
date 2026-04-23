@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getStripeServer } from "@/lib/stripe";
-import { createNotification, sendPaymentReceiptEmails } from "@/lib/actions/notifications";
+import {
+  createNotification,
+  sendPaymentReceiptEmails,
+  sendRefundReceiptEmail,
+} from "@/lib/actions/notifications";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { fetchPlatformFeePercentForListing } from "@/lib/platform-fee";
@@ -13,6 +17,8 @@ import { insertDisputeThreadEntry } from "@/lib/disputes/dispute-thread-and-noti
 import { recomputeVerificationBadgesForUser } from "@/lib/actions/verification";
 import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewards";
 import { adminDeleteListingByIdCascade } from "@/lib/actions/admin-listings";
+import { suggestMediationRefundCents } from "@/lib/disputes/mediation-settlement-ai";
+import { insertAdminMediationProposalRecords } from "@/lib/actions/disputes";
 
 async function requireAdmin(): Promise<{
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -876,5 +882,315 @@ export async function adminBackfillJobWinnersFromAcceptedBidsForm(): Promise<voi
   revalidatePath("/admin/jobs");
   revalidatePath("/jobs");
   revalidatePath("/cleaner/dashboard");
+}
+
+export type MediationAiSuggestionState =
+  | { ok: true; refund_cents: number; rationale: string; source: string }
+  | { ok: false; error: string };
+
+/** Admin-only: AI/heuristic refund suggestion for mediation (AUD cents from job payment to lister). */
+export async function fetchMediationSettlementAiSuggestion(
+  jobId: number
+): Promise<MediationAiSuggestionState> {
+  try {
+    const { supabase } = await requireAdmin();
+    if (!Number.isFinite(jobId) || jobId < 1) {
+      return { ok: false, error: "Invalid job." };
+    }
+    const { data: job, error } = await supabase
+      .from("jobs")
+      .select("agreed_amount_cents, proposed_refund_amount, counter_proposal_amount, dispute_reason")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (error || !job) return { ok: false, error: "Job not found." };
+    const j = job as {
+      agreed_amount_cents?: number | null;
+      proposed_refund_amount?: number | null;
+      counter_proposal_amount?: number | null;
+      dispute_reason?: string | null;
+    };
+    const suggestion = await suggestMediationRefundCents({
+      agreedAmountCents: Math.max(0, Number(j.agreed_amount_cents ?? 0)),
+      proposedRefundCents:
+        j.proposed_refund_amount != null ? Number(j.proposed_refund_amount) : null,
+      counterRefundCents:
+        j.counter_proposal_amount != null ? Number(j.counter_proposal_amount) : null,
+      disputeReason: j.dispute_reason ?? null,
+    });
+    return {
+      ok: true,
+      refund_cents: suggestion.refund_cents,
+      rationale: suggestion.rationale,
+      source: suggestion.source,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Not authorized.";
+    return { ok: false, error: msg };
+  }
+}
+
+export type AdminMediationSettlementState =
+  | { ok: true; success: string }
+  | { ok: false; error: string };
+
+/**
+ * Admin mediation: either send a proposal for both parties to accept (with optional lister top-up),
+ * or impose a binding settlement (refund + release to cleaner) when top-up is zero.
+ */
+export async function adminSubmitMediationSettlement(
+  _prev: AdminMediationSettlementState | undefined,
+  formData: FormData
+): Promise<AdminMediationSettlementState> {
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  let adminId: string;
+  try {
+    const r = await requireAdmin();
+    supabase = r.supabase;
+    adminId = r.adminId;
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Not authorized." };
+  }
+
+  const jobId = Number(formData.get("jobId"));
+  const proposalText = String(formData.get("proposalText") ?? "").trim();
+  const mode = String(formData.get("settlementMode") ?? "collaborative").toLowerCase();
+  const refundCents = Math.max(0, Math.round(Number(formData.get("refundCents") ?? 0)));
+  const topUpCents = Math.max(0, Math.round(Number(formData.get("additionalPaymentCents") ?? 0)));
+
+  if (!Number.isFinite(jobId) || jobId < 1) {
+    return { ok: false, error: "Invalid job." };
+  }
+  if (!proposalText) {
+    return { ok: false, error: "Settlement notes are required." };
+  }
+
+  const { data: job, error: fetchError } = await supabase
+    .from("jobs")
+    .select(
+      "id, lister_id, winner_id, listing_id, status, agreed_amount_cents, payment_released_at, payment_intent_id"
+    )
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (fetchError || !job) return { ok: false, error: "Job not found." };
+
+  const j = job as {
+    id: number;
+    lister_id: string;
+    winner_id: string | null;
+    listing_id: string | null;
+    status: string;
+    agreed_amount_cents: number | null;
+    payment_released_at?: string | null;
+    payment_intent_id?: string | null;
+  };
+
+  const st = String(j.status ?? "").toLowerCase();
+  if (st === "completed" || st === "cancelled") {
+    return { ok: false, error: "This job is already completed or cancelled." };
+  }
+
+  const agreed = Math.max(0, Number(j.agreed_amount_cents ?? 0));
+  const settings = await getGlobalSettings();
+  const feePct =
+    (await fetchPlatformFeePercentForListing(supabase, j.listing_id, settings)) / 100;
+  const feeCents = Math.round(agreed * feePct);
+  const maxRefundCents = agreed + feeCents;
+
+  if (refundCents > maxRefundCents) {
+    return {
+      ok: false,
+      error: `Refund cannot exceed total charged (job + platform fee), about $${(maxRefundCents / 100).toFixed(2)} AUD.`,
+    };
+  }
+
+  if (mode === "final_override" && maxRefundCents >= 1 && refundCents >= maxRefundCents) {
+    return {
+      ok: false,
+      error:
+        "A full refund of the entire charge should use “Close / resolve dispute” → Full refund (or Partial refund) so escrow is handled correctly.",
+    };
+  }
+
+  if (mode === "final_override") {
+    if (topUpCents > 0) {
+      return {
+        ok: false,
+        error:
+          "You cannot impose a cleaner top-up without the lister paying. Clear top-up to $0 for a binding refund + release, or use “Send for acceptance” so both parties agree first.",
+      };
+    }
+    if (!["disputed", "in_review", "dispute_negotiating"].includes(st)) {
+      return {
+        ok: false,
+        error: "Binding settlement is only available for active dispute statuses (disputed, in review, or negotiating).",
+      };
+    }
+    if (j.payment_released_at) {
+      return { ok: false, error: "Escrow was already released; do not run binding settlement." };
+    }
+
+    const nowIso = new Date().toISOString();
+
+    if (refundCents >= 1) {
+      const refundResult = await executeRefund(jobId, refundCents);
+      if (!refundResult.ok) {
+        return { ok: false, error: refundResult.error ?? "Stripe refund failed." };
+      }
+    }
+
+    const releaseResult = await releaseJobFunds(jobId);
+    if (!releaseResult.ok) {
+      return {
+        ok: false,
+        error:
+          releaseResult.error ??
+          "Could not release remaining funds to the cleaner after refund. Check Stripe Connect and job escrow state.",
+      };
+    }
+
+    const { error: updateError } = await supabase
+      .from("jobs")
+      .update({
+        status: "completed",
+        completed_at: nowIso,
+        dispute_mediation_status: "accepted",
+        mediation_proposal: proposalText,
+        mediation_last_activity_at: nowIso,
+        dispute_resolution: "admin_mediation_final",
+        resolution_type: "mediation",
+        resolution_at: nowIso,
+        resolution_by: adminId,
+        dispute_status: "completed",
+        proposed_refund_amount: refundCents,
+        counter_proposal_amount: null,
+        refund_amount: refundCents >= 1 ? refundCents : null,
+      } as never)
+      .eq("id", jobId);
+
+    if (updateError) {
+      return { ok: false, error: updateError.message };
+    }
+
+    if (j.listing_id) {
+      await supabase.from("listings").update({ status: "ended" } as never).eq("id", j.listing_id);
+    }
+
+    await insertDisputeThreadEntry({
+      jobId,
+      authorUserId: adminId,
+      authorRole: "admin",
+      body: `Binding admin mediation settlement applied.\n\n${proposalText}\n\nRefund to lister: $${(refundCents / 100).toFixed(2)} AUD · Remaining escrow released to cleaner.`,
+      visibility: { lister: true, cleaner: true },
+    });
+
+    const msg =
+      refundCents >= 1
+        ? `Admin resolved the dispute: $${(refundCents / 100).toFixed(2)} refunded to you; remaining payment released to the cleaner.`
+        : "Admin resolved the dispute: full job payment released to the cleaner (no refund).";
+    if (j.lister_id) await createNotification(j.lister_id, "dispute_resolved", jobId, msg);
+    if (j.winner_id) {
+      await createNotification(
+        j.winner_id,
+        "dispute_resolved",
+        jobId,
+        refundCents >= 1
+          ? `Admin resolved the dispute: lister refund $${(refundCents / 100).toFixed(2)}; your payout has been released.`
+          : "Admin resolved the dispute: your payout has been released."
+      );
+    }
+
+    if (refundCents >= 1 && j.lister_id) {
+      let jobTitle: string | null = null;
+      if (j.listing_id) {
+        const { data: listing } = await supabase
+          .from("listings")
+          .select("title")
+          .eq("id", j.listing_id)
+          .maybeSingle();
+        jobTitle = (listing as { title?: string } | null)?.title ?? null;
+      }
+      await sendRefundReceiptEmail({
+        jobId,
+        listerId: j.lister_id,
+        refundCents,
+        jobTitle,
+        dateIso: nowIso,
+      });
+    }
+
+    if (j.winner_id) await recomputeVerificationBadgesForUser(j.winner_id);
+    if (j.lister_id) await recomputeVerificationBadgesForUser(j.lister_id);
+    try {
+      await applyReferralRewardsForCompletedJob(jobId);
+    } catch {
+      // non-fatal
+    }
+
+    await logAdminActivity({
+      adminId,
+      actionType: "dispute_resolved",
+      targetType: "job",
+      targetId: String(jobId),
+      details: { resolution: "admin_mediation_final", refundCents },
+    });
+
+    revalidatePath("/admin/disputes");
+    revalidatePath("/disputes");
+    revalidatePath("/dashboard");
+    revalidatePath("/lister/dashboard");
+    revalidatePath("/my-listings");
+    revalidatePath("/cleaner/dashboard");
+    revalidatePath("/earnings");
+    revalidatePath(`/jobs/${jobId}`);
+    return {
+      ok: true,
+      success: "Binding settlement applied: refund (if any) processed and remaining escrow released to the cleaner.",
+    };
+  }
+
+  if (!["disputed", "in_review", "dispute_negotiating"].includes(st)) {
+    return {
+      ok: false,
+      error: "Send a proposal only when the job is in disputed, in review, or negotiating.",
+    };
+  }
+
+  try {
+    await insertAdminMediationProposalRecords({
+      jobId,
+      adminUserId: adminId,
+      proposalText,
+      refundCents,
+      additionalPaymentCents: topUpCents,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not save mediation proposal.";
+    return { ok: false, error: msg };
+  }
+
+  await logAdminActivity({
+    adminId,
+    actionType: "dispute_mediation_proposed",
+    targetType: "job",
+    targetId: String(jobId),
+    details: { refundCents, topUpCents, collaborative: true },
+  });
+
+  revalidatePath("/admin/disputes");
+  revalidatePath("/disputes");
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+
+  const topHint =
+    topUpCents > 0
+      ? ` Lister top-up $${(topUpCents / 100).toFixed(2)} requires their approval via checkout once both accept.`
+      : "";
+  return {
+    ok: true,
+    success: `Mediation proposal sent to both parties.${topHint}`,
+  };
 }
 

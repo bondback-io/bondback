@@ -2,11 +2,9 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { proposeMediation } from "@/lib/actions/disputes";
+import { Label } from "@/components/ui/label";
+import { AdminMediationSettlementPanel } from "@/components/admin/admin-mediation-settlement-panel";
 import { DisputeJobCaseSummary, type DisputeJobCaseJobFields } from "@/components/disputes/dispute-job-case-summary";
 import { DisputeAuditTimeline } from "@/components/disputes/dispute-audit-timeline";
 import type { SerializableDisputeMessage } from "@/lib/disputes/serialize-dispute-messages";
@@ -119,27 +117,13 @@ export function AdminDisputeJobConsole({
 
         <AdminDisputePartyEmailForms jobId={Number(job.id)} />
 
-        <form
-          action={proposeMediation}
-          className="grid gap-2 rounded-lg border border-violet-300/70 bg-violet-50/70 p-3 dark:border-violet-800 dark:bg-violet-950/20"
-        >
-          <input type="hidden" name="jobId" value={String(job.id)} />
-          <Label className="text-xs">Mediation proposal</Label>
-          <Textarea name="proposalText" rows={2} required placeholder="Propose a fair settlement..." />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Input name="refundCents" type="number" min={0} step={50} placeholder="Refund cents (optional)" />
-            <Input
-              name="additionalPaymentCents"
-              type="number"
-              min={0}
-              step={50}
-              placeholder="Top-up cents (optional)"
-            />
-          </div>
-          <Button type="submit" size="sm" className="w-fit">
-            Send mediation proposal
-          </Button>
-        </form>
+        <AdminMediationSettlementPanel
+          jobId={Number(job.id)}
+          agreedAmountCents={agreed}
+          proposedRefundCents={Math.max(0, Number(job.proposed_refund_amount ?? 0))}
+          counterRefundCents={Math.max(0, Number(job.counter_proposal_amount ?? 0))}
+          jobStatus={String(job.status ?? "")}
+        />
       </CardContent>
     </Card>
   );

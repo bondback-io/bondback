@@ -1218,7 +1218,10 @@ export function JobDetail({
       !numericJobId ||
       (localJobStatus !== "in_progress" &&
         localJobStatus !== "completed" &&
-        localJobStatus !== "completed_pending_approval")
+        localJobStatus !== "completed_pending_approval" &&
+        localJobStatus !== "disputed" &&
+        localJobStatus !== "dispute_negotiating" &&
+        localJobStatus !== "in_review")
     ) {
       return;
     }
@@ -3209,7 +3212,10 @@ export function JobDetail({
             !listerCompletedBoostTidy &&
             (localJobStatus === "in_progress" ||
               localJobStatus === "completed" ||
-              localJobStatus === "completed_pending_approval") &&
+              localJobStatus === "completed_pending_approval" ||
+              localJobStatus === "disputed" ||
+              localJobStatus === "dispute_negotiating" ||
+              localJobStatus === "in_review") &&
             numericJobId && (
             <JobHistoryCollapsible enabled={false}>
             <>
@@ -3295,7 +3301,10 @@ export function JobDetail({
               )}
 
               {(localJobStatus === "completed" ||
-                localJobStatus === "completed_pending_approval") && (
+                localJobStatus === "completed_pending_approval" ||
+                localJobStatus === "disputed" ||
+                localJobStatus === "dispute_negotiating" ||
+                localJobStatus === "in_review") && (
                 <>
                   {!(isJobCleaner && cleanerReviewPendingMinimal) && (
                     <>
@@ -3312,42 +3321,49 @@ export function JobDetail({
                       )}
                     >
                       Cleaning checklist history{" "}
-                      {completedDateLabel
-                        ? `(Completed ${completedDateLabel})`
-                        : "(Completed)"}
+                      {localJobStatus === "disputed" ||
+                      localJobStatus === "dispute_negotiating" ||
+                      localJobStatus === "in_review"
+                        ? "(Evidence on file)"
+                        : completedDateLabel
+                          ? `(Completed ${completedDateLabel})`
+                          : "(Completed)"}
                     </summary>
                     <div className="mt-2">
                       <ChecklistHistoryGrid items={checklist} detailUiBoost={detailUiBoost} />
                     </div>
                   </details>
                   {localJobStatus === "completed" ? (
-                  !listerCompletedBoostTidy && (
-                  <p
-                    className={cn(
-                      "mt-1 rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
-                      detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
-                    )}
-                  >
-                    Payment has been released. Thanks for completing this bond clean through Bond Back.
-                  </p>
-                  )
-                  ) : (
-                    !(isJobLister && listerReleaseFundsStep) && (
-                  <p
-                    className={cn(
-                      "mt-1 rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
-                      detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
-                    )}
-                  >
-                    Waiting on final approval and payment release…
-                  </p>
+                    !listerCompletedBoostTidy && (
+                      <p
+                        className={cn(
+                          "mt-1 rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+                          detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
+                        )}
+                      >
+                        Payment has been released. Thanks for completing this bond clean through Bond Back.
+                      </p>
                     )
-                  )}
+                  ) : localJobStatus === "completed_pending_approval" ? (
+                    !(isJobLister && listerReleaseFundsStep) && (
+                      <p
+                        className={cn(
+                          "mt-1 rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+                          detailUiBoost ? "text-sm leading-relaxed" : "text-[11px]"
+                        )}
+                      >
+                        Waiting on final approval and payment release…
+                      </p>
+                    )
+                  ) : null}
                     </>
                   )}
                   {isJobLister &&
                     (localJobStatus === "completed_pending_approval" ||
-                      localJobStatus === "completed") &&
+                      localJobStatus === "completed" ||
+                      localJobStatus === "disputed" ||
+                      localJobStatus === "dispute_negotiating" ||
+                      localJobStatus === "in_review") &&
                     (afterPhotoEntries.length > 0 || afterPhotosLoading) && (
                     <div
                       id="job-after-photos"
@@ -3359,7 +3375,9 @@ export function JobDetail({
                       <p className="mt-2 text-sm leading-relaxed text-emerald-800 dark:text-emerald-200">
                         {localJobStatus === "completed"
                           ? "Saved from when the job was completed."
-                          : "Review the after photos before you finalize and release funds."}
+                          : localJobStatus === "completed_pending_approval"
+                            ? "Review the after photos before you finalize and release funds."
+                            : "After photos on file for this job — review them alongside the checklist during the dispute."}
                       </p>
                       {afterPhotosLoading && afterPhotoEntries.length === 0 ? (
                         <p className="mt-2 text-sm text-muted-foreground dark:text-gray-400">
