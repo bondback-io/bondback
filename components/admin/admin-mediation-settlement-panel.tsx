@@ -12,6 +12,7 @@ import {
   adminSubmitMediationSettlement,
   fetchMediationSettlementAiSuggestion,
 } from "@/lib/actions/admin-jobs";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Sparkles } from "lucide-react";
 
@@ -43,7 +44,7 @@ export function AdminMediationSettlementPanel({
   jobStatus: string;
 }) {
   const st = String(jobStatus ?? "").toLowerCase();
-  const isTerminal = st === "completed" || st === "cancelled";
+  const isTerminal = st === "completed" || isJobCancelledStatus(st);
 
   const [refundAud, setRefundAud] = useState(() => {
     const c = Math.max(proposedRefundCents, counterRefundCents);
@@ -184,7 +185,9 @@ export function AdminMediationSettlementPanel({
               className="mt-1 dark:bg-gray-900"
             />
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              From job escrow (max ~ job + fee). Currently {formatAudFromCents(refundCentsForSubmit)}.
+              From Stripe escrow. The maximum is the <strong>remaining</strong> refundable amount on the payment
+              charge(s) after any refunds already issued there — often lower than job + fee on paper. If submission
+              fails, reduce this to match Stripe&apos;s remaining balance.
             </p>
           </div>
           <div>

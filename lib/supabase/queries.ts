@@ -32,7 +32,7 @@ export const LISTING_LIVE_BID_CARD_SELECT =
 
 /** `public.jobs` — all columns from generated `Row` type. */
 export const JOB_TYPED_SELECT =
-  "id, listing_id, lister_id, winner_id, status, title, agreed_amount_cents, secured_via_buy_now, payment_intent_id, top_up_payments, lister_payment_due_at, payment_released_at, stripe_transfer_id, cleaner_confirmed_complete, cleaner_confirmed_at, auto_release_at, auto_release_at_original, review_extension_used_at, completed_at, disputed_at, dispute_reason, dispute_photos, dispute_evidence, dispute_status, dispute_opened_by, proposed_refund_amount, counter_proposal_amount, refund_amount, refund_status, dispute_resolution, resolution_type, resolution_at, resolution_by, dispute_cleaner_counter_used, dispute_lister_counter_used, admin_mediation_requested, admin_mediation_requested_at, created_at, updated_at";
+  "id, listing_id, lister_id, winner_id, status, title, agreed_amount_cents, secured_via_buy_now, payment_intent_id, escrow_funded_at, lister_escrow_cancelled_at, lister_escrow_cancel_fee_cents, lister_escrow_cancel_refund_cents, lister_escrow_cancel_reason, top_up_payments, lister_payment_due_at, payment_released_at, stripe_transfer_id, cleaner_confirmed_complete, cleaner_confirmed_at, auto_release_at, auto_release_at_original, review_extension_used_at, completed_at, disputed_at, dispute_reason, dispute_photos, dispute_evidence, dispute_status, dispute_opened_by, proposed_refund_amount, counter_proposal_amount, refund_amount, refund_status, dispute_resolution, resolution_type, resolution_at, resolution_by, dispute_cleaner_counter_used, dispute_lister_counter_used, admin_mediation_requested, admin_mediation_requested_at, created_at, updated_at";
 
 /**
  * Last-resort job row for `/jobs/[id]` when the DB is behind `JOB_TYPED_SELECT` (missing dispute /
@@ -54,7 +54,7 @@ export const BID_FULL_SELECT =
 
 /** Admin jobs table UI. */
 export const JOB_ADMIN_TABLE_SELECT =
-  "id, listing_id, lister_id, winner_id, status, agreed_amount_cents, created_at, completed_at, auto_release_at, cleaner_confirmed_at";
+  "id, listing_id, lister_id, winner_id, status, agreed_amount_cents, created_at, completed_at, auto_release_at, cleaner_confirmed_at, lister_escrow_cancelled_at, lister_escrow_cancel_fee_cents, lister_escrow_cancel_refund_cents, lister_escrow_cancel_reason";
 
 /** Admin listings table UI. */
 export const LISTING_ADMIN_TABLE_SELECT =
@@ -62,7 +62,7 @@ export const LISTING_ADMIN_TABLE_SELECT =
 
 /** All typed profile columns (matches `profiles.Row`). */
 export const PROFILE_TYPED_FULL_SELECT =
-  "id, roles, active_role, abn, state, suburb, postcode, max_travel_km, full_name, first_name, last_name, cleaner_username, phone, date_of_birth, years_experience, vehicle_type, profile_photo_url, bio, specialties, portfolio_photo_urls, business_name, insurance_policy_number, availability, equipment_notes, notification_preferences, email_force_disabled, email_preferences_locked, is_admin, is_deleted, stripe_connect_id, stripe_payment_method_id, stripe_customer_id, expo_push_token, verification_badges, is_email_verified, created_at, updated_at, referred_by, referral_code, account_credit_cents, high_dispute_opens_30d, last_dispute_abuse_alert_at, preferred_payout_schedule, theme_preference, distance_unit";
+  "id, roles, active_role, abn, state, suburb, postcode, max_travel_km, full_name, first_name, last_name, cleaner_username, phone, date_of_birth, years_experience, vehicle_type, profile_photo_url, bio, specialties, portfolio_photo_urls, business_name, insurance_policy_number, availability, equipment_notes, notification_preferences, email_force_disabled, email_preferences_locked, is_admin, is_deleted, is_banned, banned_reason, ban_until, negative_stars, stripe_connect_id, stripe_onboarding_complete, stripe_payment_method_id, stripe_customer_id, expo_push_token, verification_badges, is_email_verified, created_at, updated_at, referred_by, referral_code, account_credit_cents, high_dispute_opens_30d, last_dispute_abuse_alert_at, preferred_payout_schedule, theme_preference, distance_unit";
 
 /** Admin users page — full typed row (regenerate types when adding moderation columns like `is_banned`). */
 export const PROFILE_ADMIN_TABLE_SELECT = PROFILE_TYPED_FULL_SELECT;

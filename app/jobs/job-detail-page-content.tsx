@@ -38,6 +38,11 @@ import {
 import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-server";
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
+import {
+  getListerNonResponsiveCancelPreview,
+  type ListerNonResponsiveCancelPreview,
+} from "@/lib/jobs/lister-nonresponsive-cancel";
 import { cn } from "@/lib/utils";
 
 export type JobDetailRouteMode = "jobs" | "listings";
@@ -337,7 +342,7 @@ export async function JobDetailPageContent({
         }
       : null;
 
-  const isJobCancelled = job?.status === "cancelled";
+  const isJobCancelled = isJobCancelledStatus(job?.status);
   const hasActiveJob = !!job && !isJobCancelled;
 
   if (
@@ -461,6 +466,26 @@ export async function JobDetailPageContent({
   const listerDetailUI = !isCleaner && (isListingOwner || isJobLister);
   const detailUiBoost = isCleaner || listerDetailUI;
 
+  let listerNonResponsiveCancel: ListerNonResponsiveCancelPreview | null = null;
+  if ((isListingOwner || isJobLister) && job?.id != null) {
+    const jr = job as JobRow;
+    listerNonResponsiveCancel = await getListerNonResponsiveCancelPreview(supabase, {
+      id: job.id,
+      lister_id: job.lister_id,
+      winner_id: job.winner_id,
+      status: job.status,
+      listing_id: job.listing_id,
+      agreed_amount_cents: job.agreed_amount_cents,
+      payment_intent_id: job.payment_intent_id,
+      payment_released_at: job.payment_released_at,
+      escrow_funded_at: jr.escrow_funded_at ?? null,
+      created_at: job.created_at,
+      lister_escrow_cancelled_at: jr.lister_escrow_cancelled_at ?? null,
+      disputed_at: jr.disputed_at ?? null,
+      dispute_status: jr.dispute_status ?? null,
+    });
+  }
+
   const isDisputed = job?.status === "disputed" || job?.status === "in_review";
   const disputeStatusLabel =
     job?.status === "in_review" ? "Under Review" : "Awaiting Response";
@@ -548,7 +573,7 @@ export async function JobDetailPageContent({
   const completedJobBanner =
     mode === "jobs" && hasAssignedCleaner && jobStatusNorm === "completed";
   const cancelledJobBanner =
-    mode === "jobs" && hasAssignedCleaner && jobStatusNorm === "cancelled";
+    mode === "jobs" && hasAssignedCleaner && isJobCancelledStatus(jobStatusNorm);
 
   const disputeOpenedByTyped: "lister" | "cleaner" | null = job
     ? disputeOpenerRole({
@@ -734,7 +759,9 @@ export async function JobDetailPageContent({
           jobId={jobId ? String(jobId) : null}
           jobStatus={job?.status ?? null}
           jobAcceptedAt={
-            job && job.status !== "cancelled" ? ((job as { created_at?: string }).created_at ?? null) : null
+            job && !isJobCancelledStatus(job.status)
+              ? ((job as { created_at?: string }).created_at ?? null)
+              : null
           }
           completedAt={job ? ((job as { completed_at?: string }).completed_at ?? null) : null}
           autoReleaseAt={job ? ((job as { auto_release_at?: string }).auto_release_at ?? null) : null}
@@ -797,6 +824,7 @@ export async function JobDetailPageContent({
           winnerStripePayoutReady={winnerStripePayoutReady}
           requireStripeConnectBeforePaymentRelease={requireStripeConnectBeforePaymentRelease}
           pendingListerAdditionalPayment={pendingListerAdditionalPayment}
+          listerNonResponsiveCancel={listerNonResponsiveCancel}
         />
       </section>
     </OfflineJobsPrimer>

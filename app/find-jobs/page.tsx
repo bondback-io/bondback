@@ -33,6 +33,9 @@ import {
   DEFAULT_FIND_JOBS_RADIUS_KM,
 } from "@/lib/find-jobs/map-constants";
 import { listingsToFindJobsMapPoints } from "@/lib/find-jobs/map-points-from-listings";
+import { clearExpiredMarketplaceBanIfNeeded } from "@/lib/auth/clear-expired-ban";
+import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const metadata: Metadata = {
   title: "Find bond cleaning jobs",
@@ -92,6 +95,19 @@ async function FindJobsPageContent({
   const viewerIsCleaner = Boolean(
     session && session.roles.includes("cleaner") && session.activeRole === "cleaner"
   );
+
+  let cleanerMarketplaceBanned = false;
+  if (sessionUserId && viewerIsCleaner) {
+    await clearExpiredMarketplaceBanIfNeeded(sessionUserId);
+    const { data: banRow } = await supabase
+      .from("profiles")
+      .select("is_banned, ban_until")
+      .eq("id", sessionUserId)
+      .maybeSingle();
+    cleanerMarketplaceBanned = isProfileBanActiveForAccess(
+      banRow as { is_banned?: boolean | null; ban_until?: string | null } | null
+    );
+  }
 
   let profileSuburb: string | null = null;
   let defaultRadiusKm = clampMaxTravelKm(30);
@@ -357,7 +373,20 @@ async function FindJobsPageContent({
                   viewerUserId={sessionUserId}
                   viewerActiveRole={viewerActiveRole}
                 >
-                  <div className="space-y-3 lg:space-y-4">{listSection}</div>
+                  <div className="space-y-3 lg:space-y-4">
+                    {cleanerMarketplaceBanned ? (
+                      <Alert
+                        variant="destructive"
+                        className="border-rose-800/40 bg-rose-950/30 text-rose-50 dark:border-rose-900 dark:bg-rose-950/50"
+                      >
+                        <AlertDescription className="text-sm text-rose-100">
+                          Your cleaner account is temporarily banned from the marketplace (bidding and securing jobs).
+                          Contact support if you need help.
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
+                    {listSection}
+                  </div>
                 </FindJobsBrowseShell>
               </div>
             </JobsPageMobileChrome>

@@ -70,6 +70,12 @@ export interface Database {
           /** Denormalized from reviews where reviewee is this cleaner. */
           cleaner_avg_rating: number | null;
           cleaner_total_reviews: number | null;
+          is_banned: boolean | null;
+          banned_reason: string | null;
+          /** Strikes from lister escrow cancel (non-responsive cleaner). */
+          negative_stars: number;
+          /** Temporary ban end time (cleaner marketplace). */
+          ban_until: string | null;
         };
         Insert: {
           id: string;
@@ -122,6 +128,10 @@ export interface Database {
           cleaner_username?: string | null;
           cleaner_avg_rating?: number | null;
           cleaner_total_reviews?: number | null;
+          is_banned?: boolean;
+          banned_reason?: string | null;
+          negative_stars?: number;
+          ban_until?: string | null;
         };
         Update: {
           roles?: string[] | null;
@@ -172,6 +182,10 @@ export interface Database {
           cleaner_username?: string | null;
           cleaner_avg_rating?: number | null;
           cleaner_total_reviews?: number | null;
+          is_banned?: boolean;
+          banned_reason?: string | null;
+          negative_stars?: number;
+          ban_until?: string | null;
         };
         Relationships: [
           {
@@ -435,6 +449,13 @@ export interface Database {
           agreed_amount_cents: number | null;
           secured_via_buy_now: boolean;
           payment_intent_id: string | null;
+          /** First successful Pay & Start Job (escrow hold) timestamp. */
+          escrow_funded_at: string | null;
+          /** Lister cancelled after escrow (non-responsive cleaner flow). */
+          lister_escrow_cancelled_at: string | null;
+          lister_escrow_cancel_fee_cents: number | null;
+          lister_escrow_cancel_refund_cents: number | null;
+          lister_escrow_cancel_reason: string | null;
           /** Additional escrow holds (separate PaymentIntents); see `lib/job-top-up.ts`. */
           top_up_payments: Json;
           /** When status is accepted without escrow; lister must Pay & Start by this time (UTC). */
@@ -478,6 +499,11 @@ export interface Database {
           agreed_amount_cents?: number | null;
           secured_via_buy_now?: boolean;
           payment_intent_id?: string | null;
+          escrow_funded_at?: string | null;
+          lister_escrow_cancelled_at?: string | null;
+          lister_escrow_cancel_fee_cents?: number | null;
+          lister_escrow_cancel_refund_cents?: number | null;
+          lister_escrow_cancel_reason?: string | null;
           top_up_payments?: Json;
           lister_payment_due_at?: string | null;
           payment_released_at?: string | null;
@@ -518,6 +544,11 @@ export interface Database {
           agreed_amount_cents?: number | null;
           secured_via_buy_now?: boolean;
           payment_intent_id?: string | null;
+          escrow_funded_at?: string | null;
+          lister_escrow_cancelled_at?: string | null;
+          lister_escrow_cancel_fee_cents?: number | null;
+          lister_escrow_cancel_refund_cents?: number | null;
+          lister_escrow_cancel_reason?: string | null;
           top_up_payments?: Json;
           lister_payment_due_at?: string | null;
           payment_released_at?: string | null;
@@ -568,6 +599,61 @@ export interface Database {
             columns: ["winner_id"];
             isOneToOne: false;
             referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      job_lister_cancellation_audit: {
+        Row: {
+          id: string;
+          job_id: number;
+          lister_id: string;
+          cleaner_id: string | null;
+          charge_total_cents: number;
+          platform_fee_cents: number;
+          cancellation_fee_cents: number;
+          refund_cents: number;
+          platform_fee_percent_snapshot: number | null;
+          reason: string | null;
+          cleaner_negative_stars_after: number | null;
+          cleaner_banned: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: number;
+          lister_id: string;
+          cleaner_id?: string | null;
+          charge_total_cents: number;
+          platform_fee_cents: number;
+          cancellation_fee_cents: number;
+          refund_cents: number;
+          platform_fee_percent_snapshot?: number | null;
+          reason?: string | null;
+          cleaner_negative_stars_after?: number | null;
+          cleaner_banned?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          job_id?: number;
+          lister_id?: string;
+          cleaner_id?: string | null;
+          charge_total_cents?: number;
+          platform_fee_cents?: number;
+          cancellation_fee_cents?: number;
+          refund_cents?: number;
+          platform_fee_percent_snapshot?: number | null;
+          reason?: string | null;
+          cleaner_negative_stars_after?: number | null;
+          cleaner_banned?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "job_lister_cancellation_audit_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
+            referencedRelation: "jobs";
             referencedColumns: ["id"];
           }
         ];

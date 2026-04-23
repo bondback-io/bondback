@@ -2,6 +2,8 @@
  * Dispute Resolution hub (/disputes): list vs detail, open vs closed, auto-close on escrow release.
  */
 
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
+
 const CLOSED_DISPUTE_STATUSES = new Set(["completed", "cancelled"]);
 
 /** Shared `select` for hub list + detail (keep in sync with RLS-visible columns). */
@@ -71,7 +73,7 @@ export function isDashboardCompletedJob(job: {
   const s = String(job.status ?? "").trim().toLowerCase();
   const ds = String(job.dispute_status ?? "").trim().toLowerCase();
   /** Only job `status` cancels the row. `dispute_status` may be `cancelled` (e.g. legacy admin paths) while the job is still terminal `completed`. */
-  if (s === "cancelled") return false;
+  if (isJobCancelledStatus(s)) return false;
   /** Admin / escrow paths set `completed_at` when the job is fully closed — catch status lag. */
   if (String(job.completed_at ?? "").trim().length > 0) return true;
   if (s === "completed") return true;
@@ -122,7 +124,7 @@ type DashboardJobPhaseFields = Parameters<typeof isDashboardCompletedJob>[0];
 export function isDashboardActivePipelineJob(job: DashboardJobPhaseFields & { status?: string | null }): boolean {
   if (isDashboardCompletedJob(job)) return false;
   const s = String(job.status ?? "").trim().toLowerCase();
-  if (s === "cancelled") return false;
+  if (isJobCancelledStatus(s)) return false;
   if (
     s === "accepted" ||
     s === "in_progress" ||

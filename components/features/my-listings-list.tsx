@@ -78,6 +78,7 @@ import {
   isListerPaidJobListing,
   type ListFilter,
 } from "@/lib/my-listings/lister-listing-helpers";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import {
   loadListingDraftLocal,
   clearListingDraftLocal,
@@ -87,8 +88,8 @@ import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 function preferJobRow<
   T extends { status: string | null; updated_at?: string | null },
 >(a: T, b: T): T {
-  const ac = a.status === "cancelled";
-  const bc = b.status === "cancelled";
+  const ac = isJobCancelledStatus(a.status);
+  const bc = isJobCancelledStatus(b.status);
   if (ac && !bc) return b;
   if (!ac && bc) return a;
   const ta = a.updated_at ? Date.parse(String(a.updated_at)) : 0;
@@ -172,7 +173,7 @@ function jobRowIsNonCancelled(
   info: { status: string | null } | null | undefined
 ): boolean {
   if (!info) return false;
-  return String(info.status ?? "").toLowerCase() !== "cancelled";
+  return !isJobCancelledStatus(info.status);
 }
 
 function snapshotToActiveJobsRecord(
@@ -711,7 +712,7 @@ export function MyListingsList({
   const nowMs = Date.now();
   const cancelledJobListingIds = new Set<string>(
     listingsDeduped
-      .filter((l) => activeJobs[String(l.id)]?.status === "cancelled")
+      .filter((l) => isJobCancelledStatus(activeJobs[String(l.id)]?.status))
       .map((l) => String(l.id))
   );
   const liveListings = otherListings.filter(
@@ -1195,7 +1196,7 @@ export function MyListingsList({
               const directJobHref =
                 job &&
                 job.jobId != null &&
-                String(job.status ?? "") !== "cancelled" &&
+                !isJobCancelledStatus(job.status) &&
                 String(job.jobId).trim() !== ""
                   ? `/jobs/${encodeURIComponent(String(job.jobId).trim())}`
                   : null;

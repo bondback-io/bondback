@@ -31,6 +31,7 @@ import {
 } from "@/lib/listings";
 import { formatLocationWithState } from "@/lib/state-from-postcode";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import {
   Bed,
   Bath,
@@ -328,7 +329,7 @@ function ListingCardInner({
 
   const isLive = isListingLive(listing);
   const isListingCancelled = String(listing.status).toLowerCase() === "cancelled";
-  const isJobCancelled = String(jobStatus ?? "").toLowerCase() === "cancelled";
+  const isJobCancelled = isJobCancelledStatus(jobStatus);
   const hideCleanerCancelledAuctionUi =
     isCleaner && (isListingCancelled || isJobCancelled);
   const hasBuyNow =

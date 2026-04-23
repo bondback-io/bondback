@@ -16,6 +16,8 @@ import { authPerfDevLog, isAuthPerfDev } from "@/lib/auth/auth-perf-dev";
 import { ACCOUNT_INACTIVE_MESSAGE } from "@/lib/auth/account-errors";
 import { signOutIfAuthUserMissing } from "@/lib/auth/sign-out-if-auth-user-missing";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { clearExpiredMarketplaceBanIfNeeded } from "@/lib/auth/clear-expired-ban";
+import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
 
 type SessionFinalizeParams = {
   /** Matches `@supabase/ssr` server client (differs from bare `SupabaseClient<Database>` generics). */
@@ -201,9 +203,12 @@ export async function redirectAfterAuthSessionEstablished(
     provider: provider === "google" ? "google" : "email",
   });
 
+  await clearExpiredMarketplaceBanIfNeeded(session.user.id);
+
   const profileT0 = Date.now();
   type ProfileRow = {
     is_banned?: boolean;
+    ban_until?: string | null;
     banned_reason?: string | null;
     roles?: unknown;
     active_role?: string | null;
@@ -214,7 +219,7 @@ export async function redirectAfterAuthSessionEstablished(
   if (admin) {
     const { data } = await admin
       .from("profiles")
-      .select("is_banned, banned_reason, roles, active_role")
+      .select("is_banned, ban_until, banned_reason, roles, active_role")
       .eq("id", session.user.id)
       .maybeSingle();
     p = (data as ProfileRow | null) ?? null;
@@ -222,7 +227,7 @@ export async function redirectAfterAuthSessionEstablished(
   if (!p) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("is_banned, banned_reason, roles, active_role")
+      .select("is_banned, ban_until, banned_reason, roles, active_role")
       .eq("id", session.user.id)
       .maybeSingle();
     p = (profile as ProfileRow | null) ?? null;
@@ -233,7 +238,7 @@ export async function redirectAfterAuthSessionEstablished(
     console.warn("[auth:perf] auth-callback-session:profiles_select_SLOW", { ms: profileMs });
   }
 
-  if (p?.is_banned) {
+  if (p != null && isProfileBanActiveForAccess(p)) {
     await supabase.auth.signOut();
     const reason = p.banned_reason ? encodeURIComponent(p.banned_reason) : "";
     const loginUrl = new URL("/login", origin);

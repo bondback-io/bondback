@@ -13,6 +13,7 @@ import {
 import { haversineDistanceKm, postcodeDistanceKm } from "@/lib/geo/haversine";
 import { getSuburbLatLon } from "@/lib/geo/suburb-lat-lon";
 import { normalizeProfileRoles } from "@/lib/profile-roles";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 
 const safeTrim = (v: unknown) => String(v ?? "").trim();
 const DEFAULT_NEW_LISTING_REMINDER_INTERVAL_HOURS = 6;
@@ -444,7 +445,7 @@ export async function sendNoBidListingReminderNotifications(
 
   const listingIdsWithAssignedCleaner = new Set(
     ((jobsRes.data ?? []) as { listing_id: string | null; winner_id: string | null; status: string | null }[])
-      .filter((j) => safeTrim(j.winner_id).length > 0 && safeTrim(j.status).toLowerCase() !== "cancelled")
+      .filter((j) => safeTrim(j.winner_id).length > 0 && !isJobCancelledStatus(j.status))
       .map((j) => safeTrim(j.listing_id))
       .filter((v) => v.length > 0)
   );

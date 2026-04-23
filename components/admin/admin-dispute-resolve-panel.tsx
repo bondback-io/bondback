@@ -12,6 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { adminResolveDispute } from "@/lib/actions/admin-jobs";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import { CheckCircle2, Gavel, Receipt, RotateCcw, XCircle, Clock } from "lucide-react";
 
 function formatCents(cents: number): string {
@@ -44,7 +45,7 @@ export function AdminDisputeResolvePanel({
   );
 
   const st = String(jobStatus ?? "").toLowerCase();
-  const isTerminal = st === "completed" || st === "cancelled";
+  const isTerminal = st === "completed" || isJobCancelledStatus(st);
 
   const handleResolve = async () => {
     const formData = new FormData();

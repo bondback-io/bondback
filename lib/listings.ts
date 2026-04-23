@@ -1,5 +1,6 @@
 import type { Database } from "@/types/supabase";
 import { parseUtcTimestamp } from "@/lib/utils";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 
 export type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 export type BidRow = Database["public"]["Tables"]["bids"]["Row"];
@@ -56,9 +57,7 @@ export function listingIdsWithCancelledJobs(
   jobs: ReadonlyArray<{ listing_id: string | number; status: string | null | undefined }>
 ): Set<string> {
   return new Set(
-    jobs
-      .filter((j) => String(j.status ?? "").toLowerCase() === "cancelled")
-      .map((j) => String(j.listing_id))
+    jobs.filter((j) => isJobCancelledStatus(j.status)).map((j) => String(j.listing_id))
   );
 }
 

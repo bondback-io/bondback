@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/supabase";
 import { parseUtcTimestamp } from "@/lib/utils";
+import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   JOB_DETAIL_MINIMAL_SELECT,
@@ -158,7 +159,7 @@ export async function listingHasAssignedWinnerJob(
     .from("jobs")
     .select("id")
     .eq("listing_id", listingId)
-    .neq("status", "cancelled")
+    .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
     .not("winner_id", "is", null)
     .limit(1)
     .maybeSingle();
@@ -379,7 +380,7 @@ export async function loadListingFullForSession(
       .from("jobs")
       .select("lister_id, winner_id, status, listing_id")
       .eq("listing_id", listingId)
-      .neq("status", "cancelled")
+      .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
       .not("winner_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -448,7 +449,7 @@ export async function loadJobForListingDetailPage(
       .from("jobs")
       .select(select)
       .eq("listing_id", listingId)
-      .neq("status", "cancelled")
+      .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -475,7 +476,7 @@ export async function loadJobForListingDetailPage(
       .from("jobs")
       .select(select)
       .eq("listing_id", listingId)
-      .neq("status", "cancelled")
+      .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()

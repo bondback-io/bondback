@@ -17,6 +17,7 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { isListerRelistPoolListingStatus } from "@/lib/my-listings/lister-listing-helpers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveListerMyListingsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
+import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 
 type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -670,7 +671,7 @@ export async function relistExpiredListing(
     .from("jobs")
     .select("id")
     .eq("listing_id", listingId)
-    .neq("status", "cancelled")
+    .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
     .limit(1);
   if (blockErr) {
     return { ok: false, error: blockErr.message };

@@ -1,0 +1,124 @@
+import { fetchPlatformFeePercentForListing } from "@/lib/platform-fee";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/supabase";
+import { getGlobalSettings } from "@/lib/actions/global-settings";
+import {
+  getCleanerLastActivityAtMs,
+  idleLongEnoughForNonResponsiveCancel,
+  NONRESPONSIVE_CANCEL_IDLE_MS,
+} from "@/lib/jobs/cleaner-last-activity";
+import { trimStr } from "@/lib/utils";
+
+export const MAX_CANCELLATION_FEE_CENTS = 5000; // $50 AUD
+
+export function computeNonResponsiveCancellationAmounts(params: {
+  agreedAmountCents: number;
+  feePercent: number;
+}): {
+  platformFeeCents: number;
+  cancellationFeeCents: number;
+  chargeTotalCents: number;
+  refundCents: number;
+} {
+  const agreed = Math.max(0, Math.round(params.agreedAmountCents));
+  const pct = params.feePercent / 100;
+  const platformFeeCents = Math.round(agreed * pct);
+  const cancellationFeeCents = Math.min(MAX_CANCELLATION_FEE_CENTS, platformFeeCents);
+  const chargeTotalCents = agreed + platformFeeCents;
+  const refundCents = Math.max(0, chargeTotalCents - cancellationFeeCents);
+  return { platformFeeCents, cancellationFeeCents, chargeTotalCents, refundCents };
+}
+
+export type ListerNonResponsiveCancelPreview =
+  | {
+      eligible: true;
+      cancellationFeeCents: number;
+      refundCents: number;
+      chargeTotalCents: number;
+      platformFeeCents: number;
+      platformFeePercent: number;
+      idleHours: number;
+    }
+  | { eligible: false; reason: string };
+
+/**
+ * Server-only preview for lister job UI (caller must ensure viewer is lister).
+ */
+export async function getListerNonResponsiveCancelPreview(
+  supabase: SupabaseClient<Database, "public", any>,
+  job: {
+    id: number;
+    lister_id: string;
+    winner_id: string | null;
+    status: string | null;
+    listing_id: string | null;
+    agreed_amount_cents: number | null;
+    payment_intent_id: string | null;
+    payment_released_at: string | null;
+    escrow_funded_at?: string | null;
+    created_at?: string | null;
+    lister_escrow_cancelled_at?: string | null;
+    disputed_at?: string | null;
+    dispute_status?: string | null;
+  }
+): Promise<ListerNonResponsiveCancelPreview> {
+  if (job.lister_escrow_cancelled_at) {
+    return { eligible: false, reason: "This job was already cancelled under this flow." };
+  }
+  const st = String(job.status ?? "").toLowerCase();
+  if (!["in_progress", "accepted"].includes(st)) {
+    return { eligible: false, reason: "Only available while the job is paid and active." };
+  }
+  if (!trimStr(job.payment_intent_id)) {
+    return { eligible: false, reason: "No escrow payment on this job." };
+  }
+  if (trimStr(job.payment_released_at)) {
+    return { eligible: false, reason: "Payment was already released from escrow." };
+  }
+  if (trimStr(job.disputed_at)) {
+    return { eligible: false, reason: "Not available while this job has an open dispute history." };
+  }
+  if (["disputed", "in_review", "dispute_negotiating"].includes(st)) {
+    return { eligible: false, reason: "Not available during dispute review." };
+  }
+  if (!job.winner_id) {
+    return { eligible: false, reason: "No cleaner is assigned." };
+  }
+
+  const lastAct = await getCleanerLastActivityAtMs(job.id, job.winner_id);
+  const idle = idleLongEnoughForNonResponsiveCancel(
+    lastAct,
+    job.escrow_funded_at ?? null,
+    job.created_at ?? null
+  );
+  if (!idle.ok) {
+    const hours = (NONRESPONSIVE_CANCEL_IDLE_MS / (60 * 60 * 1000)).toFixed(0);
+    return {
+      eligible: false,
+      reason: `The cleaner must have no activity for at least ${hours} hours. Not eligible yet.`,
+    };
+  }
+
+  const settings = await getGlobalSettings();
+  const feePercent = await fetchPlatformFeePercentForListing(
+    supabase,
+    job.listing_id,
+    settings
+  );
+  const agreed = Math.max(0, Math.round(Number(job.agreed_amount_cents ?? 0)));
+  if (agreed < 1) {
+    return { eligible: false, reason: "Job has no agreed amount." };
+  }
+  const amounts = computeNonResponsiveCancellationAmounts({
+    agreedAmountCents: agreed,
+    feePercent,
+  });
+  const idleHours = Math.max(0, (Date.now() - idle.idleSinceMs) / (60 * 60 * 1000));
+
+  return {
+    eligible: true,
+    ...amounts,
+    platformFeePercent: feePercent,
+    idleHours,
+  };
+}

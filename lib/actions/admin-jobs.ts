@@ -24,6 +24,7 @@ import { applyReferralRewardsForCompletedJob } from "@/lib/actions/referral-rewa
 import { adminDeleteListingByIdCascade } from "@/lib/actions/admin-listings";
 import { suggestMediationRefundCents } from "@/lib/disputes/mediation-settlement-ai";
 import { insertAdminMediationProposalRecords } from "@/lib/actions/disputes";
+import { isJobCancelledStatus, JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 
 async function requireAdmin(): Promise<{
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -851,7 +852,7 @@ export async function adminBackfillJobWinnersFromAcceptedBidsForm(): Promise<voi
     .from("jobs")
     .select("id, listing_id")
     .is("winner_id", null)
-    .neq("status", "cancelled");
+    .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT);
 
   if (jErr || !jobs?.length) {
     revalidatePath("/admin/jobs");
@@ -991,7 +992,7 @@ export async function adminSubmitMediationSettlement(
   };
 
   const st = String(j.status ?? "").toLowerCase();
-  if (st === "completed" || st === "cancelled") {
+  if (st === "completed" || isJobCancelledStatus(st)) {
     return { ok: false, error: "This job is already completed or cancelled." };
   }
 

@@ -10,6 +10,8 @@ import { invalidatePendingEarlyAcceptIfSuperseded } from "@/lib/actions/early-bi
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { MAX_BID_DROP_PER_BID_CENTS } from "@/lib/bidding-rules";
+import { clearExpiredMarketplaceBanIfNeeded } from "@/lib/auth/clear-expired-ban";
+import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type BidRow = Database["public"]["Tables"]["bids"]["Row"];
@@ -130,6 +132,20 @@ export async function placeBid(
 
   if (!roles.includes("cleaner") || activeRole !== "cleaner") {
     return { ok: false, error: "Only cleaners can place bids." };
+  }
+
+  await clearExpiredMarketplaceBanIfNeeded(session.user.id);
+  const { data: banCheck } = await supabase
+    .from("profiles")
+    .select("is_banned, ban_until")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  if (isProfileBanActiveForAccess(banCheck as { is_banned?: boolean | null; ban_until?: string | null } | null)) {
+    return {
+      ok: false,
+      error:
+        "Your account is temporarily banned from bidding. If you think this is a mistake, contact support.",
+    };
   }
 
   const settings = await getGlobalSettings();

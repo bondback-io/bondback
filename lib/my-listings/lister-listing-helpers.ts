@@ -3,6 +3,7 @@ import type { ListingRow } from "@/lib/listings";
 import { isListingLiveAt } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 
 export type JobSnapshot = {
   jobId: string | number;
@@ -84,7 +85,7 @@ export function isListerJobConverted(
   job: JobSnapshot | null | undefined
 ): boolean {
   const s = String(job?.status ?? "");
-  if (!s || s === "cancelled") return false;
+  if (!s || isJobCancelledStatus(s)) return false;
   return true;
 }
 
@@ -124,7 +125,7 @@ export function isListerNoBidsRelistListing(
   nowMs: number = Date.now()
 ): boolean {
   const js = String(job?.status ?? "");
-  if (js && js !== "cancelled") return false;
+  if (js && !isJobCancelledStatus(js)) return false;
   return isListerRelistPoolListingStatus(listing, nowMs);
 }
 
@@ -133,7 +134,7 @@ export function isListerJobPipelineActive(
   job: JobSnapshot | null | undefined
 ): boolean {
   const s = String(job?.status ?? "");
-  if (!s || s === "cancelled") return false;
+  if (!s || isJobCancelledStatus(s)) return false;
   if (isListerMyListingsJobCompleted(job)) return false;
   return true;
 }
@@ -144,8 +145,12 @@ export function classifyListerBadge(
   nowMs: number
 ): { key: string; label: string; tone: BadgeTone } {
   const js = job?.status ?? null;
-  if (js === "cancelled") {
-    return { key: "cancelled", label: "Cancelled", tone: "slate" };
+  if (isJobCancelledStatus(js)) {
+    return {
+      key: "cancelled",
+      label: String(js) === "cancelled_by_lister" ? "Cancelled (lister)" : "Cancelled",
+      tone: "slate",
+    };
   }
   if (job && isListerMyListingsJobCompleted(job)) {
     return { key: "completed", label: "Completed", tone: "emerald" };
@@ -255,7 +260,7 @@ export function isListerPaidJobListing(
   job: JobSnapshot | null | undefined
 ): boolean {
   const s = String(job?.status ?? "");
-  if (!s || s === "cancelled") return false;
+  if (!s || isJobCancelledStatus(s)) return false;
   if (isListerMyListingsJobCompleted(job)) return false;
   if (isDisputedJobStatus(s)) return false;
   return (
@@ -275,7 +280,7 @@ export function passesListFilter(
 ): boolean {
   if (filter === "all") return true;
   const js = job?.status ?? null;
-  const hasNonCancelledJob = Boolean(js && js !== "cancelled");
+  const hasNonCancelledJob = Boolean(js && !isJobCancelledStatus(js));
   if (filter === "jobs") return hasNonCancelledJob;
   const auctionLive = isListingLiveAt(listing, nowMs);
   if (filter === "auctions") return auctionLive && !hasNonCancelledJob;

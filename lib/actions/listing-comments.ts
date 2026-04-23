@@ -15,6 +15,7 @@ import {
   parsePostedAsRole,
   type ListingCommentPostedAsRole,
 } from "@/lib/listing-comment-author-role";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type ListingCommentRow = Database["public"]["Tables"]["listing_comments"]["Row"];
@@ -320,7 +321,7 @@ export async function postListingComment(params: {
       .maybeSingle();
 
     const hasActiveJob =
-      !!jobRow && String((jobRow as { status?: string }).status ?? "").toLowerCase() !== "cancelled";
+      !!jobRow && !isJobCancelledStatus((jobRow as { status?: string }).status);
 
     if (!shouldShowPublicListingComments(row, hasActiveJob)) {
       return { ok: false, error: "Comments are closed for this listing." };

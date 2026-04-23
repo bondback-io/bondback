@@ -1,0 +1,209 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { MoreHorizontal, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cancelEscrowJobNonResponsiveCleaner } from "@/lib/actions/jobs";
+import type { ListerNonResponsiveCancelPreview } from "@/lib/jobs/lister-nonresponsive-cancel";
+import { useToast } from "@/components/ui/use-toast";
+
+function formatAud(cents: number): string {
+  return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
+}
+
+export function ListerNonresponsiveCancelMenu({
+  jobId,
+  preview,
+}: {
+  jobId: number;
+  preview: Extract<ListerNonResponsiveCancelPreview, { eligible: true }>;
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [confirmText, setConfirmText] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function reset() {
+    setStep(1);
+    setConfirmText("");
+  }
+
+  function closeDialog() {
+    setOpen(false);
+    reset();
+  }
+
+  function submitFinal() {
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("jobId", String(jobId));
+      fd.set("confirm", confirmText.trim());
+      const r = await cancelEscrowJobNonResponsiveCleaner(fd);
+      if (!r.ok) {
+        toast({
+          variant: "destructive",
+          title: "Could not cancel job",
+          description: r.error,
+        });
+        return;
+      }
+      toast({
+        title: "Job cancelled",
+        description: `Refund of ${formatAud(r.refundCents)} is processing. Bond Back retained ${formatAud(r.cancellationFeeCents)}.`,
+      });
+      closeDialog();
+      router.refresh();
+    });
+  }
+
+  const confirmOk = confirmText.trim() === "CANCEL";
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground dark:text-gray-500 dark:hover:text-gray-200"
+            aria-label="More options"
+          >
+            <MoreHorizontal className="h-4 w-4" aria-hidden />
+            More
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[min(100vw-2rem,280px)]">
+          <DropdownMenuItem
+            className="text-xs text-muted-foreground focus:text-foreground dark:text-gray-400 dark:focus:text-gray-100"
+            onSelect={(e) => {
+              e.preventDefault();
+              setOpen(true);
+              reset();
+            }}
+          >
+            Cancel Job – Cleaner Non-Responsive
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) closeDialog();
+          else setOpen(true);
+        }}
+      >
+        <DialogContent className="max-h-[min(90vh,640px)] overflow-y-auto border-border bg-card dark:border-gray-800 dark:bg-gray-950 sm:max-w-lg">
+          {step === 1 ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-lg">Cancel for non-responsive cleaner?</DialogTitle>
+                <DialogDescription asChild>
+                  <div className="space-y-3 pt-1 text-left text-sm text-muted-foreground dark:text-gray-400">
+                    <p>
+                      This action should only be used when the cleaner has been completely non-responsive
+                      for 5+ days.
+                    </p>
+                    <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                      <p className="font-semibold text-foreground dark:text-gray-50">Cancelling will:</p>
+                      <ul className="mt-2 list-inside list-disc space-y-1">
+                        <li>
+                          Refund your payment minus a cancellation fee (max $50 — here:{" "}
+                          <strong>{formatAud(preview.cancellationFeeCents)}</strong>, refund approx{" "}
+                          <strong>{formatAud(preview.refundCents)}</strong>)
+                        </li>
+                        <li>Apply 1 negative star to the cleaner&apos;s profile</li>
+                        <li>Risk a 3-month ban if they reach 3 negative stars</li>
+                      </ul>
+                    </div>
+                    <p className="font-medium text-foreground dark:text-gray-200">
+                      Are you sure you want to proceed?
+                    </p>
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button type="button" variant="outline" onClick={closeDialog}>
+                  Back
+                </Button>
+                <Button type="button" onClick={() => setStep(2)}>
+                  Continue
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-lg">Final confirmation</DialogTitle>
+                <DialogDescription className="text-left text-sm">
+                  Type <span className="font-mono font-semibold">CANCEL</span> to enable the button below.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <Alert variant="destructive" className="border-red-300/80 dark:border-red-900/60">
+                  <AlertDescription>
+                    This action cannot be undone and will negatively impact the cleaner&apos;s reputation.
+                  </AlertDescription>
+                </Alert>
+                <div>
+                  <Label htmlFor={`cancel-confirm-${jobId}`} className="text-xs">
+                    Confirmation
+                  </Label>
+                  <Input
+                    id={`cancel-confirm-${jobId}`}
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    placeholder="CANCEL"
+                    autoComplete="off"
+                    className="mt-1 font-mono dark:bg-gray-900"
+                  />
+                </div>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={pending}>
+                  Back
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={!confirmOk || pending}
+                  onClick={submitFinal}
+                >
+                  {pending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                      Processing…
+                    </>
+                  ) : (
+                    "Cancel job & refund"
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

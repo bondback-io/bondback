@@ -9,6 +9,7 @@ import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sameUuid, trimStr } from "@/lib/utils";
+import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 
 function safeEqualToken(a: string, b: string): boolean {
   try {
@@ -82,7 +83,7 @@ export async function requestEarlyBidAcceptance(
     .from("jobs")
     .select("id")
     .eq("listing_id", listingUuid)
-    .neq("status", "cancelled")
+    .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
     .limit(1);
   if (blockingJobs && blockingJobs.length > 0) {
     return { ok: false, error: "A job already exists for this listing." };

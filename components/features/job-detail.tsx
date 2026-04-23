@@ -94,6 +94,9 @@ import { ImageLightboxGallery } from "@/components/ui/image-lightbox-gallery";
 import { ReviewForm } from "@/components/features/review-form";
 import { GuidedDisputeForm } from "@/components/features/guided-dispute-form";
 import { ListerAdditionalPaymentReviewDialog } from "@/components/disputes/lister-additional-payment-review-dialog";
+import { ListerNonresponsiveCancelMenu } from "@/components/jobs/lister-nonresponsive-cancel-menu";
+import type { ListerNonResponsiveCancelPreview } from "@/lib/jobs/lister-nonresponsive-cancel";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import { useToast } from "@/components/ui/use-toast";
 import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
 import { logClientError } from "@/lib/errors/log-client-error";
@@ -604,6 +607,8 @@ export type JobDetailProps = {
     reason: string;
     job_id: number;
   } | null;
+  /** Server-only eligibility for escrow non-responsive cancel (lister menu). */
+  listerNonResponsiveCancel?: ListerNonResponsiveCancelPreview | null;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -843,6 +848,7 @@ export function JobDetail({
   winnerStripePayoutReady = true,
   requireStripeConnectBeforePaymentRelease = true,
   pendingListerAdditionalPayment = null,
+  listerNonResponsiveCancel = null,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -1203,7 +1209,7 @@ export function JobDetail({
       : null;
   const isListingCancelled = String(listing.status).toLowerCase() === "cancelled";
   const isJobCancelled =
-    localJobStatus === "cancelled" || jobStatus === "cancelled";
+    isJobCancelledStatus(localJobStatus) || isJobCancelledStatus(jobStatus);
   /** Hide auction/timer/bid UI for cleaners on cancelled listing or cancelled job only */
   const hideCleanerCancelledAuctionUi =
     isCleaner && (isListingCancelled || isJobCancelled);
@@ -1448,7 +1454,7 @@ export function JobDetail({
       Boolean(numericJobId) &&
       hasActiveJob &&
       statusForAfterPhotos != null &&
-      statusForAfterPhotos !== "cancelled" &&
+      !isJobCancelledStatus(statusForAfterPhotos) &&
       afterPhotoLoadStatuses.has(statusForAfterPhotos);
 
     if (!shouldLoadAfterPhotos) {
@@ -1727,6 +1733,7 @@ export function JobDetail({
       in_review: "Under review",
       dispute_negotiating: "Dispute",
       cancelled: "Cancelled",
+      cancelled_by_lister: "Cancelled by lister",
     };
     return map[s] ?? (s ? s.replace(/_/g, " ") : "Job");
   }, [localJobStatus, jobStatus]);
@@ -1913,14 +1920,17 @@ export function JobDetail({
     requireStripeConnectBeforePaymentRelease &&
     !winnerStripePayoutReady &&
     localJobStatus &&
-    !["completed", "cancelled"].includes(localJobStatus);
+    localJobStatus != null &&
+    localJobStatus !== "completed" &&
+    !isJobCancelledStatus(localJobStatus);
 
   const showCleanerStripeWinBanner =
     isJobCleaner &&
     Boolean(jobId) &&
     !winnerStripePayoutReady &&
     localJobStatus &&
-    !["completed", "cancelled"].includes(localJobStatus);
+    localJobStatus !== "completed" &&
+    !isJobCancelledStatus(localJobStatus);
 
   /** Lister boosted job page after payment released — compact summary + Job history collapsible. */
   const listerCompletedBoostTidy =
@@ -1997,6 +2007,18 @@ export function JobDetail({
         detailUiBoost && "mx-auto w-full max-w-4xl pb-24 md:pb-10"
       )}
     >
+      {(isListingOwner || isJobLister) &&
+        listerNonResponsiveCancel?.eligible === true &&
+        numericJobId != null &&
+        Number.isFinite(numericJobId) &&
+        numericJobId > 0 && (
+          <div className="-mb-2 flex justify-end">
+            <ListerNonresponsiveCancelMenu
+              jobId={numericJobId}
+              preview={listerNonResponsiveCancel}
+            />
+          </div>
+        )}
       {paymentTimeline && (
         <JobPaymentTimeline {...paymentTimeline} />
       )}
@@ -2731,17 +2753,23 @@ export function JobDetail({
               </p>
             </div>
           )}
-          {(localJobStatus === "cancelled" || jobStatus === "cancelled") && isJobCleaner && (
+          {isJobCancelled && isJobCleaner && (
             <div className="flex items-center gap-2 rounded-lg border-2 border-red-400 bg-red-50 px-4 py-3 text-sm font-medium text-red-900 dark:border-red-500 dark:bg-red-950/70 dark:text-red-100">
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 dark:bg-red-400" aria-hidden />
               <span>
-                This job listing has been cancelled by the property lister. You have been unassigned from the job.
+                {localJobStatus === "cancelled_by_lister" || jobStatus === "cancelled_by_lister"
+                  ? "This job was cancelled by the property lister (non-responsive cleaner / escrow refund). You have been unassigned."
+                  : "This job listing has been cancelled by the property lister. You have been unassigned from the job."}
               </span>
             </div>
           )}
-          {(localJobStatus === "cancelled" || jobStatus === "cancelled") && isJobLister && (
+          {isJobCancelled && isJobLister && (
             <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300">
-              <span>You have cancelled this job. The cleaner has been notified.</span>
+              <span>
+                {localJobStatus === "cancelled_by_lister" || jobStatus === "cancelled_by_lister"
+                  ? "You cancelled this job under the non-responsive cleaner process. Refund and fee details are in your notifications and payment timeline."
+                  : "You have cancelled this job. The cleaner has been notified."}
+              </span>
             </div>
           )}
           {!detailUiBoost &&

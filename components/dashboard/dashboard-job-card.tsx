@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import { parseJobTopUpPayments } from "@/lib/job-top-up";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import type { Json } from "@/types/supabase";
 
 type JobRow = {
@@ -74,8 +75,9 @@ function jobCardStatusPresentation(status: string): {
         badgeClass: "bg-slate-600/90 text-white dark:bg-slate-500",
       };
     case "cancelled":
+    case "cancelled_by_lister":
       return {
-        label: "Cancelled",
+        label: s === "cancelled_by_lister" ? "Cancelled (lister)" : "Cancelled",
         badgeClass: "bg-destructive text-destructive-foreground",
       };
     case "disputed":
@@ -177,7 +179,7 @@ function DashboardJobCardInner({
   const showStripeSetupBadge =
     stripePayoutSetupRequired &&
     job.status !== "completed" &&
-    job.status !== "cancelled";
+    !isJobCancelledStatus(job.status);
 
   const agreed = job.agreed_amount_cents;
   const topUpCount = parseJobTopUpPayments(job.top_up_payments ?? null).length;

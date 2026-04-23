@@ -6,6 +6,8 @@ import {
 } from "@/lib/auth/post-login-redirect";
 import { sanitizeInternalNextPath } from "@/lib/safe-redirect";
 import { LoginForm, type LoginFormSearchProps } from "./login-form";
+import { clearExpiredMarketplaceBanIfNeeded } from "@/lib/auth/clear-expired-ban";
+import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
 
 function searchParamsToQueryString(
   sp: Record<string, string | string[] | undefined>
@@ -58,20 +60,22 @@ export default async function LoginPage({
   } = await supabase.auth.getUser();
 
   if (user?.id) {
+    await clearExpiredMarketplaceBanIfNeeded(user.id);
     const { data: profile } = await supabase
       .from("profiles")
-      .select("roles, active_role, is_banned, banned_reason")
+      .select("roles, active_role, is_banned, banned_reason, ban_until")
       .eq("id", user.id)
       .maybeSingle();
 
     const row = profile as {
       is_banned?: boolean;
       banned_reason?: string | null;
+      ban_until?: string | null;
     } | null;
 
-    if (row?.is_banned) {
+    if (isProfileBanActiveForAccess(row)) {
       await supabase.auth.signOut();
-      const reason = row.banned_reason?.trim();
+      const reason = row?.banned_reason?.trim();
       const qs = new URLSearchParams();
       qs.set("banned", "1");
       if (reason) qs.set("reason", reason);

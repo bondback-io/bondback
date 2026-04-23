@@ -27,6 +27,10 @@ import { countUnreadListingQaNotifications } from "@/lib/actions/notifications";
 import { ListingPublicCommentsDock } from "@/components/features/listing-public-comments-dock";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ListerAdditionalPaymentReviewDialog } from "@/components/disputes/lister-additional-payment-review-dialog";
+import {
+  isJobCancelledStatus,
+  JOB_STATUS_NOT_IN_LISTING_SLOT,
+} from "@/lib/jobs/job-status-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -176,7 +180,7 @@ export default async function ListingDetailPage({
         .from("jobs")
         .select("id, status, agreed_amount_cents, top_up_payments")
         .eq("listing_id", listingId)
-        .neq("status", "cancelled")
+        .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -213,7 +217,7 @@ export default async function ListingDetailPage({
 
   const initialBids: BidWithBidder[] = await enrichBidsWithBidderProfiles(bids ?? []);
 
-  const hasActiveJob = !!jobRow && jobRow.status !== "cancelled";
+  const hasActiveJob = !!jobRow && !isJobCancelledStatus(jobRow.status);
   const numericJobId = jobRow?.id ?? null;
   const securedViaBuyNow =
     Boolean(

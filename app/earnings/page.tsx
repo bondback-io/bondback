@@ -16,6 +16,7 @@ import {
   isDashboardCompletedJob,
 } from "@/lib/jobs/dispute-hub-helpers";
 import { resolveCleanerEarningsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
+import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 import type { ListingPriceFallbackCents } from "@/lib/admin-job-gross";
 
 function listingPriceExtras(listing: ListingRow | undefined): ListingPriceFallbackCents | undefined {
@@ -120,7 +121,7 @@ export default async function EarningsPage() {
       .from("jobs")
       .select(jobSelectEarnings as never)
       .in("listing_id", acceptedListingIds as string[])
-      .neq("status", "cancelled")
+      .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
       .order("created_at", { ascending: false });
     const byId = new Map<number, JobRow>();
     for (const j of jobs) {

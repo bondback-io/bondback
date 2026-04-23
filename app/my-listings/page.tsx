@@ -20,6 +20,7 @@ import {
 import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
 import { resolveListerMyListingsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
 import { parseUtcTimestamp } from "@/lib/utils";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import { ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import MyListingsLoading from "./loading";
@@ -30,8 +31,8 @@ type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 function preferJobRow<
   T extends { status: string | null; updated_at?: string | null },
 >(a: T, b: T): T {
-  const ac = a.status === "cancelled";
-  const bc = b.status === "cancelled";
+  const ac = isJobCancelledStatus(a.status);
+  const bc = isJobCancelledStatus(b.status);
   if (ac && !bc) return b;
   if (!ac && bc) return a;
   const ta = a.updated_at ? Date.parse(String(a.updated_at)) : 0;
@@ -304,11 +305,11 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
 
     const nowMs = Date.now();
     const cancelledJobListingIds = new Set(
-      jobs.filter((j) => j.status === "cancelled").map((j) => String(j.listing_id))
+      jobs.filter((j) => isJobCancelledStatus(j.status)).map((j) => String(j.listing_id))
     );
     const listingIdsWithActiveJob = new Set(
       Object.entries(jobByListing)
-        .filter(([, row]) => row.status !== "cancelled")
+        .filter(([, row]) => !isJobCancelledStatus(row.status))
         .map(([lid]) => lid)
     );
     const liveCount = initialListings.filter(
@@ -329,7 +330,7 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
 
     const activeJobWithoutDisputeCount = initialListings.filter((l) => {
       const row = jobByListing[String(l.id)];
-      if (!row || row.status === "cancelled") return false;
+      if (!row || isJobCancelledStatus(row.status)) return false;
       if (jobRowDashboardCompleted(row)) return false;
       if (isDisputeJobStatus(row.status)) return false;
       return true;

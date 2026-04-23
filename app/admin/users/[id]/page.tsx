@@ -25,6 +25,8 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { getEffectivePayoutSchedule, formatPayoutScheduleLabel } from "@/lib/payout-schedule";
 import { formatDistanceToNow, format } from "date-fns";
 import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
+import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
+import { AdminCleanerReputationPanel } from "@/components/admin/admin-cleaner-reputation-panel";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type EmailLogRow = Database["public"]["Tables"]["email_logs"]["Row"];
@@ -101,7 +103,12 @@ export default async function AdminUserDetailPage({
   const roles = (p.roles as string[] | null) ?? [];
   const primaryRole = p.active_role ?? roles[0] ?? "—";
   const isAdmin = !!(p as { is_admin?: boolean }).is_admin;
-  const isBanned = !!p.is_banned;
+  const banUntilRaw = (p as { ban_until?: string | null }).ban_until ?? null;
+  const marketplaceBanActive = isProfileBanActiveForAccess({
+    is_banned: p.is_banned,
+    ban_until: banUntilRaw,
+  });
+  const isBanned = marketplaceBanActive;
   const isDeleted = !!p.is_deleted;
   const isCleaner = roles.includes("cleaner");
   const stripeConnectId = (p as { stripe_connect_id?: string | null }).stripe_connect_id ?? null;
@@ -274,6 +281,31 @@ export default async function AdminUserDetailPage({
             </dl>
           </CardContent>
         </Card>
+
+        {isCleaner ? (
+          <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
+            <CardHeader>
+              <CardTitle className="text-base md:text-lg dark:text-gray-100">
+                Moderation: strikes &amp; bans
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Adjust negative stars or lift bans via user actions. Audit entries are logged when stars change.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <AdminCleanerReputationPanel
+                userId={userId}
+                initialNegativeStars={Math.max(
+                  0,
+                  Math.round(Number((p as { negative_stars?: number | null }).negative_stars ?? 0))
+                )}
+                banUntilIso={banUntilRaw}
+                bannedReason={p.banned_reason ?? null}
+                marketplaceBanActive={marketplaceBanActive}
+              />
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Email log */}
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900">

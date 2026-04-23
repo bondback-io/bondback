@@ -49,6 +49,12 @@ import {
   notifyAdminUsersAboutJob,
   sendDisputeActivityEmail,
 } from "@/lib/disputes/dispute-thread-and-notify";
+import { getListerNonResponsiveCancelPreview } from "@/lib/jobs/lister-nonresponsive-cancel";
+import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
+import { JOB_TYPED_SELECT } from "@/lib/supabase/queries";
+import { getSiteUrl } from "@/lib/site";
+import { clearExpiredMarketplaceBanIfNeeded } from "@/lib/auth/clear-expired-ban";
+import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
 
 async function maybeNotifyCleanerJobWonStripePayoutSetup(params: {
   cleanerId: string;
@@ -281,12 +287,20 @@ export async function createJobPayment(
       },
     });
 
+    const nowIsoPi = new Date().toISOString();
+    const { data: existingEscrow } = await supabase
+      .from("jobs")
+      .select("escrow_funded_at")
+      .eq("id", numericJobId)
+      .maybeSingle();
+    const hasEscrowAt = !!(existingEscrow as { escrow_funded_at?: string | null } | null)?.escrow_funded_at;
     const { error: updateError } = await supabase
       .from("jobs")
       .update({
         payment_intent_id: pi.id,
         lister_payment_due_at: null,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIsoPi,
+        ...(!hasEscrowAt ? { escrow_funded_at: nowIsoPi } : {}),
       } as never)
       .eq("id", numericJobId);
 
@@ -377,7 +391,7 @@ export async function finalizeBidAcceptanceCore(params: {
     .from("jobs")
     .select("id")
     .eq("listing_id", listRow.id)
-    .neq("status", "cancelled")
+    .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
     .maybeSingle();
 
   if (existingJob) {
@@ -418,7 +432,7 @@ export async function finalizeBidAcceptanceCore(params: {
         .from("jobs")
         .select("id, winner_id")
         .eq("listing_id", listRow.id)
-        .neq("status", "cancelled")
+        .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
         .maybeSingle();
       const rj = racedJob as { id: number | string; winner_id: string | null } | null;
       if (rj && sameUuid(rj.winner_id, cleanerId)) {
@@ -536,6 +550,20 @@ export async function secureJobAtPrice(
     return { ok: false, error: "You must be logged in." };
   }
 
+  await clearExpiredMarketplaceBanIfNeeded(session.user.id);
+  const { data: banBuyNow } = await admin
+    .from("profiles")
+    .select("is_banned, ban_until")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  if (isProfileBanActiveForAccess(banBuyNow as { is_banned?: boolean | null; ban_until?: string | null } | null)) {
+    return {
+      ok: false,
+      error:
+        "Your account is temporarily banned from securing jobs. If you think this is a mistake, contact support.",
+    };
+  }
+
   const { data: listing, error: fetchError } = await admin
     .from("listings")
     .select("id, lister_id, status, buy_now_cents, title")
@@ -582,7 +610,7 @@ export async function secureJobAtPrice(
     .from("jobs")
     .select("id")
     .eq("listing_id", listRow.id)
-    .neq("status", "cancelled")
+    .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
     .maybeSingle();
 
   if (existingJob) {
@@ -617,7 +645,7 @@ export async function secureJobAtPrice(
         .from("jobs")
         .select("id, winner_id")
         .eq("listing_id", listRow.id)
-        .neq("status", "cancelled")
+        .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
         .maybeSingle();
       const rj = raced as { id: number | string; winner_id: string | null } | null;
       if (rj && sameUuid(rj.winner_id, session.user.id)) {
@@ -877,6 +905,12 @@ export async function createJobCheckoutSession(
         return { ok: false, error: resolved.error };
       }
       const nowIso = new Date().toISOString();
+      const { data: escRow } = await supabase
+        .from("jobs")
+        .select("escrow_funded_at")
+        .eq("id", numericJobId)
+        .maybeSingle();
+      const hasEscrowAt = !!(escRow as { escrow_funded_at?: string | null } | null)?.escrow_funded_at;
       const { error: updateErr } = await supabase
         .from("jobs")
         .update({
@@ -884,6 +918,7 @@ export async function createJobCheckoutSession(
           status: "in_progress",
           lister_payment_due_at: null,
           updated_at: nowIso,
+          ...(!hasEscrowAt ? { escrow_funded_at: nowIso } : {}),
         } as never)
         .eq("id", numericJobId);
       if (updateErr) {
@@ -1333,6 +1368,12 @@ export async function fulfillJobPaymentFromSession(
     }
 
     const nowIso = new Date().toISOString();
+    const { data: escFund } = await supabase
+      .from("jobs")
+      .select("escrow_funded_at")
+      .eq("id", numericJobId)
+      .maybeSingle();
+    const hasEscrowFunded = !!(escFund as { escrow_funded_at?: string | null } | null)?.escrow_funded_at;
     const { error: updateError } = await supabase
       .from("jobs")
       .update({
@@ -1340,6 +1381,7 @@ export async function fulfillJobPaymentFromSession(
         status: "in_progress",
         lister_payment_due_at: null,
         updated_at: nowIso,
+        ...(!hasEscrowFunded ? { escrow_funded_at: nowIso } : {}),
       } as never)
       .eq("id", numericJobId)
       .eq("status", "accepted");
@@ -1807,6 +1849,228 @@ export async function cancelJobByLister(
   revalidatePath(`/jobs/${numericJobId}`);
 
   return { ok: true };
+}
+
+export type EscrowNonResponsiveCancelActionState =
+  | { ok: true; refundCents: number; cancellationFeeCents: number }
+  | { ok: false; error: string };
+
+/**
+ * Lister-only: cancel after escrow when cleaner has been idle 5+ days. Partial refund; platform keeps
+ * min(original platform fee, $50 AUD). Applies negative star to cleaner; 3 stars → 3-month ban.
+ */
+export async function cancelEscrowJobNonResponsiveCleaner(
+  formData: FormData
+): Promise<EscrowNonResponsiveCancelActionState> {
+  const jobId = Number(formData.get("jobId"));
+  const confirm = String(formData.get("confirm") ?? "").trim();
+  if (confirm !== "CANCEL") {
+    return { ok: false, error: "Type the word CANCEL exactly to confirm." };
+  }
+  if (!Number.isFinite(jobId) || jobId < 1) {
+    return { ok: false, error: "Invalid job." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return { ok: false, error: "You must be signed in." };
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Server configuration error." };
+  }
+
+  const { data: job, error: jobErr } = await admin
+    .from("jobs")
+    .select(JOB_TYPED_SELECT)
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (jobErr || !job) {
+    return { ok: false, error: "Job not found." };
+  }
+
+  const row = job as Database["public"]["Tables"]["jobs"]["Row"];
+
+  if (row.lister_id !== session.user.id) {
+    return { ok: false, error: "Only the property lister can use this action." };
+  }
+
+  if (row.lister_escrow_cancelled_at) {
+    return { ok: false, error: "This job was already cancelled under this process." };
+  }
+
+  const preview = await getListerNonResponsiveCancelPreview(supabase, row);
+  if (!preview.eligible) {
+    return { ok: false, error: preview.reason };
+  }
+
+  const refundCents = preview.refundCents;
+  const cancellationFeeCents = preview.cancellationFeeCents;
+
+  const refundResult = await executeRefund(jobId, refundCents);
+  if (!refundResult.ok) {
+    return { ok: false, error: refundResult.error ?? "Stripe refund failed." };
+  }
+
+  const nowIso = new Date().toISOString();
+  const reasonCode = "cleaner_non_responsive_escrow_cancel";
+
+  const { error: jobUpdErr } = await admin
+    .from("jobs")
+    .update({
+      status: "cancelled_by_lister",
+      lister_escrow_cancelled_at: nowIso,
+      lister_escrow_cancel_fee_cents: cancellationFeeCents,
+      lister_escrow_cancel_refund_cents: refundCents,
+      lister_escrow_cancel_reason: reasonCode,
+      refund_amount: refundCents,
+      updated_at: nowIso,
+    } as never)
+    .eq("id", jobId);
+
+  if (jobUpdErr) {
+    return { ok: false, error: jobUpdErr.message };
+  }
+
+  if (row.listing_id) {
+    await admin.from("listings").update({ status: "ended" } as never).eq("id", row.listing_id);
+  }
+
+  let negStarsAfter = 0;
+  let cleanerBanned = false;
+  const winnerId = trimStr(row.winner_id);
+
+  if (winnerId) {
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("negative_stars")
+      .eq("id", winnerId)
+      .maybeSingle();
+    const prev = Math.max(0, Math.round(Number((prof as { negative_stars?: number | null } | null)?.negative_stars ?? 0)));
+    negStarsAfter = prev + 1;
+    const banUntilIso = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+    if (negStarsAfter >= 3) {
+      cleanerBanned = true;
+      await admin
+        .from("profiles")
+        .update({
+          negative_stars: negStarsAfter,
+          is_banned: true,
+          ban_until: banUntilIso,
+          banned_reason:
+            "Automatic 3-month ban: 3 negative stars from lister cancellations (cleaner non-responsive).",
+          updated_at: nowIso,
+        } as never)
+        .eq("id", winnerId);
+    } else {
+      await admin
+        .from("profiles")
+        .update({
+          negative_stars: negStarsAfter,
+          updated_at: nowIso,
+        } as never)
+        .eq("id", winnerId);
+    }
+    try {
+      await recomputeVerificationBadgesForUser(winnerId);
+    } catch {
+      // non-fatal
+    }
+  }
+
+  await admin.from("job_lister_cancellation_audit").insert({
+    job_id: jobId,
+    lister_id: row.lister_id,
+    cleaner_id: winnerId || null,
+    charge_total_cents: preview.chargeTotalCents,
+    platform_fee_cents: preview.platformFeeCents,
+    cancellation_fee_cents: cancellationFeeCents,
+    refund_cents: refundCents,
+    platform_fee_percent_snapshot: preview.platformFeePercent,
+    reason: reasonCode,
+    cleaner_negative_stars_after: negStarsAfter,
+    cleaner_banned: cleanerBanned,
+  } as never);
+
+  await logTimerActivity({
+    actorUserId: session.user.id,
+    actionType: "lister_escrow_cancel_nonresponsive",
+    jobId,
+    details: {
+      cancellation_fee_cents: cancellationFeeCents,
+      refund_cents: refundCents,
+      cleaner_id: winnerId || null,
+      negative_stars_after: negStarsAfter,
+      cleaner_banned: cleanerBanned,
+    },
+  });
+
+  const jobTitle = row.title?.trim() || null;
+  const refundAud = (refundCents / 100).toFixed(2);
+  const feeAud = (cancellationFeeCents / 100).toFixed(2);
+
+  await createNotification(
+    row.lister_id,
+    "job_cancelled_by_lister",
+    jobId,
+    `Job cancelled — non-responsive cleaner. Refund of $${refundAud} AUD is processing (cancellation fee retained: $${feeAud}).`,
+    { listingUuid: row.listing_id, listingTitle: jobTitle }
+  );
+  await sendDisputeActivityEmail({
+    jobId,
+    toUserId: row.lister_id,
+    subject: `[Bond Back] Job #${jobId}: cancelled — refund processing`,
+    htmlBody: `<p>Your job was <strong>cancelled</strong> under the non-responsive cleaner process.</p><p>Refund to your payment method: <strong>$${refundAud} AUD</strong> (Bond Back retains <strong>$${feeAud} AUD</strong> as the cancellation fee).</p>${disputeHubLinksHtml(jobId)}`,
+  });
+  await sendRefundReceiptEmail({
+    jobId,
+    listerId: row.lister_id,
+    refundCents,
+    jobTitle,
+    dateIso: nowIso,
+  });
+
+  if (winnerId) {
+    await createNotification(
+      winnerId,
+      "job_status_update",
+      jobId,
+      `The lister cancelled job #${jobId} for cleaner non-response. A negative strike was applied to your profile.${cleanerBanned ? " Your account is banned from the marketplace for 3 months." : ""}`,
+      { listingUuid: row.listing_id, listingTitle: jobTitle }
+    );
+    await sendDisputeActivityEmail({
+      jobId,
+      toUserId: winnerId,
+      subject: `[Bond Back] Job #${jobId}: cancelled by lister (non-response)`,
+      htmlBody: `<p>The property lister cancelled this job citing <strong>cleaner non-response</strong> after the inactivity threshold.</p><p>A <strong>negative strike</strong> was applied to your profile.${cleanerBanned ? " Your account is <strong>banned from bidding</strong> for three months." : ""}</p>${disputeHubLinksHtml(jobId)}`,
+    });
+  }
+
+  const adminUrl = `${getSiteUrl().origin}/admin/jobs`;
+  await notifyAdminUsersAboutJob({
+    jobId,
+    subject: `[Bond Back] Admin: lister escrow cancel (non-responsive) — job #${jobId}`,
+    htmlBody: `<p>Lister cancelled job #${jobId} (cleaner non-responsive, escrow refund).</p><ul><li>Refund to lister: $${refundAud} AUD</li><li>Cancellation fee retained: $${feeAud} AUD</li><li>Cleaner negative stars (after): ${negStarsAfter}</li><li>Banned: ${cleanerBanned ? "yes (3 months)" : "no"}</li></ul><p><a href="${adminUrl}">Admin jobs</a></p>`,
+    inAppMessage: `Job #${jobId}: lister escrow cancel (non-responsive). Fee $${feeAud} · refund $${refundAud}.`,
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/my-listings");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/admin/jobs");
+  if (row.listing_id) {
+    revalidatePath(`/listings/${row.listing_id}`);
+  }
+
+  return { ok: true, refundCents, cancellationFeeCents: cancellationFeeCents };
 }
 
 export type MarkChecklistFinishedResult =
@@ -2360,6 +2624,26 @@ export const captureAndTransfer = releaseJobFunds;
 export type ExecuteRefundResult = { ok: true } | { ok: false; error: string };
 
 /**
+ * Remaining lister-refundable balance for a PaymentIntent (after prior refunds on the charge).
+ * `amount_received` alone is wrong here: it does not decrease when refunds are issued.
+ */
+async function refundableCentsForLoadedPaymentIntent(
+  stripe: Stripe,
+  pi: Stripe.PaymentIntent
+): Promise<number> {
+  const lc = pi.latest_charge;
+  if (lc && typeof lc === "object") {
+    const ch = lc as Stripe.Charge;
+    return Math.max(0, (ch.amount ?? 0) - (ch.amount_refunded ?? 0));
+  }
+  if (typeof lc === "string" && lc.length > 0) {
+    const ch = await stripe.charges.retrieve(lc);
+    return Math.max(0, (ch.amount ?? 0) - (ch.amount_refunded ?? 0));
+  }
+  return Math.max(0, Number(pi.amount_received ?? 0));
+}
+
+/**
  * Refund amount (cents) to the lister via Stripe; optionally reverse transfer from cleaner.
  * Call after dispute resolution (acceptRefund / acceptCounterRefund). Idempotent for 0 amount.
  */
@@ -2421,14 +2705,14 @@ export async function executeRefund(
     for (const leg of legs) {
       if (remaining < 1) break;
       const piId = leg.paymentIntentId;
-      let pi = await stripe.paymentIntents.retrieve(piId);
+      let pi = await stripe.paymentIntents.retrieve(piId, { expand: ["latest_charge"] });
       if (pi.status === "requires_capture") {
         await stripe.paymentIntents.capture(piId);
-        pi = await stripe.paymentIntents.retrieve(piId);
+        pi = await stripe.paymentIntents.retrieve(piId, { expand: ["latest_charge"] });
       }
-      const received = Number(pi.amount_received ?? 0);
-      if (received < 1) continue;
-      const slice = Math.min(remaining, received);
+      const refundableOnLeg = await refundableCentsForLoadedPaymentIntent(stripe, pi);
+      if (refundableOnLeg < 1) continue;
+      const slice = Math.min(remaining, refundableOnLeg);
       if (slice < 1) continue;
       await stripe.refunds.create({
         payment_intent: piId,

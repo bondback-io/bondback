@@ -32,6 +32,10 @@ import {
 } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
 import {
+  JOB_STATUS_NOT_IN_LISTING_SLOT,
+  isJobCancelledStatus,
+} from "@/lib/jobs/job-status-helpers";
+import {
   CleanerLiveBidsSection,
   type CleanerLiveBidItem,
 } from "@/components/dashboard/cleaner-live-bids-section";
@@ -150,7 +154,7 @@ async function CleanerDashboardContent() {
       .from("jobs")
       .select(jobSelectForDashboard)
       .in("listing_id", acceptedListingIds as string[])
-      .neq("status", "cancelled")
+      .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
       .order("created_at", { ascending: false });
     const byId = new Map<number, JobRow>();
     for (const j of jobs) {
@@ -221,7 +225,7 @@ async function CleanerDashboardContent() {
   }
 
   const completedJobs = jobs.filter((j) => isDashboardCompletedJob(j));
-  const cancelledJobs = jobs.filter((j) => j.status === "cancelled");
+  const cancelledJobs = jobs.filter((j) => isJobCancelledStatus(j.status));
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);

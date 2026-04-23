@@ -48,6 +48,7 @@ import {
   isDashboardCompletedJob,
 } from "@/lib/jobs/dispute-hub-helpers";
 import { resolveListerDashboardJobSelect } from "@/lib/jobs/dashboard-jobs-select";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -182,7 +183,7 @@ async function ListerDashboardContent() {
 
   /** Any non-cancelled job reserves the listing (includes disputes and completed). */
   const listingIdsWithActiveJob = new Set(
-    jobs.filter((j) => j.status !== "cancelled").map((j) => String(j.listing_id))
+    jobs.filter((j) => !isJobCancelledStatus(j.status)).map((j) => String(j.listing_id))
   );
 
   const cancelledJobListingIds = listingIdsWithCancelledJobs(jobs);
@@ -197,7 +198,7 @@ async function ListerDashboardContent() {
 
   const completedJobs = jobs.filter((j) => isDashboardCompletedJob(j));
   const activeJobs = jobs.filter((j) => isDashboardActivePipelineJob(j));
-  const cancelledJobs = jobs.filter((j) => j.status === "cancelled");
+  const cancelledJobs = jobs.filter((j) => isJobCancelledStatus(j.status));
   const cancelledJobListingIdSet = new Set(
     cancelledJobs.map((j) => String(j.listing_id))
   );
@@ -620,6 +621,10 @@ async function ListerDashboardContent() {
                     status: job.status,
                     winner_id: job.winner_id,
                   });
+                  const cancelSubtitle =
+                    String(job.status) === "cancelled_by_lister"
+                      ? "Job cancelled — cleaner non-responsive (escrow refund)"
+                      : "Job cancelled by you";
                   return (
                     <li key={row.id}>
                       <Link
@@ -634,7 +639,7 @@ async function ListerDashboardContent() {
                             )}
                           </p>
                           <p className="mt-0.5 text-sm text-muted-foreground dark:text-gray-400">
-                            Job cancelled by you
+                            {cancelSubtitle}
                             {cancelledAt && ` · ${cancelledAt}`} · Un-assigned
                           </p>
                         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import Link from "next/link";
 import Image from "next/image";
 import { OptimizedImage } from "@/components/ui/optimized-image";
@@ -115,7 +116,7 @@ export function DisputeRow({
       ? { label: "In Review", className: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200 border-sky-200 dark:border-sky-800" }
       : job.status === "completed"
       ? { label: "Resolved", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800" }
-      :       job.status === "cancelled"
+      : isJobCancelledStatus(job.status)
       ? { label: "Rejected", className: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200 border-red-200 dark:border-red-800" }
       : job.status === "refunded" || job.status === "partially_refunded"
       ? { label: job.refund_status === "succeeded" ? "Refunded" : job.status, className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800" }

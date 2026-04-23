@@ -183,6 +183,10 @@ export default async function CleanerProfilePage({
   const displayName =
     fullName?.trim() || businessName?.trim() || "Cleaner";
   const starValue = avg ? Math.round(avg * 10) / 10 : null;
+  const negativeStars = Math.max(
+    0,
+    Math.round(Number((profileRow as { negative_stars?: number | null }).negative_stars ?? 0))
+  );
 
   const browseTier = computeCleanerBrowseTier({
     completedJobs: completedJobsCount ?? 0,
@@ -347,6 +351,14 @@ export default async function CleanerProfilePage({
                   moreCountHint={reviewPopoverHint}
                 />
               </span>
+              {negativeStars > 0 ? (
+                <span
+                  className="text-xs font-medium text-rose-800 dark:text-rose-200"
+                  title="Strikes from lister cancellations when the cleaner was non-responsive with escrow held."
+                >
+                  {negativeStars} negative strike{negativeStars === 1 ? "" : "s"}
+                </span>
+              ) : null}
             </div>
 
             {latestWrittenReview && String(latestWrittenReview.review_text ?? "").trim() ? (

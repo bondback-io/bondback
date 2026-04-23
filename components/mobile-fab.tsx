@@ -12,6 +12,7 @@ import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import type { DashboardJobCardProps } from "@/components/dashboard/dashboard-job-card";
 import { DashboardJobCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 import { BROWSE_JOBS_NAV_LABEL } from "@/lib/navigation/browse-jobs-labels";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 
 /** Primary contextual FAB for lister/cleaner dashboards (mobile only). Sits above the tab bar; leaves room for the layout icon FAB on the right. */
 export function MobileDashboardFab({
@@ -239,7 +240,7 @@ export function ListerActiveJobsList({
                   </span>
                   {item.stripePayoutSetupRequired &&
                   item.status !== "completed" &&
-                  item.status !== "cancelled" ? (
+                  !isJobCancelledStatus(item.status) ? (
                     <span className="inline-flex max-w-full rounded-md border border-amber-500/60 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100">
                       Stripe setup
                     </span>

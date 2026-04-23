@@ -6,6 +6,7 @@ import { createNotification } from "@/lib/actions/notifications";
 import { revalidateJobsBrowseCaches } from "@/lib/cache-revalidate";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { trimStr } from "@/lib/utils";
+import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 
 export type ResolveAuctionsResult = {
   processed: number;
@@ -79,7 +80,7 @@ export async function resolveExpiredLiveAuctions(
       .from("jobs")
       .select("id")
       .eq("listing_id", listingId)
-      .neq("status", "cancelled")
+      .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT)
       .limit(1);
 
     if (blockingJobs && blockingJobs.length > 0) {

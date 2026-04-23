@@ -46,6 +46,7 @@ const ADMIN_JOB_STATUS_FILTERS: { value: string; label: string }[] = [
   { value: "completed_pending_approval", label: "Pending approval" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "cancelled_by_lister", label: "Cancelled (lister escrow)" },
   { value: "disputed", label: "Disputed" },
   { value: "dispute_negotiating", label: "Dispute negotiating" },
   { value: "in_review", label: "In review" },
@@ -159,7 +160,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
     if (s === "completed") {
       return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200";
     }
-    if (s === "cancelled") {
+    if (s === "cancelled" || s === "cancelled_by_lister") {
       return "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200";
     }
     if (s === "disputed" || s === "in_review" || s === "dispute_negotiating") {
@@ -267,6 +268,9 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                 <TableHead className="hidden sm:table-cell">
                   Completed
                 </TableHead>
+                <TableHead className="hidden lg:table-cell text-right whitespace-nowrap">
+                  Escrow cancel
+                </TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -319,6 +323,11 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                     <TableCell className="hidden sm:table-cell text-[11px] text-muted-foreground">
                       {job.completed_at
                         ? format(new Date(job.completed_at), "dd MMM yyyy")
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-right text-[11px] tabular-nums text-muted-foreground">
+                      {job.lister_escrow_cancelled_at
+                        ? `Fee $${(Number(job.lister_escrow_cancel_fee_cents ?? 0) / 100).toFixed(0)} · Refund $${(Number(job.lister_escrow_cancel_refund_cents ?? 0) / 100).toFixed(0)}`
                         : "—"}
                     </TableCell>
                     <TableCell>

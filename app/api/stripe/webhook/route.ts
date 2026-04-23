@@ -287,15 +287,17 @@ export async function POST(request: Request) {
             const numericJobId = Number(jobIdMeta);
             const { data: jobBefore } = await admin
               .from("jobs")
-              .select("winner_id, lister_id, listing_id")
+              .select("winner_id, lister_id, listing_id, escrow_funded_at")
               .eq("id", numericJobId)
               .maybeSingle();
+            const jbEscrow = jobBefore as { escrow_funded_at?: string | null } | null;
             const { error } = await admin
               .from("jobs")
               .update({
                 payment_intent_id: paymentIntentId,
                 status: "in_progress",
                 updated_at: nowIso,
+                ...(!jbEscrow?.escrow_funded_at ? { escrow_funded_at: nowIso } : {}),
               } as never)
               .eq("id", numericJobId);
             if (error) console.error("[stripe/webhook] checkout.session.completed set payment_intent_id by job_id failed", jobIdMeta, error);

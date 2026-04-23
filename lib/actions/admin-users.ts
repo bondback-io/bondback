@@ -8,10 +8,12 @@ import { sendWelcomeEmailAfterEmailVerification } from "@/lib/actions/onboarding
 import { createNotification } from "@/lib/actions/notifications";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getSupportContactEmail } from "@/lib/support-contact-email";
+import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
 import type {
   BanResult,
   DeleteUserResult,
   EditRoleResult,
+  SetCleanerNegativeStarsResult,
   UnbanResult,
 } from "@/lib/actions/admin-users-types";
 
@@ -98,6 +100,7 @@ export async function unbanUser(userId: string): Promise<UnbanResult> {
     .update({
       is_banned: false,
       banned_at: null,
+      ban_until: null,
       banned_reason: null,
       banned_by: null,
     } as Record<string, unknown>)
@@ -107,6 +110,49 @@ export async function unbanUser(userId: string): Promise<UnbanResult> {
   await logAdminActivity({ adminId: auth.adminId!, actionType: "user_unbanned", targetType: "user", targetId: userId, details: {} });
   revalidatePath("/admin/users");
   revalidatePath("/admin/dashboard");
+  return { ok: true };
+}
+
+/** Admin: set cleaner `negative_stars` (lister non-responsive cancellations). */
+export async function adminSetCleanerNegativeStars(
+  userId: string,
+  rawStars: number
+): Promise<SetCleanerNegativeStarsResult> {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireAdmin(supabase);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const db = requireServiceRole();
+  if (!db.ok) return { ok: false, error: db.error };
+  const uid = String(userId ?? "").trim();
+  if (!uid) return { ok: false, error: "Invalid user." };
+  const n = Math.max(0, Math.min(99, Math.round(Number(rawStars))));
+  const { data: prof } = await db.supabaseAdmin
+    .from("profiles")
+    .select("roles")
+    .eq("id", uid)
+    .maybeSingle();
+  const roles = ((prof as { roles?: string[] | null } | null)?.roles ?? []) as string[];
+  if (!roles.includes("cleaner")) {
+    return { ok: false, error: "Negative stars apply to cleaner profiles only." };
+  }
+  const { error } = await db.supabaseAdmin
+    .from("profiles")
+    .update({
+      negative_stars: n,
+      updated_at: new Date().toISOString(),
+    } as Record<string, unknown>)
+    .eq("id", uid);
+  if (error) return { ok: false, error: error.message };
+  await logAdminActivity({
+    adminId: auth.adminId!,
+    actionType: "cleaner_negative_stars_set",
+    targetType: "user",
+    targetId: uid,
+    details: { negative_stars: n },
+  });
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${uid}`);
+  revalidatePath(`/cleaners/${uid}`);
   return { ok: true };
 }
 
@@ -120,13 +166,17 @@ export async function checkBanAfterLogin(): Promise<
 
   const { data: row } = await supabase
     .from("profiles")
-    .select("is_banned, banned_reason")
+    .select("is_banned, banned_reason, ban_until")
     .eq("id", session.user.id)
     .maybeSingle();
 
-  const profile = row as { is_banned?: boolean; banned_reason?: string | null } | null;
-  if (!profile || !profile.is_banned) return { banned: false };
-  return { banned: true, reason: profile.banned_reason ?? null };
+  const profile = row as {
+    is_banned?: boolean;
+    banned_reason?: string | null;
+    ban_until?: string | null;
+  } | null;
+  if (!isProfileBanActiveForAccess(profile)) return { banned: false };
+  return { banned: true, reason: profile?.banned_reason ?? null };
 }
 
 function chunkIds<T>(ids: T[], size: number): T[][] {

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
+import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 
 /**
  * Listing ids that already have an **active** job row — excluded from Find Jobs so cleaners
@@ -18,7 +19,7 @@ export async function fetchTakenListingIds(
     const { data } = await admin
       .from("jobs")
       .select("listing_id")
-      .neq("status", "cancelled");
+      .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT);
     return ((data ?? []) as { listing_id: string | number }[]).map((j) => j.listing_id);
   }
 
@@ -30,6 +31,6 @@ export async function fetchTakenListingIds(
   const { data: jobsData } = await supabase
     .from("jobs")
     .select("listing_id")
-    .neq("status", "cancelled");
+    .not("status", "in", JOB_STATUS_NOT_IN_LISTING_SLOT);
   return ((jobsData ?? []) as { listing_id: string | number }[]).map((j) => j.listing_id);
 }
