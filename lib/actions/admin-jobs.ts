@@ -25,6 +25,39 @@ import { adminDeleteListingByIdCascade } from "@/lib/actions/admin-listings";
 import { suggestMediationRefundCents } from "@/lib/disputes/mediation-settlement-ai";
 import { insertAdminMediationProposalRecords } from "@/lib/actions/disputes";
 import { isJobCancelledStatus, JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
+import { isCleanerStripeReleaseBlockingError } from "@/lib/stripe-payout-ready";
+import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
+
+type CleanerStripeNotifyReason = "dispute_resolve" | "mediation_binding" | "force_release";
+
+/**
+ * When escrow release fails because the cleaner’s Stripe Connect isn’t ready, nudge them (email + in-app)
+ * so they can finish setup. Deduped per job for 24h to avoid spam if an admin retries.
+ */
+async function maybeNotifyCleanerStripeRequiredForRelease(
+  cleanerId: string | null | undefined,
+  jobId: number,
+  reason: CleanerStripeNotifyReason,
+  releaseError: string
+): Promise<void> {
+  if (!cleanerId || !releaseError) return;
+  if (!isCleanerStripeReleaseBlockingError(releaseError)) return;
+
+  const duped = await hasRecentJobNotification(cleanerId, "job_won_complete_payout", jobId, 24);
+  if (duped) return;
+
+  const lead =
+    reason === "mediation_binding"
+      ? `A binding mediation settlement tried to release your payout for Job #${jobId}, but your Stripe payout setup isn’t complete yet.`
+      : reason === "force_release"
+        ? `An admin tried to release escrow for Job #${jobId}, but your Stripe payout setup isn’t complete yet.`
+        : `An admin tried to release escrow to you for Job #${jobId} (dispute settlement), but your Stripe payout setup isn’t complete yet.`;
+  const msg = `${lead} Open Profile → Payments to connect your bank so we can send your funds.`;
+  await createNotification(cleanerId, "job_won_complete_payout", jobId, msg, {
+    persistTitle: `Finish Stripe setup · Job #${jobId}`,
+    persistBody: msg,
+  });
+}
 
 async function requireAdmin(): Promise<{
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -316,7 +349,15 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
   // Ensure payout/refund happens when PaymentIntent is still held (manual capture).
   if (resolution === "release_funds" || resolution === "reject") {
     const releaseResult = await releaseJobFunds(numericJobId);
-    if (!releaseResult.ok) return;
+    if (!releaseResult.ok) {
+      await maybeNotifyCleanerStripeRequiredForRelease(
+        j.winner_id,
+        numericJobId,
+        "dispute_resolve",
+        releaseResult.error
+      );
+      return;
+    }
   }
 
   if (resolution === "partial_refund" || resolution === "full_refund") {
@@ -670,6 +711,12 @@ export async function overrideTimer(
   if (actionType === "force_release_now") {
     const releaseResult = await releaseJobFunds(jobId);
     if (!releaseResult.ok) {
+      await maybeNotifyCleanerStripeRequiredForRelease(
+        row.winner_id,
+        jobId,
+        "force_release",
+        releaseResult.error
+      );
       return { ok: false, error: releaseResult.error };
     }
 
@@ -997,24 +1044,13 @@ export async function adminSubmitMediationSettlement(
   }
 
   const agreed = Math.max(0, Number(j.agreed_amount_cents ?? 0));
-  const settings = await getGlobalSettings();
-  const feePct =
-    (await fetchPlatformFeePercentForListing(supabase, j.listing_id, settings)) / 100;
-  const feeCents = Math.round(agreed * feePct);
-  const maxRefundCents = agreed + feeCents;
+  /** Job total in escrow to cleaners (initial bid + lister top-ups). Platform fee is not refundable via this field. */
+  const maxRefundCents = agreed;
 
   if (refundCents > maxRefundCents) {
     return {
       ok: false,
-      error: `Refund cannot exceed total charged (job + platform fee), about $${(maxRefundCents / 100).toFixed(2)} AUD.`,
-    };
-  }
-
-  if (mode === "final_override" && maxRefundCents >= 1 && refundCents >= maxRefundCents) {
-    return {
-      ok: false,
-      error:
-        "A full refund of the entire charge should use “Close / resolve dispute” → Full refund (or Partial refund) so escrow is handled correctly.",
+      error: `Refund cannot exceed the job amount held in escrow ($${(maxRefundCents / 100).toFixed(2)} AUD including top-ups). The platform fee is not refundable here — use “Close / resolve dispute” → Full refund if the entire card charge must be reversed.`,
     };
   }
 
@@ -1047,11 +1083,13 @@ export async function adminSubmitMediationSettlement(
 
     const releaseResult = await releaseJobFunds(jobId);
     if (!releaseResult.ok) {
+      const err =
+        releaseResult.error ??
+        "Could not release remaining funds to the cleaner after refund. Check Stripe Connect and job escrow state.";
+      await maybeNotifyCleanerStripeRequiredForRelease(j.winner_id, jobId, "mediation_binding", err);
       return {
         ok: false,
-        error:
-          releaseResult.error ??
-          "Could not release remaining funds to the cleaner after refund. Check Stripe Connect and job escrow state.",
+        error: err,
       };
     }
 

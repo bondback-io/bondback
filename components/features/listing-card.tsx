@@ -60,6 +60,11 @@ import { useDistanceUnit } from "@/hooks/use-distance-unit";
 import { formatDistanceKmLabel } from "@/lib/distance-format";
 import { NEXT_IMAGE_SIZES_LISTING_CARD_DESKTOP } from "@/lib/next-image-sizes";
 import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
+import {
+  normalizeServiceType,
+  recurringListingBadgeText,
+  serviceTypeLabel,
+} from "@/lib/service-types";
 
 export type ListingCardProps = {
   listing: ListingRow;
@@ -352,6 +357,18 @@ function ListingCardInner({
   const title = listing.title ?? "Bond clean";
   const thumbAlt = title ? `Photo for ${title}` : "Listing photo";
   const propertyType = listing.property_type ? String(listing.property_type) : null;
+  const listRow = listing as ListingRow & {
+    service_type?: string | null;
+    recurring_frequency?: string | null;
+    is_urgent?: boolean | null;
+  };
+  const recurringBadgeText =
+    normalizeServiceType(listRow.service_type) === "recurring_house_cleaning" &&
+    listRow.recurring_frequency
+      ? recurringListingBadgeText(listRow.recurring_frequency)
+      : null;
+  const listerMarkedUrgent = listRow.is_urgent === true;
+  const serviceTypeLine = serviceTypeLabel(normalizeServiceType(listRow.service_type));
 
   const endTime = parseUtcTimestamp(listing.end_time);
   const hoursLeft = (endTime - Date.now()) / (60 * 60 * 1000);
@@ -475,6 +492,8 @@ function ListingCardInner({
           publicMarketplaceBidCTAs={publicMarketplaceBidCTAs}
           currentUserId={currentUserId}
           signInToBidHref={signInToBidHref}
+          recurringBadge={recurringBadgeText}
+          listerMarkedUrgent={listerMarkedUrgent}
         />
       </div>
 
@@ -511,7 +530,7 @@ function ListingCardInner({
           <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/40 [@media(hover:none)]:bg-black/20" aria-hidden />
         </Link>
 
-        {/* Status badge + menu — over image (desktop) */}
+        {/* Status badge + service badges + menu — over image (desktop) */}
         <div className="absolute left-3 top-3 right-3 z-10 flex items-start justify-between gap-2">
           <Badge
             variant="secondary"
@@ -530,7 +549,19 @@ function ListingCardInner({
             {status === "ending_soon" && "Ending soon"}
             {status === "expired" && "Not live"}
           </Badge>
-          <ListingCardOverflowMenu {...overflowMenuProps} />
+          <div className="flex flex-col items-end gap-1.5">
+            {recurringBadgeText ? (
+              <Badge className="border border-lime-500/50 bg-lime-400 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-lime-950 shadow-md md:text-[9px] dark:bg-lime-400 dark:text-lime-950">
+                {recurringBadgeText}
+              </Badge>
+            ) : null}
+            {listerMarkedUrgent ? (
+              <Badge className="animate-pulse border border-red-400/80 bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white shadow-md md:text-[9px]">
+                Urgent
+              </Badge>
+            ) : null}
+            <ListingCardOverflowMenu {...overflowMenuProps} />
+          </div>
         </div>
       </div>
 
@@ -542,8 +573,19 @@ function ListingCardInner({
         )}
       >
         {/* Urgency badges — compact row */}
-        {(endingInUnder24h || highDemand || (noBidsYet && isLive)) && (
+        {(endingInUnder24h ||
+          highDemand ||
+          (noBidsYet && isLive) ||
+          listerMarkedUrgent) && (
           <div className="flex flex-wrap items-center gap-1.5">
+            {listerMarkedUrgent && (
+              <Badge
+                className="animate-pulse border-red-300 bg-red-600 px-2 py-0.5 text-xs font-black uppercase tracking-wide text-white dark:border-red-800 md:text-[10px]"
+                aria-label="Urgent job"
+              >
+                Urgent
+              </Badge>
+            )}
             {endingInUnder24h && (
               <Badge className="border-red-200 bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200 md:text-[10px] md:font-semibold" aria-label="Ending in under 24 hours">
                 Ending in &lt;24h
@@ -633,6 +675,10 @@ function ListingCardInner({
               </Badge>
             </>
           )}
+          <span aria-hidden>|</span>
+          <Badge variant="outline" className="text-[10px] font-medium dark:border-gray-600 dark:text-gray-300">
+            {serviceTypeLine}
+          </Badge>
         </p>
 
         {/* Lister trust row: name + verification badges — desktop (shown to cleaners even on own listings) */}

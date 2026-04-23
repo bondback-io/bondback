@@ -116,9 +116,26 @@ import {
   getListingAddonLabel,
   type ListingAddonKey,
 } from "@/lib/listing-addon-prices";
+import {
+  DEEP_CLEAN_PURPOSES,
+  RECURRING_FREQUENCIES,
+  SERVICE_TYPES,
+  deepCleanPurposeLabel,
+  recurringFrequencyMultiplier,
+  recurringFrequencyShortLabel,
+  serviceTypeLabel,
+} from "@/lib/service-types";
 
 const listingAddonZodEnum = z.enum(
   LISTING_ADDON_KEYS as unknown as [string, ...string[]]
+);
+
+const serviceTypeZodEnum = z.enum(SERVICE_TYPES as unknown as [string, ...string[]]);
+const recurringFreqZodEnum = z.enum(
+  RECURRING_FREQUENCIES as unknown as [string, ...string[]]
+);
+const deepCleanPurposeZodEnum = z.enum(
+  DEEP_CLEAN_PURPOSES as unknown as [string, ...string[]]
 );
 
 const propertyTypes = ["apartment", "house", "townhouse", "studio"] as const;
@@ -151,6 +168,12 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
   const allowedDurations = getAuctionDurationDayChoices(allowTwoMinuteAuction);
   return z
     .object({
+      serviceType: serviceTypeZodEnum,
+      recurringFrequency: recurringFreqZodEnum.optional(),
+      airbnbGuestCapacity: z.coerce.number().int().min(1).max(99).optional(),
+      airbnbTurnaroundHours: z.coerce.number().int().min(1).max(168).optional(),
+      deepCleanPurpose: deepCleanPurposeZodEnum.optional(),
+      isUrgent: z.boolean().default(false),
       propertyType: z.enum(propertyTypes),
       bedrooms: z.coerce.number().int().min(1).max(6),
       bathrooms: z.coerce.number().int().min(1).max(5),
@@ -166,7 +189,7 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
       addons: z.array(listingAddonZodEnum).default([]),
       propertyDescription: z.string().max(4000).optional(),
       instructions: z.string().max(2000).optional(),
-      moveOutDate: z.date({ required_error: "Select your move-out date" }),
+      moveOutDate: z.date().optional(),
       reservePrice: z.coerce.number().min(minReserveAud, reservePriceMinMessage(minReserveAud)),
       durationDays: z.coerce
         .number()
@@ -175,6 +198,53 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
       buyNowPrice: z.string().optional(),
     })
     .superRefine((data, ctx) => {
+      if (data.serviceType === "bond_cleaning") {
+        if (!data.moveOutDate) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["moveOutDate"],
+            message: "Select your move-out date",
+          });
+        }
+      } else {
+        if (!data.moveOutDate) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["moveOutDate"],
+            message: "Select your preferred service date",
+          });
+        }
+      }
+      if (data.serviceType === "recurring_house_cleaning" && !data.recurringFrequency) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["recurringFrequency"],
+          message: "Select how often you need cleaning",
+        });
+      }
+      if (data.serviceType === "airbnb_turnover") {
+        if (data.airbnbGuestCapacity == null || data.airbnbGuestCapacity < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["airbnbGuestCapacity"],
+            message: "Enter guest capacity",
+          });
+        }
+        if (data.airbnbTurnaroundHours == null || data.airbnbTurnaroundHours < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["airbnbTurnaroundHours"],
+            message: "Enter turnaround time (hours)",
+          });
+        }
+      }
+      if (data.serviceType === "deep_clean" && !data.deepCleanPurpose) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deepCleanPurpose"],
+          message: "Select the type of clean",
+        });
+      }
       if (data.buyNowPrice?.trim()) {
         const numeric = Number(data.buyNowPrice);
         if (Number.isNaN(numeric))
@@ -195,17 +265,23 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
 
 type ListingFormValues = z.infer<ReturnType<typeof buildListingSchema>>;
 
-function calculateEstimatedPrice(
+function calculatePricingParts(
   values: ListingFormValues,
   pricingModifiers: PricingModifiersConfig
-): number {
-  const baseAud = computeBaseListingPriceAud(pricingModifiers, {
+): {
+  baseCoreAud: number;
+  extrasAud: number;
+  recurringMult: number;
+  adjustmentAud: number;
+  adjustedTotalAud: number;
+} {
+  const baseCoreAud = computeBaseListingPriceAud(pricingModifiers, {
     bedrooms: values.bedrooms,
     condition: values.propertyCondition as PropertyConditionKey,
     levels: values.propertyLevels as PropertyLevelsKey,
   });
   const beds = values.bedrooms;
-  const addonsTotal = (values.addons ?? []).reduce(
+  const extrasAud = (values.addons ?? []).reduce(
     (sum, key) =>
       sum +
       getListingAddonPriceFromModifiers(
@@ -215,7 +291,44 @@ function calculateEstimatedPrice(
       ),
     0
   );
-  return baseAud + addonsTotal;
+  const recurringMult =
+    values.serviceType === "recurring_house_cleaning"
+      ? recurringFrequencyMultiplier(values.recurringFrequency)
+      : 1;
+  const raw = (baseCoreAud + extrasAud) * recurringMult;
+  const adjustedTotalAud = Math.round(raw * 100) / 100;
+  const adjustmentAud = Math.round((adjustedTotalAud - baseCoreAud - extrasAud) * 100) / 100;
+  return { baseCoreAud, extrasAud, recurringMult, adjustmentAud, adjustedTotalAud };
+}
+
+function calculateEstimatedPrice(
+  values: ListingFormValues,
+  pricingModifiers: PricingModifiersConfig
+): number {
+  return calculatePricingParts(values, pricingModifiers).adjustedTotalAud;
+}
+
+function buildAutoListingTitle(values: ListingFormValues): string {
+  const pt = values.propertyType.charAt(0).toUpperCase() + values.propertyType.slice(1);
+  const sub = values.suburb;
+  const beds = values.bedrooms;
+  const baths = values.bathrooms;
+  const bedLabel = `${beds} ${beds === 1 ? "Bedroom" : "Bedrooms"}`;
+  const bathLabel = `${baths} ${baths === 1 ? "Bathroom" : "Bathrooms"}`;
+  switch (values.serviceType) {
+    case "bond_cleaning":
+      return `${bedLabel} + ${bathLabel} ${pt} in ${sub}`;
+    case "recurring_house_cleaning": {
+      const f = recurringFrequencyShortLabel(values.recurringFrequency);
+      return `Recurring clean (${f}) · ${bedLabel} + ${bathLabel} ${pt} in ${sub}`;
+    }
+    case "airbnb_turnover":
+      return `Airbnb turnover · ${bedLabel} ${pt} in ${sub}`;
+    case "deep_clean":
+      return `${deepCleanPurposeLabel(values.deepCleanPurpose)} · ${bedLabel} + ${bathLabel} ${pt} in ${sub}`;
+    default:
+      return `${bedLabel} + ${bathLabel} ${pt} in ${sub}`;
+  }
 }
 
 type SuburbRow = { suburb: string; postcode: string | number; state: string | null };
@@ -331,6 +444,12 @@ export function NewListingForm({
   const form = useForm<ListingFormValues>({
     resolver: listingResolver,
     defaultValues: {
+      serviceType: "bond_cleaning",
+      recurringFrequency: undefined,
+      airbnbGuestCapacity: undefined,
+      airbnbTurnaroundHours: undefined,
+      deepCleanPurpose: undefined,
+      isUrgent: false,
       propertyType: "apartment",
       bedrooms: 2,
       bathrooms: 1,
@@ -343,12 +462,26 @@ export function NewListingForm({
       addons: [],
       propertyDescription: "",
       instructions: "",
-      moveOutDate: undefined as unknown as Date,
+      moveOutDate: undefined,
       reservePrice: defaultReservePrice,
       durationDays: 3,
       buyNowPrice: "",
     },
   });
+
+  const serviceTypeWatched = form.watch("serviceType");
+  useEffect(() => {
+    if (serviceTypeWatched !== "recurring_house_cleaning") {
+      form.setValue("recurringFrequency", undefined, { shouldValidate: true });
+    }
+    if (serviceTypeWatched !== "airbnb_turnover") {
+      form.setValue("airbnbGuestCapacity", undefined, { shouldValidate: true });
+      form.setValue("airbnbTurnaroundHours", undefined, { shouldValidate: true });
+    }
+    if (serviceTypeWatched !== "deep_clean") {
+      form.setValue("deepCleanPurpose", undefined, { shouldValidate: true });
+    }
+  }, [serviceTypeWatched, form]);
 
   const watchedValues = form.watch();
   const reservePriceWatched = form.watch("reservePrice");
@@ -377,6 +510,10 @@ export function NewListingForm({
   );
   const estimatedPrice = useMemo(
     () => calculateEstimatedPrice(watchedValues, pricingModifiers),
+    [watchedValues, pricingModifiers]
+  );
+  const pricingParts = useMemo(
+    () => calculatePricingParts(watchedValues, pricingModifiers),
     [watchedValues, pricingModifiers]
   );
   /** True when user set starting price below the live calculated estimate (property + add-ons). */
@@ -582,12 +719,30 @@ export function NewListingForm({
       }
 
       const durationDays = values.durationDays;
-      const moveOutDateStr = format(values.moveOutDate, "yyyy-MM-dd");
+      const moveOutDateStr = values.moveOutDate
+        ? format(values.moveOutDate, "yyyy-MM-dd")
+        : null;
       const endTime = computeListingEndTimeIso({ durationDays });
 
-      const instructions = values.instructions?.trim() || null;
+      const instructionsBase = values.instructions?.trim() || null;
+      const metaLines: string[] = [];
+      if (values.serviceType === "airbnb_turnover") {
+        metaLines.push(
+          `Airbnb turnover — guest capacity: ${values.airbnbGuestCapacity}, turnaround: ${values.airbnbTurnaroundHours}h`
+        );
+      }
+      if (values.serviceType === "recurring_house_cleaning" && values.recurringFrequency) {
+        metaLines.push(
+          `Recurring clean — ${recurringFrequencyShortLabel(values.recurringFrequency)}`
+        );
+      }
+      if (values.serviceType === "deep_clean" && values.deepCleanPurpose) {
+        metaLines.push(`Purpose: ${deepCleanPurposeLabel(values.deepCleanPurpose)}`);
+      }
+      const instructions =
+        [metaLines.join("\n"), instructionsBase].filter(Boolean).join("\n\n") || null;
 
-      const title = `${values.bedrooms} ${values.bedrooms === 1 ? "Bedroom" : "Bedrooms"} + ${values.bathrooms} ${values.bathrooms === 1 ? "Bathroom" : "Bathrooms"} ${values.propertyType.charAt(0).toUpperCase() + values.propertyType.slice(1)} in ${values.suburb}`;
+      const title = buildAutoListingTitle(values);
 
       if (initialPhotoFiles.length > PHOTO_LIMITS.LISTING_INITIAL) {
         const msg = `Max ${PHOTO_LIMITS.LISTING_INITIAL} initial condition photos allowed.`;
@@ -637,9 +792,21 @@ export function NewListingForm({
         end_time: endTime,
         end_date: endTime.slice(0, 10),
         platform_fee_percentage: Math.max(0, Math.min(30, Number(feePercentage) || 12)),
-        preferred_dates: [moveOutDateStr],
+        preferred_dates: moveOutDateStr ? [moveOutDateStr] : null,
         property_condition: values.propertyCondition,
         property_levels: values.propertyLevels,
+        service_type: values.serviceType,
+        recurring_frequency:
+          values.serviceType === "recurring_house_cleaning"
+            ? values.recurringFrequency ?? null
+            : null,
+        airbnb_guest_capacity:
+          values.serviceType === "airbnb_turnover" ? values.airbnbGuestCapacity ?? null : null,
+        airbnb_turnaround_hours:
+          values.serviceType === "airbnb_turnover" ? values.airbnbTurnaroundHours ?? null : null,
+        deep_clean_purpose:
+          values.serviceType === "deep_clean" ? values.deepCleanPurpose ?? null : null,
+        is_urgent: values.isUrgent === true,
       });
 
       setPublishProgress(20);
@@ -862,17 +1029,61 @@ export function NewListingForm({
                 <Sparkles className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" aria-hidden />
               </span>
               <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 sm:text-sm">
-                New bond clean listing
+                New cleaning job
               </p>
             </div>
             <h1 className="text-2xl font-bold leading-[1.15] tracking-tight text-foreground dark:text-gray-50 sm:text-3xl">
               Post your job and get cleaner bids
             </h1>
             <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground dark:text-gray-400 sm:text-base">
-              You&apos;re on the create-listing flow: add your property, move-out date, photos, and pricing. Cleaners will see your listing and place competitive bids so you can choose the best offer.
+              List bond cleans, recurring house cleaning, Airbnb turnovers, or deep / move-in cleans.
+              Add your property, schedule, photos, and pricing — cleaners bid so you can pick the best offer.
             </p>
           </div>
         </header>
+
+        <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50/90 to-background shadow-sm dark:border-emerald-900/50 dark:from-emerald-950/40 dark:to-gray-900/80">
+          <CardHeader className="pb-3 pt-5 sm:pt-6">
+            <CardTitle className="text-lg text-foreground dark:text-gray-100">Service type</CardTitle>
+            <CardDescription className="dark:text-gray-400">
+              Bond cleaning works exactly as before. Other types unlock tailored fields and pricing adjustments.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 pb-5 sm:pb-6">
+            <Label htmlFor="serviceType" className="text-sm font-medium">
+              What kind of clean is this?
+            </Label>
+            <Controller
+              control={form.control}
+              name="serviceType"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger
+                    id="serviceType"
+                    className="h-12 text-base dark:bg-gray-800 dark:border-gray-700"
+                  >
+                    <SelectValue placeholder="Select service type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bond_cleaning">Bond cleaning (end of lease)</SelectItem>
+                    <SelectItem value="recurring_house_cleaning">Recurring house cleaning</SelectItem>
+                    <SelectItem value="airbnb_turnover">Airbnb / short-stay turnover</SelectItem>
+                    <SelectItem value="deep_clean">Deep / spring / move-in cleaning</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {form.formState.errors.serviceType && (
+              <p className="text-xs text-destructive">{form.formState.errors.serviceType.message}</p>
+            )}
+            <p className="text-xs text-muted-foreground dark:text-gray-500">
+              Selected:{" "}
+              <span className="font-medium text-foreground dark:text-gray-300">
+                {serviceTypeLabel(serviceTypeWatched)}
+              </span>
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Stepper */}
         <Card className="border-border shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
@@ -1114,6 +1325,97 @@ export function NewListingForm({
                     ))}
                   </div>
                 </div>
+
+                {serviceTypeWatched === "recurring_house_cleaning" && (
+                  <div className="space-y-2 rounded-lg border border-emerald-200/70 bg-emerald-50/40 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/25">
+                    <Label>How often?</Label>
+                    <Controller
+                      control={form.control}
+                      name="recurringFrequency"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700">
+                            <SelectValue placeholder="Select frequency" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="weekly">Weekly (suggested price ×0.88)</SelectItem>
+                            <SelectItem value="fortnightly">Fortnightly (×0.98)</SelectItem>
+                            <SelectItem value="monthly">Monthly (×1.12)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    {form.formState.errors.recurringFrequency && (
+                      <p className="text-xs text-destructive">
+                        {form.formState.errors.recurringFrequency.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {serviceTypeWatched === "airbnb_turnover" && (
+                  <div className="grid gap-4 sm:grid-cols-2 rounded-lg border border-amber-200/70 bg-amber-50/40 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+                    <div className="space-y-2">
+                      <Label htmlFor="airbnbGuestCapacity">Guest capacity</Label>
+                      <Input
+                        id="airbnbGuestCapacity"
+                        type="number"
+                        min={1}
+                        max={99}
+                        className="dark:bg-gray-800 dark:border-gray-700"
+                        {...form.register("airbnbGuestCapacity", { valueAsNumber: true })}
+                      />
+                      {form.formState.errors.airbnbGuestCapacity && (
+                        <p className="text-xs text-destructive">
+                          {form.formState.errors.airbnbGuestCapacity.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="airbnbTurnaroundHours">Turnaround (hours)</Label>
+                      <Input
+                        id="airbnbTurnaroundHours"
+                        type="number"
+                        min={1}
+                        max={168}
+                        className="dark:bg-gray-800 dark:border-gray-700"
+                        {...form.register("airbnbTurnaroundHours", { valueAsNumber: true })}
+                      />
+                      {form.formState.errors.airbnbTurnaroundHours && (
+                        <p className="text-xs text-destructive">
+                          {form.formState.errors.airbnbTurnaroundHours.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {serviceTypeWatched === "deep_clean" && (
+                  <div className="space-y-2 rounded-lg border border-violet-200/70 bg-violet-50/40 p-4 dark:border-violet-900/45 dark:bg-violet-950/25">
+                    <Label>Purpose</Label>
+                    <Controller
+                      control={form.control}
+                      name="deepCleanPurpose"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700">
+                            <SelectValue placeholder="Select purpose" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="deep_clean">Deep clean</SelectItem>
+                            <SelectItem value="spring_clean">Spring clean</SelectItem>
+                            <SelectItem value="move_in_clean">Move-in clean</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    {form.formState.errors.deepCleanPurpose && (
+                      <p className="text-xs text-destructive">
+                        {form.formState.errors.deepCleanPurpose.message}
+                      </p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1610,9 +1912,21 @@ export function NewListingForm({
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Label>Move-out date</Label>
-                    <FieldHelp label="Move-out date help">
-                      When do you need the bond clean completed? Cleaners will use this to plan.
+                    <Label>
+                      {serviceTypeWatched === "bond_cleaning"
+                        ? "Move-out date"
+                        : "Preferred service date"}
+                    </Label>
+                    <FieldHelp
+                      label={
+                        serviceTypeWatched === "bond_cleaning"
+                          ? "Move-out date help"
+                          : "Service date help"
+                      }
+                    >
+                      {serviceTypeWatched === "bond_cleaning"
+                        ? "When do you need the bond clean completed? Cleaners will use this to plan."
+                        : "When would you like this clean done? You can coordinate exact timing with your cleaner after booking."}
                     </FieldHelp>
                   </div>
                   <Controller
@@ -1632,7 +1946,9 @@ export function NewListingForm({
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {field.value
                               ? format(field.value, "d MMM yyyy")
-                              : "Select move-out date"}
+                              : serviceTypeWatched === "bond_cleaning"
+                                ? "Select move-out date"
+                                : "Select preferred date"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="p-0" align="start">
@@ -1745,6 +2061,75 @@ export function NewListingForm({
                     </AlertDescription>
                   </Alert>
                 )}
+
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm dark:border-gray-700 dark:bg-gray-800/50">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
+                    Price calculator (before your starting bid)
+                  </p>
+                  <dl className="mt-2 space-y-1.5">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground dark:text-gray-400">Base (property)</dt>
+                      <dd className="tabular-nums font-medium">
+                        {formatAudFromCents(Math.round(pricingParts.baseCoreAud * 100))}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground dark:text-gray-400">Add-ons (extras)</dt>
+                      <dd className="tabular-nums font-medium">
+                        {formatAudFromCents(Math.round(pricingParts.extrasAud * 100))}
+                      </dd>
+                    </div>
+                    {pricingParts.adjustmentAud !== 0 ? (
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-muted-foreground dark:text-gray-400">
+                          Recurring adjustment (×{pricingParts.recurringMult.toFixed(2)})
+                        </dt>
+                        <dd
+                          className={cn(
+                            "tabular-nums font-medium",
+                            pricingParts.adjustmentAud < 0
+                              ? "text-emerald-700 dark:text-emerald-400"
+                              : "text-amber-800 dark:text-amber-300"
+                          )}
+                        >
+                          {pricingParts.adjustmentAud > 0 ? "+" : ""}
+                          {formatAudFromCents(Math.round(pricingParts.adjustmentAud * 100))}
+                        </dd>
+                      </div>
+                    ) : null}
+                    <div className="flex justify-between gap-2 border-t border-border pt-1.5 dark:border-gray-600">
+                      <dt className="font-medium text-foreground dark:text-gray-200">Suggested subtotal</dt>
+                      <dd className="tabular-nums font-semibold text-foreground dark:text-gray-100">
+                        {formatAudFromCents(Math.round(pricingParts.adjustedTotalAud * 100))}
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="mt-2 text-[11px] text-muted-foreground dark:text-gray-500">
+                    Platform fee stays {feePercentage}% for all service types. Your starting price below may match or
+                    differ from this suggestion.
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-lg border border-red-200/80 bg-red-50/50 px-3 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+                  <Checkbox
+                    id="isUrgent"
+                    checked={form.watch("isUrgent")}
+                    onCheckedChange={(c) =>
+                      form.setValue("isUrgent", c === true, { shouldValidate: true })
+                    }
+                    className="mt-0.5"
+                  />
+                  <div className="min-w-0 space-y-0.5">
+                    <Label htmlFor="isUrgent" className="cursor-pointer text-sm font-semibold text-foreground">
+                      Mark as urgent
+                    </Label>
+                    <p className="text-xs text-muted-foreground dark:text-gray-400">
+                      Highlights your job to cleaners (red urgency on the map and in search). Use when you&apos;re
+                      on a tight deadline.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-3">
                     <Label htmlFor="reservePrice" className="shrink-0 text-sm">
@@ -1811,6 +2196,14 @@ export function NewListingForm({
                             </dt>
                             <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                               {formatAudFromCents(reserveFeeCents)}
+                            </dd>
+                          </div>
+                          <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+                            <dt className="text-muted-foreground dark:text-gray-400">
+                              Net to cleaner (at this starting bid)
+                            </dt>
+                            <dd className="text-base font-semibold tabular-nums text-emerald-800 dark:text-emerald-300 sm:text-lg">
+                              {formatAudFromCents(Math.round(reservePriceWatched * 100))}
                             </dd>
                           </div>
                           <div className="border-t border-border pt-2 dark:border-gray-600">

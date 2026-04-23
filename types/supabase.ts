@@ -241,6 +241,14 @@ export interface Database {
           property_condition: string | null;
           /** "1" | "2" */
           property_levels: string | null;
+          /** bond_cleaning | recurring_house_cleaning | airbnb_turnover | deep_clean */
+          service_type: string;
+          /** weekly | fortnightly | monthly when recurring */
+          recurring_frequency: string | null;
+          airbnb_guest_capacity: number | null;
+          airbnb_turnaround_hours: number | null;
+          deep_clean_purpose: string | null;
+          is_urgent: boolean;
         };
         Insert: {
           id?: string;
@@ -275,6 +283,12 @@ export interface Database {
           cancelled_early_at?: string | null;
           property_condition?: string | null;
           property_levels?: string | null;
+          service_type?: string;
+          recurring_frequency?: string | null;
+          airbnb_guest_capacity?: number | null;
+          airbnb_turnaround_hours?: number | null;
+          deep_clean_purpose?: string | null;
+          is_urgent?: boolean;
         };
         Update: {
           title?: string;
@@ -306,6 +320,12 @@ export interface Database {
           cancelled_early_at?: string | null;
           property_condition?: string | null;
           property_levels?: string | null;
+          service_type?: string;
+          recurring_frequency?: string | null;
+          airbnb_guest_capacity?: number | null;
+          airbnb_turnaround_hours?: number | null;
+          deep_clean_purpose?: string | null;
+          is_urgent?: boolean;
         };
         Relationships: [
           {

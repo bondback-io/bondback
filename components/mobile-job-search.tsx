@@ -80,6 +80,8 @@ export type JobsPageMobileChromeProps = {
   initialBedrooms?: string;
   initialBathrooms?: string;
   initialPropertyType?: string;
+  initialServiceType?: string;
+  initialUrgentOnly?: boolean;
 };
 
 /**
@@ -97,6 +99,8 @@ export function JobsPageMobileChrome({
   initialBedrooms = "",
   initialBathrooms = "",
   initialPropertyType = "",
+  initialServiceType = "",
+  initialUrgentOnly = false,
   ...barProps
 }: JobsPageMobileChromeProps) {
   const [count, setCount] = React.useState(initialResultCount);
@@ -124,6 +128,8 @@ export function JobsPageMobileChrome({
           initialBedrooms={initialBedrooms}
           initialBathrooms={initialBathrooms}
           initialPropertyType={initialPropertyType}
+          initialServiceType={initialServiceType}
+          initialUrgentOnly={initialUrgentOnly}
           {...barProps}
         />
       </div>
@@ -178,6 +184,8 @@ export type MobileJobSearchBarProps = {
   initialBedrooms?: string;
   initialBathrooms?: string;
   initialPropertyType?: string;
+  initialServiceType?: string;
+  initialUrgentOnly?: boolean;
   resultCount?: number;
   className?: string;
   /** When false, bar is not sticky (e.g. nested in dashboard header). Default true. */
@@ -255,6 +263,8 @@ export function MobileJobSearchBar({
   initialBedrooms = "",
   initialBathrooms = "",
   initialPropertyType = "",
+  initialServiceType = "",
+  initialUrgentOnly = false,
   resultCount = 0,
   className,
   sticky = true,
@@ -327,6 +337,11 @@ export function MobileJobSearchBar({
     const p = initialPropertyType?.trim();
     return p && p !== "" && p !== "any" ? p : "any";
   });
+  const [serviceType, setServiceType] = React.useState(() => {
+    const s = initialServiceType?.trim();
+    return s && s !== "" && s !== "any" ? s : "any";
+  });
+  const [urgentOnly, setUrgentOnly] = React.useState(() => initialUrgentOnly === true);
 
   const minBidRef = React.useRef(minBidPrice);
   const maxBidRef = React.useRef(maxBidPrice);
@@ -355,6 +370,9 @@ export function MobileJobSearchBar({
     setBathrooms(ba && ba !== "any" && ba ? ba : "any");
     const pt = searchParams.get("property_type");
     setPropertyType(pt && pt !== "any" && pt ? pt : "any");
+    const st = searchParams.get("service_type");
+    setServiceType(st && st !== "any" && st ? st : "any");
+    setUrgentOnly(searchParams.get("urgent_only") === "1");
   }, [searchParams]);
 
   React.useEffect(() => {
@@ -767,6 +785,7 @@ export function MobileJobSearchBar({
                       <button
                         type="button"
                         role="option"
+                        aria-selected={false}
                         className="flex w-full min-h-[44px] items-center px-3 py-2.5 text-left text-base hover:bg-muted dark:hover:bg-gray-800"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => selectSuburbRow(row)}
@@ -1073,6 +1092,52 @@ export function MobileJobSearchBar({
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Service type</Label>
+                  <Select
+                    value={serviceType}
+                    onValueChange={(v) => {
+                      setServiceType(v);
+                      navigateSearch({
+                        service_type: v === "any" ? undefined : v,
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl border-border bg-background dark:border-gray-600 dark:bg-gray-900">
+                      <SelectValue placeholder="Any service" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any service</SelectItem>
+                      <SelectItem value="bond_cleaning">Bond cleaning</SelectItem>
+                      <SelectItem value="recurring_house_cleaning">Recurring house cleaning</SelectItem>
+                      <SelectItem value="airbnb_turnover">Airbnb / short-stay turnover</SelectItem>
+                      <SelectItem value="deep_clean">Deep / spring / move-in</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 dark:border-gray-800">
+                  <div className="min-w-0 space-y-0.5 pr-2">
+                    <Label
+                      htmlFor="jobs-urgent-only"
+                      className="text-sm font-medium text-foreground dark:text-gray-100"
+                    >
+                      Urgent jobs only
+                    </Label>
+                    <p className="text-xs text-muted-foreground dark:text-gray-500">
+                      Listings the lister marked as urgent.
+                    </p>
+                  </div>
+                  <Switch
+                    id="jobs-urgent-only"
+                    checked={urgentOnly}
+                    onCheckedChange={(checked) => {
+                      setUrgentOnly(checked);
+                      navigateSearch({
+                        urgent_only: checked ? "1" : undefined,
+                      });
+                    }}
+                  />
+                </div>
               </div>
 
               <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4 dark:border-gray-800 dark:bg-gray-900/40">
@@ -1219,6 +1284,51 @@ export function MobileJobSearchBar({
                 <SelectItem value="studio">Studio</SelectItem>
               </SelectContent>
             </Select>
+
+            <Select
+              value={serviceType}
+              onValueChange={(v) => {
+                setServiceType(v);
+                navigateSearch({
+                  service_type: v === "any" ? undefined : v,
+                });
+              }}
+            >
+              <SelectTrigger
+                className="h-9 w-[min(100%,11rem)] min-w-[8rem] rounded-full border-border/90 bg-background text-xs font-medium shadow-sm dark:border-gray-600 dark:bg-gray-950"
+                aria-label="Service type"
+              >
+                <SelectValue placeholder="Service" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Any service</SelectItem>
+                <SelectItem value="bond_cleaning">Bond clean</SelectItem>
+                <SelectItem value="recurring_house_cleaning">Recurring</SelectItem>
+                <SelectItem value="airbnb_turnover">Airbnb</SelectItem>
+                <SelectItem value="deep_clean">Deep clean</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button
+              type="button"
+              variant={urgentOnly ? "default" : "outline"}
+              size="sm"
+              className={cn(
+                "h-9 shrink-0 rounded-full px-3 text-xs font-semibold",
+                urgentOnly &&
+                  "border-red-600 bg-red-600 text-white hover:bg-red-700 dark:border-red-500 dark:bg-red-600"
+              )}
+              aria-pressed={urgentOnly}
+              onClick={() => {
+                const next = !urgentOnly;
+                setUrgentOnly(next);
+                navigateSearch({
+                  urgent_only: next ? "1" : undefined,
+                });
+              }}
+            >
+              Urgent
+            </Button>
 
             <Select
               value={bedrooms}

@@ -2452,33 +2452,9 @@ export async function releaseJobFunds(
     };
   }
 
-  /** RLS usually allows users to read only their own profile; listers cannot read the cleaner's row. */
-  const adminForPayout = createSupabaseAdminClient();
-  const profileClient = adminForPayout ?? supabase;
-  const { data: profile } = await profileClient
-    .from("profiles")
-    .select("stripe_connect_id, stripe_onboarding_complete")
-    .eq("id", winnerId)
-    .maybeSingle();
-
   const globalForRelease = await getGlobalSettings();
-  if (globalForRelease?.require_stripe_connect_before_payment_release !== false) {
-    if (!isProfileStripePayoutReady(profile)) {
-      return {
-        ok: false,
-        error:
-          "The cleaner has not finished Stripe payout setup. They must connect their bank account before escrow can be released.",
-      };
-    }
-  }
 
-  const stripeConnectIdRaw = (profile as { stripe_connect_id?: string | null } | null)?.stripe_connect_id;
-  if (!trimStr(stripeConnectIdRaw)) {
-    return { ok: false, error: "Cleaner has not connected a bank account (Stripe Connect)." };
-  }
-  const stripeConnectId = trimStr(stripeConnectIdRaw);
-
-  let stripe;
+  let stripe: Stripe;
   try {
     stripe = await getStripeServer();
   } catch {
@@ -2486,16 +2462,24 @@ export async function releaseJobFunds(
   }
 
   try {
-    const connectReady = await ensureConnectAccountCanReceiveTransfers(
-      stripe,
-      stripeConnectId
+    /**
+     * After partial lister refunds, each charge has less balance available for `source_transaction` transfers.
+     * Transfer at most: min(cleaner leg amount, charge_remaining − platform fee on that leg).
+     * If nothing remains for the cleaner, skip Connect transfers and still mark escrow settled.
+     */
+    const listingFeePercent = await fetchPlatformFeePercentForListing(
+      supabase,
+      j.listing_id,
+      globalForRelease
     );
-    if (!connectReady.ok) {
-      return { ok: false, error: connectReady.error };
-    }
+    const topUpsParsed = parseJobTopUpPayments(j.top_up_payments as never);
 
-    const transferIds: string[] = [];
-    let updatedTopUps = parseJobTopUpPayments(j.top_up_payments as never);
+    type PlanRow = {
+      leg: (typeof legs)[number];
+      chargeId: string;
+      transferAmount: number;
+    };
+    const plan: PlanRow[] = [];
 
     for (const leg of legs) {
       const pi = await stripe.paymentIntents.retrieve(leg.paymentIntentId);
@@ -2527,30 +2511,83 @@ export async function releaseJobFunds(
             : (pi.latest_charge as { id?: string } | null)?.id;
       }
 
-      const transferParams: {
-        amount: number;
-        currency: string;
-        destination: string;
-        metadata: { job_id: string; leg?: string };
-        source_transaction?: string;
-      } = {
-        amount: Math.max(1, leg.agreedCents),
-        currency: "aud",
-        destination: stripeConnectId,
-        metadata: {
-          job_id: String(numericJobId),
-          leg: leg.topUpIndex < 0 ? "primary" : `top_up_${leg.topUpIndex}`,
-        },
-      };
-      if (chargeId) transferParams.source_transaction = chargeId;
+      const cid = trimStr(chargeId);
+      if (!cid) {
+        return { ok: false, error: "Could not resolve Stripe charge for an escrow payment." };
+      }
 
-      const transfer = await stripe.transfers.create(transferParams);
-      transferIds.push(transfer.id);
+      const ch = await stripe.charges.retrieve(cid);
+      const remainingOnCharge = Math.max(
+        0,
+        (ch.amount ?? 0) - (ch.amount_refunded ?? 0)
+      );
+      const primaryFeeEstimate = Math.round((leg.agreedCents * listingFeePercent) / 100);
+      const legFeeCents =
+        leg.topUpIndex < 0
+          ? primaryFeeEstimate
+          : Math.max(
+              0,
+              Math.floor(topUpsParsed[leg.topUpIndex]?.fee_cents ?? primaryFeeEstimate)
+            );
+      const maxCleanerFromCharge = Math.max(0, remainingOnCharge - legFeeCents);
+      const transferAmount = Math.min(leg.agreedCents, maxCleanerFromCharge);
+      plan.push({ leg, chargeId: cid, transferAmount });
+    }
 
-      if (leg.topUpIndex >= 0 && updatedTopUps[leg.topUpIndex]) {
-        updatedTopUps = updatedTopUps.map((row, idx) =>
-          idx === leg.topUpIndex ? { ...row, stripe_transfer_id: transfer.id } : row
-        );
+    const totalCleanerTransfer = plan.reduce((s, p) => s + p.transferAmount, 0);
+
+    const transferIds: string[] = [];
+    let updatedTopUps = parseJobTopUpPayments(j.top_up_payments as never);
+
+    if (totalCleanerTransfer >= 1) {
+      const adminForPayout = createSupabaseAdminClient();
+      const profileClient = adminForPayout ?? supabase;
+      const { data: profile } = await profileClient
+        .from("profiles")
+        .select("stripe_connect_id, stripe_onboarding_complete")
+        .eq("id", winnerId)
+        .maybeSingle();
+
+      if (globalForRelease?.require_stripe_connect_before_payment_release !== false) {
+        if (!isProfileStripePayoutReady(profile)) {
+          return {
+            ok: false,
+            error:
+              "The cleaner has not finished Stripe payout setup. They must connect their bank account before escrow can be released.",
+          };
+        }
+      }
+
+      const stripeConnectIdRaw = (profile as { stripe_connect_id?: string | null } | null)?.stripe_connect_id;
+      if (!trimStr(stripeConnectIdRaw)) {
+        return { ok: false, error: "Cleaner has not connected a bank account (Stripe Connect)." };
+      }
+      const stripeConnectId = trimStr(stripeConnectIdRaw);
+
+      const connectReady = await ensureConnectAccountCanReceiveTransfers(stripe, stripeConnectId);
+      if (!connectReady.ok) {
+        return { ok: false, error: connectReady.error };
+      }
+
+      for (const row of plan) {
+        if (row.transferAmount < 1) continue;
+        const transfer = await stripe.transfers.create({
+          amount: row.transferAmount,
+          currency: "aud",
+          destination: stripeConnectId,
+          metadata: {
+            job_id: String(numericJobId),
+            leg: row.leg.topUpIndex < 0 ? "primary" : `top_up_${row.leg.topUpIndex}`,
+          },
+          source_transaction: row.chargeId,
+        });
+        transferIds.push(transfer.id);
+        const idx = row.leg.topUpIndex;
+        if (idx >= 0 && updatedTopUps[idx]) {
+          updatedTopUps = updatedTopUps.map((r, i) =>
+            i === idx ? { ...r, stripe_transfer_id: transfer.id } : r
+          );
+        }
       }
     }
 
@@ -2564,7 +2601,7 @@ export async function releaseJobFunds(
       .from("jobs")
       .update({
         payment_released_at: nowIso,
-        stripe_transfer_id: transferIds.join(","),
+        stripe_transfer_id: transferIds.length > 0 ? transferIds.join(",") : null,
         top_up_payments: updatedTopUps as unknown as never,
         updated_at: nowIso,
         ...(disputeClose ?? {}),
@@ -2579,7 +2616,10 @@ export async function releaseJobFunds(
     if (testMode) {
       console.log(
         "[Stripe Test] Multi-leg release:",
-        legs.map((l) => l.paymentIntentId),
+        plan.map((p) => ({
+          pi: p.leg.paymentIntentId,
+          transferAmount: p.transferAmount,
+        })),
         "Transfers:",
         transferIds
       );

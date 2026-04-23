@@ -1,3 +1,5 @@
+import type { ServiceTypeKey } from "@/lib/service-types";
+
 export type FindJobsMapPoint = {
   id: string;
   title: string;
@@ -9,4 +11,7 @@ export type FindJobsMapPoint = {
   currentBidLabel: string;
   buyNowLabel: string | null;
   bidCount: number;
+  serviceType: ServiceTypeKey;
+  recurringFrequency: string | null;
+  isUrgent: boolean;
 };

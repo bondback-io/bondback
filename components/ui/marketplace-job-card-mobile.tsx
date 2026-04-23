@@ -77,6 +77,10 @@ export type JobCardMarketplaceMobileProps = {
   /** Second image (e.g. another room) for a split hero preview. */
   secondaryThumb?: string | null;
   propertyType?: string | null;
+  /** e.g. "🔄 Weekly" — bright badge for recurring listings */
+  recurringBadge?: string | null;
+  /** Lister-flagged urgent job */
+  listerMarkedUrgent?: boolean;
 };
 
 function JobCardMarketplaceMobileInner({
@@ -111,6 +115,8 @@ function JobCardMarketplaceMobileInner({
   startingBidDisplay,
   secondaryThumb,
   propertyType,
+  recurringBadge = null,
+  listerMarkedUrgent = false,
   publicMarketplaceBidCTAs = false,
   currentUserId = null,
   signInToBidHref,
@@ -192,7 +198,19 @@ function JobCardMarketplaceMobileInner({
               >
                 {title}
               </h3>
-              <div className="shrink-0">{menu}</div>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                {recurringBadge ? (
+                  <Badge className="border border-lime-500/40 bg-lime-400 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-lime-950 shadow-sm dark:bg-lime-400 dark:text-lime-950">
+                    {recurringBadge}
+                  </Badge>
+                ) : null}
+                {listerMarkedUrgent ? (
+                  <Badge className="animate-pulse border border-red-500/50 bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+                    Urgent
+                  </Badge>
+                ) : null}
+                {menu}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -506,6 +524,16 @@ function JobCardMarketplaceMobileInner({
         <div className="absolute left-3 right-3 top-3 z-10 flex items-start justify-between gap-2">
           <div className="min-w-0 shrink">{menu}</div>
           <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {recurringBadge ? (
+              <Badge className="border border-lime-500/40 bg-lime-400 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-lime-950 shadow-md dark:bg-lime-400 dark:text-lime-950">
+                {recurringBadge}
+              </Badge>
+            ) : null}
+            {listerMarkedUrgent ? (
+              <Badge className="animate-pulse border-2 border-white/90 bg-red-600 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-white shadow-md">
+                Urgent
+              </Badge>
+            ) : null}
             {showListerTrust && listerVerificationBadges && listerVerificationBadges.length > 0 && (
               <VerificationBadges badges={listerVerificationBadges} showLabel size="lg" />
             )}

@@ -69,6 +69,8 @@ type FindJobsPageSearchParams = {
   bedrooms?: string;
   bathrooms?: string;
   property_type?: string;
+  service_type?: string;
+  urgent_only?: string;
 };
 
 async function FindJobsPageContent({
@@ -138,6 +140,8 @@ async function FindJobsPageContent({
   const bedroomsFilter = (sp.bedrooms ?? "").trim();
   const bathroomsFilter = (sp.bathrooms ?? "").trim();
   const propertyTypeFilter = (sp.property_type ?? "").trim();
+  const serviceTypeFilter = (sp.service_type ?? "").trim();
+  const urgentOnlyFilter = (sp.urgent_only ?? "").trim();
 
   const bedroomsNormalized =
     bedroomsFilter && bedroomsFilter.toLowerCase() !== "any" ? bedroomsFilter : undefined;
@@ -160,6 +164,14 @@ async function FindJobsPageContent({
     bedrooms: bedroomsNormalized,
     bathrooms: bathroomsNormalized,
     property_type: propertyTypeNormalized,
+    service_type:
+      serviceTypeFilter && serviceTypeFilter.toLowerCase() !== "any"
+        ? serviceTypeFilter
+        : undefined,
+    urgent_only:
+      urgentOnlyFilter === "1" || urgentOnlyFilter.toLowerCase() === "true"
+        ? "1"
+        : undefined,
   };
 
   const query = buildLiveListingsQuery(supabase, filters, takenIds);
@@ -234,6 +246,12 @@ async function FindJobsPageContent({
   if (propertyTypeFilter && propertyTypeFilter !== "any") {
     baseParams.set("property_type", propertyTypeFilter);
   }
+  if (serviceTypeFilter && serviceTypeFilter.toLowerCase() !== "any") {
+    baseParams.set("service_type", serviceTypeFilter);
+  }
+  if (urgentOnlyFilter === "1" || urgentOnlyFilter.toLowerCase() === "true") {
+    baseParams.set("urgent_only", "1");
+  }
 
   const clearHref = "/find-jobs";
 
@@ -256,6 +274,8 @@ async function FindJobsPageContent({
     ...(bedroomsNormalized && { bedrooms: bedroomsNormalized }),
     ...(bathroomsNormalized && { bathrooms: bathroomsNormalized }),
     ...(propertyTypeNormalized && { property_type: propertyTypeNormalized }),
+    ...(filters.service_type && { service_type: filters.service_type }),
+    ...(filters.urgent_only && { urgent_only: filters.urgent_only }),
   }).toString();
 
   /** Bumps when URL filters or map window change so client `JobsList` resets from fresh SSR props. */
@@ -335,6 +355,8 @@ async function FindJobsPageContent({
           bedrooms: bedroomsNormalized,
           bathrooms: bathroomsNormalized,
           property_type: propertyTypeNormalized,
+          service_type: filters.service_type,
+          urgent_only: filters.urgent_only,
         }}
       />
     );
@@ -362,6 +384,8 @@ async function FindJobsPageContent({
               initialBedrooms={bedroomsFilter}
               initialBathrooms={bathroomsFilter}
               initialPropertyType={propertyTypeFilter}
+              initialServiceType={serviceTypeFilter}
+              initialUrgentOnly={urgentOnlyFilter === "1" || urgentOnlyFilter.toLowerCase() === "true"}
             >
               <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 pb-2 md:px-4 lg:pb-0">
                 <FindJobsBrowseShell

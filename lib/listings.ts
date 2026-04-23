@@ -318,7 +318,7 @@ export function buildListingInsertRow(params: {
   /** Keys chosen under Special areas (stored for add-on badge styling). */
   special_areas: string[] | null;
   special_instructions: string | null;
-  move_out_date: string;
+  move_out_date: string | null;
   photo_urls: string[] | null;
   reserve_cents: number;
   reserve_price: number;
@@ -336,14 +336,23 @@ export function buildListingInsertRow(params: {
   initial_photos?: string[] | null;
   property_condition: string | null;
   property_levels: string | null;
+  service_type?: string;
+  recurring_frequency?: string | null;
+  airbnb_guest_capacity?: number | null;
+  airbnb_turnaround_hours?: number | null;
+  deep_clean_purpose?: string | null;
+  is_urgent?: boolean;
 }): ListingInsertPayload {
   const propertyDescription = params.property_description?.trim() || null;
+  const propertyAddress = params.property_address?.trim() || null;
+  const serviceType = params.service_type?.trim() || "bond_cleaning";
 
   return {
     lister_id: params.lister_id,
     title: params.title,
     description: null,
     property_description: propertyDescription,
+    property_address: propertyAddress,
     suburb: params.suburb,
     postcode: params.postcode,
     property_type: params.property_type,
@@ -369,5 +378,11 @@ export function buildListingInsertRow(params: {
     preferred_dates: params.preferred_dates ?? null,
     property_condition: params.property_condition,
     property_levels: params.property_levels,
+    service_type: serviceType,
+    recurring_frequency: params.recurring_frequency ?? null,
+    airbnb_guest_capacity: params.airbnb_guest_capacity ?? null,
+    airbnb_turnaround_hours: params.airbnb_turnaround_hours ?? null,
+    deep_clean_purpose: params.deep_clean_purpose ?? null,
+    is_urgent: params.is_urgent === true,
   };
 }

@@ -23,6 +23,10 @@ export type JobsListFilters = {
   bedrooms?: string;
   bathrooms?: string;
   property_type?: string;
+  /** `bond_cleaning` | `recurring_house_cleaning` | `airbnb_turnover` | `deep_clean` */
+  service_type?: string;
+  /** When `"1"`, only `is_urgent` listings */
+  urgent_only?: string;
 };
 
 /** Accepts SSR or browser Supabase client (schema generic may differ slightly between packages). */
@@ -43,6 +47,8 @@ export function buildLiveListingsQuery(
   const bedroomsFilter = (filters.bedrooms ?? "").trim();
   const bathroomsFilter = (filters.bathrooms ?? "").trim();
   const propertyTypeFilter = (filters.property_type ?? "").trim();
+  const serviceTypeFilter = (filters.service_type ?? "").trim();
+  const urgentOnlyFilter = (filters.urgent_only ?? "").trim();
 
   let query = supabase
     .from("listings")
@@ -99,6 +105,12 @@ export function buildLiveListingsQuery(
   if (propertyTypeFilter && propertyTypeFilter.toLowerCase() !== "any") {
     query = query.eq("property_type", propertyTypeFilter);
   }
+  if (serviceTypeFilter && serviceTypeFilter.toLowerCase() !== "any") {
+    query = query.eq("service_type", serviceTypeFilter);
+  }
+  if (urgentOnlyFilter === "1" || urgentOnlyFilter.toLowerCase() === "true") {
+    query = query.eq("is_urgent", true);
+  }
 
   switch (sort) {
     case "price-asc":
@@ -134,6 +146,8 @@ export type ListingFilterRow = {
   bedrooms?: number | null;
   bathrooms?: number | null;
   property_type?: string | null;
+  service_type?: string | null;
+  is_urgent?: boolean | null;
 };
 
 /**
@@ -233,6 +247,16 @@ export function listingMatchesJobsListFilters(
   const propertyTypeFilter = (filters.property_type ?? "").trim();
   if (propertyTypeFilter && propertyTypeFilter.toLowerCase() !== "any") {
     if (String(row.property_type ?? "") !== propertyTypeFilter) return false;
+  }
+
+  const serviceTypeFilter = (filters.service_type ?? "").trim();
+  if (serviceTypeFilter && serviceTypeFilter.toLowerCase() !== "any") {
+    if (String(row.service_type ?? "bond_cleaning") !== serviceTypeFilter) return false;
+  }
+
+  const urgentOnlyFilter = (filters.urgent_only ?? "").trim();
+  if (urgentOnlyFilter === "1" || urgentOnlyFilter.toLowerCase() === "true") {
+    if (row.is_urgent !== true) return false;
   }
 
   return true;

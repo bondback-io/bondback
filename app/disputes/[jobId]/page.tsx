@@ -3,8 +3,11 @@ import { notFound, redirect } from "next/navigation";
 import { getSessionWithProfile } from "@/lib/supabase/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DisputeJobCaseSummary } from "@/components/disputes/dispute-job-case-summary";
 import { DisputeAuditTimeline } from "@/components/disputes/dispute-audit-timeline";
 import { DisputeThreadCard } from "@/components/disputes/dispute-thread-card";
@@ -57,6 +60,26 @@ export default async function DisputeCaseDetailPage({
   const mediationState = String(
     (jobRow as { dispute_mediation_status?: string | null }).dispute_mediation_status ?? "none"
   );
+
+  const settings = await getGlobalSettings();
+  const requireStripeForRelease =
+    settings?.require_stripe_connect_before_payment_release !== false;
+  let showCleanerStripePayoutNotice = false;
+  if (isCleaner && requireStripeForRelease) {
+    const paidOut = String(
+      (jobRow as { payment_released_at?: string | null }).payment_released_at ?? ""
+    ).trim();
+    if (!paidOut) {
+      const { data: stripeRow } = await supabase
+        .from("profiles")
+        .select("stripe_connect_id, stripe_onboarding_complete")
+        .eq("id", userId)
+        .maybeSingle();
+      showCleanerStripePayoutNotice = !isProfileStripePayoutReady(
+        stripeRow as { stripe_connect_id?: string | null; stripe_onboarding_complete?: boolean | null } | null
+      );
+    }
+  }
 
   const admin = createSupabaseAdminClient();
   let messages = [] as ReturnType<typeof serializeDisputeMessagesForClient>;
@@ -118,6 +141,22 @@ export default async function DisputeCaseDetailPage({
           </Button>
         </div>
       </div>
+
+      {showCleanerStripePayoutNotice ? (
+        <Alert className="border-amber-500/60 bg-amber-50/90 dark:border-amber-800 dark:bg-amber-950/35">
+          <AlertDescription className="text-sm text-foreground dark:text-gray-100">
+            <span className="font-medium">Payout setup required.</span> When this dispute is settled, escrow can only
+            be sent to you after Stripe payout setup is complete.{" "}
+            <Link
+              href="/profile?tab=payments"
+              className="font-medium text-primary underline underline-offset-2 hover:no-underline"
+            >
+              Open Profile → Payments
+            </Link>{" "}
+            to connect your bank.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {requests.length > 0 ? (
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900/50">

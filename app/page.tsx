@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ClipboardList,
   HandCoins,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -140,6 +141,81 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
             <p className="mt-10 text-center text-xs leading-relaxed text-zinc-500 dark:text-zinc-400 sm:text-sm">
               Secure payments · Verified cleaners · Australia-wide
             </p>
+          </div>
+        </section>
+
+        {/* Recurring cleans */}
+        <section
+          className="mt-14 sm:mt-16 md:mt-20"
+          aria-labelledby="recurring-cleans-heading"
+        >
+          <div
+            className={cn(
+              "relative overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-background to-teal-50/50 px-5 py-8 shadow-sm sm:rounded-3xl sm:px-8 sm:py-10",
+              "dark:border-emerald-800/50 dark:from-emerald-950/40 dark:via-gray-950 dark:to-teal-950/30"
+            )}
+          >
+            <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-emerald-400/15 blur-2xl dark:bg-emerald-500/10" aria-hidden />
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
+              <div className="min-w-0 max-w-2xl space-y-3">
+                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
+                  <RefreshCw className="h-4 w-4 shrink-0" aria-hidden />
+                  Recurring cleans
+                </p>
+                <h2
+                  id="recurring-cleans-heading"
+                  className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl"
+                >
+                  Same trusted cleaners, on your schedule
+                </h2>
+                <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-base">
+                  Book weekly, fortnightly, or monthly house cleaning through Bond Back — transparent
+                  pricing with frequency adjustments, secure payments, and the same marketplace quality
+                  you expect for bond cleans.
+                </p>
+                <ul className="grid gap-2 text-sm text-zinc-700 dark:text-zinc-300 sm:grid-cols-2">
+                  <li className="flex gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    <span>Flexible frequency with clear price guidance</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    <span>Verified cleaners and in-app coordination</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    <span>12% platform fee — same as other services</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    <span>Also list Airbnb turnovers &amp; deep cleans</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="flex w-full shrink-0 flex-col gap-3 sm:flex-row sm:justify-end lg:w-auto lg:flex-col">
+                <Button
+                  asChild
+                  size="lg"
+                  className="h-12 w-full rounded-xl font-semibold shadow-sm sm:min-w-[200px] lg:w-56"
+                >
+                  <Link href="/listings/new">
+                    List a recurring clean
+                    <ArrowRight className="ml-2 h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className="h-12 w-full rounded-xl border-2 font-semibold sm:min-w-[200px] lg:w-56 dark:border-emerald-700/60 dark:bg-gray-900/60 dark:hover:bg-emerald-950/40"
+                >
+                  <Link href="/find-jobs?service_type=recurring_house_cleaning">
+                    Browse recurring jobs
+                    <ArrowRight className="ml-2 h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                  </Link>
+                </Button>
+              </div>
+            </div>
           </div>
         </section>
 

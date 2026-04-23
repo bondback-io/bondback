@@ -31,6 +31,13 @@ import {
   isJobCancelledStatus,
   JOB_STATUS_NOT_IN_LISTING_SLOT,
 } from "@/lib/jobs/job-status-helpers";
+import { Badge } from "@/components/ui/badge";
+import {
+  deepCleanPurposeLabel,
+  normalizeServiceType,
+  recurringFrequencyShortLabel,
+  serviceTypeLabel,
+} from "@/lib/service-types";
 
 export const dynamic = "force-dynamic";
 
@@ -380,6 +387,45 @@ export default async function ListingDetailPage({
                   />
                 </div>
               )}
+            {(() => {
+              const lr = listingRow as ListingRow & {
+                recurring_frequency?: string | null;
+                airbnb_guest_capacity?: number | null;
+                airbnb_turnaround_hours?: number | null;
+                deep_clean_purpose?: string | null;
+              };
+              const st = normalizeServiceType(lr.service_type);
+              const metaBits: string[] = [];
+              if (st === "recurring_house_cleaning" && lr.recurring_frequency) {
+                metaBits.push(recurringFrequencyShortLabel(lr.recurring_frequency));
+              }
+              if (st === "airbnb_turnover") {
+                if (typeof lr.airbnb_guest_capacity === "number")
+                  metaBits.push(`${lr.airbnb_guest_capacity} guests`);
+                if (typeof lr.airbnb_turnaround_hours === "number")
+                  metaBits.push(`${lr.airbnb_turnaround_hours}h turnaround`);
+              }
+              if (st === "deep_clean" && lr.deep_clean_purpose) {
+                metaBits.push(deepCleanPurposeLabel(lr.deep_clean_purpose));
+              }
+              return (
+                <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-border/80 bg-muted/25 px-3 py-3 dark:border-gray-800 dark:bg-gray-900/50">
+                  <Badge variant="secondary" className="text-xs font-semibold">
+                    {serviceTypeLabel(st)}
+                  </Badge>
+                  {lr.is_urgent === true ? (
+                    <Badge className="border border-red-400/50 bg-red-600 text-xs font-black uppercase tracking-wide text-white">
+                      Urgent
+                    </Badge>
+                  ) : null}
+                  {metaBits.length > 0 ? (
+                    <span className="text-sm text-muted-foreground dark:text-gray-400">
+                      {metaBits.join(" · ")}
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })()}
             <ListingAuctionDetail
               listing={listingRow}
               initialBids={initialBids}

@@ -17,6 +17,13 @@ import { fetchListingBidsForFindJobsPanel } from "@/lib/actions/find-jobs-detail
 import { shouldShowPublicListingComments } from "@/lib/listing-public-comments-visibility";
 import type { ListingRow } from "@/lib/listings";
 import { useFindJobsDesktopDetailOverlay } from "@/components/find-jobs/use-find-jobs-desktop-detail";
+import { Badge } from "@/components/ui/badge";
+import {
+  deepCleanPurposeLabel,
+  normalizeServiceType,
+  recurringFrequencyShortLabel,
+  serviceTypeLabel,
+} from "@/lib/service-types";
 
 export type FindJobsDetailPanelBodyProps = {
   listing: ListingRow;
@@ -104,6 +111,30 @@ export function FindJobsDetailPanelBody({
 
   const listerDisplayName = getListerCardData(String(listing.id))?.listerName ?? null;
 
+  const lr = listing as ListingRow & {
+    service_type?: string | null;
+    recurring_frequency?: string | null;
+    airbnb_guest_capacity?: number | null;
+    airbnb_turnaround_hours?: number | null;
+    deep_clean_purpose?: string | null;
+    is_urgent?: boolean | null;
+  };
+  const st = normalizeServiceType(lr.service_type);
+  const serviceLine = serviceTypeLabel(st);
+  const metaBits: string[] = [];
+  if (st === "recurring_house_cleaning" && lr.recurring_frequency) {
+    metaBits.push(recurringFrequencyShortLabel(lr.recurring_frequency));
+  }
+  if (st === "airbnb_turnover") {
+    if (typeof lr.airbnb_guest_capacity === "number")
+      metaBits.push(`${lr.airbnb_guest_capacity} guests`);
+    if (typeof lr.airbnb_turnaround_hours === "number")
+      metaBits.push(`${lr.airbnb_turnaround_hours}h turnaround`);
+  }
+  if (st === "deep_clean" && lr.deep_clean_purpose) {
+    metaBits.push(deepCleanPurposeLabel(lr.deep_clean_purpose));
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -114,6 +145,21 @@ export function FindJobsDetailPanelBody({
           </div>
         ) : (
           <div className="px-3 pb-8 pt-4 sm:px-5">
+            <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-border pb-4 dark:border-gray-800">
+              <Badge variant="secondary" className="text-xs font-semibold">
+                {serviceLine}
+              </Badge>
+              {lr.is_urgent === true ? (
+                <Badge className="animate-pulse border border-red-400/60 bg-red-600 text-xs font-black uppercase tracking-wide text-white">
+                  Urgent
+                </Badge>
+              ) : null}
+              {metaBits.length > 0 ? (
+                <span className="text-xs text-muted-foreground dark:text-gray-400">
+                  {metaBits.join(" · ")}
+                </span>
+              ) : null}
+            </div>
             <ListingAuctionDetail
               listing={listing}
               initialBids={bids}
@@ -179,8 +225,8 @@ export function FindJobsMobileDetailSheet() {
   return (
     <Sheet open={open} onOpenChange={(o) => !o && setDetailListing(null)}>
       <SheetContent
-        side="right"
-        className="flex h-full w-full max-w-full flex-col gap-0 overflow-hidden border-0 p-0 xl:hidden"
+        side="bottom"
+        className="flex max-h-[92dvh] w-full flex-col gap-0 overflow-hidden rounded-t-2xl border-0 p-0 xl:hidden"
       >
         <SheetTitle className="sr-only">Job details</SheetTitle>
         {detailListing ? (

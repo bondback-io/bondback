@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, type TouchEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
@@ -130,6 +130,8 @@ export function JobsList({
 }: JobsListProps) {
   const findJobsMap = useFindJobsMapOptional();
   const router = useRouter();
+  const [pullRefreshPx, setPullRefreshPx] = useState(0);
+  const pullTouchStartY = useRef<number | null>(null);
   const showListerActionsResolved = showListerActions !== undefined ? showListerActions : !isCleaner;
   const [listings, setListings] = useState<ListingRow[]>(initialListings);
   const [bidCountByListingId, setBidCountByListingId] = useState<Record<string, number>>(initialBidCounts);
@@ -763,10 +765,48 @@ export function JobsList({
       </TooltipProvider>
     ) : null;
 
+  const findJobsPullHandlers =
+    findJobsPublicBrowse && isMobile
+      ? {
+          onTouchStart: (e: TouchEvent) => {
+            if (typeof window !== "undefined" && window.scrollY > 12) return;
+            pullTouchStartY.current = e.touches[0]?.clientY ?? null;
+          },
+          onTouchMove: (e: TouchEvent) => {
+            if (pullTouchStartY.current == null) return;
+            if (typeof window !== "undefined" && window.scrollY > 12) {
+              setPullRefreshPx(0);
+              return;
+            }
+            const y = e.touches[0]?.clientY ?? 0;
+            const d = Math.max(0, y - pullTouchStartY.current);
+            setPullRefreshPx(Math.min(d, 80));
+          },
+          onTouchEnd: () => {
+            if (pullRefreshPx > 44) {
+              router.refresh();
+            }
+            setPullRefreshPx(0);
+            pullTouchStartY.current = null;
+          },
+        }
+      : {};
+
   return (
     <>
       {mobileRadiusStickyBar}
-      {listContent}
+      <div className="relative w-full" {...findJobsPullHandlers}>
+        {findJobsPublicBrowse && isMobile && pullRefreshPx > 10 ? (
+          <div
+            className="pointer-events-none flex justify-center py-1 text-center text-xs font-medium text-muted-foreground dark:text-gray-400"
+            style={{ opacity: Math.min(1, pullRefreshPx / 48) }}
+            aria-live="polite"
+          >
+            Release to refresh
+          </div>
+        ) : null}
+        {listContent}
+      </div>
     </>
   );
 }

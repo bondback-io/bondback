@@ -25,7 +25,7 @@ function MediationSubmitButton({ binding }: { binding: boolean }) {
   return (
     <Button type="submit" size="sm" className="w-fit gap-1.5" disabled={pending}>
       {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-      {binding ? "Apply binding settlement" : "Send for acceptance"}
+      {binding ? "Finalize Job Payment & Dispute" : "Send for acceptance"}
     </Button>
   );
 }
@@ -185,9 +185,10 @@ export function AdminMediationSettlementPanel({
               className="mt-1 dark:bg-gray-900"
             />
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              From Stripe escrow. The maximum is the <strong>remaining</strong> refundable amount on the payment
-              charge(s) after any refunds already issued there — often lower than job + fee on paper. If submission
-              fails, reduce this to match Stripe&apos;s remaining balance.
+              Maximum here is the job total in escrow (agreed amount including top-ups):{" "}
+              <strong>{agreedAmountCents > 0 ? formatAudFromCents(agreedAmountCents) : "—"}</strong>. Platform fees are
+              not refunded through this field. If Stripe rejects the amount, use a lower figure matching the
+              remaining balance on the charge(s).
             </p>
           </div>
           <div>

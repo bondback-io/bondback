@@ -12,6 +12,11 @@ import {
 import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { cn, parseUtcTimestamp } from "@/lib/utils";
+import {
+  normalizeServiceType,
+  recurringListingBadgeText,
+  serviceTypeLabel,
+} from "@/lib/service-types";
 export type FindJobsCompactRowProps = {
   listing: ListingRow;
   bidCount: number;
@@ -78,6 +83,17 @@ export function FindJobsCompactRow({
   const ends = formatEndsShort(listing.end_time);
   const avatarSrc = listerAvatarUrl?.trim() || null;
   const initials = listerInitials(listerName);
+  const lr = listing as ListingRow & {
+    service_type?: string | null;
+    recurring_frequency?: string | null;
+    is_urgent?: boolean | null;
+  };
+  const recurringBadge =
+    normalizeServiceType(lr.service_type) === "recurring_house_cleaning" && lr.recurring_frequency
+      ? recurringListingBadgeText(lr.recurring_frequency)
+      : null;
+  const urgent = lr.is_urgent === true;
+  const stLabel = serviceTypeLabel(normalizeServiceType(lr.service_type));
 
   return (
     <div
@@ -94,6 +110,11 @@ export function FindJobsCompactRow({
         className="flex w-full gap-3 px-3 py-3 text-left sm:px-4"
       >
         <div className="relative h-[72px] w-[88px] shrink-0 overflow-hidden rounded-lg bg-muted dark:bg-gray-800">
+          {recurringBadge ? (
+            <span className="absolute right-1 top-1 z-10 max-w-[calc(100%-8px)] truncate rounded-md border border-lime-500/50 bg-lime-400 px-1 py-0.5 text-[9px] font-black uppercase leading-none text-lime-950 shadow-sm dark:bg-lime-400 dark:text-lime-950">
+              {recurringBadge}
+            </span>
+          ) : null}
           {thumb ? (
             <Image
               src={thumb}
@@ -116,9 +137,16 @@ export function FindJobsCompactRow({
             <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground dark:text-gray-100">
               {title}
             </p>
-            <span className="shrink-0 text-lg font-bold tabular-nums leading-none text-emerald-600 dark:text-emerald-400 md:text-xl">
-              {price}
-            </span>
+            <div className="flex shrink-0 flex-col items-end gap-0.5">
+              {urgent ? (
+                <span className="rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-black uppercase leading-none text-white">
+                  Urgent
+                </span>
+              ) : null}
+              <span className="text-lg font-bold tabular-nums leading-none text-emerald-600 dark:text-emerald-400 md:text-xl">
+                {price}
+              </span>
+            </div>
           </div>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground dark:text-gray-400">
             <MapPin className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
@@ -142,6 +170,9 @@ export function FindJobsCompactRow({
             <span className="text-[11px] text-muted-foreground dark:text-gray-500">
               {bidCount} bid{bidCount !== 1 ? "s" : ""}
             </span>
+            <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal dark:border-gray-600">
+              {stLabel}
+            </Badge>
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end justify-center gap-1">
