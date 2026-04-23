@@ -2105,7 +2105,7 @@ export function NewListingForm({
                     </div>
                   </dl>
                   <p className="mt-2 text-[11px] text-muted-foreground dark:text-gray-500">
-                    Platform fee stays {feePercentage}% for all service types. Your starting price below may match or
+                    Service Fee stays {feePercentage}% for all service types. Your starting price below may match or
                     differ from this suggestion.
                   </p>
                 </div>
@@ -2192,7 +2192,7 @@ export function NewListingForm({
                           </div>
                           <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                             <dt className="text-muted-foreground dark:text-gray-400">
-                              Platform fee ({feePercentage}%)
+                              Service Fee ({feePercentage}%)
                             </dt>
                             <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                               {formatAudFromCents(reserveFeeCents)}
@@ -2309,7 +2309,7 @@ export function NewListingForm({
                         </div>
                         <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                           <dt className="text-muted-foreground dark:text-gray-400">
-                            Platform fee ({feePercentage}%)
+                            Service Fee ({feePercentage}%)
                           </dt>
                           <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                             {formatAudFromCents(buyNowFeeCents)}

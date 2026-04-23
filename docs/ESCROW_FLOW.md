@@ -1,6 +1,6 @@
 # Stripe Connect escrow + payout flow
 
-Platform holds funds in escrow and releases to the cleaner on lister approval (minus 12% platform fee). Uses Stripe Connect Express (hosted dashboard) for cleaner payouts.
+Platform holds funds in escrow and releases to the cleaner on lister approval (minus 12% Service Fee). Uses Stripe Connect Express (hosted dashboard) for cleaner payouts.
 
 ---
 
@@ -24,7 +24,7 @@ Platform holds funds in escrow and releases to the cleaner on lister approval (m
 
 [Lister] Clicks "Pay & Start Job"
     → createPaymentIntent(jobId) / createJobCheckoutSession(jobId)
-    → Redirect to Stripe Checkout (line items: Job + Platform fee, total = job + 12%)
+    → Redirect to Stripe Checkout (line items: Job + Service Fee, total = job + 12%)
     → PaymentIntent created with capture_method=manual (authorized only)
 
 [Stripe] Customer completes payment

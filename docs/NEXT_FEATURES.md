@@ -26,6 +26,6 @@
 
 **Already stubbed in codebase**
 
-- Stripe: Buy-Now checkout + escrow/PaymentIntent hold (12% platform fee comment).
+- Stripe: Buy-Now checkout + escrow/PaymentIntent hold (12% Service Fee comment).
 - Notifications: `lib/notifications.ts` (console.log; swap for Resend/Twilio).
 - Job completion: before/after photo upload requirement and flow in `docs/JOB_COMPLETION_PHOTOS.md`.

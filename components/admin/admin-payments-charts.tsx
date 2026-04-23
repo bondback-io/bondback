@@ -43,7 +43,7 @@ export function AdminPaymentsCharts({ monthlyData }: AdminPaymentsChartsProps) {
     <div className="space-y-6">
       <div className="h-56 w-full">
         <p className="mb-2 text-xs font-medium text-muted-foreground">
-          Platform fees over time (monthly)
+          Service Fees over time (monthly)
         </p>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart

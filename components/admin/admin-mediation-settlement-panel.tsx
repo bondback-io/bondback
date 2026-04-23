@@ -186,7 +186,7 @@ export function AdminMediationSettlementPanel({
             />
             <p className="mt-0.5 text-[10px] text-muted-foreground">
               Maximum here is the job total in escrow (agreed amount including top-ups):{" "}
-              <strong>{agreedAmountCents > 0 ? formatAudFromCents(agreedAmountCents) : "—"}</strong>. Platform fees are
+              <strong>{agreedAmountCents > 0 ? formatAudFromCents(agreedAmountCents) : "—"}</strong>. Service Fees are
               not refunded through this field. If Stripe rejects the amount, use a lower figure matching the
               remaining balance on the charge(s).
             </p>

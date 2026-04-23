@@ -2385,6 +2385,70 @@ export type ReleaseJobFundsResult =
   | { ok: false; error: string };
 
 /**
+ * Net cents already pulled from a charge into Connect via Transfers using `source_transaction`.
+ * Stripe caps new transfers at (charge amount − refunds − this total). Search API is optional; returns 0 if unavailable.
+ */
+async function netCentsAlreadyTransferredFromCharge(
+  stripe: Stripe,
+  chargeId: string
+): Promise<number> {
+  try {
+    // stripe-node types omit Transfer Search; API supports `source_transaction:'ch_…'`.
+    const searchTransfers = (
+      stripe.transfers as unknown as {
+        search: (p: {
+          query: string;
+          limit?: number;
+          page?: string;
+        }) => Promise<{
+          data: Stripe.Transfer[];
+          has_more?: boolean;
+          next_page?: string | null;
+        }>;
+      }
+    ).search.bind(stripe.transfers);
+
+    let total = 0;
+    let page: string | undefined;
+    for (;;) {
+      const search = await searchTransfers({
+        query: `source_transaction:'${chargeId}'`,
+        limit: 100,
+        ...(page ? { page } : {}),
+      });
+      for (const t of search.data) {
+        const reversed =
+          typeof t.amount_reversed === "number" && Number.isFinite(t.amount_reversed)
+            ? t.amount_reversed
+            : 0;
+        total += Math.max(0, t.amount - reversed);
+      }
+      const next = search.next_page;
+      if (!search.has_more || !next) break;
+      page = next;
+    }
+    return total;
+  } catch {
+    return 0;
+  }
+}
+
+function legPlatformFeeCentsForRelease(
+  leg: { agreedCents: number; topUpIndex: number },
+  listingFeePercent: number,
+  topUpsParsed: JobTopUpPaymentRecord[]
+): number {
+  const primaryFeeEstimate = Math.round((leg.agreedCents * listingFeePercent) / 100);
+  if (leg.topUpIndex < 0) {
+    return primaryFeeEstimate;
+  }
+  return Math.max(
+    0,
+    Math.floor(topUpsParsed[leg.topUpIndex]?.fee_cents ?? primaryFeeEstimate)
+  );
+}
+
+/**
  * Capture PaymentIntent and transfer job price to cleaner's Stripe Connect account.
  * Idempotent: if payment_released_at already set, no-op. Callable by finalizeJobPayment or auto-release.
  */
@@ -2521,15 +2585,16 @@ export async function releaseJobFunds(
         0,
         (ch.amount ?? 0) - (ch.amount_refunded ?? 0)
       );
-      const primaryFeeEstimate = Math.round((leg.agreedCents * listingFeePercent) / 100);
-      const legFeeCents =
-        leg.topUpIndex < 0
-          ? primaryFeeEstimate
-          : Math.max(
-              0,
-              Math.floor(topUpsParsed[leg.topUpIndex]?.fee_cents ?? primaryFeeEstimate)
-            );
-      const maxCleanerFromCharge = Math.max(0, remainingOnCharge - legFeeCents);
+      const alreadyTransferredFromCharge = await netCentsAlreadyTransferredFromCharge(
+        stripe,
+        cid
+      );
+      const poolAfterPriorTransfers = Math.max(
+        0,
+        remainingOnCharge - alreadyTransferredFromCharge
+      );
+      const legFeeCents = legPlatformFeeCentsForRelease(leg, listingFeePercent, topUpsParsed);
+      const maxCleanerFromCharge = Math.max(0, poolAfterPriorTransfers - legFeeCents);
       const transferAmount = Math.min(leg.agreedCents, maxCleanerFromCharge);
       plan.push({ leg, chargeId: cid, transferAmount });
     }
@@ -2570,17 +2635,38 @@ export async function releaseJobFunds(
       }
 
       for (const row of plan) {
-        if (row.transferAmount < 1) continue;
-        const transfer = await stripe.transfers.create({
-          amount: row.transferAmount,
-          currency: "aud",
-          destination: stripeConnectId,
-          metadata: {
-            job_id: String(numericJobId),
-            leg: row.leg.topUpIndex < 0 ? "primary" : `top_up_${row.leg.topUpIndex}`,
+        const legFeeCents = legPlatformFeeCentsForRelease(
+          row.leg,
+          listingFeePercent,
+          topUpsParsed
+        );
+        const freshCh = await stripe.charges.retrieve(row.chargeId);
+        const grossRem = Math.max(
+          0,
+          (freshCh.amount ?? 0) - (freshCh.amount_refunded ?? 0)
+        );
+        const alreadyOut = await netCentsAlreadyTransferredFromCharge(stripe, row.chargeId);
+        const poolAfterPrior = Math.max(0, grossRem - alreadyOut);
+        let transferAmountNow = Math.min(
+          row.leg.agreedCents,
+          Math.max(0, poolAfterPrior - legFeeCents)
+        );
+        if (transferAmountNow < 1) continue;
+
+        const idemKey = `bondback:release:job:${numericJobId}:leg:${row.leg.topUpIndex}:ch:${row.chargeId}:amt:${transferAmountNow}`;
+        const transfer = await stripe.transfers.create(
+          {
+            amount: transferAmountNow,
+            currency: "aud",
+            destination: stripeConnectId,
+            metadata: {
+              job_id: String(numericJobId),
+              leg: row.leg.topUpIndex < 0 ? "primary" : `top_up_${row.leg.topUpIndex}`,
+            },
+            source_transaction: row.chargeId,
           },
-          source_transaction: row.chargeId,
-        });
+          { idempotencyKey: idemKey.slice(0, 255) }
+        );
         transferIds.push(transfer.id);
         const idx = row.leg.topUpIndex;
         if (idx >= 0 && updatedTopUps[idx]) {

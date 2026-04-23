@@ -130,7 +130,7 @@ export function EarningsChart({
               ? "Earnings overview"
               : role === "lister"
               ? "Lister earnings overview"
-              : "Platform fees overview"}
+              : "Service Fees overview"}
           </CardTitle>
           <p className="text-xs text-muted-foreground">
             Track how much you&apos;ve earned over time from completed bond cleans.

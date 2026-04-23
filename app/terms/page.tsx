@@ -52,7 +52,7 @@ export default function TermsPage() {
         </p>
         <p className="text-xs text-muted-foreground dark:text-gray-500">
           Last updated: April 2026. All dollar amounts are in <strong>AUD</strong>. Unless we clearly state otherwise,{" "}
-          <strong>prices and platform fees shown on the Platform are inclusive of GST</strong>.
+          <strong>prices and Service Fees shown on the Platform are inclusive of GST</strong>.
         </p>
       </header>
 
@@ -148,9 +148,9 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section id="fees" title="6. Platform fees and commission">
+        <Section id="fees" title="6. Service Fees and commission">
           <p>
-            Bond Back may charge <strong>platform fees</strong> or commission on transactions, as disclosed at listing,
+            Bond Back may charge <strong>Service Fees</strong> or commission on transactions, as disclosed at listing,
             checkout, or in your dashboard. Unless expressly stated otherwise, <strong>such fees are inclusive of GST</strong>{" "}
             for Australian GST-registered supply chains as applicable.
           </p>
@@ -193,7 +193,7 @@ export default function TermsPage() {
           <p>
             Subject to non-excludable consumer guarantees under the ACL, our aggregate liability to you for loss arising
             from or in connection with the Platform (except liability that cannot be limited under the ACL) may be
-            limited to the total platform fees paid by you to us in the twelve (12) months before the claim, or AUD
+            limited to the total Service Fees paid by you to us in the twelve (12) months before the claim, or AUD
             $100, whichever is greater, except where a different minimum liability applies under law.
           </p>
           <p>

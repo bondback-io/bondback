@@ -176,7 +176,7 @@ export function ConnectBankAccount({
           Payouts (Stripe Connect)
         </CardTitle>
         <CardDescription className="dark:text-gray-400">
-          Connect your Stripe account to receive payouts when listers approve & release funds. You receive the full bid amount; the lister pays the platform fee separately.
+          Connect your Stripe account to receive payouts when listers approve & release funds. You receive the full bid amount; the lister pays the Service Fee separately.
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -36,7 +36,7 @@ export function ReferralReward({ variant, creditDollars, jobId }: ReferralReward
           {isReferred ? (
             <>
               Massive congrats on wrapping your first job (Job #{jobId}). We&apos;ve added{" "}
-              <strong>{creditDollars}</strong> to your Bond Back account credit—use it toward platform fees
+              <strong>{creditDollars}</strong> to your Bond Back account credit—use it toward Service Fees
               where applicable.
             </>
           ) : (

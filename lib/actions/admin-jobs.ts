@@ -1050,7 +1050,7 @@ export async function adminSubmitMediationSettlement(
   if (refundCents > maxRefundCents) {
     return {
       ok: false,
-      error: `Refund cannot exceed the job amount held in escrow ($${(maxRefundCents / 100).toFixed(2)} AUD including top-ups). The platform fee is not refundable here — use “Close / resolve dispute” → Full refund if the entire card charge must be reversed.`,
+      error: `Refund cannot exceed the job amount held in escrow ($${(maxRefundCents / 100).toFixed(2)} AUD including top-ups). The Service Fee is not refundable here — use “Close / resolve dispute” → Full refund if the entire card charge must be reversed.`,
     };
   }
 

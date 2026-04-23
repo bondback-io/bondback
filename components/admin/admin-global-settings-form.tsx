@@ -413,7 +413,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/60">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-medium text-muted-foreground dark:text-gray-400">
-            Current Platform Fee:
+            Current Service Fee:
           </span>
           <span className="text-2xl font-bold tabular-nums text-foreground dark:text-gray-100">
             {feePercentage}%
@@ -1066,7 +1066,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
         <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
           <CardHeader>
             <CardTitle className="text-sm font-semibold dark:text-gray-100">
-              Platform commission rate
+              Service Fee rate
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-xs sm:text-sm text-muted-foreground dark:text-gray-300">
@@ -1075,7 +1075,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
                 htmlFor="feePercentage"
                 className="text-xs font-medium text-muted-foreground dark:text-gray-300"
               >
-                Platform commission rate (%)
+                Service Fee rate (%)
               </Label>
               <div className="flex items-center gap-2">
                 <Input

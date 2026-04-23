@@ -184,7 +184,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
                   </li>
                   <li className="flex gap-2">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-                    <span>12% platform fee — same as other services</span>
+                    <span>12% Service Fee — same as other services</span>
                   </li>
                   <li className="flex gap-2">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />

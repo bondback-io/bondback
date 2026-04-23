@@ -150,7 +150,7 @@ function DashboardListingCardInner({
             )}
           </p>
           <p className="text-xs text-muted-foreground dark:text-gray-400">
-            Platform fee ({feePercentage}%):{" "}
+            Service Fee ({feePercentage}%):{" "}
             <span className="font-semibold text-foreground dark:text-gray-100">{formatCents(currentPlatformFeeCents)}</span>
           </p>
 
@@ -281,7 +281,7 @@ function DashboardListingCardInner({
               </span>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Current Platform Fee ({feePercentage}%):{" "}
+              Current Service Fee ({feePercentage}%):{" "}
               <span className="font-semibold text-foreground dark:text-gray-100">{formatCents(currentPlatformFeeCents)}</span>
             </p>
           </div>

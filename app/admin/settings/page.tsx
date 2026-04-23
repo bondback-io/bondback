@@ -47,7 +47,7 @@ export default async function AdminBackupsPage() {
                 Backups
               </CardTitle>
               <p className="text-xs text-muted-foreground dark:text-gray-400">
-                {profile.full_name ?? "Admin"} · Export snapshots for safekeeping. Platform fee, Stripe, email defaults,
+                {profile.full_name ?? "Admin"} · Export snapshots for safekeeping. Service Fee, Stripe, email defaults,
                 and other configuration live in{" "}
                 <Link href="/admin/global-settings" className="font-medium text-foreground underline-offset-4 hover:underline dark:text-gray-200">
                   Global settings

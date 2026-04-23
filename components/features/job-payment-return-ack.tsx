@@ -77,12 +77,12 @@ export function JobPaymentReturnAck({
                 )}
                 <p>
                   Your payment succeeded. The checkout total included the agreed job amount (
-                  {jobAmount}) and the platform fee ({feePercentage}% · {feeAmount}).
+                  {jobAmount}) and the Service Fee ({feePercentage}% · {feeAmount}).
                 </p>
                 <p>
                   The <strong className="text-foreground">{jobAmount}</strong> agreed for the bond
                   clean is <strong className="text-foreground">held in escrow</strong> for this job.
-                  The platform fee is separate and covers Bond Back&apos;s service; it is not part of
+                  The Service Fee is separate and covers Bond Back&apos;s service; it is not part of
                   the cleaner&apos;s payout when you release funds.
                 </p>
                 <p className="text-muted-foreground">
@@ -127,7 +127,7 @@ export function JobPaymentReturnAck({
                 </p>
                 <p>
                   The agreed job total on this page is now <strong className="text-foreground">{jobAmount}</strong>{" "}
-                  (including the top-up). The platform fee on the top-up is separate from the cleaner&apos;s payout.
+                  (including the top-up). The Service Fee on the top-up is separate from the cleaner&apos;s payout.
                 </p>
                 <p className="text-muted-foreground">
                   The cleaner has been notified that extra funds are available for additional agreed work.

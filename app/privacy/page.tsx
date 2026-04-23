@@ -120,7 +120,7 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-1 pl-5">
             <li>create and manage accounts, verify identity, and operate the marketplace;</li>
             <li>display listings, bids, profiles, and job-related information to other users as intended by the service;</li>
-            <li>process payments, escrow, refunds, platform fees, and GST reporting as applicable;</li>
+            <li>process payments, escrow, refunds, Service Fees, and GST reporting as applicable;</li>
             <li>communicate with you about your account, jobs, security, and service updates;</li>
             <li>detect, prevent, and investigate fraud, abuse, and unlawful activity;</li>
             <li>comply with legal obligations (including tax, record-keeping, and regulatory requests);</li>

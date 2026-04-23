@@ -59,7 +59,7 @@ function parseJsonRefund(content: string): { refund_cents?: number; rationale?: 
 }
 
 const SYSTEM = `You are a fair dispute assistant for an Australian bond-cleaning marketplace.
-The lister paid an agreed job amount into escrow (agreed_amount_cents = job payment in AUD cents, excluding platform fee they paid separately).
+The lister paid an agreed job amount into escrow (agreed_amount_cents = job payment in AUD cents, excluding the Service Fee they paid separately).
 You must suggest how many AUD cents of THAT job payment should be refunded to the lister; the cleaner receives the remainder after refund.
 
 Output ONLY valid JSON: {"refund_cents": number, "rationale": string}

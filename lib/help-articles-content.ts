@@ -29,7 +29,7 @@ Bond Back is a **marketplace for end-of-lease (bond) cleaning** in Australia. We
 2. **Cleaners** see the listing and either **place a bid** (auction-style) or **Buy Now** if the lister set that option.
 3. When the lister **accepts a bid** (or a cleaner buys now), a **job** is created. Payment is held securely.
 4. The **cleaner** completes the clean, uploads **before/after photos**, and marks the job **complete**.
-5. The **lister** (or their property manager) checks the property and **approves completion**. Funds are then released to the cleaner (minus the platform fee).
+5. The **lister** (or their property manager) checks the property and **approves completion**. Funds are then released to the cleaner (minus the Service Fee).
 
 ## Key concepts
 
@@ -206,7 +206,7 @@ You'll get a notification when the job is marked complete.
 1. **Inspect the property** — Ideally on the same day or before your final handover. Use the before/after photos as a reference and check the areas that matter for your bond (kitchen, bathroom, floors, oven, etc.).
 2. **Compare to the checklist** — If your property manager gave you a bond cleaning checklist, use it. Approving means you're satisfied the clean meets what you agreed.
 3. **Approve or raise an issue** in Bond Back:
-   - **Approve** — Click **Approve completion** (or equivalent). The held funds are released to the cleaner (minus the platform fee). The job is closed.
+   - **Approve** — Click **Approve completion** (or equivalent). The held funds are released to the cleaner (minus the Service Fee). The job is closed.
    - **Issue** — If something is missing or not up to standard, **don't approve** yet. Use messages to ask the cleaner to fix specific items, or open a **dispute** if you can't resolve it.
 
 ## When to approve
@@ -342,7 +342,7 @@ Once you've finished the bond clean and uploaded before/after photos, you **mark
 ## What happens next
 
 - The **lister** (or their property manager) inspects the property. If they're satisfied, they **approve completion** in Bond Back.
-- When they approve, **funds are released** from escrow to you. The platform fee is deducted; you receive the rest (see *When and how do I get paid as a cleaner?* and *What is the platform fee?*).
+- When they approve, **funds are released** from escrow to you. The Service Fee is deducted; you receive the rest (see *When and how do I get paid as a cleaner?* and *What is the Service Fee?*).
 - If the lister has concerns, they may message you to request touch-ups. Resolve those before they approve. If you can't agree, either party can open a dispute.
 
 ## Getting paid
@@ -363,14 +363,14 @@ Once you've finished the bond clean and uploaded before/after photos, you **mark
     sort_order: 10,
     content: `# When and how do I get paid as a cleaner?
 
-Cleaners get paid **after** the lister approves the job completion. Payment is released from escrow minus the platform fee. Here's the flow and what to expect.
+Cleaners get paid **after** the lister approves the job completion. Payment is released from escrow minus the Service Fee. Here's the flow and what to expect.
 
 ## Payment flow
 
 1. **Lister approves your bid** (or you use Buy Now) → A job is created and the **lister's payment is held in escrow**.
 2. You **complete the clean**, upload **before/after photos**, and **mark the job complete**.
 3. The **lister approves completion** in Bond Back after checking the property (or their property manager does).
-4. **Funds are released** to you: job amount minus the **platform fee** (see *What is the platform fee and how is it calculated?*). Payout is sent to your registered payout method (e.g. bank account) according to Bond Back's payout schedule.
+4. **Funds are released** to you: job amount minus the **Service Fee** (see *What is the Service Fee and how is it calculated?*). Payout is sent to your registered payout method (e.g. bank account) according to Bond Back's payout schedule.
 
 ## When you get paid
 
@@ -390,17 +390,17 @@ Cleaners get paid **after** the lister approves the job completion. Payment is r
   },
   {
     id: "platform-fee-calculated",
-    title: "What is the platform fee and how is it calculated?",
+    title: "What is the Service Fee and how is it calculated?",
     slug: "platform-fee-calculated",
     category: "Payments & Earnings",
     sort_order: 20,
-    content: `# What is the platform fee and how is it calculated?
+    content: `# What is the Service Fee and how is it calculated?
 
-Bond Back charges a **platform fee** on completed jobs. This helps cover running the marketplace, payments, and support. Here's how it works for cleaners and listers.
+Bond Back charges a **Service Fee** on completed jobs — it covers secure matching, payments, escrow, and platform support. Here's how it works for cleaners and listers.
 
 ## Who pays the fee?
 
-- Typically the **cleaner** pays the platform fee — it's deducted from the job amount before the cleaner is paid. So if the job is **$400** and the fee is **10%**, you receive **$360** (before any other deductions like tax).
+- Typically the **cleaner** pays the Service Fee — it's deducted from the job amount before the cleaner is paid. So if the job is **$400** and the fee is **10%**, you receive **$360** (before any other deductions like tax).
 - In some setups, the lister might pay a fee on top of the job price; check the pricing page or your dashboard for how it's shown in your region.
 
 ## How it's calculated
@@ -412,7 +412,7 @@ Bond Back charges a **platform fee** on completed jobs. This helps cover running
 ## Where to see the fee
 
 - Before you bid or Buy Now, the listing or checkout may show an estimate of what you'll receive after the fee.
-- After the job is approved, your **payout breakdown** (in Payments or the job details) will show: job amount, minus platform fee, equals payout.
+- After the job is approved, your **payout breakdown** (in Payments or the job details) will show: job amount, minus Service Fee, equals payout.
 
 ## Tips
 

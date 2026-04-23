@@ -2,10 +2,10 @@
 
 ## Summary
 
-1. **Pay & Start Job** — Server action `createJobCheckoutSession` builds Stripe Checkout with `payment_intent_data.capture_method = "manual"` (see `lib/stripe.ts`). The lister is charged **job price + platform fee %**; funds stay on the platform balance as an **uncaptured** PaymentIntent (escrow hold).
+1. **Pay & Start Job** — Server action `createJobCheckoutSession` builds Stripe Checkout with `payment_intent_data.capture_method = "manual"` (see `lib/stripe.ts`). The lister is charged **job price + Service Fee %**; funds stay on the platform balance as an **uncaptured** PaymentIntent (escrow hold).
 2. **Checkout return** — Client calls `fulfillJobPaymentFromSession(session_id)`; webhook `checkout.session.completed` also sets `payment_intent_id` and `status: in_progress` if the browser never returns (`app/api/stripe/webhook/route.ts`).
 3. **Cleaner completes** — `markJobChecklistFinished` sets `completed_pending_approval`, `auto_release_at` / `auto_release_at_original` to **now + `global_settings.auto_release_hours`** (default 48).
-4. **Lister approves** — `finalizeJobPayment` → `releaseJobFunds`: **capture** PI, **`transfers.create`** to the winner’s Connect account id stored as **`profiles.stripe_connect_id`** (same as Stripe’s connected account id / `acct_*`). Transfer amount = **agreed job price** (platform fee was already included in the lister’s total charge).
+4. **Lister approves** — `finalizeJobPayment` → `releaseJobFunds`: **capture** PI, **`transfers.create`** to the winner’s Connect account id stored as **`profiles.stripe_connect_id`** (same as Stripe’s connected account id / `acct_*`). Transfer amount = **agreed job price** (Service Fee was already included in the lister’s total charge).
 5. **Auto-release** — `processAutoRelease` / `runAutoReleaseCheck` (cron: `GET|POST /api/cron/auto-release`) uses the **Supabase service role** client so RLS does not block unauthenticated cron. It selects due jobs, calls `releaseJobFunds(jobId, { supabase: admin })`, completes the job, sends notifications and receipt emails.
 
 ## Code map

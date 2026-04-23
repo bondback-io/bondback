@@ -172,7 +172,7 @@ export function AdminPaymentsPageClient(props: Props) {
               </div>
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Potential platform fees (estimate)
+                  Potential Service Fees (estimate)
                 </p>
                 <p className="text-lg font-semibold text-foreground dark:text-gray-100">
                   {formatCents(potentialTotalFeeCents)}
@@ -191,7 +191,7 @@ export function AdminPaymentsPageClient(props: Props) {
               Fees &amp; payout volume
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Line: platform fees by month (completed jobs). Bar: payout volume to cleaners by month.
+              Line: Service Fees by month (completed jobs). Bar: payout volume to cleaners by month.
             </p>
           </CardHeader>
           <CardContent>
@@ -205,7 +205,7 @@ export function AdminPaymentsPageClient(props: Props) {
               Recent completed transactions
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Jobs marked completed: cleaner payout, platform fee, date. Funds released from escrow.
+              Jobs marked completed: cleaner payout, Service Fee, date. Funds released from escrow.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -333,7 +333,7 @@ export function AdminPaymentsPageClient(props: Props) {
                       <TableHead className="hidden sm:table-cell">Suburb</TableHead>
                       <TableHead className="text-right">Est. job $</TableHead>
                       <TableHead className="text-right">Fee %</TableHead>
-                      <TableHead className="text-right">Est. platform fee</TableHead>
+                      <TableHead className="text-right">Est. Service Fee</TableHead>
                       <TableHead className="hidden md:table-cell">Ends</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -392,7 +392,7 @@ export function AdminPaymentsPageClient(props: Props) {
                       <TableHead className="hidden md:table-cell">Cleaner</TableHead>
                       <TableHead className="text-right">Agreed amount</TableHead>
                       <TableHead className="text-right">Fee %</TableHead>
-                      <TableHead className="text-right">Est. platform fee</TableHead>
+                      <TableHead className="text-right">Est. Service Fee</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -435,7 +435,7 @@ export function AdminPaymentsPageClient(props: Props) {
           <CardHeader>
             <CardTitle className="text-base dark:text-gray-100">Actual platform revenue (escrow active)</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Platform fee line items already charged at checkout while the job is in progress or awaiting your release
+              Service Fee line items already charged at checkout while the job is in progress or awaiting your release
               review. Only jobs with a PaymentIntent (funds held) and status in progress or pending your approval after
               clean are included — not completed jobs (those appear under Overview → realised revenue).
             </p>
@@ -452,7 +452,7 @@ export function AdminPaymentsPageClient(props: Props) {
           <CardContent>
             {actualEscrowJobs.length === 0 ? (
               <div className="rounded-md border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground dark:border-gray-700 dark:bg-gray-900/60">
-                No active escrow jobs. When a lister completes Pay &amp; Start Job, the platform fee appears here until the
+                No active escrow jobs. When a lister completes Pay &amp; Start Job, the Service Fee appears here until the
                 job is completed.
               </div>
             ) : (
@@ -464,7 +464,7 @@ export function AdminPaymentsPageClient(props: Props) {
                       <TableHead>Status</TableHead>
                       <TableHead className="hidden md:table-cell">Cleaner</TableHead>
                       <TableHead className="text-right">Job total</TableHead>
-                      <TableHead className="text-right">Platform fee</TableHead>
+                      <TableHead className="text-right">Service Fee</TableHead>
                       <TableHead className="text-right">Cleaner share</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>

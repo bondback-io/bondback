@@ -36,7 +36,7 @@ export default async function AdminPaymentsPage() {
             Payments &amp; Revenue
           </h1>
           <p className="text-sm text-muted-foreground">
-            Platform fees, escrow, and payout overview. Use the tabs for potential fees (live auctions and jobs awaiting
+            Service Fees, escrow, and payout overview. Use the tabs for potential fees (live auctions and jobs awaiting
             payment) versus actual fees already charged while work is in escrow.
           </p>
         </div>

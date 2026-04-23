@@ -2302,7 +2302,7 @@ export function JobDetail({
                   </p>
                   <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
                     You will receive the full bid amount ({formatCents(agreedAmountCents)}). The lister pays
-                    the platform fee separately.
+                    the Service Fee separately.
                   </p>
                 </div>
               )}
@@ -2785,7 +2785,7 @@ export function JobDetail({
                 </p>
                 <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
                   You will receive the full bid amount ({formatCents(agreedAmountCents)}). The lister pays
-                  the platform fee separately.
+                  the Service Fee separately.
                 </p>
               </div>
             )}
@@ -2906,8 +2906,8 @@ export function JobDetail({
                         </p>
                         <p className="text-sm leading-relaxed text-emerald-800 dark:text-emerald-200">
                           {cleanerReceivedPartialRefund
-                            ? "This is the net amount from the job escrow after the agreed partial refund to the lister. The lister paid the platform fee separately."
-                            : "You received the full bid amount. The lister paid the platform fee separately."}
+                            ? "This is the net amount from the job escrow after the agreed partial refund to the lister. The lister paid the Service Fee separately."
+                            : "You received the full bid amount. The lister paid the Service Fee separately."}
                         </p>
                         <p className="text-sm leading-relaxed text-emerald-800/90 dark:text-emerald-200/90">
                           Funds sent to your Stripe account – automatic payout in 2–7 days, or use Withdraw Now in Settings → Payments.
@@ -2948,7 +2948,7 @@ export function JobDetail({
                 </div>
                 )
               )}
-              {/* Platform fee breakdown handled above; avoid duplicating copy here. */}
+              {/* Service Fee breakdown handled above; avoid duplicating copy here. */}
             </>
           ) : hideCleanerCancelledAuctionUi ? (
             <p className="text-sm text-muted-foreground dark:text-gray-400">
@@ -2991,7 +2991,7 @@ export function JobDetail({
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 dark:border-gray-600 dark:bg-gray-800/70">
                 <span className="text-base font-medium text-muted-foreground dark:text-gray-300">
-                  Platform fee ({feePercentage}%)
+                  Service Fee ({feePercentage}%)
                 </span>
                 <span className="text-2xl font-semibold tabular-nums text-foreground dark:text-gray-100 sm:text-3xl">
                   {formatCents(platformFeeOnCurrentBidCents)}
@@ -3151,7 +3151,7 @@ export function JobDetail({
                     {isJobLister
                       ? hasPaymentHold
                         ? "Funds are held in escrow. Start the job so the cleaner can see the checklist and begin."
-                        : "Pay the job price plus the platform fee to place funds into escrow and unlock the checklist for your cleaner."
+                        : "Pay the job price plus the Service Fee to place funds into escrow and unlock the checklist for your cleaner."
                       : (
                         <>
                           The lister is reviewing and confirming the job. When chat is available, use{" "}
@@ -4062,7 +4062,7 @@ export function JobDetail({
                   <span className="font-semibold text-foreground">
                     {formatCents(agreedAmountCents)}
                   </span>{" "}
-                  to the cleaner (you already paid any platform fee when securing the job). The cleaner will
+                  to the cleaner (you already paid any Service Fee when securing the job). The cleaner will
                   be notified. This action cannot be undone here.
                 </DialogDescription>
               </DialogHeader>
@@ -5180,7 +5180,7 @@ export function JobDetail({
                 </p>
                 <p className="text-[11px] text-emerald-800 dark:text-emerald-200">
                   You will receive the full bid amount ({formatCents(agreedAmountCents)}). The lister pays the
-                  platform fee separately.
+                  Service Fee separately.
                 </p>
               </div>
             )}

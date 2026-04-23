@@ -58,7 +58,7 @@ export function JobPaymentBreakdown({
   const howItWorks =
     variant === "pay"
       ? "Funds are authorized with manual capture — nothing is paid out to the cleaner until you approve release or the auto-release timer ends."
-      : "On release, Stripe captures the hold, then the agreed job amount is transferred to the cleaner’s connected account (the fee was included in your total).";
+      : "On release, Stripe captures the hold, then the agreed job amount is transferred to the cleaner’s connected account (the Service Fee was included in your total).";
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -107,7 +107,7 @@ export function JobPaymentBreakdown({
                 To cleaner
               </div>
               <div className="border-b border-border pb-1 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground dark:border-gray-700 dark:text-gray-500 sm:text-[11px]">
-                Fee ({feePercentage}%)
+                Service Fee ({feePercentage}%)
               </div>
               <div className="text-muted-foreground dark:text-gray-400">Agreed job price</div>
               <div className="text-right tabular-nums font-medium text-foreground dark:text-gray-100">
@@ -141,7 +141,7 @@ export function JobPaymentBreakdown({
             </div>
             <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-border pt-2 dark:border-gray-700">
               <span className="text-sm font-semibold text-foreground dark:text-gray-100">
-                Total charged (job + fees)
+                Total charged (job + Service Fees)
               </span>
               <span className="shrink-0 tabular-nums text-base font-semibold text-foreground dark:text-gray-100">
                 {formatCents(totalChargedCents)}
@@ -158,12 +158,12 @@ export function JobPaymentBreakdown({
             </div>
             <div className="flex items-baseline justify-between gap-3">
               <dt className="flex min-w-0 items-center gap-1 text-muted-foreground dark:text-gray-400">
-                <span className="truncate">Fee ({feePercentage}%)</span>
+                <span className="truncate">Service Fee ({feePercentage}%)</span>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span
                       className="inline-flex shrink-0 cursor-help rounded p-0.5 opacity-80 hover:opacity-100"
-                      aria-label="Platform fee info"
+                      aria-label="Service Fee info"
                     >
                       <Info className="h-3.5 w-3.5" />
                     </span>

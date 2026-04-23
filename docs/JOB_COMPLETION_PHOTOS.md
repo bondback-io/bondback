@@ -17,7 +17,7 @@ When a job is won (auction ends, lowest bid ≤ reserve), the **cleaner** must c
 1. Auction ends → winner set → notify cleaner (see `lib/notifications.ts`).
 2. Cleaner completes work and uploads before/after photos via a completion form (e.g. `/jobs/[id]/complete`).
 3. Lister can review photos and confirm; or auto-approve after X days.
-4. On approval → release escrow (Stripe PaymentIntent capture or Connect transfer) to cleaner; platform fee (12%) retained.
+4. On approval → release escrow (Stripe PaymentIntent capture or Connect transfer) to cleaner; Service Fee (12%) retained.
 
 ## Schema stub (SQL when implementing)
 

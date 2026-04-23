@@ -76,7 +76,7 @@ export function AdminRevenueChart({ points, summary }: Props) {
               Platform Revenue Over Time
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Track platform fees collected from completed jobs.
+              Track Service Fees collected from completed jobs.
             </p>
           </div>
         </CardHeader>
@@ -95,7 +95,7 @@ export function AdminRevenueChart({ points, summary }: Props) {
             Platform Revenue Over Time
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Monthly platform fees (line) vs total job volume (bars).
+            Monthly Service Fees (line) vs total job volume (bars).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -190,7 +190,7 @@ export function AdminRevenueChart({ points, summary }: Props) {
                       maximumFractionDigits: 0,
                     });
                     const label =
-                      name === "feeCents" ? "Platform fees" : "Job volume";
+                      name === "feeCents" ? "Service Fees" : "Job volume";
                     return [dollars, label];
                   }}
                   labelFormatter={(label) => label}
@@ -204,7 +204,7 @@ export function AdminRevenueChart({ points, summary }: Props) {
                 <Line
                   type="monotone"
                   dataKey="feeCents"
-                  name="Platform fees"
+                  name="Service Fees"
                   stroke="rgb(16, 185, 129)"
                   strokeWidth={2}
                   dot={{ r: 2 }}

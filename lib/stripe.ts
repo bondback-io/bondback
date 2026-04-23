@@ -130,8 +130,8 @@ export async function createJobCheckoutSessionUrl(
                 currency: "aud",
                 unit_amount: feeCents,
                 product_data: {
-                  name: "Platform fee",
-                  description: `${feePercent}% service fee`,
+                  name: "Service Fee",
+                  description: `${feePercent}% Service Fee — secure matching, payments, and support`,
                 },
               },
             },
@@ -202,7 +202,7 @@ export async function createJobTopUpCheckoutSessionUrl(
                 currency: "aud",
                 unit_amount: feeCents,
                 product_data: {
-                  name: "Platform fee (top-up)",
+                  name: "Service Fee (top-up)",
                   description: `${feePercent}% on this top-up`,
                 },
               },

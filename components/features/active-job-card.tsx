@@ -218,7 +218,7 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
             </div>
           )}
           <p className="text-xs leading-relaxed text-muted-foreground dark:text-gray-500">
-            Price includes 12% platform fee paid by the lister
+            Price includes 12% Service Fee paid by the lister
           </p>
 
           <div className="flex flex-col gap-3.5 pt-1">
@@ -341,7 +341,7 @@ export function ActiveJobCard({ job, listing, daysLeft }: ActiveJobCardProps) {
                   {formatCents(listing.current_lowest_bid_cents ?? 0)}
                 </span>
                 <span className="max-w-[14rem] text-xs leading-snug text-muted-foreground dark:text-gray-500">
-                  Price includes 12% platform fee paid by the lister
+                  Price includes 12% Service Fee paid by the lister
                 </span>
               </>
             )}

@@ -71,7 +71,7 @@ export function PaymentReceipt({
           <>
             <Text style={amountStyle}>Amount paid: {formatCents(amountCents)}</Text>
             {feeCents > 0 && (
-              <Text style={body}>Includes platform fee: {formatCents(feeCents)}</Text>
+              <Text style={body}>Includes Service Fee: {formatCents(feeCents)}</Text>
             )}
           </>
         ) : (
