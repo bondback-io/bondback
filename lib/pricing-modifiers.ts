@@ -44,10 +44,6 @@ export const PROPERTY_LEVELS_OPTIONS: { value: PropertyLevelsKey; label: string 
 export const LEGACY_DEFAULT_BASE_RATE_PER_BEDROOM_AUD = 85;
 
 /**
- * Normalize `global_settings.pricing_base_rate_per_bedroom_aud` for display and quoting.
- * Rows that still have the old default **85** are treated as the current recommended rate (131).
- */
-/**
  * Parse `global_settings.pricing_base_rate_per_bedroom_by_service_type` (jsonb).
  * Each known service type gets a rate ≥ 1; unknown/missing keys use `fallbackAud`.
  */
@@ -71,6 +67,37 @@ export function resolveBaseRatePerBedroomByServiceFromGlobal(
   return out;
 }
 
+/**
+ * Parse `global_settings.pricing_base_multiplier_by_service_type` (jsonb).
+ * Each service gets a multiplier ≥ 0.01; missing keys use `fallbackMult`.
+ */
+export function resolveBaseMultiplierByServiceFromGlobal(
+  raw: unknown,
+  fallbackMult: number
+): Record<ServiceTypeKey, number> {
+  const fb = Math.max(
+    0.01,
+    Number.isFinite(fallbackMult) ? fallbackMult : DEFAULT_PRICING_MODIFIERS.baseMultiplier
+  );
+  const obj = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const out = {} as Record<ServiceTypeKey, number>;
+  for (const k of SERVICE_TYPES) {
+    const v = obj[k];
+    const n =
+      typeof v === "number" && Number.isFinite(v)
+        ? v
+        : typeof v === "string" && v.trim() !== ""
+          ? Number(v)
+          : NaN;
+    out[k] = Number.isFinite(n) && n >= 0.01 ? Math.max(0.01, n) : fb;
+  }
+  return out;
+}
+
+/**
+ * Normalize `global_settings.pricing_base_rate_per_bedroom_aud` for display and quoting.
+ * Rows that still have the old default **85** are treated as the current recommended rate (131).
+ */
 export function normalizeBaseRatePerBedroomFromGlobal(raw: unknown): number {
   if (raw == null || raw === "") {
     return DEFAULT_PRICING_MODIFIERS.baseRatePerBedroomAud;
@@ -116,7 +143,10 @@ export type PricingModifiersConfig = {
   baseRatePerBedroomAud: number;
   /** Effective AUD per bedroom for each `listings.service_type` on the new listing flow. */
   baseRatePerBedroomByServiceAud: Record<ServiceTypeKey, number>;
+  /** Legacy column: default when per-service multiplier JSON has no entry. */
   baseMultiplier: number;
+  /** Effective base multiplier per `listings.service_type`. */
+  baseMultiplierByService: Record<ServiceTypeKey, number>;
   carpetSteamPerBedroomAud: number;
   wallsPerBedroomAud: number;
   windowsPerBedroomAud: number;
@@ -150,13 +180,18 @@ export function resolvePricingModifiersFromGlobal(
   };
   const D = DEFAULT_PRICING_MODIFIERS;
   const baseFallback = normalizeBaseRatePerBedroomFromGlobal(g["pricing_base_rate_per_bedroom_aud"]);
+  const multFallback = Math.max(0.01, n("pricing_base_multiplier", D.baseMultiplier));
   return {
     baseRatePerBedroomAud: baseFallback,
     baseRatePerBedroomByServiceAud: resolveBaseRatePerBedroomByServiceFromGlobal(
       g["pricing_base_rate_per_bedroom_by_service_type"],
       baseFallback
     ),
-    baseMultiplier: Math.max(0.01, n("pricing_base_multiplier", D.baseMultiplier)),
+    baseMultiplier: multFallback,
+    baseMultiplierByService: resolveBaseMultiplierByServiceFromGlobal(
+      g["pricing_base_multiplier_by_service_type"],
+      multFallback
+    ),
     carpetSteamPerBedroomAud: Math.max(0, n("pricing_carpet_steam_per_bedroom_aud", D.carpetSteamPerBedroomAud)),
     wallsPerBedroomAud: Math.max(0, n("pricing_walls_per_bedroom_aud", D.wallsPerBedroomAud)),
     windowsPerBedroomAud: Math.max(0, n("pricing_windows_per_bedroom_aud", D.windowsPerBedroomAud)),
@@ -218,7 +253,10 @@ export function computeBaseListingPriceAud(
     beds *
     conditionPctModifier(mod, input.condition) *
     levelsMultiplier(mod, input.levels) *
-    Math.max(0, mod.baseMultiplier);
+    Math.max(
+      0,
+      mod.baseMultiplierByService[input.serviceType] ?? mod.baseMultiplier
+    );
   return Math.max(0, Math.round(raw));
 }
 

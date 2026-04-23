@@ -79,6 +79,8 @@ type GlobalSettingsRow = {
   pricing_base_rate_per_bedroom_by_service_type?: unknown;
   /** Scales (rate × beds × condition × levels); default 1 */
   pricing_base_multiplier?: number | null;
+  /** Optional per-service multipliers; missing keys use pricing_base_multiplier */
+  pricing_base_multiplier_by_service_type?: unknown;
   pricing_condition_excellent_very_good_pct?: number | null;
   pricing_condition_good_pct?: number | null;
   pricing_condition_fair_average_pct?: number | null;
@@ -141,6 +143,20 @@ function sanitizePricingBaseRateByServiceForDb(
     const v = input[k];
     if (typeof v === "number" && Number.isFinite(v) && v >= 1) {
       out[k] = Math.min(99999, Math.max(1, Math.round(v * 100) / 100));
+    }
+  }
+  return out;
+}
+
+function sanitizePricingBaseMultiplierByServiceForDb(
+  input: Partial<Record<ServiceTypeKey, number>> | null | undefined
+): Record<string, number> {
+  if (!input || typeof input !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const k of SERVICE_TYPES) {
+    const v = input[k];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0.01) {
+      out[k] = Math.min(1000, Math.max(0.01, Math.round(v * 10000) / 10000));
     }
   }
   return out;
@@ -363,6 +379,8 @@ export type SaveGlobalSettingsInput = {
   /** Per `listings.service_type` (AUD/bedroom). Omitted keys use `pricingBaseRatePerBedroomAud` when quoting. */
   pricingBaseRatePerBedroomByServiceType?: Partial<Record<ServiceTypeKey, number>> | null;
   pricingBaseMultiplier?: number;
+  /** Per service type; omitted keys use `pricingBaseMultiplier`. */
+  pricingBaseMultiplierByServiceType?: Partial<Record<ServiceTypeKey, number>> | null;
   pricingConditionExcellentVeryGoodPct?: number;
   pricingConditionGoodPct?: number;
   pricingConditionFairAveragePct?: number;
@@ -495,6 +513,9 @@ export async function saveGlobalSettings(
       typeof data.pricingBaseMultiplier === "number" && Number.isFinite(data.pricingBaseMultiplier)
         ? Math.max(0.01, data.pricingBaseMultiplier)
         : DEFAULT_PRICING_MODIFIERS.baseMultiplier,
+    pricing_base_multiplier_by_service_type: sanitizePricingBaseMultiplierByServiceForDb(
+      data.pricingBaseMultiplierByServiceType
+    ),
     pricing_condition_excellent_very_good_pct:
       typeof data.pricingConditionExcellentVeryGoodPct === "number" && Number.isFinite(data.pricingConditionExcellentVeryGoodPct)
         ? Math.max(0, data.pricingConditionExcellentVeryGoodPct)

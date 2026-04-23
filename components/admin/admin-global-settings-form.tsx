@@ -240,6 +240,18 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [pricingBaseMultiplier, setPricingBaseMultiplier] = React.useState(
     initial?.pricingBaseMultiplier ?? DEFAULT_PRICING_MODIFIERS.baseMultiplier
   );
+  const [pricingMultiplierByService, setPricingMultiplierByService] = React.useState<
+    Record<ServiceTypeKey, string>
+  >(() => {
+    const by = initial?.pricingBaseMultiplierByServiceType ?? {};
+    const fb = String(initial?.pricingBaseMultiplier ?? DEFAULT_PRICING_MODIFIERS.baseMultiplier);
+    const o = {} as Record<ServiceTypeKey, string>;
+    for (const k of SERVICE_TYPES) {
+      const v = by[k];
+      o[k] = typeof v === "number" && Number.isFinite(v) ? String(v) : fb;
+    }
+    return o;
+  });
   const [pricingConditionExcellentVeryGoodPct, setPricingConditionExcellentVeryGoodPct] =
     React.useState(
       initial?.pricingConditionExcellentVeryGoodPct ??
@@ -335,6 +347,19 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       }
     }
 
+    const fbMult = Math.max(
+      0.01,
+      Number(pricingBaseMultiplier) || DEFAULT_PRICING_MODIFIERS.baseMultiplier
+    );
+    const pricingBaseMultiplierByServiceType: Partial<Record<ServiceTypeKey, number>> = {};
+    for (const k of SERVICE_TYPES) {
+      const raw = (pricingMultiplierByService[k] ?? "").trim();
+      const n = raw === "" ? fbMult : Number(raw);
+      if (Number.isFinite(n) && n >= 0.01) {
+        pricingBaseMultiplierByServiceType[k] = Math.max(0.01, n);
+      }
+    }
+
     const payload: SaveGlobalSettingsInput = {
       feePercentage: Math.max(0, Math.min(30, Number(feePercentage) || 0)),
       platformFeePercentageByServiceType,
@@ -402,10 +427,8 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       maxPushPerUserPerDay: maxPushPerUserPerDay.trim() ? Math.max(1, Math.min(20, parseInt(maxPushPerUserPerDay, 10) || 5)) : undefined,
       pricingBaseRatePerBedroomAud: fbRate,
       pricingBaseRatePerBedroomByServiceType,
-      pricingBaseMultiplier: Math.max(
-        0.01,
-        Number(pricingBaseMultiplier) || DEFAULT_PRICING_MODIFIERS.baseMultiplier
-      ),
+      pricingBaseMultiplier: fbMult,
+      pricingBaseMultiplierByServiceType,
       pricingConditionExcellentVeryGoodPct: Math.max(
         0,
         Number(pricingConditionExcellentVeryGoodPct) || 0
@@ -914,9 +937,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             <span className="font-mono text-[10px] sm:text-[11px]">
               (base rate × bedrooms) × condition × levels × base multiplier
             </span>
-            . Base rate is chosen by listing <strong className="text-foreground dark:text-gray-200">service type</strong> (below); the default
-            rate is the fallback when a per-type value is missing. Then add-ons (carpet steam, walls, and windows use rate × bedrooms; others are
-            flat amounts below).
+            . <strong className="text-foreground dark:text-gray-200">Base rate</strong> and{" "}
+            <strong className="text-foreground dark:text-gray-200">base multiplier</strong> can each be set per service type; defaults apply when
+            a per-type value is missing. Then add-ons (carpet steam, walls, and windows use rate × bedrooms; others are flat amounts below).
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -964,7 +987,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Label htmlFor="pricing-base-multiplier" className="text-xs font-medium shrink-0">
-              Base multiplier
+              Default base multiplier
             </Label>
             <Input
               id="pricing-base-multiplier"
@@ -976,6 +999,33 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               onChange={(e) => setPricingBaseMultiplier(Number(e.target.value))}
               className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
             />
+          </div>
+          <p className="text-[10px] text-muted-foreground dark:text-gray-500">
+            Fallback when a per-service multiplier below is missing (min 0.01).
+          </p>
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+            <p className="text-[11px] font-medium text-foreground dark:text-gray-200">Base multiplier by service type</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {SERVICE_TYPES.map((k) => (
+                <div key={k} className="flex flex-col gap-1.5">
+                  <Label htmlFor={`pricing-mult-svc-${k}`} className="text-[11px] font-medium">
+                    {serviceTypeLabel(k)}
+                  </Label>
+                  <Input
+                    id={`pricing-mult-svc-${k}`}
+                    type="number"
+                    min={0.01}
+                    step={0.01}
+                    inputMode="decimal"
+                    value={pricingMultiplierByService[k]}
+                    onChange={(e) =>
+                      setPricingMultiplierByService((prev) => ({ ...prev, [k]: e.target.value }))
+                    }
+                    className="h-9 dark:bg-gray-900 dark:border-gray-700"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
           <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 dark:border-gray-700 dark:bg-gray-900/50">
             <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-400">

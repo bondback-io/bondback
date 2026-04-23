@@ -133,6 +133,9 @@ export default async function AdminGlobalSettingsPage() {
         pricingBaseMultiplier:
           (existing as { pricing_base_multiplier?: number | null }).pricing_base_multiplier ??
           DEFAULT_PRICING_MODIFIERS.baseMultiplier,
+        pricingBaseMultiplierByServiceType: resolvePricingModifiersFromGlobal(
+          existing as Record<string, unknown>
+        ).baseMultiplierByService,
         pricingConditionExcellentVeryGoodPct:
           (existing as { pricing_condition_excellent_very_good_pct?: number | null }).pricing_condition_excellent_very_good_pct ?? 0,
         pricingConditionGoodPct: (existing as { pricing_condition_good_pct?: number | null }).pricing_condition_good_pct ?? 12,

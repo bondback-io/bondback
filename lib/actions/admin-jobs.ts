@@ -1064,38 +1064,54 @@ export async function adminSubmitMediationSettlement(
           "You cannot impose a cleaner top-up without the lister paying. Clear top-up to $0 for a binding refund + release, or use “Send for acceptance” so both parties agree first.",
       };
     }
-    if (!["disputed", "in_review", "dispute_negotiating"].includes(st)) {
+    const adminDb = createSupabaseAdminClient();
+    if (!adminDb) {
       return {
         ok: false,
-        error: "Binding settlement is only available for active dispute statuses (disputed, in review, or negotiating).",
+        error:
+          "Cannot apply binding settlement: Supabase service role is not configured (SUPABASE_SERVICE_ROLE_KEY). Escrow release requires it.",
       };
     }
-    if (j.payment_released_at) {
-      return { ok: false, error: "Escrow was already released; do not run binding settlement." };
+
+    const bindingAllowedStatuses = new Set([
+      "disputed",
+      "in_review",
+      "dispute_negotiating",
+      "completed_pending_approval",
+    ]);
+    if (!bindingAllowedStatuses.has(st)) {
+      return {
+        ok: false,
+        error: `Binding settlement is not available for job status “${j.status}”. The job must be in a dispute workflow (disputed, in review, negotiating, or awaiting lister approval).`,
+      };
     }
 
     const nowIso = new Date().toISOString();
+    /** True if a prior attempt already ran Stripe release; avoid double refund/release but still complete the job row. */
+    const escrowAlreadyReleased = Boolean(String(j.payment_released_at ?? "").trim());
 
-    if (refundCents >= 1) {
-      const refundResult = await executeRefund(jobId, refundCents);
-      if (!refundResult.ok) {
-        return { ok: false, error: refundResult.error ?? "Stripe refund failed." };
+    if (!escrowAlreadyReleased) {
+      if (refundCents >= 1) {
+        const refundResult = await executeRefund(jobId, refundCents);
+        if (!refundResult.ok) {
+          return { ok: false, error: refundResult.error ?? "Stripe refund failed." };
+        }
+      }
+
+      const releaseResult = await releaseJobFunds(jobId, { supabase: adminDb });
+      if (!releaseResult.ok) {
+        const err =
+          releaseResult.error ??
+          "Could not release remaining funds to the cleaner after refund. Check Stripe Connect and job escrow state.";
+        await maybeNotifyCleanerStripeRequiredForRelease(j.winner_id, jobId, "mediation_binding", err);
+        return {
+          ok: false,
+          error: err,
+        };
       }
     }
 
-    const releaseResult = await releaseJobFunds(jobId);
-    if (!releaseResult.ok) {
-      const err =
-        releaseResult.error ??
-        "Could not release remaining funds to the cleaner after refund. Check Stripe Connect and job escrow state.";
-      await maybeNotifyCleanerStripeRequiredForRelease(j.winner_id, jobId, "mediation_binding", err);
-      return {
-        ok: false,
-        error: err,
-      };
-    }
-
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminDb
       .from("jobs")
       .update({
         status: "completed",
@@ -1119,7 +1135,7 @@ export async function adminSubmitMediationSettlement(
     }
 
     if (j.listing_id) {
-      await supabase.from("listings").update({ status: "ended" } as never).eq("id", j.listing_id);
+      await adminDb.from("listings").update({ status: "ended" } as never).eq("id", j.listing_id);
     }
 
     await insertDisputeThreadEntry({
