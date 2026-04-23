@@ -38,6 +38,7 @@ import {
 import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-server";
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
+import { cn } from "@/lib/utils";
 
 export type JobDetailRouteMode = "jobs" | "listings";
 
@@ -447,6 +448,19 @@ export async function JobDetailPageContent({
       : "Back to jobs";
   const backHref = isListerActive ? "/my-listings" : isCleaner ? "/dashboard" : "/jobs";
 
+  const isJobLister =
+    !!user &&
+    !!job &&
+    sameUserId(user.id, job.lister_id) &&
+    roles.includes("lister");
+  const isListingOwner =
+    !!user &&
+    sameUserId(listingRow.lister_id, user.id) &&
+    roles.includes("lister") &&
+    isListerActive;
+  const listerDetailUI = !isCleaner && (isListingOwner || isJobLister);
+  const detailUiBoost = isCleaner || listerDetailUI;
+
   const isDisputed = job?.status === "disputed" || job?.status === "in_review";
   const disputeStatusLabel =
     job?.status === "in_review" ? "Under Review" : "Awaiting Response";
@@ -609,100 +623,107 @@ export async function JobDetailPageContent({
           isStripeTestMode={stripeTestMode}
         />
         {user && jobId && <RecordJobView jobId={jobId} />}
-        {pipelineActive ? (
-          <Alert className="border-primary/40 bg-primary/5">
-            <div className="flex items-start gap-2">
-              <Briefcase
-                className="mt-0.5 h-4 w-4 shrink-0 text-foreground"
-                aria-hidden
-              />
-              <AlertDescription className="min-w-0 flex-1 p-0 leading-snug sm:leading-relaxed">
-                <span className="font-semibold text-foreground">This is an active job</span>
-                {cleanerName ? (
-                  <>
-                    {" "}
-                    — assigned cleaner:{" "}
-                    <span className="font-medium">{cleanerName}</span>
-                  </>
-                ) : (
-                  " — cleaner assigned."
-                )}
-              </AlertDescription>
-            </div>
-          </Alert>
-        ) : completedJobBanner ? (
-          <Alert className="border-emerald-500/30 bg-emerald-500/[0.06] dark:border-emerald-800/50 dark:bg-emerald-950/25">
-            <div className="flex items-start gap-2">
-              <Briefcase
-                className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400"
-                aria-hidden
-              />
-              <AlertDescription className="min-w-0 flex-1 p-0 text-emerald-950 leading-snug dark:text-emerald-100 sm:leading-relaxed">
-                <span className="font-semibold text-foreground dark:text-emerald-50">
-                  This job is completed
-                </span>
-                {cleanerName ? (
-                  <>
-                    {" "}
-                    — cleaner: <span className="font-medium">{cleanerName}</span>
-                  </>
-                ) : null}
-              </AlertDescription>
-            </div>
-          </Alert>
-        ) : cancelledJobBanner ? (
-          <Alert className="border-border bg-muted/40 dark:border-gray-700 dark:bg-gray-900/40">
-            <div className="flex items-start gap-2">
-              <Briefcase
-                className="mt-0.5 h-4 w-4 shrink-0 text-foreground"
-                aria-hidden
-              />
-              <AlertDescription className="min-w-0 flex-1 p-0 leading-snug sm:leading-relaxed">
-                <span className="font-semibold text-foreground">This job is no longer active</span>
-                <span className="text-muted-foreground"> — it was cancelled.</span>
-              </AlertDescription>
-            </div>
-          </Alert>
-        ) : null}
-        <div className="w-full space-y-3 md:space-y-4">
-          <Button
-            variant="ghost"
-            asChild
-            className="h-auto min-h-11 w-full justify-start px-3 py-2 text-left dark:hover:bg-gray-800 dark:hover:text-gray-100"
-          >
-            <Link href={backHref}>← {backLabel}</Link>
-          </Button>
-          {isDisputed && (
-            <Alert
-              variant="warning"
-              className="w-full border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/40"
-            >
-              <div className="flex w-full items-start gap-2 sm:gap-3">
-                <AlertTriangle
-                  className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+        <div
+          className={cn(
+            "space-y-6",
+            detailUiBoost && "mx-auto w-full max-w-4xl"
+          )}
+        >
+          {pipelineActive ? (
+            <Alert className="border-primary/40 bg-primary/5">
+              <div className="flex items-start gap-2">
+                <Briefcase
+                  className="mt-0.5 h-4 w-4 shrink-0 text-foreground"
                   aria-hidden
                 />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <p className="m-0 text-sm font-medium leading-snug text-amber-900 dark:text-amber-100 sm:text-base">
-                    Dispute in progress — details below
-                  </p>
-                  <AlertDescription className="m-0 p-0 text-amber-800 dark:text-amber-200">
-                    Status: {disputeStatusLabel}
-                  </AlertDescription>
-                  <div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
-                      className="border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900/50"
-                    >
-                      <a href="#dispute">View Dispute Details</a>
-                    </Button>
-                  </div>
-                </div>
+                <AlertDescription className="min-w-0 flex-1 p-0 leading-snug sm:leading-relaxed">
+                  <span className="font-semibold text-foreground">This is an active job</span>
+                  {cleanerName ? (
+                    <>
+                      {" "}
+                      — assigned cleaner:{" "}
+                      <span className="font-medium">{cleanerName}</span>
+                    </>
+                  ) : (
+                    " — cleaner assigned."
+                  )}
+                </AlertDescription>
               </div>
             </Alert>
-          )}
+          ) : completedJobBanner ? (
+            <Alert className="border-emerald-500/30 bg-emerald-500/[0.06] dark:border-emerald-800/50 dark:bg-emerald-950/25">
+              <div className="flex items-start gap-2">
+                <Briefcase
+                  className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400"
+                  aria-hidden
+                />
+                <AlertDescription className="min-w-0 flex-1 p-0 text-emerald-950 leading-snug dark:text-emerald-100 sm:leading-relaxed">
+                  <span className="font-semibold text-foreground dark:text-emerald-50">
+                    This job is completed
+                  </span>
+                  {cleanerName ? (
+                    <>
+                      {" "}
+                      — cleaner: <span className="font-medium">{cleanerName}</span>
+                    </>
+                  ) : null}
+                </AlertDescription>
+              </div>
+            </Alert>
+          ) : cancelledJobBanner ? (
+            <Alert className="border-border bg-muted/40 dark:border-gray-700 dark:bg-gray-900/40">
+              <div className="flex items-start gap-2">
+                <Briefcase
+                  className="mt-0.5 h-4 w-4 shrink-0 text-foreground"
+                  aria-hidden
+                />
+                <AlertDescription className="min-w-0 flex-1 p-0 leading-snug sm:leading-relaxed">
+                  <span className="font-semibold text-foreground">This job is no longer active</span>
+                  <span className="text-muted-foreground"> — it was cancelled.</span>
+                </AlertDescription>
+              </div>
+            </Alert>
+          ) : null}
+          <div className="w-full space-y-3 md:space-y-4">
+            <Button
+              variant="ghost"
+              asChild
+              className="h-auto min-h-11 w-full justify-start px-3 py-2 text-left dark:hover:bg-gray-800 dark:hover:text-gray-100"
+            >
+              <Link href={backHref}>← {backLabel}</Link>
+            </Button>
+            {isDisputed && (
+              <Alert
+                variant="warning"
+                className="w-full border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/40"
+              >
+                <div className="flex w-full items-start gap-2 sm:gap-3">
+                  <AlertTriangle
+                    className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+                    aria-hidden
+                  />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <p className="m-0 text-sm font-medium leading-snug text-amber-900 dark:text-amber-100 sm:text-base">
+                      Dispute in progress — details below
+                    </p>
+                    <AlertDescription className="m-0 p-0 text-amber-800 dark:text-amber-200">
+                      Status: {disputeStatusLabel}
+                    </AlertDescription>
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900/50"
+                      >
+                        <a href="#dispute">View Dispute Details</a>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Alert>
+            )}
+          </div>
         </div>
         <JobDetail
           listingId={listingId}
@@ -753,18 +774,8 @@ export async function JobDetailPageContent({
           isStripeTestMode={stripeTestMode}
           feePercentage={feePercentage}
           currentUserId={sessionUserId ?? null}
-          isJobLister={
-            !!user &&
-            !!job &&
-            sameUserId(user.id, job.lister_id) &&
-            roles.includes("lister")
-          }
-          isListingOwner={
-            !!user &&
-            sameUserId(listingRow.lister_id, user.id) &&
-            roles.includes("lister") &&
-            isListerActive
-          }
+          isJobLister={isJobLister}
+          isListingOwner={isListingOwner}
           isJobCleaner={
             !!user &&
             !!job &&
