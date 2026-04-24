@@ -315,6 +315,7 @@ function calculatePricingParts(
 } {
   const baseCoreAud = computeBaseListingPriceAud(pricingModifiers, {
     bedrooms: values.bedrooms,
+    bathrooms: values.bathrooms,
     condition: values.propertyCondition as PropertyConditionKey,
     levels: values.propertyLevels as PropertyLevelsKey,
     serviceType: normalizeServiceType(values.serviceType),
@@ -472,6 +473,7 @@ export function NewListingForm({
   const defaultReservePrice = Math.max(
     computeBaseListingPriceAud(pricingModifiers, {
       bedrooms: 2,
+      bathrooms: 1,
       condition: "excellent_very_good",
       levels: "1",
       serviceType: "bond_cleaning",
@@ -1947,8 +1949,8 @@ export function NewListingForm({
                     ${estimatedPrice} AUD
                   </p>
                   <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                    Base from rate × bedrooms × condition × levels × base multiplier; then selected add-ons (carpet steam,
-                    walls, and windows scale per bedroom).{" "}
+                    Base from (rate × bedrooms × condition × levels × service multiplier) plus (bathroom rate × bathrooms);
+                    then selected add-ons (carpet steam, walls, and windows scale per bedroom).{" "}
                     {PROPERTY_CONDITION_OPTIONS.find((o) => o.value === watchedValues.propertyCondition)?.label ?? ""}
                     {", "}
                     {PROPERTY_LEVELS_OPTIONS.find((o) => o.value === watchedValues.propertyLevels)?.label ?? ""}.

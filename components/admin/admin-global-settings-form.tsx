@@ -19,6 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { CircleHelp } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import type { SaveGlobalSettingsInput } from "@/lib/actions/global-settings";
 import {
@@ -33,13 +40,24 @@ import { sendAdminSmsFromGlobalSettings } from "@/lib/actions/sms-notifications"
 import { sendTestAdminNotificationEmail } from "@/lib/actions/admin-notify-email";
 import { sendNoBidListingRemindersManual } from "@/lib/actions/sms-notifications";
 import { NotificationCronStatusButton } from "@/components/admin/notification-cron-status-dialog";
-import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
+import {
+  DEFAULT_BATHROOM_RATE_PER_BATHROOM_BY_SERVICE_AUD,
+  DEFAULT_PRICING_MODIFIERS,
+} from "@/lib/pricing-modifiers";
 import { getListingAddonLabel } from "@/lib/listing-addon-prices";
 import {
   SERVICE_TYPES,
   serviceTypeLabel,
   type ServiceTypeKey,
 } from "@/lib/service-types";
+
+/** Admin Pricing configuration card order (matches product grouping in copy). */
+const PRICING_CONFIG_SERVICE_ORDER: ServiceTypeKey[] = [
+  "bond_cleaning",
+  "airbnb_turnover",
+  "recurring_house_cleaning",
+  "deep_clean",
+];
 
 const SMS_TYPE_CONTROLS: { key: string; label: string }[] = [
   { key: "new_bid", label: "New bid" },
@@ -51,6 +69,35 @@ const SMS_TYPE_CONTROLS: { key: string; label: string }[] = [
   { key: "auto_release_warning", label: "Auto-release warning" },
   { key: "new_job_in_area", label: "New job in area (cleaners)" },
 ];
+
+function PricingFieldHelp({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <Label htmlFor={htmlFor} className="text-[11px] font-medium">
+        {label}
+      </Label>
+      <Tooltip>
+        <TooltipTrigger
+          type="button"
+          className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <CircleHelp className="size-3.5 shrink-0" aria-label={`About ${label}`} />
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs text-xs leading-snug">
+          {children}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
 
 export type AdminGlobalSettingsFormProps = {
   initial: Partial<SaveGlobalSettingsInput> | null;
@@ -252,6 +299,18 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
     }
     return o;
   });
+  const [pricingBathroomByService, setPricingBathroomByService] = React.useState<
+    Record<ServiceTypeKey, string>
+  >(() => {
+    const by = initial?.pricingBathroomRatePerBathroomByServiceType ?? {};
+    const o = {} as Record<ServiceTypeKey, string>;
+    for (const k of SERVICE_TYPES) {
+      const v = by[k];
+      const def = DEFAULT_BATHROOM_RATE_PER_BATHROOM_BY_SERVICE_AUD[k];
+      o[k] = typeof v === "number" && Number.isFinite(v) ? String(v) : String(def);
+    }
+    return o;
+  });
   const [pricingConditionExcellentVeryGoodPct, setPricingConditionExcellentVeryGoodPct] =
     React.useState(
       initial?.pricingConditionExcellentVeryGoodPct ??
@@ -360,6 +419,16 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       }
     }
 
+    const pricingBathroomRatePerBathroomByServiceType: Partial<Record<ServiceTypeKey, number>> = {};
+    for (const k of SERVICE_TYPES) {
+      const raw = (pricingBathroomByService[k] ?? "").trim();
+      const def = DEFAULT_BATHROOM_RATE_PER_BATHROOM_BY_SERVICE_AUD[k];
+      const n = raw === "" ? def : Number(raw);
+      if (Number.isFinite(n) && n >= 0) {
+        pricingBathroomRatePerBathroomByServiceType[k] = Math.min(99999, Math.max(0, n));
+      }
+    }
+
     const payload: SaveGlobalSettingsInput = {
       feePercentage: Math.max(0, Math.min(30, Number(feePercentage) || 0)),
       platformFeePercentageByServiceType,
@@ -429,6 +498,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       pricingBaseRatePerBedroomByServiceType,
       pricingBaseMultiplier: fbMult,
       pricingBaseMultiplierByServiceType,
+      pricingBathroomRatePerBathroomByServiceType,
       pricingConditionExcellentVeryGoodPct: Math.max(
         0,
         Number(pricingConditionExcellentVeryGoodPct) || 0
@@ -933,100 +1003,163 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             Pricing modifiers
           </CardTitle>
           <p className="text-[11px] text-muted-foreground dark:text-gray-400">
-            Used on <strong className="text-foreground dark:text-gray-200">New listing</strong> for the suggested base:{" "}
+            Used on <strong className="text-foreground dark:text-gray-200">New listing</strong> for the suggested base
+            before add-ons:{" "}
             <span className="font-mono text-[10px] sm:text-[11px]">
-              (base rate × bedrooms) × condition × levels × base multiplier
+              round(rate × beds × condition × levels × multiplier) + round(bathroom $ × baths)
             </span>
-            . <strong className="text-foreground dark:text-gray-200">Base rate</strong> and{" "}
-            <strong className="text-foreground dark:text-gray-200">base multiplier</strong> can each be set per service type; defaults apply when
-            a per-type value is missing. Then add-ons (carpet steam, walls, and windows use rate × bedrooms; others are flat amounts below).
+            . Defaults below apply when a per-type field is left blank. Then add-ons (carpet steam, walls, and windows use
+            rate × bedrooms; others are flat amounts).
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <Label htmlFor="pricing-base-rate" className="text-xs font-medium shrink-0">
-              Default base rate per bedroom (AUD)
-            </Label>
-            <Input
-              id="pricing-base-rate"
-              type="number"
-              min={1}
-              step={1}
-              inputMode="decimal"
-              value={pricingBaseRatePerBedroomAud}
-              onChange={(e) => setPricingBaseRatePerBedroomAud(Number(e.target.value))}
-              className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
-            />
-          </div>
-          <p className="text-[10px] text-muted-foreground dark:text-gray-500">
-            Fallback for legacy data and any service type without its own rate below.
-          </p>
-          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 dark:border-gray-700 dark:bg-gray-900/40">
-            <p className="text-[11px] font-medium text-foreground dark:text-gray-200">Base rate per bedroom by service type (AUD)</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {SERVICE_TYPES.map((k) => (
-                <div key={k} className="flex flex-col gap-1.5">
-                  <Label htmlFor={`pricing-base-svc-${k}`} className="text-[11px] font-medium">
-                    {serviceTypeLabel(k)}
+          <TooltipProvider delayDuration={200}>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-foreground dark:text-gray-100">
+                  Pricing configuration
+                </p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground dark:text-gray-500">
+                  Per service type: bedroom rate, bathroom add-on, and multiplier that scales the bedroom subtotal only.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="pricing-base-rate" className="text-xs font-medium shrink-0">
+                    Default base bedroom rate ($)
                   </Label>
-                  <Input
-                    id={`pricing-base-svc-${k}`}
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="decimal"
-                    value={pricingBaseByService[k]}
-                    onChange={(e) =>
-                      setPricingBaseByService((prev) => ({ ...prev, [k]: e.target.value }))
-                    }
-                    className="h-9 dark:bg-gray-900 dark:border-gray-700"
-                  />
+                  <Tooltip>
+                    <TooltipTrigger
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <CircleHelp className="size-3.5" aria-label="About default base bedroom rate" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs text-xs leading-snug">
+                      Fallback AUD per bedroom when a service type does not have its own base rate. Feeds the bedroom
+                      subtotal: rate × bedrooms × condition × levels × service multiplier.
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <Label htmlFor="pricing-base-multiplier" className="text-xs font-medium shrink-0">
-              Default base multiplier
-            </Label>
-            <Input
-              id="pricing-base-multiplier"
-              type="number"
-              min={0.01}
-              step={0.01}
-              inputMode="decimal"
-              value={pricingBaseMultiplier}
-              onChange={(e) => setPricingBaseMultiplier(Number(e.target.value))}
-              className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
-            />
-          </div>
-          <p className="text-[10px] text-muted-foreground dark:text-gray-500">
-            Fallback when a per-service multiplier below is missing (min 0.01).
-          </p>
-          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 dark:border-gray-700 dark:bg-gray-900/40">
-            <p className="text-[11px] font-medium text-foreground dark:text-gray-200">Base multiplier by service type</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {SERVICE_TYPES.map((k) => (
-                <div key={k} className="flex flex-col gap-1.5">
-                  <Label htmlFor={`pricing-mult-svc-${k}`} className="text-[11px] font-medium">
-                    {serviceTypeLabel(k)}
+                <Input
+                  id="pricing-base-rate"
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="decimal"
+                  value={pricingBaseRatePerBedroomAud}
+                  onChange={(e) => setPricingBaseRatePerBedroomAud(Number(e.target.value))}
+                  className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
+                />
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="pricing-base-multiplier" className="text-xs font-medium shrink-0">
+                    Default overall service multiplier
                   </Label>
-                  <Input
-                    id={`pricing-mult-svc-${k}`}
-                    type="number"
-                    min={0.01}
-                    step={0.01}
-                    inputMode="decimal"
-                    value={pricingMultiplierByService[k]}
-                    onChange={(e) =>
-                      setPricingMultiplierByService((prev) => ({ ...prev, [k]: e.target.value }))
-                    }
-                    className="h-9 dark:bg-gray-900 dark:border-gray-700"
-                  />
+                  <Tooltip>
+                    <TooltipTrigger
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <CircleHelp className="size-3.5" aria-label="About default service multiplier" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs text-xs leading-snug">
+                      Fallback multiplier (e.g. 0.9x, 1.3x) applied to the bedroom subtotal only. Bathroom charges and
+                      add-ons are not multiplied by this.
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-              ))}
+                <Input
+                  id="pricing-base-multiplier"
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  inputMode="decimal"
+                  value={pricingBaseMultiplier}
+                  onChange={(e) => setPricingBaseMultiplier(Number(e.target.value))}
+                  className="h-9 max-w-full sm:max-w-[8rem] sm:text-right dark:bg-gray-900 dark:border-gray-700"
+                />
+              </div>
+              <div className="space-y-3">
+                {PRICING_CONFIG_SERVICE_ORDER.map((k) => (
+                  <div
+                    key={k}
+                    className="space-y-3 rounded-lg border border-border bg-muted/30 p-3 dark:border-gray-700 dark:bg-gray-900/40"
+                  >
+                    <p className="text-[11px] font-semibold text-foreground dark:text-gray-200">
+                      {serviceTypeLabel(k)}
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="flex flex-col gap-1.5">
+                        <PricingFieldHelp
+                          label="Base bedroom rate ($)"
+                          htmlFor={`pricing-base-svc-${k}`}
+                        >
+                          AUD per bedroom for this service. Multiplied by bedrooms, condition, levels, and the service
+                          multiplier below.
+                        </PricingFieldHelp>
+                        <Input
+                          id={`pricing-base-svc-${k}`}
+                          type="number"
+                          min={1}
+                          step={1}
+                          inputMode="decimal"
+                          value={pricingBaseByService[k]}
+                          onChange={(e) =>
+                            setPricingBaseByService((prev) => ({ ...prev, [k]: e.target.value }))
+                          }
+                          className="h-9 dark:bg-gray-900 dark:border-gray-700"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <PricingFieldHelp
+                          label="Bathroom multiplier ($ / bathroom)"
+                          htmlFor={`pricing-bath-svc-${k}`}
+                        >
+                          Flat dollars per bathroom added after the bedroom subtotal. Not scaled by condition, levels, or
+                          the service multiplier.
+                        </PricingFieldHelp>
+                        <Input
+                          id={`pricing-bath-svc-${k}`}
+                          type="number"
+                          min={0}
+                          step={1}
+                          inputMode="decimal"
+                          value={pricingBathroomByService[k]}
+                          onChange={(e) =>
+                            setPricingBathroomByService((prev) => ({ ...prev, [k]: e.target.value }))
+                          }
+                          className="h-9 dark:bg-gray-900 dark:border-gray-700"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <PricingFieldHelp
+                          label="Overall service multiplier"
+                          htmlFor={`pricing-mult-svc-${k}`}
+                        >
+                          Scales the bedroom line only (rate × beds × condition × levels × this). Use for service-level
+                          pricing tweaks (minimum 0.01).
+                        </PricingFieldHelp>
+                        <Input
+                          id={`pricing-mult-svc-${k}`}
+                          type="number"
+                          min={0.01}
+                          step={0.01}
+                          inputMode="decimal"
+                          value={pricingMultiplierByService[k]}
+                          onChange={(e) =>
+                            setPricingMultiplierByService((prev) => ({ ...prev, [k]: e.target.value }))
+                          }
+                          className="h-9 dark:bg-gray-900 dark:border-gray-700"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          </TooltipProvider>
           <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 dark:border-gray-700 dark:bg-gray-900/50">
             <p className="text-[11px] font-medium text-muted-foreground dark:text-gray-400">
               Add-ons — per bedroom (AUD each; line total = rate × bedrooms on new listing)

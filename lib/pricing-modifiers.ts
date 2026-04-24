@@ -1,8 +1,9 @@
 /**
  * Listing base price from admin-configurable modifiers (Global Settings → Pricing Modifiers).
  *
- * Base (before add-ons), rounded to whole AUD:
- *   (base rate × bedrooms) × condition multiplier × levels multiplier × base multiplier
+ * Core estimate (before add-ons), rounded to whole AUD:
+ *   round((base rate × bedrooms) × condition × levels × service multiplier)
+ *   + round(bathroom rate × bathrooms)
  *
  * Legacy reference (no extras, bedroom-only): 2bd $380, 3bd $480, 4bd $680, 5bd $780.
  * At Fair/Average (25%) and 1 Level: multiplier on (rate×beds) = 1.25.
@@ -94,6 +95,38 @@ export function resolveBaseMultiplierByServiceFromGlobal(
   return out;
 }
 
+/** Default AUD per bathroom when `pricing_bathroom_rate_per_bathroom_by_service_type` has no entry. */
+export const DEFAULT_BATHROOM_RATE_PER_BATHROOM_BY_SERVICE_AUD: Record<ServiceTypeKey, number> = {
+  bond_cleaning: 60,
+  recurring_house_cleaning: 35,
+  airbnb_turnover: 55,
+  deep_clean: 65,
+};
+
+/**
+ * Parse `global_settings.pricing_bathroom_rate_per_bathroom_by_service_type` (jsonb).
+ * Each service gets a rate ≥ 0; missing keys use {@link DEFAULT_BATHROOM_RATE_PER_BATHROOM_BY_SERVICE_AUD}.
+ */
+export function resolveBathroomRatePerBathroomByServiceFromGlobal(
+  raw: unknown
+): Record<ServiceTypeKey, number> {
+  const obj = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const out = {} as Record<ServiceTypeKey, number>;
+  for (const k of SERVICE_TYPES) {
+    const def = DEFAULT_BATHROOM_RATE_PER_BATHROOM_BY_SERVICE_AUD[k];
+    const v = obj[k];
+    const n =
+      typeof v === "number" && Number.isFinite(v)
+        ? v
+        : typeof v === "string" && v.trim() !== ""
+          ? Number(v)
+          : NaN;
+    out[k] =
+      Number.isFinite(n) && n >= 0 ? Math.min(99999, Math.max(0, Math.round(n * 100) / 100)) : def;
+  }
+  return out;
+}
+
 /**
  * Normalize `global_settings.pricing_base_rate_per_bedroom_aud` for display and quoting.
  * Rows that still have the old default **85** are treated as the current recommended rate (131).
@@ -147,6 +180,8 @@ export type PricingModifiersConfig = {
   baseMultiplier: number;
   /** Effective base multiplier per `listings.service_type`. */
   baseMultiplierByService: Record<ServiceTypeKey, number>;
+  /** AUD per bathroom per service type (additive; not multiplied by condition/levels). */
+  bathroomRatePerBathroomByServiceAud: Record<ServiceTypeKey, number>;
   carpetSteamPerBedroomAud: number;
   wallsPerBedroomAud: number;
   windowsPerBedroomAud: number;
@@ -192,6 +227,9 @@ export function resolvePricingModifiersFromGlobal(
       g["pricing_base_multiplier_by_service_type"],
       multFallback
     ),
+    bathroomRatePerBathroomByServiceAud: resolveBathroomRatePerBathroomByServiceFromGlobal(
+      g["pricing_bathroom_rate_per_bathroom_by_service_type"]
+    ),
     carpetSteamPerBedroomAud: Math.max(0, n("pricing_carpet_steam_per_bedroom_aud", D.carpetSteamPerBedroomAud)),
     wallsPerBedroomAud: Math.max(0, n("pricing_walls_per_bedroom_aud", D.wallsPerBedroomAud)),
     windowsPerBedroomAud: Math.max(0, n("pricing_windows_per_bedroom_aud", D.windowsPerBedroomAud)),
@@ -230,25 +268,32 @@ function levelsMultiplier(mod: PricingModifiersConfig, levels: PropertyLevelsKey
   return 1 + Math.max(0, mod.levelsTwoPct) / 100;
 }
 
+/** Bathrooms on the new listing form (1–5). */
+export function clampListingBathrooms(bathrooms: number): number {
+  return Math.max(1, Math.min(5, Math.round(Number(bathrooms)) || 1));
+}
+
 /**
- * Base price in AUD (before add-ons), rounded to whole dollars.
- * (Base rate × bedrooms) × condition × levels × base multiplier
+ * Base price in AUD (before add-ons), rounded to whole dollars:
+ * bedroom subtotal + (bathroom rate × bathrooms).
  */
 export function computeBaseListingPriceAud(
   mod: PricingModifiersConfig,
   input: {
     bedrooms: number;
+    bathrooms?: number;
     condition: PropertyConditionKey;
     levels: PropertyLevelsKey;
     serviceType: ServiceTypeKey;
   }
 ): number {
   const beds = Math.max(1, Math.min(6, Math.round(Number(input.bedrooms)) || 1));
+  const baths = clampListingBathrooms(input.bathrooms ?? 1);
   const rate = Math.max(
     0,
     mod.baseRatePerBedroomByServiceAud[input.serviceType] ?? mod.baseRatePerBedroomAud
   );
-  const raw =
+  const bedroomSubtotal =
     rate *
     beds *
     conditionPctModifier(mod, input.condition) *
@@ -257,7 +302,13 @@ export function computeBaseListingPriceAud(
       0,
       mod.baseMultiplierByService[input.serviceType] ?? mod.baseMultiplier
     );
-  return Math.max(0, Math.round(raw));
+  const bathRate = Math.max(
+    0,
+    mod.bathroomRatePerBathroomByServiceAud[input.serviceType] ??
+      DEFAULT_BATHROOM_RATE_PER_BATHROOM_BY_SERVICE_AUD[input.serviceType]
+  );
+  const bathroomSubtotal = bathRate * baths;
+  return Math.max(0, Math.round(bedroomSubtotal) + Math.round(bathroomSubtotal));
 }
 
 function clampBedrooms(bedrooms: number): number {

@@ -81,6 +81,8 @@ type GlobalSettingsRow = {
   pricing_base_multiplier?: number | null;
   /** Optional per-service multipliers; missing keys use pricing_base_multiplier */
   pricing_base_multiplier_by_service_type?: unknown;
+  /** Optional { bond_cleaning: n, ... } AUD per bathroom; empty uses code defaults per service */
+  pricing_bathroom_rate_per_bathroom_by_service_type?: unknown;
   pricing_condition_excellent_very_good_pct?: number | null;
   pricing_condition_good_pct?: number | null;
   pricing_condition_fair_average_pct?: number | null;
@@ -157,6 +159,20 @@ function sanitizePricingBaseMultiplierByServiceForDb(
     const v = input[k];
     if (typeof v === "number" && Number.isFinite(v) && v >= 0.01) {
       out[k] = Math.min(1000, Math.max(0.01, Math.round(v * 10000) / 10000));
+    }
+  }
+  return out;
+}
+
+function sanitizePricingBathroomRateByServiceForDb(
+  input: Partial<Record<ServiceTypeKey, number>> | null | undefined
+): Record<string, number> {
+  if (!input || typeof input !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const k of SERVICE_TYPES) {
+    const v = input[k];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+      out[k] = Math.min(99999, Math.max(0, Math.round(v * 100) / 100));
     }
   }
   return out;
@@ -381,6 +397,8 @@ export type SaveGlobalSettingsInput = {
   pricingBaseMultiplier?: number;
   /** Per service type; omitted keys use `pricingBaseMultiplier`. */
   pricingBaseMultiplierByServiceType?: Partial<Record<ServiceTypeKey, number>> | null;
+  /** Per service type AUD per bathroom (additive on new listing estimate). */
+  pricingBathroomRatePerBathroomByServiceType?: Partial<Record<ServiceTypeKey, number>> | null;
   pricingConditionExcellentVeryGoodPct?: number;
   pricingConditionGoodPct?: number;
   pricingConditionFairAveragePct?: number;
@@ -516,6 +534,9 @@ export async function saveGlobalSettings(
     pricing_base_multiplier_by_service_type: sanitizePricingBaseMultiplierByServiceForDb(
       data.pricingBaseMultiplierByServiceType
     ),
+    pricing_bathroom_rate_per_bathroom_by_service_type: sanitizePricingBathroomRateByServiceForDb(
+      data.pricingBathroomRatePerBathroomByServiceType
+    ),
     pricing_condition_excellent_very_good_pct:
       typeof data.pricingConditionExcellentVeryGoodPct === "number" && Number.isFinite(data.pricingConditionExcellentVeryGoodPct)
         ? Math.max(0, data.pricingConditionExcellentVeryGoodPct)
@@ -622,9 +643,11 @@ export async function saveGlobalSettings(
       msg.includes("does not exist") || msg.includes("42703")
         ? msg.includes("default_site_theme")
           ? " Add column global_settings.default_site_theme (see sql/20260216120000_global_settings_default_site_theme.sql)."
+          : msg.includes("pricing_bathroom_rate_per_bathroom_by_service_type")
+            ? " Add column global_settings.pricing_bathroom_rate_per_bathroom_by_service_type (see sql/20260417120000_pricing_bathroom_rate_by_service_type.sql)."
           : msg.includes("new_listing_in_radius") || msg.includes("enable_daily_browse")
             ? " Add cleaner new-listing channel columns (see sql/20260417100000_global_settings_new_listing_channel_toggles.sql)."
-          : " Run the migration: supabase/migrations/20250308120000_global_settings.sql (or create the global_settings table with announcement_text, announcement_active, etc.)."
+          : " Run supabase/sql/20260417140000_global_settings_ensure_columns_admin_save.sql in the Supabase SQL editor (adds all columns used by Admin → Global Settings save), or apply the individual migrations under supabase/migrations."
         : "";
     return { ok: false, error: msg + hint };
   }

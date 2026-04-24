@@ -136,6 +136,9 @@ export default async function AdminGlobalSettingsPage() {
         pricingBaseMultiplierByServiceType: resolvePricingModifiersFromGlobal(
           existing as Record<string, unknown>
         ).baseMultiplierByService,
+        pricingBathroomRatePerBathroomByServiceType: resolvePricingModifiersFromGlobal(
+          existing as Record<string, unknown>
+        ).bathroomRatePerBathroomByServiceAud,
         pricingConditionExcellentVeryGoodPct:
           (existing as { pricing_condition_excellent_very_good_pct?: number | null }).pricing_condition_excellent_very_good_pct ?? 0,
         pricingConditionGoodPct: (existing as { pricing_condition_good_pct?: number | null }).pricing_condition_good_pct ?? 12,
