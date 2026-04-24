@@ -481,11 +481,13 @@ export async function JobDetailPageContent({
           .select("reviewee_type, reviewee_role, overall_rating, review_text")
           .eq("job_id", job.id)
           .eq("reviewer_id", user.id)
+          .order("id", { ascending: false })
       : await supabase
           .from("reviews")
           .select("reviewee_type, reviewee_role, overall_rating, review_text")
           .eq("job_id", job.id)
-          .eq("reviewer_id", user.id);
+          .eq("reviewer_id", user.id)
+          .order("id", { ascending: false });
     const myReviews = myReviewsRes.data;
     for (const r of myReviews ?? []) {
       const row = r as {
@@ -495,14 +497,15 @@ export async function JobDetailPageContent({
         review_text: string | null;
       };
       const t = String(row.reviewee_type ?? row.reviewee_role ?? "").trim().toLowerCase();
-      if (t === "cleaner") {
+      /** Newest row first (`id` desc) — keep first match per side only. */
+      if (t === "cleaner" && !myReviewOfCleaner) {
         hasReviewedCleaner = true;
         myReviewOfCleaner = {
           overall_rating: row.overall_rating,
           review_text: row.review_text,
         };
       }
-      if (t === "lister") {
+      if (t === "lister" && !myReviewOfLister) {
         hasReviewedLister = true;
         myReviewOfLister = {
           overall_rating: row.overall_rating,

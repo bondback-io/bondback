@@ -47,6 +47,7 @@ export function ReviewForm({ jobId, revieweeType, onSuccess }: ReviewFormProps) 
     }
     setSubmitting(true);
     try {
+      const trimmedComment = text.trim();
       const res = await submitReview({
         jobId,
         revieweeType,
@@ -59,7 +60,7 @@ export function ReviewForm({ jobId, revieweeType, onSuccess }: ReviewFormProps) 
               punctuality,
             }
           : {}),
-        reviewText: text.trim() || null,
+        reviewText: trimmedComment.length > 0 ? trimmedComment : null,
       });
       if (!res.ok) {
         setError(res.error);

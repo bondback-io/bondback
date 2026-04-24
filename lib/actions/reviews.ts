@@ -22,7 +22,6 @@ export type SubmitReviewInput = {
   reliability?: number | null;
   communication?: number | null;
   punctuality?: number | null;
-  cleanliness?: number | null;
   reviewText?: string | null;
 };
 
@@ -108,14 +107,27 @@ export async function submitReview(
     return { ok: false, error: "Only the cleaner can review the owner." };
   }
 
-  // Enforce single review per (job, reviewer, reviewee_type)
-  const { data: existing } = await supabase
-    .from("reviews")
-    .select("id")
-    .eq("job_id", row.id as never)
-    .eq("reviewer_id", userId as never)
-    .eq("reviewee_type", input.revieweeType as never)
-    .limit(1);
+  const adminDb = createSupabaseAdminClient();
+  const rt = input.revieweeType;
+
+  // Enforce single review per (job, reviewer, reviewee side) — match type OR role for legacy rows.
+  const existingRes = adminDb
+    ? await adminDb
+        .from("reviews")
+        .select("id")
+        .eq("job_id", row.id as never)
+        .eq("reviewer_id", userId as never)
+        .or(`reviewee_type.eq.${rt},reviewee_role.eq.${rt}`)
+        .limit(1)
+    : await supabase
+        .from("reviews")
+        .select("id")
+        .eq("job_id", row.id as never)
+        .eq("reviewer_id", userId as never)
+        .or(`reviewee_type.eq.${rt},reviewee_role.eq.${rt}`)
+        .limit(1);
+
+  const existing = existingRes.data;
 
   if (existing && existing.length > 0) {
     return {
@@ -134,27 +146,44 @@ export async function submitReview(
     if (!Number.isFinite(n) || n < 1 || n > 5) return null;
     return n;
   };
-  const text =
-    input.reviewText == null ? null : String(input.reviewText).trim().slice(0, 1000);
+  const reviewTextStored = (() => {
+    const raw = input.reviewText;
+    if (raw == null) return null;
+    const s = String(raw).trim().slice(0, 1000);
+    return s.length > 0 ? s : null;
+  })();
 
-  const { data: inserted, error: insertError } = await supabase
-    .from("reviews")
-    .insert({
-      job_id: row.id as number,
-      reviewer_id: userId,
-      reviewee_id: revieweeId,
-      reviewee_role: input.revieweeType,
-      reviewee_type: input.revieweeType,
-      overall_rating: overall,
-      quality_of_work: categoryOrNull(input.qualityOfWork),
-      reliability: categoryOrNull(input.reliability),
-      communication: categoryOrNull(input.communication),
-      punctuality: categoryOrNull(input.punctuality),
-      cleanliness: input.cleanliness ?? null,
-      review_text: text,
-    } as never)
-    .select("id, reviewee_id, reviewee_type")
-    .maybeSingle();
+  const insertPayload = {
+    job_id: row.id as number,
+    reviewer_id: userId,
+    reviewee_id: revieweeId,
+    reviewee_role: input.revieweeType,
+    reviewee_type: input.revieweeType,
+    overall_rating: overall,
+    quality_of_work: categoryOrNull(input.qualityOfWork),
+    reliability: categoryOrNull(input.reliability),
+    communication: categoryOrNull(input.communication),
+    punctuality: categoryOrNull(input.punctuality),
+    review_text: reviewTextStored,
+  };
+
+  /**
+   * Prefer service-role writes so `review_text` and the full row persist reliably (RLS/session
+   * edge cases). Participation is already validated with the user-scoped client above.
+   */
+  const insertRes = adminDb
+    ? await adminDb
+        .from("reviews")
+        .insert(insertPayload as never)
+        .select("id, reviewee_id, reviewee_type, review_text")
+        .maybeSingle()
+    : await supabase
+        .from("reviews")
+        .insert(insertPayload as never)
+        .select("id, reviewee_id, reviewee_type, review_text")
+        .maybeSingle();
+
+  const { data: inserted, error: insertError } = insertRes;
 
   if (insertError || !inserted) {
     return {
@@ -165,15 +194,14 @@ export async function submitReview(
 
   const insertedRow = inserted as Pick<
     ReviewsRow,
-    "id" | "reviewee_id" | "reviewee_type"
+    "id" | "reviewee_id" | "reviewee_type" | "review_text"
   >;
 
   // Best-effort: recompute averages for the reviewee
   try {
-    await recomputeProfileAverages(
-      insertedRow.reviewee_id as string,
-      insertedRow.reviewee_type as "cleaner" | "lister"
-    );
+    const revieweeForBadges =
+      (insertedRow.reviewee_type as "cleaner" | "lister" | null) ?? input.revieweeType;
+    await recomputeProfileAverages(insertedRow.reviewee_id as string, revieweeForBadges);
     await recomputeVerificationBadgesForUser(insertedRow.reviewee_id as string);
   } catch {
     // ignore rating recompute errors
