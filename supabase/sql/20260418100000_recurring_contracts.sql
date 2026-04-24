@@ -1,6 +1,9 @@
 -- Recurring house-clean contracts: parent listing + per-visit jobs (each job may set recurring_occurrence_id).
 -- Replaces jobs_one_non_cancelled_per_listing with a partial unique index that allows multiple
 -- recurring visit jobs per listing (they carry recurring_occurrence_id IS NOT NULL).
+--
+-- NOTE: Bond Back production (bondback-mvp) uses bigint for public.listings.id, not uuid.
+-- recurring_contracts.listing_id MUST match that type or the FK cannot be created (42804).
 
 -- -----------------------------------------------------------------------------
 -- Listings: series bounds captured at publish (start required in app for recurring)
@@ -23,7 +26,7 @@ COMMENT ON COLUMN public.listings.recurring_contract_paused IS 'True when recurr
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.recurring_contracts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  listing_id uuid NOT NULL REFERENCES public.listings (id) ON DELETE CASCADE,
+  listing_id bigint NOT NULL REFERENCES public.listings (id) ON DELETE CASCADE,
   lister_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   cleaner_id uuid REFERENCES auth.users (id) ON DELETE SET NULL,
   frequency text NOT NULL CHECK (frequency IN ('weekly', 'fortnightly', 'monthly')),
