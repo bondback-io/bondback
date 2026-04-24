@@ -75,11 +75,12 @@ export function JobPaymentTimeline({
   const refundEventAt = resolutionAt ?? paymentReleasedAt;
   const showRefundStep = refundCents != null && Boolean(refundEventAt?.trim());
 
+  /** Prefer escrow total minus refund whenever a refund is shown — matches the timeline line items. */
   const netReleased =
-    netToCleanerCents != null && netToCleanerCents >= 0
-      ? netToCleanerCents
-      : totalAgreed > 0 && refundCents != null
-        ? Math.max(0, totalAgreed - refundCents)
+    totalAgreed > 0 && refundCents != null
+      ? Math.max(0, totalAgreed - refundCents)
+      : netToCleanerCents != null && netToCleanerCents >= 0
+        ? netToCleanerCents
         : totalAgreed > 0
           ? totalAgreed
           : null;

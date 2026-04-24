@@ -256,11 +256,21 @@ async function recomputeProfileAverages(
   userId: string,
   revieweeType: "cleaner" | "lister"
 ) {
+  /**
+   * Must use the service-role client: the session user is usually the *reviewer*, not the
+   * reviewee. RLS allows reading many review rows only from an admin context, and updating
+   * another user’s `profiles.cleaner_avg_rating` is blocked for normal sessions.
+   */
   const admin = createSupabaseAdminClient();
-  const supabase = await createServerSupabaseClient();
-  const db = (admin ?? supabase) as typeof supabase;
+  if (!admin) {
+    console.warn(
+      "[recomputeProfileAverages] SUPABASE_SERVICE_ROLE_KEY missing — skipping profile rating update for",
+      userId
+    );
+    return;
+  }
 
-  let rowsRes = await db
+  let rowsRes = await admin
     .from("reviews")
     .select("overall_rating")
     .eq("reviewee_id", userId as never)
@@ -269,7 +279,7 @@ async function recomputeProfileAverages(
     .or(revieweeTypeOrRoleFilter(revieweeType));
 
   if (isMissingRevieweeRoleColumnError(rowsRes.error)) {
-    rowsRes = await db
+    rowsRes = await admin
       .from("reviews")
       .select("overall_rating")
       .eq("reviewee_id", userId as never)
@@ -297,7 +307,7 @@ async function recomputeProfileAverages(
     (update as any).review_count = ratings.length;
   }
 
-  await db.from("profiles").update(update as never).eq("id", userId as never);
+  await admin.from("profiles").update(update as never).eq("id", userId as never);
 }
 
 export async function recomputeAllProfileReviewAggregates(userId: string): Promise<void> {

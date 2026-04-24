@@ -44,7 +44,27 @@ export function listerRefundCentsFromDisputeJob(job: JobRowForCleanerNet): numbe
     if (fromProposal >= 1) return fromProposal;
   }
 
-  return Math.max(0, Math.round(Number(job.refund_amount ?? 0) || 0));
+  const fromRefundCol = Math.max(0, Math.round(Number(job.refund_amount ?? 0) || 0));
+  if (fromRefundCol >= 1) return fromRefundCol;
+
+  /**
+   * Job detail may load a narrower `select()` that omits `refund_amount` while admin/mediation
+   * outcomes still store the cents on `proposed_refund_amount`.
+   */
+  const settled = st === "completed" || isDashboardCompletedJob(job);
+  if (settled) {
+    const drLower = dr.trim().toLowerCase();
+    const proposedFallbackResolutions = new Set([
+      "admin_mediation_final",
+      "partial_refund",
+    ]);
+    if (proposedFallbackResolutions.has(drLower)) {
+      const p = Math.max(0, Math.round(Number(job.proposed_refund_amount ?? 0) || 0));
+      if (p >= 1) return p;
+    }
+  }
+
+  return 0;
 }
 
 /**

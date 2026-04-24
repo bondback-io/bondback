@@ -474,18 +474,27 @@ export async function JobDetailPageContent({
   let myReviewOfCleaner: JobDetailMySubmittedReview | null = null;
   let myReviewOfLister: JobDetailMySubmittedReview | null = null;
   if (user && job?.id && canLeaveReview) {
-    const { data: myReviews } = await supabase
-      .from("reviews")
-      .select("reviewee_type, overall_rating, review_text")
-      .eq("job_id", job.id)
-      .eq("reviewer_id", user.id);
+    const adminReviews = createSupabaseAdminClient();
+    const myReviewsRes = adminReviews
+      ? await adminReviews
+          .from("reviews")
+          .select("reviewee_type, reviewee_role, overall_rating, review_text")
+          .eq("job_id", job.id)
+          .eq("reviewer_id", user.id)
+      : await supabase
+          .from("reviews")
+          .select("reviewee_type, reviewee_role, overall_rating, review_text")
+          .eq("job_id", job.id)
+          .eq("reviewer_id", user.id);
+    const myReviews = myReviewsRes.data;
     for (const r of myReviews ?? []) {
       const row = r as {
         reviewee_type: string | null;
+        reviewee_role: string | null;
         overall_rating: number;
         review_text: string | null;
       };
-      const t = String(row.reviewee_type ?? "");
+      const t = String(row.reviewee_type ?? row.reviewee_role ?? "").trim().toLowerCase();
       if (t === "cleaner") {
         hasReviewedCleaner = true;
         myReviewOfCleaner = {

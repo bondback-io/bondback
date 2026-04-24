@@ -8,6 +8,7 @@ import type { Database } from "@/types/supabase";
 import type { BidBidderProfileSummary } from "@/lib/bids/bidder-types";
 import { BIDDER_PROFILE_SUMMARY_SELECT } from "@/lib/bids/enrich-bids-with-bidders";
 import { fetchCleanerReviewsForPublicProfile } from "@/lib/reviews/fetch-cleaner-reviews-for-profile";
+import { fetchVisibleCleanerReviewAggregatesByCleanerIds } from "@/lib/reviews/fetch-visible-cleaner-review-aggregates";
 import { formatReviewerDisplayName } from "@/lib/reviews/reviewer-display-name";
 
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
@@ -140,16 +141,18 @@ export async function getBidderProfileForListingBid(
 
   const base = row as BidBidderProfileSummary;
 
-  const [jobsRes, reviewRows] = await Promise.all([
+  const [jobsRes, reviewRows, aggMap] = await Promise.all([
     admin
       .from("jobs")
       .select("id", { count: "exact", head: true })
       .eq("winner_id", cleanerId)
       .eq("status", "completed"),
     fetchCleanerReviewsForPublicProfile(admin, admin, cleanerId, { limit: 5 }),
+    fetchVisibleCleanerReviewAggregatesByCleanerIds(admin, [cleanerId]),
   ]);
 
   const completed_jobs_count = jobsRes.count ?? 0;
+  const liveAgg = aggMap.get(String(cleanerId).trim());
 
   const recent_reviews_as_cleaner: BidBidderProfileSummary["recent_reviews_as_cleaner"] =
     reviewRows.map((r) => {
@@ -169,13 +172,17 @@ export async function getBidderProfileForListingBid(
     });
 
   const avgRaw = base.cleaner_avg_rating;
-  const cleaner_avg_rating =
+  let cleaner_avg_rating =
     avgRaw != null && !Number.isNaN(Number(avgRaw)) ? Number(avgRaw) : null;
   const countRaw = base.cleaner_total_reviews;
-  const cleaner_total_reviews =
+  let cleaner_total_reviews =
     countRaw != null && !Number.isNaN(Number(countRaw))
       ? Math.max(0, Math.round(Number(countRaw)))
       : 0;
+  if (liveAgg && liveAgg.count > 0 && liveAgg.avg != null) {
+    cleaner_avg_rating = liveAgg.avg;
+    cleaner_total_reviews = liveAgg.count;
+  }
 
   const profile: BidBidderProfileSummary = {
     ...base,
@@ -234,11 +241,21 @@ export async function hydrateBidderProfilesForListing(
     byId[id] = row as BidBidderProfileSummary;
   }
 
-  const counts = await countCompletedJobsByWinnerIds(adminCheck, toLoad);
+  const [counts, reviewAgg] = await Promise.all([
+    countCompletedJobsByWinnerIds(adminCheck, toLoad),
+    fetchVisibleCleanerReviewAggregatesByCleanerIds(adminCheck, toLoad),
+  ]);
   for (const id of toLoad) {
     const row = byId[id];
     if (row) {
-      byId[id] = { ...row, completed_jobs_count: counts.get(id) ?? 0 };
+      const agg = reviewAgg.get(id);
+      byId[id] = {
+        ...row,
+        completed_jobs_count: counts.get(id) ?? 0,
+        ...(agg && agg.count > 0 && agg.avg != null
+          ? { cleaner_avg_rating: agg.avg, cleaner_total_reviews: agg.count }
+          : {}),
+      };
     }
   }
 

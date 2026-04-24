@@ -4164,7 +4164,10 @@ export function JobDetail({
                         <ReviewForm
                           jobId={numericJobId}
                           revieweeType="cleaner"
-                          onSuccess={() => setSubmittedCleanerReview(true)}
+                          onSuccess={() => {
+                            setSubmittedCleanerReview(true);
+                            router.refresh();
+                          }}
                         />
                       )}
                     </>
@@ -4203,7 +4206,10 @@ export function JobDetail({
                         <ReviewForm
                           jobId={numericJobId}
                           revieweeType="lister"
-                          onSuccess={() => setSubmittedListerReview(true)}
+                          onSuccess={() => {
+                            setSubmittedListerReview(true);
+                            router.refresh();
+                          }}
                         />
                       )}
                     </>
