@@ -251,6 +251,11 @@ export interface Database {
           is_urgent: boolean;
           /** Service-specific extras (see lib/listing-service-details.ts). */
           service_details?: Json | null;
+          recurring_series_start_date?: string | null;
+          recurring_series_end_date?: string | null;
+          recurring_series_max_occurrences?: number | null;
+          recurring_next_occurrence_on?: string | null;
+          recurring_contract_paused?: boolean;
         };
         Insert: {
           id?: string;
@@ -292,6 +297,11 @@ export interface Database {
           deep_clean_purpose?: string | null;
           is_urgent?: boolean;
           service_details?: Json;
+          recurring_series_start_date?: string | null;
+          recurring_series_end_date?: string | null;
+          recurring_series_max_occurrences?: number | null;
+          recurring_next_occurrence_on?: string | null;
+          recurring_contract_paused?: boolean;
         };
         Update: {
           title?: string;
@@ -330,6 +340,11 @@ export interface Database {
           deep_clean_purpose?: string | null;
           is_urgent?: boolean;
           service_details?: Json;
+          recurring_series_start_date?: string | null;
+          recurring_series_end_date?: string | null;
+          recurring_series_max_occurrences?: number | null;
+          recurring_next_occurrence_on?: string | null;
+          recurring_contract_paused?: boolean;
         };
         Relationships: [
           {
@@ -512,6 +527,7 @@ export interface Database {
           resolution_by: string | null;
           created_at: string;
           updated_at: string;
+          recurring_occurrence_id: string | null;
         };
         Insert: {
           id?: number;
@@ -558,6 +574,7 @@ export interface Database {
           resolution_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          recurring_occurrence_id?: string | null;
         };
         Update: {
           listing_id?: string;
@@ -602,6 +619,7 @@ export interface Database {
           resolution_at?: string | null;
           resolution_by?: string | null;
           updated_at?: string;
+          recurring_occurrence_id?: string | null;
         };
         Relationships: [
           {
@@ -626,6 +644,92 @@ export interface Database {
             referencedColumns: ["id"];
           }
         ];
+      };
+      recurring_contracts: {
+        Row: {
+          id: string;
+          listing_id: string;
+          lister_id: string;
+          cleaner_id: string | null;
+          frequency: string;
+          agreed_amount_cents: number;
+          platform_fee_percentage: number;
+          series_start_date: string;
+          series_end_date: string | null;
+          max_occurrences: number | null;
+          visits_completed: number;
+          paused_at: string | null;
+          resume_scheduled_for: string | null;
+          next_occurrence_on: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          listing_id: string;
+          lister_id: string;
+          cleaner_id?: string | null;
+          frequency: string;
+          agreed_amount_cents: number;
+          platform_fee_percentage?: number;
+          series_start_date: string;
+          series_end_date?: string | null;
+          max_occurrences?: number | null;
+          visits_completed?: number;
+          paused_at?: string | null;
+          resume_scheduled_for?: string | null;
+          next_occurrence_on?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          cleaner_id?: string | null;
+          frequency?: string;
+          agreed_amount_cents?: number;
+          platform_fee_percentage?: number;
+          series_start_date?: string;
+          series_end_date?: string | null;
+          max_occurrences?: number | null;
+          visits_completed?: number;
+          paused_at?: string | null;
+          resume_scheduled_for?: string | null;
+          next_occurrence_on?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      recurring_occurrences: {
+        Row: {
+          id: string;
+          contract_id: string;
+          scheduled_date: string;
+          status: string;
+          job_id: number | null;
+          skip_reason_key: string | null;
+          skip_reason_detail: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          scheduled_date: string;
+          status: string;
+          job_id?: number | null;
+          skip_reason_key?: string | null;
+          skip_reason_detail?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          scheduled_date?: string;
+          status?: string;
+          job_id?: number | null;
+          skip_reason_key?: string | null;
+          skip_reason_detail?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       job_lister_cancellation_audit: {
         Row: {

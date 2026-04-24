@@ -55,6 +55,10 @@ import { JOB_TYPED_SELECT } from "@/lib/supabase/queries";
 import { getSiteUrl } from "@/lib/site";
 import { clearExpiredMarketplaceBanIfNeeded } from "@/lib/auth/clear-expired-ban";
 import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
+import {
+  initializeRecurringContractForNewJob,
+  scheduleNextRecurringVisitAfterJobCompleted,
+} from "@/lib/recurring/recurring-contract-internal";
 
 async function maybeNotifyCleanerJobWonStripePayoutSetup(params: {
   cleanerId: string;
@@ -156,6 +160,15 @@ async function applyAcceptedBidListingSideEffects(
     };
   }
   return { ok: true };
+}
+
+async function rollbackListingJobAfterRecurringInitFailure(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  listingId: string,
+  jobId: number
+): Promise<void> {
+  await admin.from("recurring_contracts").delete().eq("listing_id", listingId);
+  await admin.from("jobs").delete().eq("id", jobId);
 }
 
 function revalidateAfterListerAcceptedBid(listingId: string, jobId: number | string) {
@@ -457,6 +470,22 @@ export async function finalizeBidAcceptanceCore(params: {
     insertedThisRequest = true;
   }
 
+  const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
+
+  const initRes = await initializeRecurringContractForNewJob(admin, {
+    listingId: params.listingId,
+    listerId: listRow.lister_id,
+    cleanerId,
+    jobId: numericJobId,
+    agreedAmountCents: amountCents,
+  });
+  if (!initRes.ok) {
+    if (insertedThisRequest) {
+      await rollbackListingJobAfterRecurringInitFailure(admin, params.listingId, numericJobId);
+    }
+    return { ok: false, error: initRes.error };
+  }
+
   const sideFx = await applyAcceptedBidListingSideEffects(
     admin,
     params.listingId,
@@ -464,17 +493,7 @@ export async function finalizeBidAcceptanceCore(params: {
   );
   if (!sideFx.ok) {
     if (insertedThisRequest) {
-      const idForDelete = typeof jobId === "number" ? jobId : Number(jobId);
-      const { error: delErr } = await admin.from("jobs").delete().eq("id", idForDelete);
-      if (delErr) {
-        console.error("[listing→job] rollback job delete failed after side-effects error", {
-          listingId: params.listingId,
-          jobId,
-          sideFxError: sideFx.error,
-          code: delErr.code,
-          message: delErr.message,
-        });
-      }
+      await rollbackListingJobAfterRecurringInitFailure(admin, params.listingId, numericJobId);
     } else {
       console.error("[listing→job] side-effects failed; job may exist from concurrent insert", {
         listingId: params.listingId,
@@ -484,8 +503,6 @@ export async function finalizeBidAcceptanceCore(params: {
     }
     return { ok: false, error: sideFx.error };
   }
-
-  const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
   const listingTitle = params.listingTitle ?? listRow.title ?? null;
   try {
@@ -637,6 +654,8 @@ export async function secureJobAtPrice(
 
   let jobId: number | string;
   let skipBuyNowWinnerNotifications = false;
+  /** True when this request created a new job row (not unique-race reuse). */
+  let insertedBuyNowThisSession = false;
 
   if (insertError || !inserted) {
     if (insertError && isPostgresUniqueViolation(insertError)) {
@@ -667,9 +686,24 @@ export async function secureJobAtPrice(
     }
   } else {
     jobId = (inserted as { id: number | string }).id;
+    insertedBuyNowThisSession = true;
   }
 
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
+
+  const buyNowInit = await initializeRecurringContractForNewJob(admin, {
+    listingId: listRow.id,
+    listerId: listRow.lister_id,
+    cleanerId: session.user.id,
+    jobId: numericJobId,
+    agreedAmountCents: buyNowCents,
+  });
+  if (!buyNowInit.ok) {
+    if (insertedBuyNowThisSession) {
+      await rollbackListingJobAfterRecurringInitFailure(admin, listRow.id, numericJobId);
+    }
+    return { ok: false, error: buyNowInit.error };
+  }
 
   if (admin) {
     const { data: loserBidRows } = await admin
@@ -1718,7 +1752,7 @@ export async function ensureJobChecklistIfEmpty(
 
   const { data: job } = await supabase
     .from("jobs")
-    .select("id, status, listing_id, lister_id, winner_id")
+    .select("id, status, listing_id, lister_id, winner_id, recurring_occurrence_id")
     .eq("id", numericJobId as never)
     .maybeSingle();
 
@@ -1729,9 +1763,11 @@ export async function ensureJobChecklistIfEmpty(
     listing_id: string;
     lister_id: string;
     winner_id: string | null;
+    recurring_occurrence_id: string | null;
   };
 
   if (checklistJob.status !== "in_progress") return;
+  if (trimStr(checklistJob.recurring_occurrence_id)) return;
 
   const {
     data: { session },
@@ -1793,7 +1829,7 @@ export async function approveJobStart(
 
   const { data: job, error } = await supabase
     .from("jobs")
-    .select("id, lister_id, winner_id, status, listing_id, payment_intent_id")
+    .select("id, lister_id, winner_id, status, listing_id, payment_intent_id, recurring_occurrence_id")
     .eq("id", jobId as never)
     .maybeSingle();
 
@@ -1808,6 +1844,7 @@ export async function approveJobStart(
     status: string;
     listing_id: string;
     payment_intent_id?: string | null;
+    recurring_occurrence_id?: string | null;
   };
 
   if (approveRow.lister_id !== session.user.id) {
@@ -1846,7 +1883,10 @@ export async function approveJobStart(
     .eq("job_id", numericJobId as never)
     .limit(1);
 
-  if (!existingItems || existingItems.length === 0) {
+  if (
+    (!existingItems || existingItems.length === 0) &&
+    !trimStr(approveRow.recurring_occurrence_id)
+  ) {
     const { data: listingForChecklist } = await supabase
       .from("listings")
       .select("addons, special_areas")
@@ -2231,7 +2271,7 @@ export async function markJobChecklistFinished(
   let jobQuery = supabase
     .from("jobs")
     .select(
-      "id, lister_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, auto_release_at, auto_release_at_original"
+      "id, lister_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, auto_release_at, auto_release_at_original, recurring_occurrence_id"
     );
   if (Number.isFinite(numericId) && numericId > 0 && /^\d+$/.test(raw)) {
     jobQuery = jobQuery.eq("id", numericId);
@@ -2265,6 +2305,7 @@ export async function markJobChecklistFinished(
     | "cleaner_confirmed_at"
     | "auto_release_at"
     | "auto_release_at_original"
+    | "recurring_occurrence_id"
   >;
 
   if (row.winner_id !== session.user.id) {
@@ -2283,7 +2324,7 @@ export async function markJobChecklistFinished(
     };
   }
 
-  if (row.status === "in_progress") {
+  if (row.status === "in_progress" && !trimStr(row.recurring_occurrence_id)) {
     const jid = typeof row.id === "number" ? row.id : Number(row.id);
     const readyMap = await getCleanerReadyToRequestPaymentByJobId(supabase, [jid]);
     if (!readyMap.get(jid)) {
@@ -3095,7 +3136,7 @@ export async function finalizeJobPayment(
   const { data: job, error } = await supabase
     .from("jobs")
     .select(
-      "id, lister_id, winner_id, status, cleaner_confirmed_complete, listing_id, agreed_amount_cents"
+      "id, lister_id, winner_id, status, cleaner_confirmed_complete, listing_id, agreed_amount_cents, recurring_occurrence_id"
     )
     .eq("id", jobId as never)
     .maybeSingle();
@@ -3113,6 +3154,7 @@ export async function finalizeJobPayment(
     | "cleaner_confirmed_complete"
     | "listing_id"
     | "agreed_amount_cents"
+    | "recurring_occurrence_id"
   >;
 
   if (row.lister_id !== user.id) {
@@ -3136,45 +3178,49 @@ export async function finalizeJobPayment(
   const admin = createSupabaseAdminClient();
   const gatedClient = (admin ?? supabase) as SupabaseClient<Database>;
 
+  const isRecurringVisit = Boolean(trimStr(row.recurring_occurrence_id));
+
   // New flow: ready for release when checklist is complete and 3+ after-photos are uploaded
   // (no separate "mark complete" action; cleaner completing checklist + photos is enough)
-  const { data: items, error: checklistError } = await gatedClient
-    .from("job_checklist_items")
-    .select("is_completed")
-    .eq("job_id", numericJobId as never);
+  if (!isRecurringVisit) {
+    const { data: items, error: checklistError } = await gatedClient
+      .from("job_checklist_items")
+      .select("is_completed")
+      .eq("job_id", numericJobId as never);
 
-  if (checklistError) {
-    return { ok: false, error: checklistError.message };
-  }
+    if (checklistError) {
+      return { ok: false, error: checklistError.message };
+    }
 
-  const allCompleted =
-    (items ?? []).length > 0 &&
-    (items ?? []).every((row: { is_completed: boolean }) => row.is_completed);
+    const allCompleted =
+      (items ?? []).length > 0 &&
+      (items ?? []).every((r: { is_completed: boolean }) => r.is_completed);
 
-  if (!allCompleted) {
-    return {
-      ok: false,
-      error:
-        "All checklist tasks must be completed before payment can be finalized.",
-    };
-  }
+    if (!allCompleted) {
+      return {
+        ok: false,
+        error:
+          "All checklist tasks must be completed before payment can be finalized.",
+      };
+    }
 
-  // Require at least 3 after-photos (new flow: no separate "mark complete" button)
-  const { data: afterFiles, error: afterError } = await gatedClient.storage
-    .from("condition-photos")
-    .list(`jobs/${numericJobId}/after`, { limit: 100 });
-  if (afterError) {
-    return { ok: false, error: afterError.message };
-  }
-  const afterCount = (afterFiles ?? []).filter(
-    (f) => f.name && !f.name.startsWith("thumb_")
-  ).length;
-  if (afterCount < 3) {
-    return {
-      ok: false,
-      error:
-        "At least 3 after-photos must be uploaded before you can release payment.",
-    };
+    // Require at least 3 after-photos (new flow: no separate "mark complete" button)
+    const { data: afterFiles, error: afterError } = await gatedClient.storage
+      .from("condition-photos")
+      .list(`jobs/${numericJobId}/after`, { limit: 100 });
+    if (afterError) {
+      return { ok: false, error: afterError.message };
+    }
+    const afterCount = (afterFiles ?? []).filter(
+      (f) => f.name && !f.name.startsWith("thumb_")
+    ).length;
+    if (afterCount < 3) {
+      return {
+        ok: false,
+        error:
+          "At least 3 after-photos must be uploaded before you can release payment.",
+      };
+    }
   }
 
   const settingsForRelease = await getGlobalSettings();
@@ -3243,11 +3289,19 @@ export async function finalizeJobPayment(
     return { ok: false, error: updateError.message };
   }
 
-  if (row.listing_id) {
+  if (row.listing_id && !isRecurringVisit) {
     await supabase
       .from("listings")
       .update({ status: "ended" } as never)
       .eq("id", row.listing_id as never);
+  }
+
+  if (admin && isRecurringVisit) {
+    try {
+      await scheduleNextRecurringVisitAfterJobCompleted(admin, numericJobId);
+    } catch (e) {
+      console.error("[finalizeJobPayment] scheduleNextRecurringVisitAfterJobCompleted", e);
+    }
   }
 
   if (row.winner_id) {
@@ -3351,7 +3405,7 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
   const { data: jobs, error } = await admin
     .from("jobs")
     .select(
-      "id, listing_id, lister_id, winner_id, agreed_amount_cents, auto_release_at, auto_release_at_original, cleaner_confirmed_at"
+      "id, listing_id, lister_id, winner_id, agreed_amount_cents, auto_release_at, auto_release_at_original, cleaner_confirmed_at, recurring_occurrence_id"
     )
     .eq("status", "completed_pending_approval")
     .eq("cleaner_confirmed_complete", true)
@@ -3370,6 +3424,7 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
     auto_release_at?: string | null;
     auto_release_at_original?: string | null;
     cleaner_confirmed_at?: string | null;
+    recurring_occurrence_id?: string | null;
   }[];
 
   const nowMs = Date.now();
@@ -3433,11 +3488,20 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
       errors.push(`Job ${job.id} status: ${updateError.message}`);
     }
 
-    if (job.listing_id) {
+    const autoRelRecurring = Boolean(trimStr(job.recurring_occurrence_id));
+    if (job.listing_id && !autoRelRecurring) {
       await admin
         .from("listings")
         .update({ status: "ended" } as never)
         .eq("id", job.listing_id);
+    }
+
+    if (autoRelRecurring) {
+      try {
+        await scheduleNextRecurringVisitAfterJobCompleted(admin, job.id);
+      } catch (e) {
+        console.error("[processAutoRelease] scheduleNextRecurringVisitAfterJobCompleted", e);
+      }
     }
 
     if (job.winner_id) {

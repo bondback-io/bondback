@@ -143,6 +143,15 @@ export function buildNotificationPersistFields(
     case "listing_expired_no_bids":
       title = "Auction ended — no bids";
       break;
+    case "recurring_next_visit":
+      title = jobId != null ? `Next recurring visit · Job #${jobId}` : "Next recurring visit";
+      break;
+    case "recurring_contract":
+      title = "Recurring contract update";
+      break;
+    case "recurring_occurrence_skipped":
+      title = "Recurring visit skipped";
+      break;
     default:
       title = "Update";
   }

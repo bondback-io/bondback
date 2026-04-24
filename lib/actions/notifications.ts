@@ -55,7 +55,10 @@ export type NotificationType =
   | "lister_payout_blocked_cleaner_stripe"
   | "bid_outbid"
   | "listing_assigned_buy_now"
-  | "listing_expired_no_bids";
+  | "listing_expired_no_bids"
+  | "recurring_next_visit"
+  | "recurring_contract"
+  | "recurring_occurrence_skipped";
 
 export type NewJobChannelDelivery = Partial<{
   email: boolean;

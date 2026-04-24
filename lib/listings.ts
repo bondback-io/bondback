@@ -344,6 +344,9 @@ export function buildListingInsertRow(params: {
   deep_clean_purpose?: string | null;
   is_urgent?: boolean;
   service_details?: Json | null;
+  recurring_series_start_date?: string | null;
+  recurring_series_end_date?: string | null;
+  recurring_series_max_occurrences?: number | null;
 }): ListingInsertPayload {
   const propertyDescription = params.property_description?.trim() || null;
   const propertyAddress = params.property_address?.trim() || null;
@@ -387,5 +390,8 @@ export function buildListingInsertRow(params: {
     deep_clean_purpose: params.deep_clean_purpose ?? null,
     is_urgent: params.is_urgent === true,
     service_details: (params.service_details ?? {}) as Json,
+    recurring_series_start_date: params.recurring_series_start_date ?? null,
+    recurring_series_end_date: params.recurring_series_end_date ?? null,
+    recurring_series_max_occurrences: params.recurring_series_max_occurrences ?? null,
   };
 }

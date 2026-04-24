@@ -19,6 +19,17 @@ export async function getCleanerReadyToRequestPaymentByJobId(
   }
   if (jobIds.length === 0) return out;
 
+  const { data: recurringMeta } = await supabase
+    .from("jobs")
+    .select("id, recurring_occurrence_id")
+    .in("id", jobIds as never);
+  const recurringJobIds = new Set<number>();
+  for (const m of recurringMeta ?? []) {
+    const id = Number((m as { id: number; recurring_occurrence_id: string | null }).id);
+    const occ = (m as { recurring_occurrence_id: string | null }).recurring_occurrence_id;
+    if (Number.isFinite(id) && occ != null && String(occ).trim()) recurringJobIds.add(id);
+  }
+
   const { data: checklistRows, error: checklistError } = await supabase
     .from("job_checklist_items")
     .select("job_id, is_completed")
@@ -40,6 +51,11 @@ export async function getCleanerReadyToRequestPaymentByJobId(
   const storageChecks = await Promise.all(
     jobIds.map(async (jobId) => {
       const items = byJob.get(jobId) ?? [];
+      if (recurringJobIds.has(jobId)) {
+        if (items.length === 0) return [jobId, true] as const;
+        const allDone = items.every((i) => i.is_completed === true);
+        return [jobId, allDone] as const;
+      }
       const allCompleted =
         items.length > 0 && items.every((i) => i.is_completed === true);
       if (!allCompleted) {

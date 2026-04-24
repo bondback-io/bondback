@@ -136,6 +136,8 @@ import { compressImage } from "@/lib/utils/compressImage";
 import { NEXT_IMAGE_SIZES_THUMB_GRID } from "@/lib/next-image-sizes";
 import { getStateFromPostcode, formatLocationWithState } from "@/lib/state-from-postcode";
 import { getBondGuidelineForState } from "@/lib/bond-cleaning-guidelines";
+import { normalizeServiceType } from "@/lib/service-types";
+import { JobRecurringContractPanel } from "@/components/features/job-recurring-contract-panel";
 import { canSendJobChatMessages } from "@/lib/chat-unlock";
 import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction-control";
 import { JobPaymentTimeline, type JobPaymentTimelineProps } from "@/components/features/job-payment-timeline";
@@ -2835,6 +2837,16 @@ export function JobDetail({
               closedDisputeCaseHref={disputeCaseHref}
             />
           )}
+          {hasActiveJob &&
+            !listerCompletedBoostTidy &&
+            normalizeServiceType(listing.service_type) === "recurring_house_cleaning" && (
+              <JobRecurringContractPanel
+                listingId={listingId}
+                isJobLister={!!isJobLister}
+                isJobCleaner={!!isJobCleaner}
+                allowMutations={!isJobCancelled}
+              />
+            )}
 
           {hasActiveJob &&
             isJobCleaner &&

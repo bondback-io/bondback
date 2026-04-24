@@ -176,16 +176,27 @@ export function getListingCardServiceUi(listing: ListingRow): ListingCardService
       (listing as { recurring_frequency?: string | null }).recurring_frequency
     );
     const sched = details?.recurring_preferred_schedule?.trim();
+    const lr = listing as {
+      recurring_next_occurrence_on?: string | null;
+      recurring_contract_paused?: boolean | null;
+      recurring_series_start_date?: string | null;
+    };
     const parts: string[] = [];
     if (freq) parts.push(freq);
     if (sched) parts.push(sched);
-    const mov = listing.move_out_date ? parseISO(String(listing.move_out_date)) : null;
-    if (mov && isValid(mov)) {
-      parts.push(`Next: ${format(mov, "d MMM yyyy")}`);
+    const nextSource =
+      lr.recurring_next_occurrence_on ??
+      listing.move_out_date ??
+      lr.recurring_series_start_date ??
+      null;
+    const nextD = nextSource ? parseISO(String(nextSource)) : null;
+    if (nextD && isValid(nextD)) {
+      parts.push(`Next: ${format(nextD, "d MMM yyyy")}`);
     } else if (Array.isArray(listing.preferred_dates) && listing.preferred_dates.length > 0) {
       const first = parseISO(String(listing.preferred_dates[0]));
       if (isValid(first)) parts.push(`Preferred: ${format(first, "d MMM yyyy")}`);
     }
+    parts.push(lr.recurring_contract_paused === true ? "Paused" : "Active");
     highlightLine = parts.length > 0 ? parts.join(" · ") : freq || null;
   } else if (svc === "deep_clean") {
     const inten = deepCleanIntensityLabel(details?.deep_clean_intensity);

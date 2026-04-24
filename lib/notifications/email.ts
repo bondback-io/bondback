@@ -117,7 +117,10 @@ export type NotificationType =
   | "lister_payout_blocked_cleaner_stripe"
   | "bid_outbid"
   | "listing_assigned_buy_now"
-  | "listing_expired_no_bids";
+  | "listing_expired_no_bids"
+  | "recurring_next_visit"
+  | "recurring_contract"
+  | "recurring_occurrence_skipped";
 
 export type SendEmailAttachment = {
   filename: string;
@@ -455,6 +458,9 @@ export async function buildNotificationEmail(
     bid_outbid: `Someone bid lower — you’re not leading anymore – Bond Back`,
     listing_assigned_buy_now: `Fixed price taken — your bid’s closed – Bond Back`,
     listing_expired_no_bids: `Your auction ended with no bids – Bond Back`,
+    recurring_next_visit: `Next recurring clean — Job #${id} – Bond Back`,
+    recurring_contract: `Recurring contract update – Bond Back`,
+    recurring_occurrence_skipped: `Recurring visit skipped – Bond Back`,
   };
 
   let element: React.ReactElement;
@@ -606,7 +612,10 @@ export async function buildNotificationEmail(
     case "job_status_update":
     case "early_accept_declined":
     case "listing_public_comment":
-    case "new_job_in_area": {
+    case "new_job_in_area":
+    case "recurring_next_visit":
+    case "recurring_contract":
+    case "recurring_occurrence_skipped": {
       const headlines: Record<string, string> = {
         after_photos_uploaded: "After photos are in",
         auto_release_warning: "Auto-release reminder",
@@ -615,6 +624,9 @@ export async function buildNotificationEmail(
         early_accept_declined: "Early pick update",
         listing_public_comment: "New public comment",
         new_job_in_area: "New job in your area",
+        recurring_next_visit: "Next recurring visit",
+        recurring_contract: "Recurring contract",
+        recurring_occurrence_skipped: "Visit skipped",
       };
       const h =
         type === "new_job_in_area" && browseRounded != null

@@ -251,6 +251,9 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
       airbnbHostNotes: z.string().max(2000).optional(),
       recurringPreferredSchedule: z.string().max(500).optional(),
       recurringFocusNotes: z.string().max(2000).optional(),
+      recurringSeriesStartDate: z.date().optional(),
+      recurringSeriesEndDate: z.date().optional(),
+      recurringSeriesMaxOccurrences: z.string().max(10).optional(),
       deepCleanIntensity: deepCleanIntensityZodEnum.optional(),
       deepFocusAreas: z.array(deepFocusZodEnum).default([]),
       deepSpecialRequests: z.string().max(2000).optional(),
@@ -274,6 +277,38 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
           path: ["recurringFrequency"],
           message: "Select how often you need cleaning",
         });
+      }
+      if (data.serviceType === "recurring_house_cleaning" && !data.recurringSeriesStartDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["recurringSeriesStartDate"],
+          message: "Select the first clean date",
+        });
+      }
+      if (
+        data.serviceType === "recurring_house_cleaning" &&
+        data.recurringSeriesStartDate &&
+        data.recurringSeriesEndDate &&
+        data.recurringSeriesEndDate < data.recurringSeriesStartDate
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["recurringSeriesEndDate"],
+          message: "Series end date must be on or after the first clean",
+        });
+      }
+      if (data.serviceType === "recurring_house_cleaning") {
+        const rawMax = data.recurringSeriesMaxOccurrences?.trim();
+        if (rawMax) {
+          const n = parseInt(rawMax, 10);
+          if (!Number.isFinite(n) || n < 1 || n > 520) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["recurringSeriesMaxOccurrences"],
+              message: "Enter a number of visits between 1 and 520 (or leave blank)",
+            });
+          }
+        }
       }
       if (data.serviceType === "deep_clean") {
         if (!data.deepCleanIntensity) {
@@ -512,6 +547,9 @@ export function NewListingForm({
       airbnbHostNotes: "",
       recurringPreferredSchedule: "",
       recurringFocusNotes: "",
+      recurringSeriesStartDate: undefined,
+      recurringSeriesEndDate: undefined,
+      recurringSeriesMaxOccurrences: "",
       deepCleanIntensity: undefined,
       deepFocusAreas: [],
       deepSpecialRequests: "",
@@ -534,6 +572,9 @@ export function NewListingForm({
   useEffect(() => {
     if (serviceTypeWatched !== "recurring_house_cleaning") {
       form.setValue("recurringFrequency", undefined, { shouldValidate: true });
+      form.setValue("recurringSeriesStartDate", undefined, { shouldValidate: true });
+      form.setValue("recurringSeriesEndDate", undefined, { shouldValidate: true });
+      form.setValue("recurringSeriesMaxOccurrences", "", { shouldValidate: true });
     }
     if (serviceTypeWatched !== "airbnb_turnover") {
       form.setValue("airbnbGuestCapacity", undefined, { shouldValidate: true });
@@ -792,9 +833,29 @@ export function NewListingForm({
       }
 
       const durationDays = values.durationDays;
-      const moveOutDateStr = values.moveOutDate
-        ? format(values.moveOutDate, "yyyy-MM-dd")
-        : null;
+      const recurringStartStr =
+        values.serviceType === "recurring_house_cleaning" && values.recurringSeriesStartDate
+          ? format(values.recurringSeriesStartDate, "yyyy-MM-dd")
+          : null;
+      const recurringEndStr =
+        values.serviceType === "recurring_house_cleaning" && values.recurringSeriesEndDate
+          ? format(values.recurringSeriesEndDate, "yyyy-MM-dd")
+          : null;
+      const recurringMaxParsed =
+        values.serviceType === "recurring_house_cleaning" &&
+        values.recurringSeriesMaxOccurrences?.trim()
+          ? parseInt(values.recurringSeriesMaxOccurrences.trim(), 10)
+          : null;
+      const recurringMaxOccurrences =
+        recurringMaxParsed != null && Number.isFinite(recurringMaxParsed) && recurringMaxParsed >= 1
+          ? recurringMaxParsed
+          : null;
+      const moveOutDateStr =
+        values.serviceType === "recurring_house_cleaning"
+          ? recurringStartStr
+          : values.moveOutDate
+            ? format(values.moveOutDate, "yyyy-MM-dd")
+            : null;
       const endTime = computeListingEndTimeIso({ durationDays });
 
       const metaLines: string[] = [];
@@ -918,6 +979,9 @@ export function NewListingForm({
         end_date: endTime.slice(0, 10),
         platform_fee_percentage: Math.max(0, Math.min(30, platformFeeSnap)),
         preferred_dates: moveOutDateStr ? [moveOutDateStr] : null,
+        recurring_series_start_date: recurringStartStr,
+        recurring_series_end_date: recurringEndStr,
+        recurring_series_max_occurrences: recurringMaxOccurrences,
         property_condition: values.propertyCondition,
         property_levels: values.propertyLevels,
         service_type: values.serviceType,
@@ -1127,6 +1191,14 @@ export function NewListingForm({
                   v.moveOutDate instanceof Date
                     ? v.moveOutDate.toISOString()
                     : v.moveOutDate,
+                recurringSeriesStartDate:
+                  v.recurringSeriesStartDate instanceof Date
+                    ? v.recurringSeriesStartDate.toISOString()
+                    : v.recurringSeriesStartDate,
+                recurringSeriesEndDate:
+                  v.recurringSeriesEndDate instanceof Date
+                    ? v.recurringSeriesEndDate.toISOString()
+                    : v.recurringSeriesEndDate,
               } as Record<string, unknown>,
             });
             toast({
@@ -1619,6 +1691,103 @@ export function NewListingForm({
                       {form.formState.errors.recurringFrequency && (
                         <p className="text-xs text-destructive">
                           {form.formState.errors.recurringFrequency.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>First clean date</Label>
+                      <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+                        This starts your recurring series and is shown as the next visit until a contract is active.
+                      </p>
+                      <Controller
+                        control={form.control}
+                        name="recurringSeriesStartDate"
+                        render={({ field }) => (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                type="button"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal dark:bg-gray-800 dark:border-gray-700",
+                                  !field.value && "text-muted-foreground dark:text-gray-400"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {field.value
+                                  ? format(field.value, "d MMM yyyy")
+                                  : "Select first clean date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={(d) => field.onChange(d ?? undefined)}
+                                fromDate={new Date()}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      />
+                      {form.formState.errors.recurringSeriesStartDate && (
+                        <p className="text-xs text-destructive">
+                          {form.formState.errors.recurringSeriesStartDate.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Series end date (optional)</Label>
+                      <Controller
+                        control={form.control}
+                        name="recurringSeriesEndDate"
+                        render={({ field }) => (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                type="button"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal dark:bg-gray-800 dark:border-gray-700",
+                                  !field.value && "text-muted-foreground dark:text-gray-400"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {field.value
+                                  ? format(field.value, "d MMM yyyy")
+                                  : "No end date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={(d) => field.onChange(d ?? undefined)}
+                                fromDate={form.watch("recurringSeriesStartDate") ?? new Date()}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      />
+                      {form.formState.errors.recurringSeriesEndDate && (
+                        <p className="text-xs text-destructive">
+                          {form.formState.errors.recurringSeriesEndDate.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="recurringSeriesMaxOccurrences">Max paid visits (optional)</Label>
+                      <Input
+                        id="recurringSeriesMaxOccurrences"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="e.g. 12 — leave blank for no cap"
+                        className="dark:bg-gray-800 dark:border-gray-700"
+                        {...form.register("recurringSeriesMaxOccurrences")}
+                      />
+                      {form.formState.errors.recurringSeriesMaxOccurrences && (
+                        <p className="text-xs text-destructive">
+                          {form.formState.errors.recurringSeriesMaxOccurrences.message}
                         </p>
                       )}
                     </div>
@@ -2761,6 +2930,7 @@ export function NewListingForm({
                       | "propertyLevels"
                       | "moveOutDate"
                       | "recurringFrequency"
+                      | "recurringSeriesStartDate"
                       | "deepCleanIntensity"
                     )[] = ["bedrooms", "bathrooms"];
                     if (st === "bond_cleaning") {
@@ -2774,7 +2944,7 @@ export function NewListingForm({
                       fields.push("moveOutDate");
                     }
                     if (st === "recurring_house_cleaning") {
-                      fields.push("recurringFrequency");
+                      fields.push("recurringFrequency", "recurringSeriesStartDate");
                     }
                     if (st === "deep_clean") {
                       fields.push("deepCleanIntensity");
