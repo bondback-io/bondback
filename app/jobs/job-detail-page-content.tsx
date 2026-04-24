@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Briefcase } from "lucide-react";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
+import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
+import { normalizeServiceType } from "@/lib/service-types";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import { ensureJobChecklistIfEmpty } from "@/lib/actions/jobs";
 import {
@@ -242,6 +244,19 @@ export async function JobDetailPageContent({
     settings,
     listingRow.service_type ?? null
   );
+
+  const serviceAddonsMerged = mergeServiceAddonsChecklists(
+    (settings as { service_addons_checklists?: unknown } | null)?.service_addons_checklists
+  );
+  const listingSvcForAddons = normalizeServiceType(listingRow.service_type);
+  const pricedAddonLabelById =
+    listingSvcForAddons === "airbnb_turnover" ||
+    listingSvcForAddons === "recurring_house_cleaning" ||
+    listingSvcForAddons === "deep_clean"
+      ? Object.fromEntries(
+          serviceAddonsMerged[listingSvcForAddons].priced.map((p) => [p.id, p.name])
+        )
+      : {};
 
   const jobId = job?.id ?? null;
   const jobAgreed = (job as { agreed_amount_cents?: number | null })
@@ -817,6 +832,7 @@ export async function JobDetailPageContent({
           pendingListerAdditionalPayment={pendingListerAdditionalPayment}
           listerNonResponsiveCancel={listerNonResponsiveCancel}
           disputeCaseHref={disputeCaseHref}
+          pricedAddonLabelById={pricedAddonLabelById}
         />
       </section>
     </OfflineJobsPrimer>

@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { parsePlatformFeePercentByServiceType } from "@/lib/platform-fee";
 import { resolvePricingModifiersFromGlobal } from "@/lib/pricing-modifiers";
+import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
 import { NewListingFormLazy } from "./new-listing-form-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -113,6 +114,10 @@ const NewListingPage = async () => {
   const allowTwoMinuteAuctionTest =
     (settings as { allow_two_minute_auction_test?: boolean } | null)?.allow_two_minute_auction_test === true;
 
+  const serviceAddonsChecklists = mergeServiceAddonsChecklists(
+    (settings as { service_addons_checklists?: unknown } | null)?.service_addons_checklists
+  );
+
   return (
     <NewListingFormLazy
       listerId={session.user.id}
@@ -121,6 +126,7 @@ const NewListingPage = async () => {
       feePercentage={feePercentage}
       feePercentageByService={feePercentageByService}
       pricingModifiers={pricingModifiers}
+      serviceAddonsChecklists={serviceAddonsChecklists}
       allowLowAmountListings={allowLowAmountListings}
       allowTwoMinuteAuctionTest={allowTwoMinuteAuctionTest}
     />

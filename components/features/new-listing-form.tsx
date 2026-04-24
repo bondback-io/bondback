@@ -137,10 +137,11 @@ import {
   deepFocusAreaLabel,
 } from "@/lib/listing-service-details";
 import type { Json } from "@/types/supabase";
-
-const listingAddonZodEnum = z.enum(
-  LISTING_ADDON_KEYS as unknown as [string, ...string[]]
-);
+import {
+  allowedServicePricedAddonIds,
+  sumSelectedServicePricedAddonsAud,
+  type ServiceAddonsChecklistsMerged,
+} from "@/lib/service-addons-checklists";
 
 const serviceTypeZodEnum = z.enum(SERVICE_TYPES as unknown as [string, ...string[]]);
 
@@ -215,7 +216,11 @@ function reservePriceMinMessage(minAud: number): string {
   return `Starting price must be at least ${label} AUD`;
 }
 
-function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolean) {
+function buildListingSchema(
+  minReserveAud: number,
+  allowTwoMinuteAuction: boolean,
+  serviceAddonsMerged: ServiceAddonsChecklistsMerged
+) {
   const allowedDurations = getAuctionDurationDayChoices(allowTwoMinuteAuction);
   return z
     .object({
@@ -237,7 +242,7 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
         .trim()
         .regex(/^\d{4}$/, "Postcode must be a 4-digit Australian postcode"),
       propertyAddress: z.string().max(200).optional(),
-      addons: z.array(listingAddonZodEnum).default([]),
+      addons: z.array(z.string()).default([]),
       propertyDescription: z.string().max(4000).optional(),
       instructions: z.string().max(2000).optional(),
       moveOutDate: z.date().optional(),
@@ -334,6 +339,36 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
             message: "Buy-now price must be lower than starting price",
           });
       }
+      const st = data.serviceType as ServiceTypeKey;
+      const addonList = data.addons ?? [];
+      if (st === "bond_cleaning") {
+        for (let i = 0; i < addonList.length; i++) {
+          const a = addonList[i] ?? "";
+          if (!(LISTING_ADDON_KEYS as readonly string[]).includes(a)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["addons", i],
+              message: "Invalid add-on",
+            });
+          }
+        }
+      } else if (
+        st === "airbnb_turnover" ||
+        st === "recurring_house_cleaning" ||
+        st === "deep_clean"
+      ) {
+        const allowed = allowedServicePricedAddonIds(st, serviceAddonsMerged);
+        for (let i = 0; i < addonList.length; i++) {
+          const a = addonList[i] ?? "";
+          if (!allowed.has(a)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["addons", i],
+              message: "Invalid add-on",
+            });
+          }
+        }
+      }
     });
 }
 
@@ -341,7 +376,8 @@ type ListingFormValues = z.infer<ReturnType<typeof buildListingSchema>>;
 
 function calculatePricingParts(
   values: ListingFormValues,
-  pricingModifiers: PricingModifiersConfig
+  pricingModifiers: PricingModifiersConfig,
+  serviceAddonsMerged: ServiceAddonsChecklistsMerged
 ): {
   baseCoreAud: number;
   extrasAud: number;
@@ -349,24 +385,28 @@ function calculatePricingParts(
   adjustmentAud: number;
   adjustedTotalAud: number;
 } {
+  const svc = normalizeServiceType(values.serviceType);
   const baseCoreAud = computeBaseListingPriceAud(pricingModifiers, {
     bedrooms: values.bedrooms,
     bathrooms: values.bathrooms,
     condition: values.propertyCondition as PropertyConditionKey,
     levels: values.propertyLevels as PropertyLevelsKey,
-    serviceType: normalizeServiceType(values.serviceType),
+    serviceType: svc,
   });
   const beds = values.bedrooms;
-  const extrasAud = (values.addons ?? []).reduce(
-    (sum, key) =>
-      sum +
-      getListingAddonPriceFromModifiers(
-        pricingModifiers,
-        key as ListingAddonKey,
-        beds
-      ),
-    0
-  );
+  const extrasAud =
+    svc === "bond_cleaning"
+      ? (values.addons ?? []).reduce(
+          (sum, key) =>
+            sum +
+            getListingAddonPriceFromModifiers(
+              pricingModifiers,
+              key as ListingAddonKey,
+              beds
+            ),
+          0
+        )
+      : sumSelectedServicePricedAddonsAud(svc, values.addons ?? [], serviceAddonsMerged);
   const recurringMult =
     values.serviceType === "recurring_house_cleaning"
       ? recurringFrequencyMultiplier(values.recurringFrequency)
@@ -379,9 +419,10 @@ function calculatePricingParts(
 
 function calculateEstimatedPrice(
   values: ListingFormValues,
-  pricingModifiers: PricingModifiersConfig
+  pricingModifiers: PricingModifiersConfig,
+  serviceAddonsMerged: ServiceAddonsChecklistsMerged
 ): number {
-  return calculatePricingParts(values, pricingModifiers).adjustedTotalAud;
+  return calculatePricingParts(values, pricingModifiers, serviceAddonsMerged).adjustedTotalAud;
 }
 
 function buildAutoListingTitle(values: ListingFormValues): string {
@@ -418,6 +459,8 @@ export type NewListingFormProps = {
   /** Optional admin overrides per service type; missing keys use `feePercentage`. */
   feePercentageByService?: Partial<Record<ServiceTypeKey, number>>;
   pricingModifiers: PricingModifiersConfig;
+  /** Airbnb / recurring / deep: admin-configured priced add-ons + free checklist templates. */
+  serviceAddonsChecklists: ServiceAddonsChecklistsMerged;
   /** When true (admin global setting), starting price may be below $100 for live payment tests. */
   allowLowAmountListings?: boolean;
   /** When true, auction duration may include a 2-minute test option (admin global setting). */
@@ -454,6 +497,7 @@ export function NewListingForm({
   feePercentage = 12,
   feePercentageByService,
   pricingModifiers,
+  serviceAddonsChecklists,
   allowLowAmountListings = false,
   allowTwoMinuteAuctionTest = false,
 }: NewListingFormProps) {
@@ -461,8 +505,8 @@ export function NewListingForm({
     ? LOW_AMOUNT_MIN_RESERVE_AUD
     : DEFAULT_MIN_LISTING_STARTING_PRICE_AUD;
   const listingSchema = useMemo(
-    () => buildListingSchema(minReserveAud, allowTwoMinuteAuctionTest),
-    [minReserveAud, allowTwoMinuteAuctionTest]
+    () => buildListingSchema(minReserveAud, allowTwoMinuteAuctionTest, serviceAddonsChecklists),
+    [minReserveAud, allowTwoMinuteAuctionTest, serviceAddonsChecklists]
   );
   const listingResolver = useMemo(
     () => zodResolver(listingSchema),
@@ -623,12 +667,12 @@ export function NewListingForm({
     [serviceTypeWatched]
   );
   const estimatedPrice = useMemo(
-    () => calculateEstimatedPrice(watchedValues, pricingModifiers),
-    [watchedValues, pricingModifiers]
+    () => calculateEstimatedPrice(watchedValues, pricingModifiers, serviceAddonsChecklists),
+    [watchedValues, pricingModifiers, serviceAddonsChecklists]
   );
   const pricingParts = useMemo(
-    () => calculatePricingParts(watchedValues, pricingModifiers),
-    [watchedValues, pricingModifiers]
+    () => calculatePricingParts(watchedValues, pricingModifiers, serviceAddonsChecklists),
+    [watchedValues, pricingModifiers, serviceAddonsChecklists]
   );
   /** True when user set starting price below the live calculated estimate (property + add-ons). */
   const startingPriceBelowSuggested =
@@ -637,21 +681,43 @@ export function NewListingForm({
     reservePriceWatched > 0 &&
     reservePriceWatched < estimatedPrice;
 
-  // When special areas change in step 1, sync them into addons (auto-add/remove).
+  // Bond only: special areas in step 1 sync into addons (auto-add/remove).
   useEffect(() => {
+    if (serviceTypeWatched !== "bond_cleaning") return;
     const special = watchedValues.specialAreas ?? [];
     const currentAddons = watchedValues.addons ?? [];
     const nonSpecialAddons = currentAddons.filter(
       (a) => !(specialAreaKeys as readonly string[]).includes(a)
     );
-    const merged = [...new Set([...nonSpecialAddons, ...special])] as ListingAddonKey[];
+    const merged = [...new Set([...nonSpecialAddons, ...special])];
     if (
       merged.length !== currentAddons.length ||
       merged.some((a, i) => a !== currentAddons[i])
     ) {
       form.setValue("addons", merged, { shouldValidate: true });
     }
-  }, [watchedValues.specialAreas, form]);
+  }, [watchedValues.specialAreas, serviceTypeWatched, watchedValues.addons, form]);
+
+  /** Strip add-on ids that do not apply after a service-type change. */
+  useEffect(() => {
+    const svc = serviceTypeWatched as ServiceTypeKey;
+    const addons = watchedValues.addons ?? [];
+    if (svc === "bond_cleaning") {
+      const allowed = new Set(LISTING_ADDON_KEYS as readonly string[]);
+      const next = addons.filter((a) => allowed.has(a));
+      if (next.length !== addons.length || next.some((a, i) => a !== addons[i])) {
+        form.setValue("addons", next, { shouldValidate: true });
+      }
+      return;
+    }
+    if (svc === "airbnb_turnover" || svc === "recurring_house_cleaning" || svc === "deep_clean") {
+      const allowed = allowedServicePricedAddonIds(svc, serviceAddonsChecklists);
+      const next = addons.filter((a) => allowed.has(a));
+      if (next.length !== addons.length || next.some((a, i) => a !== addons[i])) {
+        form.setValue("addons", next, { shouldValidate: true });
+      }
+    }
+  }, [serviceTypeWatched, watchedValues.addons, form, serviceAddonsChecklists]);
 
   useEffect(() => {
     if (!reserveTouched) {
@@ -820,7 +886,11 @@ export function NewListingForm({
         ? Number(values.buyNowPrice)
         : null;
       /** Suggested price from property + add-ons (shown in UI as the estimate). */
-      const estimatedPriceAud = calculateEstimatedPrice(values, pricingModifiers);
+      const estimatedPriceAud = calculateEstimatedPrice(
+        values,
+        pricingModifiers,
+        serviceAddonsChecklists
+      );
       /** Auction starts at the reserve the lister set in step 5 — must match reserve_cents (not the calculator alone). */
       const startingBidAud = reserve;
       if (buyNow != null && buyNow >= reserve) {
@@ -2311,71 +2381,134 @@ export function NewListingForm({
                     ${estimatedPrice} AUD
                   </p>
                   <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                    Base from (rate × bedrooms × condition × levels × service multiplier) plus (bathroom rate × bathrooms);
-                    then selected add-ons (carpet steam, walls, and windows scale per bedroom).{" "}
-                    {PROPERTY_CONDITION_OPTIONS.find((o) => o.value === watchedValues.propertyCondition)?.label ?? ""}
-                    {", "}
-                    {PROPERTY_LEVELS_OPTIONS.find((o) => o.value === watchedValues.propertyLevels)?.label ?? ""}.
+                    {normalizeServiceType(serviceTypeWatched as ServiceTypeKey) === "bond_cleaning" ? (
+                      <>
+                        Base from (rate × bedrooms × condition × levels × service multiplier) plus (bathroom rate ×
+                        bathrooms); then selected add-ons (carpet steam, walls, and windows scale per bedroom).{" "}
+                        {PROPERTY_CONDITION_OPTIONS.find((o) => o.value === watchedValues.propertyCondition)?.label ?? ""}
+                        {", "}
+                        {PROPERTY_LEVELS_OPTIONS.find((o) => o.value === watchedValues.propertyLevels)?.label ?? ""}.
+                      </>
+                    ) : (
+                      <>
+                        Base from bedroom/bathroom rates and service settings, plus any{" "}
+                        <strong className="font-semibold">priced add-ons</strong> you select below (flat AUD amounts set
+                        by the platform). Free cleaner checklist items are added automatically on the job — they do not
+                        change this estimate.
+                      </>
+                    )}
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Add-ons</Label>
+                  <Label>Priced add-ons</Label>
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
-                    Special areas selected in step 1 are included here. Amounts follow platform pricing
-                    (admin-configurable). Use property description for general context; use special
-                    instructions for access and one-off notes.
+                    {normalizeServiceType(serviceTypeWatched as ServiceTypeKey) === "bond_cleaning" ? (
+                      <>
+                        Special areas selected in step 1 are included here. Amounts follow bond add-on pricing in Global
+                        Settings. Use property description for context; special instructions for access notes.
+                      </>
+                    ) : (
+                      <>
+                        Optional extras for this service type. Amounts are flat AUD (2026 market-style defaults; admin
+                        can adjust). They increase your suggested starting price.
+                      </>
+                    )}
                   </p>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {LISTING_ADDON_KEYS.map((key) => {
-                      const isChecked = watchedValues.addons.includes(key);
-                      const beds = watchedValues.bedrooms ?? 1;
-                      const lineAud = getListingAddonPriceFromModifiers(
-                        pricingModifiers,
-                        key,
-                        beds
-                      );
-                      return (
-                        <div
-                          key={key}
-                          className="flex min-w-0 flex-col gap-1 rounded-lg border border-border px-4 py-3 text-sm transition-colors hover:bg-muted/30 dark:border-gray-700 dark:hover:bg-gray-800 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-                        >
-                          <div className="flex min-w-0 items-start gap-2 sm:items-center">
-                            <Checkbox
-                              id={`addon-${key}`}
-                              checked={isChecked}
-                              className="mt-0.5 sm:mt-0"
-                              onCheckedChange={(checked) => {
-                                const next = checked
-                                  ? [...watchedValues.addons, key]
-                                  : watchedValues.addons.filter((a) => a !== key);
-                                form.setValue("addons", next, { shouldValidate: true });
-                              }}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <label
-                                htmlFor={`addon-${key}`}
-                                className="cursor-pointer font-medium text-foreground dark:text-gray-200"
-                              >
-                                {getListingAddonLabel(key)}
-                              </label>
-                              {(key === "windows" ||
-                                key === "carpet_steam" ||
-                                key === "walls") && (
-                                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground dark:text-gray-500">
-                                  {key === "windows"
-                                    ? "Per-bedroom rate × bedrooms (set in Global Settings)."
-                                    : "Per-bedroom rate × bedrooms."}
-                                </p>
-                              )}
+                    {normalizeServiceType(serviceTypeWatched as ServiceTypeKey) === "bond_cleaning"
+                      ? LISTING_ADDON_KEYS.map((key) => {
+                          const isChecked = watchedValues.addons.includes(key);
+                          const beds = watchedValues.bedrooms ?? 1;
+                          const lineAud = getListingAddonPriceFromModifiers(
+                            pricingModifiers,
+                            key,
+                            beds
+                          );
+                          return (
+                            <div
+                              key={key}
+                              className="flex min-w-0 flex-col gap-1 rounded-lg border border-border px-4 py-3 text-sm transition-colors hover:bg-muted/30 dark:border-gray-700 dark:hover:bg-gray-800 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                            >
+                              <div className="flex min-w-0 items-start gap-2 sm:items-center">
+                                <Checkbox
+                                  id={`addon-${key}`}
+                                  checked={isChecked}
+                                  className="mt-0.5 sm:mt-0"
+                                  onCheckedChange={(checked) => {
+                                    const next = checked
+                                      ? [...watchedValues.addons, key]
+                                      : watchedValues.addons.filter((a) => a !== key);
+                                    form.setValue("addons", next, { shouldValidate: true });
+                                  }}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <label
+                                    htmlFor={`addon-${key}`}
+                                    className="cursor-pointer font-medium text-foreground dark:text-gray-200"
+                                  >
+                                    {getListingAddonLabel(key)}
+                                  </label>
+                                  {(key === "windows" ||
+                                    key === "carpet_steam" ||
+                                    key === "walls") && (
+                                    <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground dark:text-gray-500">
+                                      {key === "windows"
+                                        ? "Per-bedroom rate × bedrooms (set in Global Settings)."
+                                        : "Per-bedroom rate × bedrooms."}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="shrink-0 pl-7 text-sm font-medium tabular-nums text-muted-foreground dark:text-gray-300 sm:pl-0">
+                                +${lineAud}
+                              </span>
                             </div>
-                          </div>
-                          <span className="shrink-0 pl-7 text-sm font-medium tabular-nums text-muted-foreground dark:text-gray-300 sm:pl-0">
-                            +${lineAud}
-                          </span>
-                        </div>
-                      );
-                    })}
+                          );
+                        })
+                      : (() => {
+                          const st = normalizeServiceType(serviceTypeWatched as ServiceTypeKey);
+                          if (
+                            st !== "airbnb_turnover" &&
+                            st !== "recurring_house_cleaning" &&
+                            st !== "deep_clean"
+                          ) {
+                            return null;
+                          }
+                          const priced = serviceAddonsChecklists[st].priced;
+                          return priced.map((p) => {
+                            const isChecked = watchedValues.addons.includes(p.id);
+                            return (
+                              <div
+                                key={p.id}
+                                className="flex min-w-0 flex-col gap-1 rounded-lg border border-border px-4 py-3 text-sm transition-colors hover:bg-muted/30 dark:border-gray-700 dark:hover:bg-gray-800 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                              >
+                                <div className="flex min-w-0 items-start gap-2 sm:items-center">
+                                  <Checkbox
+                                    id={`addon-${p.id}`}
+                                    checked={isChecked}
+                                    className="mt-0.5 sm:mt-0"
+                                    onCheckedChange={(checked) => {
+                                      const next = checked
+                                        ? [...watchedValues.addons, p.id]
+                                        : watchedValues.addons.filter((a) => a !== p.id);
+                                      form.setValue("addons", next, { shouldValidate: true });
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={`addon-${p.id}`}
+                                    className="min-w-0 flex-1 cursor-pointer font-medium text-foreground dark:text-gray-200"
+                                  >
+                                    {p.name}
+                                  </label>
+                                </div>
+                                <span className="shrink-0 pl-7 text-sm font-medium tabular-nums text-muted-foreground dark:text-gray-300 sm:pl-0">
+                                  +${p.priceAud}
+                                </span>
+                              </div>
+                            );
+                          });
+                        })()}
                   </div>
                 </div>
 

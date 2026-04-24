@@ -13,6 +13,7 @@ import {
   resolvePricingModifiersFromGlobal,
 } from "@/lib/pricing-modifiers";
 import { parsePlatformFeePercentByServiceType } from "@/lib/platform-fee";
+import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 async function requireAdmin() {
@@ -185,6 +186,9 @@ export default async function AdminGlobalSettingsPage() {
         allowTwoMinuteAuctionTest:
           (existing as { allow_two_minute_auction_test?: boolean }).allow_two_minute_auction_test === true,
         defaultSiteTheme: parseDefaultSiteThemeFromSettings(existing),
+        serviceAddonsChecklists: mergeServiceAddonsChecklists(
+          (existing as { service_addons_checklists?: unknown }).service_addons_checklists
+        ),
       }
     : null;
 

@@ -7,6 +7,14 @@ import { createSupabaseAdminClient, getEmailForUserId } from "@/lib/supabase/adm
 import { DEFAULT_PRICING_MODIFIERS } from "@/lib/pricing-modifiers";
 import { DEFAULT_RESEND_FROM } from "@/lib/email-default-from";
 import { SERVICE_TYPES, type ServiceTypeKey } from "@/lib/service-types";
+import {
+  SERVICE_ADDON_CHECKLIST_CUSTOM_TYPES,
+  mergeServiceAddonsChecklists,
+  serializeServiceAddonsChecklistsForDb,
+  type ServiceAddonChecklistCustomType,
+  type ServiceAddonsChecklistsMerged,
+  type ServicePricedAddon,
+} from "@/lib/service-addons-checklists";
 
 /** When to send the email. instant = immediately; 5m, 1h, 1d etc. = delayed (requires worker); on_dob = on user's date of birth (birthday template only). */
 export type SendAfterOption = "instant" | "5m" | "15m" | "30m" | "1h" | "2h" | "1d" | "2d" | "3d" | "5d" | "7d" | "10d" | "14d" | "21d" | "30d" | "60d" | "on_dob";
@@ -115,6 +123,8 @@ type GlobalSettingsRow = {
   new_listing_outside_sms?: boolean;
   new_listing_outside_push?: boolean;
   enable_daily_browse_jobs_nudge?: boolean | null;
+  /** Non-bond services: priced add-ons + free checklist labels (see lib/service-addons-checklists.ts). */
+  service_addons_checklists?: unknown;
 };
 
 /** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
@@ -176,6 +186,61 @@ function sanitizePricingBathroomRateByServiceForDb(
     }
   }
   return out;
+}
+
+const PRICED_ADDON_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
+
+/**
+ * Normalize admin POST body into a DB-safe JSON blob; drops unknown keys and clamps sizes.
+ */
+function sanitizeServiceAddonsChecklistsForDb(
+  input: ServiceAddonsChecklistsMerged | null | undefined
+): Record<string, unknown> {
+  const out = mergeServiceAddonsChecklists(null);
+  if (!input || typeof input !== "object") {
+    return serializeServiceAddonsChecklistsForDb(out);
+  }
+
+  for (const svc of SERVICE_ADDON_CHECKLIST_CUSTOM_TYPES) {
+    const block = (input as Record<string, unknown>)[svc];
+    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    const b = block as { priced?: unknown; free?: unknown };
+    const pricedIn = Array.isArray(b.priced) ? b.priced : [];
+    const pricedOut: ServicePricedAddon[] = [];
+    const seen = new Set<string>();
+    for (const row of pricedIn) {
+      if (pricedOut.length >= 24) break;
+      if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+      const o = row as Record<string, unknown>;
+      let id = String(o.id ?? "").trim().slice(0, 64);
+      const name = String(o.name ?? "").trim().slice(0, 200);
+      const priceRaw = o.priceAud ?? o.price_aud;
+      const n =
+        typeof priceRaw === "number" && Number.isFinite(priceRaw)
+          ? priceRaw
+          : typeof priceRaw === "string" && priceRaw.trim() !== ""
+            ? Number(priceRaw)
+            : NaN;
+      if (!name || !Number.isFinite(n)) continue;
+      if (!id || !PRICED_ADDON_ID_RE.test(id) || seen.has(id)) {
+        id = `addon_${svc.slice(0, 6)}_${pricedOut.length}_${Math.random().toString(36).slice(2, 9)}`;
+      }
+      seen.add(id);
+      pricedOut.push({
+        id,
+        name,
+        priceAud: Math.max(0, Math.min(99999, Math.round(n))),
+      });
+    }
+    const freeIn = Array.isArray(b.free) ? b.free : [];
+    const freeOut = freeIn
+      .map((v) => String(v ?? "").trim().slice(0, 300))
+      .filter((v) => v.length > 0)
+      .slice(0, 32);
+    out[svc as ServiceAddonChecklistCustomType] = { priced: pricedOut, free: freeOut };
+  }
+
+  return serializeServiceAddonsChecklistsForDb(out);
 }
 
 /**
@@ -436,6 +501,11 @@ export type SaveGlobalSettingsInput = {
   newListingOutsidePush?: boolean;
   /** Scheduled daily browse-jobs nudge (uses #2 channel toggles). */
   enableDailyBrowseJobsNudge?: boolean;
+  /**
+   * Airbnb / recurring / deep: priced add-ons (quote) and free checklist lines.
+   * Bond cleaning ignores this (legacy pricing + default checklist card).
+   */
+  serviceAddonsChecklists?: ServiceAddonsChecklistsMerged | null;
 };
 
 export type SaveGlobalSettingsResult =
@@ -631,6 +701,9 @@ export async function saveGlobalSettings(
         : data.enableSmsAlertsNewJobs !== false,
     enable_daily_browse_jobs_nudge:
       typeof data.enableDailyBrowseJobsNudge === "boolean" ? data.enableDailyBrowseJobsNudge : true,
+    service_addons_checklists: sanitizeServiceAddonsChecklistsForDb(
+      data.serviceAddonsChecklists ?? null
+    ),
   };
 
   const { error } = admin
@@ -647,6 +720,8 @@ export async function saveGlobalSettings(
             ? " Add column global_settings.pricing_bathroom_rate_per_bathroom_by_service_type (see sql/20260417120000_pricing_bathroom_rate_by_service_type.sql)."
           : msg.includes("new_listing_in_radius") || msg.includes("enable_daily_browse")
             ? " Add cleaner new-listing channel columns (see sql/20260417100000_global_settings_new_listing_channel_toggles.sql)."
+          : msg.includes("service_addons_checklists")
+            ? " Add column global_settings.service_addons_checklists (see sql/20260419120000_global_settings_service_addons_checklists.sql)."
           : " Run supabase/sql/20260417140000_global_settings_ensure_columns_admin_save.sql in the Supabase SQL editor (adds all columns used by Admin → Global Settings save), or apply the individual migrations under supabase/migrations."
         : "";
     return { ok: false, error: msg + hint };

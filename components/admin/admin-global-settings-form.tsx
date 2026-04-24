@@ -25,7 +25,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { CircleHelp } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleHelp } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import type { SaveGlobalSettingsInput } from "@/lib/actions/global-settings";
 import {
@@ -50,6 +50,39 @@ import {
   serviceTypeLabel,
   type ServiceTypeKey,
 } from "@/lib/service-types";
+import {
+  mergeServiceAddonsChecklists,
+  serializeServiceAddonsChecklistsForDb,
+  SERVICE_ADDON_CHECKLIST_CUSTOM_TYPES,
+  type ServiceAddonChecklistCustomType,
+  type ServiceAddonsChecklistsMerged,
+} from "@/lib/service-addons-checklists";
+
+function cloneServiceAddonsState(src: ServiceAddonsChecklistsMerged): ServiceAddonsChecklistsMerged {
+  return mergeServiceAddonsChecklists(serializeServiceAddonsChecklistsForDb(src));
+}
+
+function moveArrayItem<T>(arr: T[], index: number, delta: -1 | 1): T[] {
+  const j = index + delta;
+  if (j < 0 || j >= arr.length) return arr;
+  const next = [...arr];
+  const atI = next[index];
+  const atJ = next[j];
+  if (atI === undefined || atJ === undefined) return arr;
+  next[index] = atJ;
+  next[j] = atI;
+  return next;
+}
+
+function newPricedAddonId(svc: ServiceAddonChecklistCustomType): string {
+  const suffix =
+    typeof globalThis !== "undefined" &&
+    "crypto" in globalThis &&
+    typeof (globalThis as { crypto?: { randomUUID?: () => string } }).crypto?.randomUUID === "function"
+      ? (globalThis as { crypto: { randomUUID: () => string } }).crypto.randomUUID().replace(/-/g, "").slice(0, 10)
+      : String(Date.now());
+  return `addon_${svc.split("_")[0]}_${suffix}`;
+}
 
 /** Admin Pricing configuration card order (matches product grouping in copy). */
 const PRICING_CONFIG_SERVICE_ORDER: ServiceTypeKey[] = [
@@ -250,6 +283,20 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
         ]
   );
   const [newChecklistItemDraft, setNewChecklistItemDraft] = React.useState("");
+  const [serviceAddonsChecklists, setServiceAddonsChecklists] =
+    React.useState<ServiceAddonsChecklistsMerged>(() =>
+      initial?.serviceAddonsChecklists
+        ? cloneServiceAddonsState(initial.serviceAddonsChecklists as ServiceAddonsChecklistsMerged)
+        : mergeServiceAddonsChecklists(null)
+    );
+  const [newFreeChecklistDraftBySvc, setNewFreeChecklistDraftBySvc] = React.useState<
+    Record<ServiceAddonChecklistCustomType, string>
+  >(() =>
+    Object.fromEntries(SERVICE_ADDON_CHECKLIST_CUSTOM_TYPES.map((k) => [k, ""])) as Record<
+      ServiceAddonChecklistCustomType,
+      string
+    >
+  );
   const [enableSmsNotifications, setEnableSmsNotifications] = React.useState(
     initial?.enableSmsNotifications ?? true
   );
@@ -529,6 +576,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       allowLowAmountListings,
       allowTwoMinuteAuctionTest,
       defaultSiteTheme,
+      serviceAddonsChecklists,
     };
 
     startTransition(async () => {
@@ -924,6 +972,285 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               <code className="rounded bg-muted px-1">SUPABASE_SERVICE_ROLE_KEY</code> on the server.
             </span>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold dark:text-gray-100">
+            Service add-ons &amp; checklists
+          </CardTitle>
+          <p className="text-[11px] text-muted-foreground dark:text-gray-400">
+            Airbnb, recurring, and deep/spring/inspection cleans: <strong className="text-foreground">priced add-ons</strong>{" "}
+            update the lister&apos;s suggested quote; <strong className="text-foreground">free checklist</strong> lines are
+            tickable tasks for cleaners (no charge). Bond cleaning still uses{" "}
+            <strong className="text-foreground">Pricing modifiers</strong> for bond add-ons and the{" "}
+            <strong className="text-foreground">Default cleaner checklist</strong> card below. Saves with{" "}
+            <strong className="text-foreground">Save global settings</strong> at the bottom of this page.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {SERVICE_ADDON_CHECKLIST_CUSTOM_TYPES.map((svc) => (
+            <div
+              key={svc}
+              className="space-y-4 rounded-lg border border-border/80 bg-muted/10 p-4 dark:border-gray-800 dark:bg-gray-950/40"
+            >
+              <p className="text-xs font-semibold text-foreground dark:text-gray-100">
+                {serviceTypeLabel(svc)}
+              </p>
+
+              <div className="space-y-2">
+                <Label className="text-[11px] font-medium">Priced add-ons (AUD)</Label>
+                <p className="text-[10px] text-muted-foreground dark:text-gray-500">
+                  Shown on the new listing form; each line adds to the estimate. Internal id is stable for existing
+                  listings — rename labels freely.
+                </p>
+                <div className="space-y-2">
+                  {serviceAddonsChecklists[svc].priced.map((row, idx) => (
+                    <div
+                      key={row.id}
+                      className="flex flex-col gap-2 rounded-md border border-border/60 bg-background/80 p-2 dark:border-gray-800 sm:flex-row sm:items-center"
+                    >
+                      <Input
+                        value={row.name}
+                        onChange={(e) =>
+                          setServiceAddonsChecklists((prev) => ({
+                            ...prev,
+                            [svc]: {
+                              ...prev[svc],
+                              priced: prev[svc].priced.map((p, i) =>
+                                i === idx ? { ...p, name: e.target.value } : p
+                              ),
+                            },
+                          }))
+                        }
+                        placeholder="Add-on name"
+                        className="h-9 min-w-0 flex-1 text-xs dark:bg-gray-900 dark:border-gray-700"
+                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">+$</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={row.priceAud}
+                          onChange={(e) =>
+                            setServiceAddonsChecklists((prev) => ({
+                              ...prev,
+                              [svc]: {
+                                ...prev[svc],
+                                priced: prev[svc].priced.map((p, i) =>
+                                  i === idx
+                                    ? {
+                                        ...p,
+                                        priceAud: Math.max(
+                                          0,
+                                          Math.min(99999, Math.round(Number(e.target.value) || 0))
+                                        ),
+                                      }
+                                    : p
+                                ),
+                              },
+                            }))
+                          }
+                          className="h-9 w-24 text-xs dark:bg-gray-900 dark:border-gray-700"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          aria-label="Move up"
+                          onClick={() =>
+                            setServiceAddonsChecklists((prev) => ({
+                              ...prev,
+                              [svc]: {
+                                ...prev[svc],
+                                priced: moveArrayItem(prev[svc].priced, idx, -1),
+                              },
+                            }))
+                          }
+                          disabled={idx === 0}
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          aria-label="Move down"
+                          onClick={() =>
+                            setServiceAddonsChecklists((prev) => ({
+                              ...prev,
+                              [svc]: {
+                                ...prev[svc],
+                                priced: moveArrayItem(prev[svc].priced, idx, 1),
+                              },
+                            }))
+                          }
+                          disabled={idx >= serviceAddonsChecklists[svc].priced.length - 1}
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            setServiceAddonsChecklists((prev) => ({
+                              ...prev,
+                              [svc]: {
+                                ...prev[svc],
+                                priced: prev[svc].priced.filter((_, i) => i !== idx),
+                              },
+                            }))
+                          }
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                      <p className="w-full text-[10px] font-mono text-muted-foreground sm:w-auto sm:min-w-[8rem]">
+                        id: {row.id}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() =>
+                    setServiceAddonsChecklists((prev) => ({
+                      ...prev,
+                      [svc]: {
+                        ...prev[svc],
+                        priced: [
+                          ...prev[svc].priced,
+                          { id: newPricedAddonId(svc), name: "", priceAud: 0 },
+                        ],
+                      },
+                    }))
+                  }
+                >
+                  Add priced add-on
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[11px] font-medium">Free checklist (guidance)</Label>
+                <p className="text-[10px] text-muted-foreground dark:text-gray-500">
+                  Appears as tickable tasks when the job starts; does not change the quote.
+                </p>
+                <div className="space-y-2">
+                  {serviceAddonsChecklists[svc].free.map((line, idx) => (
+                    <div key={`${svc}-free-${idx}`} className="flex flex-wrap items-center gap-2">
+                      <Input
+                        value={line}
+                        onChange={(e) =>
+                          setServiceAddonsChecklists((prev) => ({
+                            ...prev,
+                            [svc]: {
+                              ...prev[svc],
+                              free: prev[svc].free.map((x, i) => (i === idx ? e.target.value : x)),
+                            },
+                          }))
+                        }
+                        className="h-9 min-w-0 flex-1 text-xs dark:bg-gray-900 dark:border-gray-700"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label="Move up"
+                        onClick={() =>
+                          setServiceAddonsChecklists((prev) => ({
+                            ...prev,
+                            [svc]: {
+                              ...prev[svc],
+                              free: moveArrayItem(prev[svc].free, idx, -1),
+                            },
+                          }))
+                        }
+                        disabled={idx === 0}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label="Move down"
+                        onClick={() =>
+                          setServiceAddonsChecklists((prev) => ({
+                            ...prev,
+                            [svc]: {
+                              ...prev[svc],
+                              free: moveArrayItem(prev[svc].free, idx, 1),
+                            },
+                          }))
+                        }
+                        disabled={idx >= serviceAddonsChecklists[svc].free.length - 1}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() =>
+                          setServiceAddonsChecklists((prev) => ({
+                            ...prev,
+                            [svc]: {
+                              ...prev[svc],
+                              free: prev[svc].free.filter((_, i) => i !== idx),
+                            },
+                          }))
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={newFreeChecklistDraftBySvc[svc]}
+                    onChange={(e) =>
+                      setNewFreeChecklistDraftBySvc((prev) => ({ ...prev, [svc]: e.target.value }))
+                    }
+                    placeholder="New free checklist line…"
+                    className="h-9 text-xs dark:bg-gray-900 dark:border-gray-700"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0"
+                    onClick={() => {
+                      const next = newFreeChecklistDraftBySvc[svc].trim();
+                      if (!next) return;
+                      setServiceAddonsChecklists((prev) => ({
+                        ...prev,
+                        [svc]: { ...prev[svc], free: [...prev[svc].free, next] },
+                      }));
+                      setNewFreeChecklistDraftBySvc((prev) => ({ ...prev, [svc]: "" }));
+                    }}
+                    disabled={!newFreeChecklistDraftBySvc[svc].trim()}
+                  >
+                    Add line
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 

@@ -62,7 +62,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { ListingRow } from "@/lib/listings";
-import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
+import { formatListingAddonDisplayNameForService } from "@/lib/listing-addon-prices";
 import { isListingAddonSpecialArea } from "@/lib/listing-special-areas";
 import type { BidRow } from "@/lib/listings";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -614,6 +614,8 @@ export type JobDetailProps = {
   listerNonResponsiveCancel?: ListerNonResponsiveCancelPreview | null;
   /** When set, job had a dispute hub case — deep link for audit trail. */
   disputeCaseHref?: string | null;
+  /** Admin-priced add-on id → label for non-bond listings (from global settings). */
+  pricedAddonLabelById?: Record<string, string> | null;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -855,9 +857,11 @@ export function JobDetail({
   pendingListerAdditionalPayment = null,
   listerNonResponsiveCancel = null,
   disputeCaseHref = null,
+  pricedAddonLabelById = null,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
+  const listingServiceType = normalizeServiceType(listing.service_type);
 
   // Keep client state in sync when the server page refreshes (e.g. after placeBid → router.refresh()).
   // `useState(initial*)` only applies on mount; without this, lowest bid / bid history stay stale.
@@ -2505,7 +2509,11 @@ export function JobDetail({
                               <span className="font-semibold tracking-wide">Special area · </span>
                             ) : null}
                             <span className="capitalize">
-                              {formatListingAddonDisplayName(a)}
+                              {formatListingAddonDisplayNameForService(
+                                a,
+                                listingServiceType,
+                                pricedAddonLabelById
+                              )}
                             </span>
                           </Badge>
                         ))}
@@ -4948,7 +4956,11 @@ export function JobDetail({
                       <span className="font-semibold">Special area · </span>
                     ) : null}
                     <span className="capitalize">
-                      {formatListingAddonDisplayName(addon)}
+                      {formatListingAddonDisplayNameForService(
+                        addon,
+                        listingServiceType,
+                        pricedAddonLabelById
+                      )}
                     </span>
                   </span>
                 ))}
@@ -5313,7 +5325,13 @@ export function JobDetail({
                           {isListingAddonSpecialArea(listing, a) ? (
                             <span className="font-semibold tracking-wide">Special area · </span>
                           ) : null}
-                          <span className="capitalize">{formatListingAddonDisplayName(a)}</span>
+                          <span className="capitalize">
+                            {formatListingAddonDisplayNameForService(
+                              a,
+                              listingServiceType,
+                              pricedAddonLabelById
+                            )}
+                          </span>
                         </Badge>
                       ))}
                     </div>

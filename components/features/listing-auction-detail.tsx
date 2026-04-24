@@ -71,8 +71,9 @@ import {
 } from "@/lib/listing-detail-presenters";
 import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction-control";
 import { isListerNoBidsRelistListing } from "@/lib/my-listings/lister-listing-helpers";
-import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
+import { formatListingAddonDisplayNameForService } from "@/lib/listing-addon-prices";
 import { isListingAddonSpecialArea } from "@/lib/listing-special-areas";
+import { normalizeServiceType } from "@/lib/service-types";
 import {
   PHOTO_LIMITS,
   PHOTO_VALIDATION,
@@ -107,6 +108,8 @@ export type ListingAuctionDetailProps = {
   onBidPlaced?: (newLowestBidCents: number) => void;
   /** Find Jobs embed: lister display name (from profile). */
   embedListerDisplayName?: string | null;
+  /** Non-bond priced add-on id → label (from global settings). */
+  pricedAddonLabelById?: Record<string, string> | null;
 };
 
 export function ListingAuctionDetail({
@@ -125,7 +128,9 @@ export function ListingAuctionDetail({
   embedBackLinkLabel = "Return to map",
   onBidPlaced,
   embedListerDisplayName = null,
+  pricedAddonLabelById = null,
 }: ListingAuctionDetailProps) {
+  const listingServiceType = normalizeServiceType(listing.service_type);
   const router = useRouter();
   const { toast } = useToast();
   const [photoLightbox, setPhotoLightbox] = useState<{
@@ -683,7 +688,13 @@ export function ListingAuctionDetail({
                           {isListingAddonSpecialArea(listing, a) ? (
                             <span className="font-semibold tracking-wide">Special area · </span>
                           ) : null}
-                          <span className="capitalize">{formatListingAddonDisplayName(a)}</span>
+                          <span className="capitalize">
+                            {formatListingAddonDisplayNameForService(
+                              a,
+                              listingServiceType,
+                              pricedAddonLabelById
+                            )}
+                          </span>
                         </Badge>
                       ))}
                     </div>
@@ -1120,7 +1131,13 @@ export function ListingAuctionDetail({
                       {isListingAddonSpecialArea(listing, a) ? (
                         <span className="font-semibold tracking-wide">Special area · </span>
                       ) : null}
-                      <span className="capitalize">{formatListingAddonDisplayName(a)}</span>
+                      <span className="capitalize">
+                            {formatListingAddonDisplayNameForService(
+                              a,
+                              listingServiceType,
+                              pricedAddonLabelById
+                            )}
+                          </span>
                     </Badge>
                   ))}
                 </div>

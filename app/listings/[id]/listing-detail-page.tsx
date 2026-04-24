@@ -38,6 +38,7 @@ import {
   recurringFrequencyShortLabel,
   serviceTypeLabel,
 } from "@/lib/service-types";
+import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
 
 export const dynamic = "force-dynamic";
 
@@ -205,6 +206,18 @@ export default async function ListingDetailPage({
     settings,
     listingRow.service_type ?? null
   );
+  const serviceAddonsMerged = mergeServiceAddonsChecklists(
+    (settings as { service_addons_checklists?: unknown } | null)?.service_addons_checklists
+  );
+  const listingSvcForAddons = normalizeServiceType(listingRow.service_type);
+  const pricedAddonLabelById =
+    listingSvcForAddons === "airbnb_turnover" ||
+    listingSvcForAddons === "recurring_house_cleaning" ||
+    listingSvcForAddons === "deep_clean"
+      ? Object.fromEntries(
+          serviceAddonsMerged[listingSvcForAddons].priced.map((p) => [p.id, p.name])
+        )
+      : {};
   const jobAgreed = jobRow?.agreed_amount_cents;
   const listingBuyNow = listingRow.buy_now_cents;
   const listingReserve = listingRow.reserve_cents;
@@ -438,6 +451,7 @@ export default async function ListingDetailPage({
               currentUserId={sessionUserId ?? null}
               securedViaBuyNow={securedViaBuyNow}
               buyNowHistoryAmountCents={buyNowHistoryAmountCents}
+              pricedAddonLabelById={pricedAddonLabelById}
             />
           </div>
           {showPublicComments ? (

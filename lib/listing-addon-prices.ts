@@ -3,6 +3,8 @@
  * via {@link getListingAddonPriceFromModifiers} in `lib/pricing-modifiers.ts`.
  */
 
+import type { ServiceTypeKey } from "@/lib/service-types";
+
 export const LISTING_ADDON_KEYS = [
   "oven",
   "carpet_steam",
@@ -41,4 +43,27 @@ export const WALLS_CARPET_STEAMING_ADDON_KEY = "walls_carpet_steaming" as const;
 export function formatListingAddonDisplayName(key: string): string {
   if (key === WALLS_CARPET_STEAMING_ADDON_KEY) return "Walls & carpet steaming";
   return key.replace(/_/g, " ");
+}
+
+export function isBondListingAddonKey(key: string): key is ListingAddonKey {
+  return (LISTING_ADDON_KEYS as readonly string[]).includes(key);
+}
+
+/**
+ * Display name for a stored `listings.addons[]` entry: bond keys use fixed labels;
+ * other service types resolve from admin-configured priced add-on ids when a map is provided.
+ */
+export function formatListingAddonDisplayNameForService(
+  key: string,
+  serviceType: ServiceTypeKey,
+  pricedAddonLabelById?: Record<string, string> | null
+): string {
+  if (serviceType === "bond_cleaning") {
+    if (key === WALLS_CARPET_STEAMING_ADDON_KEY) return "Walls & carpet steaming";
+    if (isBondListingAddonKey(key)) return getListingAddonLabel(key);
+    return formatListingAddonDisplayName(key);
+  }
+  const mapped = pricedAddonLabelById?.[key];
+  if (mapped) return mapped;
+  return formatListingAddonDisplayName(key);
 }

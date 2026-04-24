@@ -36,6 +36,8 @@ import { logTimerActivity } from "@/lib/admin-activity-log";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
 import { formatListingAddonDisplayName } from "@/lib/listing-addon-prices";
 import { isSpecialAreaForJobChecklist } from "@/lib/listing-special-areas";
+import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
+import { normalizeServiceType } from "@/lib/service-types";
 import { sameUuid, trimStr } from "@/lib/utils";
 import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
 import { isCleanerStripeReleaseBlockingError, isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
@@ -218,6 +220,77 @@ async function loadDefaultCleanerChecklistLabels(
     .map((v) => String(v ?? "").trim())
     .filter((v) => v.length > 0);
   return cleaned.length > 0 ? cleaned : fallback;
+}
+
+async function loadServiceAddonsChecklistsRaw(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>
+): Promise<unknown> {
+  const { data, error } = await supabase
+    .from("global_settings")
+    .select("service_addons_checklists")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) return null;
+  return (data as { service_addons_checklists?: unknown } | null)?.service_addons_checklists ?? null;
+}
+
+type ListingChecklistSeedListing = {
+  service_type?: string | null;
+  addons?: string[] | null;
+  special_areas?: string[] | null;
+} | null;
+
+/**
+ * Initial `job_checklist_items` rows: bond = legacy add-on labels + global default checklist;
+ * other services = priced add-on labels + configured free guidance tasks (no duplicate bond defaults).
+ */
+async function buildJobChecklistSeedRows(params: {
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  jobId: number;
+  listingRow: ListingChecklistSeedListing;
+}): Promise<{ job_id: number; label: string }[]> {
+  const { supabase, jobId, listingRow } = params;
+  const svc = normalizeServiceType(listingRow?.service_type ?? null);
+  const addons = (listingRow?.addons ?? []) as string[];
+  const isSpecialArea = (key: string) => isSpecialAreaForJobChecklist(listingRow, key);
+  const merged = mergeServiceAddonsChecklists(await loadServiceAddonsChecklistsRaw(supabase));
+  const capWord = (s: string) => (s.length > 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+  if (svc === "bond_cleaning") {
+    const defaultLabels = await loadDefaultCleanerChecklistLabels(supabase);
+    const rows: { job_id: number; label: string }[] = [];
+    for (const addon of addons) {
+      const display = formatListingAddonDisplayName(addon);
+      const label = isSpecialArea(addon)
+        ? `Special area: ${capWord(display)}`
+        : `Add-on: ${display}`;
+      rows.push({ job_id: jobId, label });
+    }
+    for (const label of defaultLabels) {
+      rows.push({ job_id: jobId, label });
+    }
+    return rows;
+  }
+
+  const entry =
+    svc === "airbnb_turnover" || svc === "recurring_house_cleaning" || svc === "deep_clean"
+      ? merged[svc]
+      : null;
+  const pricedById = new Map((entry?.priced ?? []).map((p) => [p.id, p.name]));
+  const rows: { job_id: number; label: string }[] = [];
+  for (const addon of addons) {
+    const nameFromConfig = pricedById.get(addon);
+    const display = nameFromConfig ?? formatListingAddonDisplayName(addon);
+    const label = isSpecialArea(addon)
+      ? `Special area: ${capWord(display)}`
+      : `Add-on: ${display}`;
+    rows.push({ job_id: jobId, label });
+  }
+  for (const freeLabel of entry?.free ?? []) {
+    const t = freeLabel.trim();
+    if (t) rows.push({ job_id: jobId, label: t });
+  }
+  return rows;
 }
 
 export type CreateJobPaymentResult =
@@ -1592,30 +1665,15 @@ export async function fulfillJobPaymentFromSession(
     if (!existingItems || existingItems.length === 0) {
       const { data: listingForChecklist } = await supabase
         .from("listings")
-        .select("addons, special_areas")
+        .select("addons, special_areas, service_type")
         .eq("id", checkoutJob.listing_id as never)
         .maybeSingle();
 
-      const listingRow = listingForChecklist as {
-        addons?: string[] | null;
-        special_areas?: string[] | null;
-      } | null;
-      const addons = (listingRow?.addons ?? []) as string[];
-      const isSpecialArea = (key: string) =>
-        isSpecialAreaForJobChecklist(listingRow, key);
-      const defaultLabels = await loadDefaultCleanerChecklistLabels(supabase);
-
-      const rows: { job_id: number; label: string }[] = [];
-      for (const addon of addons) {
-        const display = formatListingAddonDisplayName(addon);
-        const label = isSpecialArea(addon)
-          ? `Special area: ${display.charAt(0).toUpperCase() + display.slice(1)}`
-          : `Add-on: ${display}`;
-        rows.push({ job_id: numericJobId, label });
-      }
-      for (const label of defaultLabels) {
-        rows.push({ job_id: numericJobId, label });
-      }
+      const rows = await buildJobChecklistSeedRows({
+        supabase,
+        jobId: numericJobId,
+        listingRow: listingForChecklist as ListingChecklistSeedListing,
+      });
       if (rows.length > 0) {
         await supabase.from("job_checklist_items").insert(rows as never);
       }
@@ -1767,7 +1825,6 @@ export async function ensureJobChecklistIfEmpty(
   };
 
   if (checklistJob.status !== "in_progress") return;
-  if (trimStr(checklistJob.recurring_occurrence_id)) return;
 
   const {
     data: { session },
@@ -1785,28 +1842,14 @@ export async function ensureJobChecklistIfEmpty(
 
   const { data: listingForChecklist } = await supabase
     .from("listings")
-    .select("addons, special_areas")
+    .select("addons, special_areas, service_type")
     .eq("id", checklistJob.listing_id as never)
     .maybeSingle();
-  const listingRow = listingForChecklist as {
-    addons?: string[] | null;
-    special_areas?: string[] | null;
-  } | null;
-  const addons = (listingRow?.addons ?? []) as string[];
-  const isSpecialArea = (key: string) =>
-    isSpecialAreaForJobChecklist(listingRow, key);
-  const defaultLabels = await loadDefaultCleanerChecklistLabels(supabase);
-  const rows: { job_id: number; label: string }[] = [];
-  for (const addon of addons) {
-    const display = formatListingAddonDisplayName(addon);
-    const label = isSpecialArea(addon)
-      ? `Special area: ${display.charAt(0).toUpperCase() + display.slice(1)}`
-      : `Add-on: ${display}`;
-    rows.push({ job_id: numericJobId, label });
-  }
-  for (const label of defaultLabels) {
-    rows.push({ job_id: numericJobId, label });
-  }
+  const rows = await buildJobChecklistSeedRows({
+    supabase,
+    jobId: numericJobId,
+    listingRow: listingForChecklist as ListingChecklistSeedListing,
+  });
   if (rows.length > 0) {
     await supabase.from("job_checklist_items").insert(rows as never);
   }
@@ -1883,54 +1926,21 @@ export async function approveJobStart(
     .eq("job_id", numericJobId as never)
     .limit(1);
 
-  if (
-    (!existingItems || existingItems.length === 0) &&
-    !trimStr(approveRow.recurring_occurrence_id)
-  ) {
+  if (!existingItems || existingItems.length === 0) {
     const { data: listingForChecklist } = await supabase
       .from("listings")
-      .select("addons, special_areas")
+      .select("addons, special_areas, service_type")
       .eq("id", approveRow.listing_id as never)
       .maybeSingle();
 
-    const listingRow = listingForChecklist as {
-      addons?: string[] | null;
-      special_areas?: string[] | null;
-    } | null;
-    const addons = (listingRow?.addons ?? []) as string[];
-    const isSpecialArea = (key: string) =>
-      isSpecialAreaForJobChecklist(listingRow, key);
-
-    const defaultLabels = await loadDefaultCleanerChecklistLabels(supabase);
-
-    const rows: {
-      job_id: number;
-      label: string;
-      is_completed?: boolean;
-    }[] = [];
-
-    for (const addon of addons) {
-      const display = formatListingAddonDisplayName(addon);
-      const label = isSpecialArea(addon)
-        ? `Special area: ${display.charAt(0).toUpperCase() + display.slice(1)}`
-        : `Add-on: ${display}`;
-      rows.push({
-        job_id: numericJobId,
-        label,
-      });
-    }
-
-    for (const label of defaultLabels) {
-      rows.push({
-        job_id: numericJobId,
-        label,
-      });
-    }
+    const rows = await buildJobChecklistSeedRows({
+      supabase,
+      jobId: numericJobId,
+      listingRow: listingForChecklist as ListingChecklistSeedListing,
+    });
 
     if (rows.length > 0) {
-      await supabase
-        .from("job_checklist_items")
-        .insert(rows as never);
+      await supabase.from("job_checklist_items").insert(rows as never);
     }
   }
 
