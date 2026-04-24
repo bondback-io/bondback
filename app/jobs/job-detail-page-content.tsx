@@ -39,6 +39,8 @@ import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-s
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
+import { listerRefundCentsFromDisputeJob } from "@/lib/jobs/cleaner-net-earnings";
+import { jobQualifiesForDisputeHub } from "@/lib/jobs/dispute-hub-helpers";
 import {
   getListerNonResponsiveCancelPreview,
   type ListerNonResponsiveCancelPreview,
@@ -261,51 +263,19 @@ export async function JobDetailPageContent({
     (job as { counter_proposal_amount?: number | null })
       ?.counter_proposal_amount ?? null;
 
-  const disputeResolution = String(job?.dispute_resolution ?? "");
-  const partialRefundResolution =
-    disputeResolution === "partial_refund_accepted" ||
-    disputeResolution === "counter_accepted_by_lister";
-
-  /** Cents returned to lister after partial-refund dispute resolution (matches Stripe / timeline). */
-  function refundToListerAfterPartialResolution(
-    dr: string,
-    refundAmount: unknown,
-    proposed: number | null,
-    counter: number | null
-  ): number {
-    const fromRow = Math.max(0, Math.round(Number(refundAmount ?? 0) || 0));
-    if (fromRow >= 1) return fromRow;
-    if (dr === "counter_accepted_by_lister") {
-      return Math.max(
-        0,
-        Math.round(Number(counter ?? proposed ?? 0) || 0)
-      );
-    }
-    if (dr === "partial_refund_accepted") {
-      return Math.max(
-        0,
-        Math.round(Number(proposed ?? counter ?? 0) || 0)
-      );
-    }
-    return 0;
-  }
-
-  const refundForNet =
-    job?.status === "completed" && partialRefundResolution
-      ? refundToListerAfterPartialResolution(
-          disputeResolution,
-          job?.refund_amount,
-          proposedRefundAmount,
-          counterProposalAmount
+  /** Cents returned to the lister from escrow after settlement (all resolution paths that set `refund_amount`). */
+  const listerRefundCentsAfterSettlement =
+    job?.status === "completed"
+      ? listerRefundCentsFromDisputeJob(
+          job as Parameters<typeof listerRefundCentsFromDisputeJob>[0]
         )
-      : Math.max(0, Math.round(Number(job?.refund_amount ?? 0) || 0));
+      : 0;
 
   const completedCleanerEscrowPayoutCents =
     job?.status === "completed" &&
-    partialRefundResolution &&
-    refundForNet >= 1 &&
+    listerRefundCentsAfterSettlement >= 1 &&
     agreedAmountCents > 0
-      ? Math.max(0, agreedAmountCents - refundForNet)
+      ? Math.max(0, agreedAmountCents - listerRefundCentsAfterSettlement)
       : null;
 
   const j = job as {
@@ -321,10 +291,12 @@ export async function JobDetailPageContent({
   const canLeaveReview =
     Boolean(job?.status === "completed") && Boolean(j?.payment_released_at);
   const timelineRefundCentsResolved =
-    job?.status === "completed" && partialRefundResolution
-      ? refundForNet >= 1
-        ? refundForNet
-        : null
+    job?.status === "completed" && listerRefundCentsAfterSettlement >= 1
+      ? listerRefundCentsAfterSettlement
+      : null;
+  const disputeCaseHref =
+    jobId != null && job && jobQualifiesForDisputeHub(job as never)
+      ? `/disputes/${jobId}`
       : null;
   const paymentTimeline =
     job && (j?.payment_intent_id || j?.payment_released_at || j?.dispute_resolution)
@@ -340,6 +312,12 @@ export async function JobDetailPageContent({
               proposedRefundAmount ??
               counterProposalAmount ??
               null),
+          topUpPayments,
+          totalAgreedCents: agreedAmountCents,
+          netToCleanerCents:
+            completedCleanerEscrowPayoutCents ??
+            (job?.status === "completed" ? agreedAmountCents : null),
+          disputeCaseHref,
         }
       : null;
 
@@ -826,6 +804,7 @@ export async function JobDetailPageContent({
           requireStripeConnectBeforePaymentRelease={requireStripeConnectBeforePaymentRelease}
           pendingListerAdditionalPayment={pendingListerAdditionalPayment}
           listerNonResponsiveCancel={listerNonResponsiveCancel}
+          disputeCaseHref={disputeCaseHref}
         />
       </section>
     </OfflineJobsPrimer>

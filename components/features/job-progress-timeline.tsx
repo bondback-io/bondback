@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { Check, CheckCircle2, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type JobProgressTimelineProps = {
@@ -12,6 +13,8 @@ export type JobProgressTimelineProps = {
   hasAfterPhotos: boolean;
   isJobLister: boolean;
   isJobCleaner: boolean;
+  /** Link to /disputes/[jobId] when the job had a dispute case (closed or open). */
+  closedDisputeCaseHref?: string | null;
 };
 
 type StepDef = {
@@ -35,6 +38,7 @@ export function JobProgressTimeline({
   hasAfterPhotos,
   isJobLister,
   isJobCleaner,
+  closedDisputeCaseHref = null,
 }: JobProgressTimelineProps) {
   const status = localJobStatus ?? "";
   const isDispute =
@@ -320,6 +324,23 @@ export function JobProgressTimeline({
           </p>
         </div>
       )}
+
+      {isCompleted && closedDisputeCaseHref?.trim() ? (
+        <div className="mt-3 flex gap-2 rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-2.5 text-xs leading-relaxed text-amber-950 dark:border-amber-800/55 dark:bg-amber-950/35 dark:text-amber-100">
+          <Scale className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+          <p className="min-w-0">
+            <span className="font-semibold">Dispute history.</span> This job went through a dispute.
+            Keep{" "}
+            <Link
+              href={closedDisputeCaseHref}
+              className="font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
+            >
+              the closed case summary
+            </Link>{" "}
+            for your records.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

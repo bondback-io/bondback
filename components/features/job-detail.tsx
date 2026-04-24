@@ -88,6 +88,7 @@ import {
   Loader2,
   Landmark,
   UserRound,
+  Trophy,
 } from "lucide-react";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { ImageLightboxGallery } from "@/components/ui/image-lightbox-gallery";
@@ -609,6 +610,8 @@ export type JobDetailProps = {
   } | null;
   /** Server-only eligibility for escrow non-responsive cancel (lister menu). */
   listerNonResponsiveCancel?: ListerNonResponsiveCancelPreview | null;
+  /** When set, job had a dispute hub case — deep link for audit trail. */
+  disputeCaseHref?: string | null;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -849,6 +852,7 @@ export function JobDetail({
   requireStripeConnectBeforePaymentRelease = true,
   pendingListerAdditionalPayment = null,
   listerNonResponsiveCancel = null,
+  disputeCaseHref = null,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -1948,14 +1952,9 @@ export function JobDetail({
     paymentTimeline?.refundAmountCents != null && paymentTimeline.refundAmountCents > 0
       ? paymentTimeline.refundAmountCents
       : null;
-  const disputeResolutionFromTimeline = paymentTimeline?.disputeResolution ?? null;
-  const isPartialRefundResolutionFromTimeline =
-    disputeResolutionFromTimeline === "partial_refund_accepted" ||
-    disputeResolutionFromTimeline === "counter_accepted_by_lister";
   const jobCompletedForEscrow = (localJobStatus ?? jobStatus) === "completed";
   const derivedNetEscrowFromTimeline =
     jobCompletedForEscrow &&
-    isPartialRefundResolutionFromTimeline &&
     timelineRefundCents != null &&
     agreedAmountCents > 0
       ? Math.max(0, agreedAmountCents - timelineRefundCents)
@@ -1974,8 +1973,7 @@ export function JobDetail({
   const cleanerReceivedPartialRefund =
     agreedAmountCents > 0 &&
     escrowToCleanerCents < agreedAmountCents &&
-    (completedCleanerEscrowPayoutCents != null ||
-      (isPartialRefundResolutionFromTimeline && timelineRefundCents != null));
+    (completedCleanerEscrowPayoutCents != null || timelineRefundCents != null);
 
   const soldGridJobPaymentDisplayCents =
     localJobStatus === "completed" && isJobCleaner
@@ -2224,15 +2222,37 @@ export function JobDetail({
                 <p className="text-xs font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-200">
                   Payment released
                 </p>
+                {securedViaBuyNow ? (
+                  <WonForHeaderWithBuyNowBadge showBuyNow showCleanerWonBadge />
+                ) : null}
                 <p className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 sm:text-3xl">
                   {formatCents(escrowToCleanerCents)}
                 </p>
                 <p className="text-sm leading-relaxed text-emerald-900 dark:text-emerald-100">
-                  Paid to{" "}
+                  {timelineRefundCents != null && timelineRefundCents > 0 ? (
+                    <>
+                      After a refund of {formatCents(timelineRefundCents)} to you,{" "}
+                    </>
+                  ) : null}
+                  <span className="font-semibold tabular-nums">
+                    {formatCents(escrowToCleanerCents)}
+                  </span>{" "}
+                  from job escrow was paid to{" "}
                   <span className="font-semibold">
                     {cleanerName ? cleanerName.split(" ")[0] : "your cleaner"}
                   </span>
-                  . Thank you for using Bond Back.
+                  .
+                  {topUpPayments.length > 0 ? (
+                    <>
+                      {" "}
+                      The agreed job total held was {formatCents(agreedAmountCents)}, including{" "}
+                      {topUpPayments.length === 1
+                        ? "one additional payment"
+                        : `${topUpPayments.length} additional payments`}
+                      .
+                    </>
+                  ) : null}{" "}
+                  Thank you for using Bond Back.
                 </p>
               </div>
               <JobProgressTimeline
@@ -2244,6 +2264,7 @@ export function JobDetail({
                 hasAfterPhotos={!!hasAfterPhotos}
                 isJobLister={!!isJobLister}
                 isJobCleaner={!!isJobCleaner}
+                closedDisputeCaseHref={disputeCaseHref}
               />
             </div>
           ) : isSold ? (
@@ -2811,6 +2832,7 @@ export function JobDetail({
               hasAfterPhotos={!!hasAfterPhotos}
               isJobLister={!!isJobLister}
               isJobCleaner={!!isJobCleaner}
+              closedDisputeCaseHref={disputeCaseHref}
             />
           )}
 
@@ -2899,6 +2921,9 @@ export function JobDetail({
                         <p className="text-sm font-bold uppercase tracking-wide text-emerald-900 dark:text-emerald-200">
                           Payment released
                         </p>
+                        {securedViaBuyNow ? (
+                          <WonForHeaderWithBuyNowBadge showBuyNow showCleanerWonBadge />
+                        ) : null}
                         <p className="text-xl font-semibold leading-snug text-emerald-900 sm:text-2xl dark:text-emerald-100">
                           {`Payment of ${formatCents(
                             escrowToCleanerCents
@@ -2907,7 +2932,9 @@ export function JobDetail({
                         <p className="text-sm leading-relaxed text-emerald-800 dark:text-emerald-200">
                           {cleanerReceivedPartialRefund
                             ? "This is the net amount from the job escrow after the agreed partial refund to the lister. The lister paid the Service Fee separately."
-                            : "You received the full bid amount. The lister paid the Service Fee separately."}
+                            : topUpPayments.length > 0
+                              ? "This is the full job amount from escrow (including any agreed top-ups). The lister paid the Service Fee separately."
+                              : "You received the full bid amount. The lister paid the Service Fee separately."}
                         </p>
                         <p className="text-sm leading-relaxed text-emerald-800/90 dark:text-emerald-200/90">
                           Funds sent to your Stripe account – automatic payout in 2–7 days, or use Withdraw Now in Settings → Payments.
@@ -5569,16 +5596,32 @@ export function JobDetail({
   );
 }
 
-function WonForHeaderWithBuyNowBadge({ showBuyNow }: { showBuyNow?: boolean }) {
+function WonForHeaderWithBuyNowBadge({
+  showBuyNow,
+  showCleanerWonBadge,
+}: {
+  showBuyNow?: boolean;
+  /** Shown with Buy Now on completed jobs — cleaner secured the job at the fixed price. */
+  showCleanerWonBadge?: boolean;
+}) {
+  const showHeader = Boolean(showBuyNow || showCleanerWonBadge);
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
+      {showHeader ? (
+        <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">Won for</p>
+      ) : null}
       {showBuyNow ? (
         <Badge
           variant="outline"
           className="border-violet-500/70 bg-violet-500/[0.12] text-[10px] font-semibold uppercase tracking-wide text-violet-800 dark:border-violet-400/60 dark:bg-violet-950/60 dark:text-violet-200"
         >
           Buy now
+        </Badge>
+      ) : null}
+      {showCleanerWonBadge ? (
+        <Badge className="gap-1 border-0 bg-emerald-600/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm dark:bg-emerald-700/95">
+          <Trophy className="h-3 w-3" aria-hidden />
+          Cleaner won
         </Badge>
       ) : null}
     </div>

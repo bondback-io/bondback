@@ -1,8 +1,10 @@
 "use client";
 
 import { format } from "date-fns";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, CreditCard, RefreshCw } from "lucide-react";
+import { CheckCircle2, CreditCard, RefreshCw, PlusCircle, Scale } from "lucide-react";
+import type { JobTopUpPaymentRecord } from "@/lib/job-top-up";
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", {
@@ -16,16 +18,32 @@ function formatCents(cents: number): string {
 export type JobPaymentTimelineProps = {
   /** Whether the job has a payment hold (PaymentIntent). */
   hasPaymentHold: boolean;
-  /** Amount held in escrow in cents (when hasPaymentHold). */
+  /** Total amount held in escrow in cents (when hasPaymentHold); usually equals agreed job total. */
   heldAmountCents?: number | null;
   /** When payment was released to cleaner (captured + transferred). */
   paymentReleasedAt: string | null;
-  /** Dispute resolution type if resolved (e.g. partial_refund_accepted, refund). */
+  /** Dispute resolution type if resolved (e.g. partial_refund_accepted, admin_mediation_final). */
   disputeResolution: string | null;
   /** When dispute was resolved. */
   resolutionAt: string | null;
-  /** Refund amount in cents (if any). */
+  /** Refund amount in cents from job escrow to the lister (if any). */
   refundAmountCents: number | null;
+  /** Additional escrow payments (separate PaymentIntents). */
+  topUpPayments?: JobTopUpPaymentRecord[];
+  /** Total agreed job price in cents (includes top-ups); defaults to held amount when omitted. */
+  totalAgreedCents?: number | null;
+  /** Net cents from job escrow paid to the cleaner after any lister refund. */
+  netToCleanerCents?: number | null;
+  /** When the job had a dispute case — link to hub detail for audit trail. */
+  disputeCaseHref?: string | null;
+};
+
+type TimelineStep = {
+  label: string;
+  sublabel?: string;
+  date: string | null;
+  icon: React.ReactNode;
+  done: boolean;
 };
 
 export function JobPaymentTimeline({
@@ -35,24 +53,94 @@ export function JobPaymentTimeline({
   disputeResolution,
   resolutionAt,
   refundAmountCents,
+  topUpPayments = [],
+  totalAgreedCents = null,
+  netToCleanerCents = null,
+  disputeCaseHref = null,
 }: JobPaymentTimelineProps) {
-  const hasRefund =
-    disputeResolution &&
-    (disputeResolution === "partial_refund_accepted" ||
-      disputeResolution === "counter_accepted_by_lister" ||
-      disputeResolution === "refund") &&
-    resolutionAt;
+  const topUps = topUpPayments ?? [];
+  const totalAgreed =
+    totalAgreedCents != null && totalAgreedCents > 0
+      ? totalAgreedCents
+      : heldAmountCents != null && heldAmountCents > 0
+        ? heldAmountCents
+        : 0;
+  const topSum = topUps.reduce((s, t) => s + t.agreed_cents, 0);
+  const primaryCents = Math.max(0, totalAgreed - topSum);
 
-  const steps: { label: string; sublabel?: string; date: string | null; icon: React.ReactNode; done: boolean }[] = [];
+  const refundCents =
+    refundAmountCents != null && refundAmountCents > 0
+      ? Math.round(refundAmountCents)
+      : null;
+  const refundEventAt = resolutionAt ?? paymentReleasedAt;
+  const showRefundStep = refundCents != null && Boolean(refundEventAt?.trim());
 
-  if (hasPaymentHold) {
+  const netReleased =
+    netToCleanerCents != null && netToCleanerCents >= 0
+      ? netToCleanerCents
+      : totalAgreed > 0 && refundCents != null
+        ? Math.max(0, totalAgreed - refundCents)
+        : totalAgreed > 0
+          ? totalAgreed
+          : null;
+
+  const steps: TimelineStep[] = [];
+
+  if (hasPaymentHold && totalAgreed > 0) {
+    if (topUps.length === 0) {
+      steps.push({
+        label: "Payment held",
+        sublabel: `${formatCents(totalAgreed)} in escrow`,
+        date: null,
+        icon: <CreditCard className="h-4 w-4" />,
+        done: true,
+      });
+    } else {
+      if (primaryCents >= 1) {
+        steps.push({
+          label: "Initial escrow hold",
+          sublabel: `${formatCents(primaryCents)} from the first payment`,
+          date: null,
+          icon: <CreditCard className="h-4 w-4" />,
+          done: true,
+        });
+      }
+      topUps.forEach((t, idx) => {
+        const note = t.note?.trim();
+        const noteShort =
+          note && note.length > 0
+            ? note.length > 72
+              ? `${note.slice(0, 72)}…`
+              : note
+            : null;
+        steps.push({
+          label:
+            topUps.length > 1
+              ? `Additional payment #${idx + 1}`
+              : "Additional payment (top-up)",
+          sublabel: [
+            `${formatCents(t.agreed_cents)} added to escrow`,
+            noteShort,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          date: t.created_at?.trim() ? t.created_at : null,
+          icon: <PlusCircle className="h-4 w-4 text-sky-600 dark:text-sky-400" />,
+          done: true,
+        });
+      });
+    }
+  }
+
+  if (showRefundStep && refundCents != null && refundEventAt) {
     steps.push({
-      label: "Payment held",
-      sublabel: heldAmountCents != null && heldAmountCents > 0
-        ? `${formatCents(heldAmountCents)} in escrow`
-        : undefined,
-      date: null,
-      icon: <CreditCard className="h-4 w-4" />,
+      label: `Refund to lister — ${formatCents(refundCents)}`,
+      sublabel:
+        disputeResolution?.trim()
+          ? `Recorded as: ${disputeResolution.replace(/_/g, " ")}`
+          : "From job escrow",
+      date: refundEventAt,
+      icon: <RefreshCw className="h-4 w-4 text-amber-600" />,
       done: true,
     });
   }
@@ -60,22 +148,23 @@ export function JobPaymentTimeline({
   if (paymentReleasedAt) {
     steps.push({
       label: "Released to cleaner",
+      sublabel:
+        netReleased != null && netReleased >= 0
+          ? refundCents != null
+            ? `${formatCents(netReleased)} to cleaner after ${formatCents(refundCents)} refund`
+            : `${formatCents(netReleased)} job payment from escrow`
+          : undefined,
       date: paymentReleasedAt,
       icon: <CheckCircle2 className="h-4 w-4 text-emerald-600" />,
       done: true,
     });
   }
 
-  if (hasRefund && refundAmountCents != null && refundAmountCents > 0) {
-    steps.push({
-      label: `Refund of ${formatCents(refundAmountCents)} to lister`,
-      date: resolutionAt,
-      icon: <RefreshCw className="h-4 w-4 text-amber-600" />,
-      done: true,
-    });
-  }
-
   if (steps.length === 0) return null;
+
+  const showSummary =
+    totalAgreed > 0 &&
+    (refundCents != null || topUps.length > 0 || netReleased != null);
 
   return (
     <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
@@ -86,14 +175,31 @@ export function JobPaymentTimeline({
         <p className="text-xs text-muted-foreground dark:text-gray-400">
           Payment and payout events for this job.
         </p>
+        {showSummary && netReleased != null && netReleased >= 0 ? (
+          <p className="mt-2 rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-xs leading-relaxed text-foreground dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
+            <span className="font-semibold">Final job price (escrow to cleaner):</span>{" "}
+            {formatCents(netReleased)}
+            {totalAgreed > netReleased ? (
+              <>
+                {" "}
+                — total held for the job was {formatCents(totalAgreed)}
+                {refundCents != null ? (
+                  <>
+                    , including {formatCents(refundCents)} refunded to the lister
+                  </>
+                ) : null}
+                .
+              </>
+            ) : (
+              "."
+            )}
+          </p>
+        ) : null}
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <ul className="space-y-3">
           {steps.map((step, i) => (
-            <li
-              key={i}
-              className="flex items-start gap-3 text-sm"
-            >
+            <li key={i} className="flex items-start gap-3 text-sm">
               <span
                 className={
                   step.done
@@ -121,6 +227,22 @@ export function JobPaymentTimeline({
             </li>
           ))}
         </ul>
+
+        {disputeCaseHref?.trim() ? (
+          <div className="flex gap-2 rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2.5 text-xs leading-relaxed text-amber-950 dark:border-amber-800/55 dark:bg-amber-950/35 dark:text-amber-100">
+            <Scale className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+            <p className="min-w-0">
+              This job was disputed.{" "}
+              <Link
+                href={disputeCaseHref}
+                className="font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
+              >
+                View the closed dispute case
+              </Link>{" "}
+              for messages and decisions.
+            </p>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

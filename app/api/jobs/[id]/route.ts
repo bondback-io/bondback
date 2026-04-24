@@ -13,6 +13,9 @@ import {
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
+import { listerRefundCentsFromDisputeJob } from "@/lib/jobs/cleaner-net-earnings";
+import { jobQualifiesForDisputeHub } from "@/lib/jobs/dispute-hub-helpers";
+import { parseJobTopUpPayments } from "@/lib/job-top-up";
 
 type Params = Promise<{ id: string }>;
 
@@ -150,6 +153,51 @@ export async function GET(
   }
 
   const hasPaymentHold = !!(job && typeof (job as { payment_intent_id?: string }).payment_intent_id === "string" && (job as { payment_intent_id: string }).payment_intent_id?.trim());
+  const jobStatus =
+    job && typeof (job as { status?: string }).status === "string"
+      ? (job as { status: string }).status
+      : null;
+  const proposedRefundAmount =
+    job && typeof (job as { proposed_refund_amount?: number }).proposed_refund_amount === "number"
+      ? (job as { proposed_refund_amount: number }).proposed_refund_amount
+      : null;
+  const counterProposalAmount =
+    job && typeof (job as { counter_proposal_amount?: number }).counter_proposal_amount === "number"
+      ? (job as { counter_proposal_amount: number }).counter_proposal_amount
+      : null;
+  const jRefund =
+    job && typeof (job as { refund_amount?: number }).refund_amount === "number"
+      ? (job as { refund_amount: number }).refund_amount
+      : null;
+
+  const listerRefundAfterSettlement =
+    jobStatus === "completed" && job
+      ? listerRefundCentsFromDisputeJob(job as never)
+      : 0;
+  const completedCleanerEscrowPayoutCents =
+    jobStatus === "completed" &&
+    listerRefundAfterSettlement >= 1 &&
+    agreedAmountCents > 0
+      ? Math.max(0, agreedAmountCents - listerRefundAfterSettlement)
+      : null;
+  const timelineRefundResolved =
+    jobStatus === "completed" && listerRefundAfterSettlement >= 1
+      ? listerRefundAfterSettlement
+      : null;
+
+  const topUpPayments = parseJobTopUpPayments(
+    job ? ((job as { top_up_payments?: unknown }).top_up_payments as never) : null
+  );
+
+  const numericJobId =
+    job && typeof (job as { id?: number }).id === "number"
+      ? (job as { id: number }).id
+      : null;
+  const disputeCaseHref =
+    numericJobId != null && job && jobQualifiesForDisputeHub(job as never)
+      ? `/disputes/${numericJobId}`
+      : null;
+
   const paymentTimeline = job && (hasPaymentHold || (job as { payment_released_at?: string }).payment_released_at || (job as { dispute_resolution?: string }).dispute_resolution)
     ? {
         hasPaymentHold,
@@ -157,7 +205,18 @@ export async function GET(
         paymentReleasedAt: (job as { payment_released_at?: string }).payment_released_at ?? null,
         disputeResolution: (job as { dispute_resolution?: string }).dispute_resolution ?? null,
         resolutionAt: (job as { resolution_at?: string }).resolution_at ?? null,
-        refundAmountCents: (job as { refund_amount?: number }).refund_amount ?? (job as { proposed_refund_amount?: number }).proposed_refund_amount ?? (job as { counter_proposal_amount?: number }).counter_proposal_amount ?? null,
+        refundAmountCents:
+          timelineRefundResolved ??
+          jRefund ??
+          proposedRefundAmount ??
+          counterProposalAmount ??
+          null,
+        topUpPayments,
+        totalAgreedCents: agreedAmountCents,
+        netToCleanerCents:
+          completedCleanerEscrowPayoutCents ??
+          (jobStatus === "completed" ? agreedAmountCents : null),
+        disputeCaseHref,
       }
     : null;
 
