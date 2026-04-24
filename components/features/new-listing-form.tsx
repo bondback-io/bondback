@@ -131,6 +131,12 @@ import {
   serviceTypeLabel,
   type ServiceTypeKey,
 } from "@/lib/service-types";
+import {
+  buildListingServiceDetailsPayload,
+  DEEP_FOCUS_AREA_KEYS,
+  deepFocusAreaLabel,
+} from "@/lib/listing-service-details";
+import type { Json } from "@/types/supabase";
 
 const listingAddonZodEnum = z.enum(
   LISTING_ADDON_KEYS as unknown as [string, ...string[]]
@@ -165,7 +171,7 @@ const SERVICE_TYPE_PICKER_OPTIONS: {
   {
     value: "deep_clean",
     title: "Deep / spring clean",
-    subtitle: "Move-in & thorough refresh",
+    subtitle: "Deep, spring & inspection-ready cleans",
     icon: Sparkles,
   },
 ];
@@ -175,6 +181,8 @@ const recurringFreqZodEnum = z.enum(
 const deepCleanPurposeZodEnum = z.enum(
   DEEP_CLEAN_PURPOSES as unknown as [string, ...string[]]
 );
+const deepFocusZodEnum = z.enum(DEEP_FOCUS_AREA_KEYS as unknown as [string, ...string[]]);
+const deepCleanIntensityZodEnum = z.enum(["light", "standard", "heavy"]);
 
 const propertyTypes = ["apartment", "house", "townhouse", "studio"] as const;
 type PropertyType = (typeof propertyTypes)[number];
@@ -193,6 +201,11 @@ const propertyConditionKeys = [
 const DEFAULT_MIN_LISTING_STARTING_PRICE_AUD = 100;
 /** When admin enables low-amount test listings, allow cents-level starting prices. */
 const LOW_AMOUNT_MIN_RESERVE_AUD = 0.01;
+
+/** Bond / Airbnb / deep require minimum condition photos; recurring can list with none. */
+function minPhotosRequiredToPublish(serviceType: ServiceTypeKey): number {
+  return serviceType === "recurring_house_cleaning" ? 0 : PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH;
+}
 
 function reservePriceMinMessage(minAud: number): string {
   const label =
@@ -234,22 +247,24 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
         .int()
         .refine((v) => allowedDurations.includes(v), "Select a valid auction duration"),
       buyNowPrice: z.string().optional(),
+      accessInstructions: z.string().max(2000).optional(),
+      airbnbHostNotes: z.string().max(2000).optional(),
+      recurringPreferredSchedule: z.string().max(500).optional(),
+      recurringFocusNotes: z.string().max(2000).optional(),
+      deepCleanIntensity: deepCleanIntensityZodEnum.optional(),
+      deepFocusAreas: z.array(deepFocusZodEnum).default([]),
+      deepSpecialRequests: z.string().max(2000).optional(),
     })
     .superRefine((data, ctx) => {
-      if (data.serviceType === "bond_cleaning") {
+      if (data.serviceType === "bond_cleaning" || data.serviceType === "airbnb_turnover") {
         if (!data.moveOutDate) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["moveOutDate"],
-            message: "Select your move-out date",
-          });
-        }
-      } else {
-        if (!data.moveOutDate) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["moveOutDate"],
-            message: "Select your preferred service date",
+            message:
+              data.serviceType === "bond_cleaning"
+                ? "Select your move-out date"
+                : "Select check-out date",
           });
         }
       }
@@ -260,28 +275,14 @@ function buildListingSchema(minReserveAud: number, allowTwoMinuteAuction: boolea
           message: "Select how often you need cleaning",
         });
       }
-      if (data.serviceType === "airbnb_turnover") {
-        if (data.airbnbGuestCapacity == null || data.airbnbGuestCapacity < 1) {
+      if (data.serviceType === "deep_clean") {
+        if (!data.deepCleanIntensity) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ["airbnbGuestCapacity"],
-            message: "Enter guest capacity",
+            path: ["deepCleanIntensity"],
+            message: "Select clean intensity",
           });
         }
-        if (data.airbnbTurnaroundHours == null || data.airbnbTurnaroundHours < 1) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["airbnbTurnaroundHours"],
-            message: "Enter turnaround time (hours)",
-          });
-        }
-      }
-      if (data.serviceType === "deep_clean" && !data.deepCleanPurpose) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["deepCleanPurpose"],
-          message: "Select the type of clean",
-        });
       }
       if (data.buyNowPrice?.trim()) {
         const numeric = Number(data.buyNowPrice);
@@ -507,6 +508,13 @@ export function NewListingForm({
       addons: [],
       propertyDescription: "",
       instructions: "",
+      accessInstructions: "",
+      airbnbHostNotes: "",
+      recurringPreferredSchedule: "",
+      recurringFocusNotes: "",
+      deepCleanIntensity: undefined,
+      deepFocusAreas: [],
+      deepSpecialRequests: "",
       moveOutDate: undefined,
       reservePrice: defaultReservePrice,
       durationDays: 3,
@@ -533,6 +541,14 @@ export function NewListingForm({
     }
     if (serviceTypeWatched !== "deep_clean") {
       form.setValue("deepCleanPurpose", undefined, { shouldValidate: true });
+      form.setValue("deepCleanIntensity", undefined, { shouldValidate: true });
+      form.setValue("deepFocusAreas", [], { shouldValidate: true });
+      form.setValue("deepSpecialRequests", "", { shouldValidate: true });
+    }
+    /** Simplified flows: pricing still uses condition × levels; use neutral defaults when not collected. */
+    if (serviceTypeWatched !== "bond_cleaning") {
+      form.setValue("propertyCondition", "good", { shouldValidate: false });
+      form.setValue("propertyLevels", "1", { shouldValidate: false });
     }
   }, [serviceTypeWatched, form]);
 
@@ -560,6 +576,10 @@ export function NewListingForm({
         effectiveFeePercent
       ),
     [buyNowNum, effectiveFeePercent]
+  );
+  const minPhotosPublish = useMemo(
+    () => minPhotosRequiredToPublish(serviceTypeWatched as ServiceTypeKey),
+    [serviceTypeWatched]
   );
   const estimatedPrice = useMemo(
     () => calculateEstimatedPrice(watchedValues, pricingModifiers),
@@ -777,25 +797,52 @@ export function NewListingForm({
         : null;
       const endTime = computeListingEndTimeIso({ durationDays });
 
-      const instructionsBase = values.instructions?.trim() || null;
       const metaLines: string[] = [];
       if (values.serviceType === "airbnb_turnover") {
-        metaLines.push(
-          `Airbnb turnover — guest capacity: ${values.airbnbGuestCapacity}, turnaround: ${values.airbnbTurnaroundHours}h`
-        );
+        if (values.airbnbGuestCapacity != null && values.airbnbGuestCapacity >= 1) {
+          metaLines.push(`Airbnb turnover — up to ${values.airbnbGuestCapacity} guests`);
+        } else {
+          metaLines.push("Airbnb turnover");
+        }
       }
       if (values.serviceType === "recurring_house_cleaning" && values.recurringFrequency) {
         metaLines.push(
           `Recurring clean — ${recurringFrequencyShortLabel(values.recurringFrequency)}`
         );
       }
-      if (values.serviceType === "deep_clean" && values.deepCleanPurpose) {
-        metaLines.push(`Purpose: ${deepCleanPurposeLabel(values.deepCleanPurpose)}`);
+      if (values.serviceType === "deep_clean") {
+        if (values.deepCleanIntensity) {
+          metaLines.push(`Deep clean intensity: ${values.deepCleanIntensity}`);
+        }
+        if (values.deepCleanPurpose) {
+          metaLines.push(`Type: ${deepCleanPurposeLabel(values.deepCleanPurpose)}`);
+        }
       }
-      const instructions =
-        [metaLines.join("\n"), instructionsBase].filter(Boolean).join("\n\n") || null;
+      const access = values.accessInstructions?.trim();
+      const userInstr = values.instructions?.trim();
+      const instrHead = metaLines.filter(Boolean).join("\n");
+      const instrParts = [instrHead, userInstr].filter(Boolean);
+      if (access) instrParts.push(`Access / keys: ${access}`);
+      const instructions = instrParts.join("\n\n") || null;
+
+      let propDesc = values.propertyDescription?.trim() || "";
+      if (values.serviceType === "airbnb_turnover" && values.airbnbHostNotes?.trim()) {
+        const n = values.airbnbHostNotes.trim();
+        propDesc = propDesc ? `${propDesc}\n\n${n}` : n;
+      }
+      if (values.serviceType === "recurring_house_cleaning" && values.recurringFocusNotes?.trim()) {
+        const n = `Regular focus: ${values.recurringFocusNotes.trim()}`;
+        propDesc = propDesc ? `${propDesc}\n\n${n}` : n;
+      }
+      if (values.serviceType === "deep_clean" && values.deepSpecialRequests?.trim()) {
+        const n = values.deepSpecialRequests.trim();
+        propDesc = propDesc ? `${propDesc}\n\n${n}` : n;
+      }
+      const property_description = propDesc || null;
 
       const title = buildAutoListingTitle(values);
+
+      const minPublishPhotos = minPhotosRequiredToPublish(values.serviceType as ServiceTypeKey);
 
       if (initialPhotoFiles.length > PHOTO_LIMITS.LISTING_INITIAL) {
         const msg = `Max ${PHOTO_LIMITS.LISTING_INITIAL} initial condition photos allowed.`;
@@ -805,14 +852,29 @@ export function NewListingForm({
         });
         return;
       }
-      if (initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH) {
-        const msg = `Upload at least ${PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} initial condition photos (step 3) before publishing.`;
-        failPublish(new Error(msg), "photoUpload", {
-          failureHint: null,
-          logToServer: false,
-        });
-        return;
+      if (initialPhotoFiles.length < minPublishPhotos) {
+        const msg =
+          minPublishPhotos === 0
+            ? ""
+            : `Upload at least ${minPublishPhotos} initial condition photos (step 3) before publishing.`;
+        if (minPublishPhotos > 0) {
+          failPublish(new Error(msg), "photoUpload", {
+            failureHint: null,
+            logToServer: false,
+          });
+          return;
+        }
       }
+
+      const serviceDetailsJson = buildListingServiceDetailsPayload({
+        access_instructions: values.accessInstructions,
+        airbnb_host_notes: values.airbnbHostNotes,
+        recurring_preferred_schedule: values.recurringPreferredSchedule,
+        recurring_focus_notes: values.recurringFocusNotes,
+        deep_clean_intensity: values.deepCleanIntensity,
+        deep_focus_areas: values.deepFocusAreas,
+        deep_special_requests: values.deepSpecialRequests,
+      });
 
       setPublishStepId("calculating");
       setPublishProgress(12);
@@ -831,7 +893,7 @@ export function NewListingForm({
       const row = buildListingInsertRow({
         lister_id: listerId,
         title,
-        property_description: values.propertyDescription?.trim() || null,
+        property_description,
         property_address: values.propertyAddress?.trim() || null,
         suburb: values.suburb,
         postcode: values.postcode,
@@ -870,6 +932,7 @@ export function NewListingForm({
         deep_clean_purpose:
           values.serviceType === "deep_clean" ? values.deepCleanPurpose ?? null : null,
         is_urgent: values.isUrgent === true,
+        service_details: serviceDetailsJson as Json,
       });
 
       setPublishProgress(20);
@@ -1281,6 +1344,7 @@ export function NewListingForm({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6 p-5 pt-0 md:p-6 md:pt-0">
+                {serviceTypeWatched === "bond_cleaning" && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label htmlFor="propertyType">Property type</Label>
@@ -1314,6 +1378,7 @@ export function NewListingForm({
                     </p>
                   )}
                 </div>
+                )}
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -1360,6 +1425,76 @@ export function NewListingForm({
                   </div>
                 </div>
 
+                {serviceTypeWatched === "airbnb_turnover" && (
+                  <div className="space-y-4 rounded-lg border border-teal-200/70 bg-teal-50/40 p-4 dark:border-teal-900/45 dark:bg-teal-950/25">
+                    <div className="space-y-2">
+                      <Label>Check-out date</Label>
+                      <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+                        When guests leave — cleaners use this to plan turnover.
+                      </p>
+                      <Controller
+                        control={form.control}
+                        name="moveOutDate"
+                        render={({ field }) => (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                type="button"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal dark:bg-gray-800 dark:border-gray-700",
+                                  !field.value && "text-muted-foreground dark:text-gray-400"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {field.value ? format(field.value, "d MMM yyyy") : "Select check-out date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={(d) => field.onChange(d ?? undefined)}
+                                fromDate={new Date()}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      />
+                      {form.formState.errors.moveOutDate && (
+                        <p className="text-xs text-destructive">{form.formState.errors.moveOutDate.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="airbnbGuestCapacity">Number of guests (optional)</Label>
+                      <Input
+                        id="airbnbGuestCapacity"
+                        type="number"
+                        min={1}
+                        max={99}
+                        placeholder="e.g. 4"
+                        className="dark:bg-gray-800 dark:border-gray-700"
+                        {...form.register("airbnbGuestCapacity", { valueAsNumber: true })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="airbnbHostNotes">Turnover notes</Label>
+                      <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+                        Linens/towels, fridge, bins, restocking, staging, etc.
+                      </p>
+                      <Textarea
+                        id="airbnbHostNotes"
+                        rows={4}
+                        placeholder="e.g. Fresh linen in closet; empty bins; quick fridge wipe…"
+                        className="dark:bg-gray-800 dark:border-gray-700"
+                        {...form.register("airbnbHostNotes")}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {serviceTypeWatched === "bond_cleaning" && (
+                <>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2 sm:col-span-2 md:col-span-1">
                     <div className="flex items-center gap-2">
@@ -1458,95 +1593,136 @@ export function NewListingForm({
                     ))}
                   </div>
                 </div>
-
-                {serviceTypeWatched === "recurring_house_cleaning" && (
-                  <div className="space-y-2 rounded-lg border border-emerald-200/70 bg-emerald-50/40 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/25">
-                    <Label>How often?</Label>
-                    <Controller
-                      control={form.control}
-                      name="recurringFrequency"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700">
-                            <SelectValue placeholder="Select frequency" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="weekly">Weekly</SelectItem>
-                            <SelectItem value="fortnightly">Fortnightly</SelectItem>
-                            <SelectItem value="monthly">Monthly</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                    {form.formState.errors.recurringFrequency && (
-                      <p className="text-xs text-destructive">
-                        {form.formState.errors.recurringFrequency.message}
-                      </p>
-                    )}
-                  </div>
+                </>
                 )}
 
-                {serviceTypeWatched === "airbnb_turnover" && (
-                  <div className="grid gap-4 sm:grid-cols-2 rounded-lg border border-amber-200/70 bg-amber-50/40 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+                {serviceTypeWatched === "recurring_house_cleaning" && (
+                  <div className="space-y-4 rounded-lg border border-sky-200/70 bg-sky-50/40 p-4 dark:border-sky-900/50 dark:bg-sky-950/25">
                     <div className="space-y-2">
-                      <Label htmlFor="airbnbGuestCapacity">Guest capacity</Label>
-                      <Input
-                        id="airbnbGuestCapacity"
-                        type="number"
-                        min={1}
-                        max={99}
-                        className="dark:bg-gray-800 dark:border-gray-700"
-                        {...form.register("airbnbGuestCapacity", { valueAsNumber: true })}
+                      <Label>How often?</Label>
+                      <Controller
+                        control={form.control}
+                        name="recurringFrequency"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700">
+                              <SelectValue placeholder="Select frequency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="weekly">Weekly</SelectItem>
+                              <SelectItem value="fortnightly">Fortnightly</SelectItem>
+                              <SelectItem value="monthly">Monthly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                       />
-                      {form.formState.errors.airbnbGuestCapacity && (
+                      {form.formState.errors.recurringFrequency && (
                         <p className="text-xs text-destructive">
-                          {form.formState.errors.airbnbGuestCapacity.message}
+                          {form.formState.errors.recurringFrequency.message}
                         </p>
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="airbnbTurnaroundHours">Turnaround (hours)</Label>
+                      <Label htmlFor="recurringPreferredSchedule">Preferred day(s) &amp; time window (optional)</Label>
                       <Input
-                        id="airbnbTurnaroundHours"
-                        type="number"
-                        min={1}
-                        max={168}
+                        id="recurringPreferredSchedule"
+                        placeholder="e.g. Tuesday mornings, after 9am"
                         className="dark:bg-gray-800 dark:border-gray-700"
-                        {...form.register("airbnbTurnaroundHours", { valueAsNumber: true })}
+                        {...form.register("recurringPreferredSchedule")}
                       />
-                      {form.formState.errors.airbnbTurnaroundHours && (
-                        <p className="text-xs text-destructive">
-                          {form.formState.errors.airbnbTurnaroundHours.message}
-                        </p>
-                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="recurringFocusNotes">Regular focus areas or notes</Label>
+                      <Textarea
+                        id="recurringFocusNotes"
+                        rows={3}
+                        placeholder="e.g. Kitchen and bathrooms each visit; pets in backyard…"
+                        className="dark:bg-gray-800 dark:border-gray-700"
+                        {...form.register("recurringFocusNotes")}
+                      />
                     </div>
                   </div>
                 )}
 
                 {serviceTypeWatched === "deep_clean" && (
-                  <div className="space-y-2 rounded-lg border border-violet-200/70 bg-violet-50/40 p-4 dark:border-violet-900/45 dark:bg-violet-950/25">
-                    <Label>Purpose</Label>
-                    <Controller
-                      control={form.control}
-                      name="deepCleanPurpose"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700">
-                            <SelectValue placeholder="Select purpose" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="deep_clean">Deep clean</SelectItem>
-                            <SelectItem value="spring_clean">Spring clean</SelectItem>
-                            <SelectItem value="move_in_clean">Move-in clean</SelectItem>
-                          </SelectContent>
-                        </Select>
+                  <div className="space-y-4 rounded-lg border border-violet-200/70 bg-violet-50/40 p-4 dark:border-violet-900/45 dark:bg-violet-950/25">
+                    <div className="space-y-2">
+                      <Label>Clean intensity</Label>
+                      <Controller
+                        control={form.control}
+                        name="deepCleanIntensity"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700">
+                              <SelectValue placeholder="Select intensity" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="light">Light deep clean</SelectItem>
+                              <SelectItem value="standard">Standard deep clean</SelectItem>
+                              <SelectItem value="heavy">Heavy deep clean</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                      {form.formState.errors.deepCleanIntensity && (
+                        <p className="text-xs text-destructive">
+                          {form.formState.errors.deepCleanIntensity.message}
+                        </p>
                       )}
-                    />
-                    {form.formState.errors.deepCleanPurpose && (
-                      <p className="text-xs text-destructive">
-                        {form.formState.errors.deepCleanPurpose.message}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Clean type (optional)</Label>
+                      <Controller
+                        control={form.control}
+                        name="deepCleanPurpose"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger className="dark:bg-gray-800 dark:border-gray-700">
+                              <SelectValue placeholder="General deep clean" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="deep_clean">Deep clean</SelectItem>
+                              <SelectItem value="spring_clean">Spring clean</SelectItem>
+                              <SelectItem value="move_in_clean">Move-in clean</SelectItem>
+                              <SelectItem value="inspection_clean">Inspection clean</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Focus areas</Label>
+                      <p className="text-[11px] text-muted-foreground dark:text-gray-500">
+                        Select any that need extra attention.
                       </p>
-                    )}
+                      <div className="flex flex-wrap gap-2">
+                        {DEEP_FOCUS_AREA_KEYS.map((key) => {
+                          const checked = watchedValues.deepFocusAreas.includes(key);
+                          return (
+                            <label
+                              key={key}
+                              className={cn(
+                                "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors dark:border-gray-700",
+                                checked
+                                  ? "border-violet-400 bg-violet-100/80 dark:bg-violet-950/50"
+                                  : "border-border hover:bg-muted/50 dark:hover:bg-gray-800"
+                              )}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(c) => {
+                                  const next = c
+                                    ? [...watchedValues.deepFocusAreas, key]
+                                    : watchedValues.deepFocusAreas.filter((a) => a !== key);
+                                  form.setValue("deepFocusAreas", next, { shouldValidate: true });
+                                }}
+                              />
+                              {deepFocusAreaLabel(key)}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -1683,21 +1859,31 @@ export function NewListingForm({
                   Initial condition photos
                 </CardTitle>
                 <CardDescription className="dark:text-gray-400">
-                  Upload clear before photos of the entire property. You need at least{" "}
-                  {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} photos to publish; you can move on and add more from the next
-                  steps before you publish. Select one photo as the cover—it will be shown on job cards.
+                  {minPhotosPublish === 0 ? (
+                    <>
+                      Photos are optional for recurring cleans. Add some if you like — they help cleaners bid accurately.
+                      You can still publish without photos.
+                    </>
+                  ) : (
+                    <>
+                      Upload clear before photos of the entire property. You need at least {minPhotosPublish} photos to
+                      publish; you can move on and add more from the next steps before you publish. Select one photo as
+                      the cover—it will be shown on job cards.
+                    </>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 p-5 pt-0 md:p-6 md:pt-0">
-                {initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH && (
+                {minPhotosPublish > 0 && initialPhotoFiles.length < minPhotosPublish && (
                   <Alert variant="warning" className="px-4 py-3">
                     <AlertDescription className="space-y-1.5 text-xs leading-relaxed sm:text-sm">
                       <span className="block font-semibold text-amber-950 dark:text-amber-50">
-                        {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} photos required to publish
+                        {minPhotosPublish} photos required to publish
                       </span>
                       <span className="block text-amber-900/95 dark:text-amber-100/95">
-                        You have {initialPhotoFiles.length} of {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH}. Add enough photos here before you can publish.
-                        You can still use <strong className="font-medium">Next</strong> to continue the form and return to this step later.
+                        You have {initialPhotoFiles.length} of {minPhotosPublish}. Add enough photos here before you can
+                        publish. You can still use <strong className="font-medium">Next</strong> to continue the form and
+                        return to this step later.
                       </span>
                     </AlertDescription>
                   </Alert>
@@ -1707,7 +1893,11 @@ export function NewListingForm({
                     <Button type="button" variant="outline" size="lg" className="min-h-12 w-full gap-2 sm:w-auto md:min-h-0" asChild>
                       <label htmlFor="listing-initial-condition-photos" className="cursor-pointer">
                         <ImagePlus className="h-5 w-5 md:h-4 md:w-4" />
-                        Upload photos (3 to publish, max {PHOTO_LIMITS.LISTING_INITIAL})
+                        Upload photos (
+                        {minPhotosPublish > 0
+                          ? `${minPhotosPublish} min to publish`
+                          : "optional"}
+                        , max {PHOTO_LIMITS.LISTING_INITIAL})
                       </label>
                     </Button>
                     <span className="text-xs text-muted-foreground dark:text-gray-400">
@@ -1856,11 +2046,12 @@ export function NewListingForm({
                       </div>
                     </>
                   )}
-                  {initialPhotoPreviews.length > 0 &&
-                    initialPhotoPreviews.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH && (
+                  {minPhotosPublish > 0 &&
+                    initialPhotoPreviews.length > 0 &&
+                    initialPhotoPreviews.length < minPhotosPublish && (
                     <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-                      Add {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH - initialPhotoPreviews.length} more photo
-                      {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH - initialPhotoPreviews.length === 1 ? "" : "s"} to meet the minimum for publishing.
+                      Add {minPhotosPublish - initialPhotoPreviews.length} more photo
+                      {minPhotosPublish - initialPhotoPreviews.length === 1 ? "" : "s"} to meet the minimum for publishing.
                     </p>
                   )}
                 </div>
@@ -1888,9 +2079,11 @@ export function NewListingForm({
                       </p>
                       <p className="text-xs text-muted-foreground dark:text-gray-400">
                         {initialPhotoFiles.length}/{PHOTO_LIMITS.LISTING_INITIAL} photos
-                        {initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH
-                          ? ` · at least ${PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} required to publish`
-                          : ""}
+                        {minPhotosPublish > 0 && initialPhotoFiles.length < minPhotosPublish
+                          ? ` · at least ${minPhotosPublish} required to publish`
+                          : minPhotosPublish === 0
+                            ? " · photos optional for recurring"
+                            : ""}
                         . Add any you missed here, or go back to step 3 to remove photos or change the cover.
                       </p>
                     </div>
@@ -2045,10 +2238,47 @@ export function NewListingForm({
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
+                    <Label htmlFor="accessInstructions">Access &amp; keys</Label>
+                    <FieldHelp label="Access help">
+                      Lockbox codes, building entry, where to collect keys, parking — helps cleaners quote and plan.
+                    </FieldHelp>
+                  </div>
+                  <Textarea
+                    id="accessInstructions"
+                    rows={3}
+                    placeholder="e.g. Lockbox 1234 on front porch; visitor parking level B2…"
+                    className="dark:bg-gray-800 dark:border-gray-700"
+                    {...form.register("accessInstructions")}
+                  />
+                </div>
+
+                {serviceTypeWatched === "deep_clean" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="deepSpecialRequestsStep4">Special requests</Label>
+                    <Textarea
+                      id="deepSpecialRequestsStep4"
+                      rows={3}
+                      placeholder="Anything else we should know for this deep clean…"
+                      className="dark:bg-gray-800 dark:border-gray-700"
+                      {...form.register("deepSpecialRequests")}
+                    />
+                  </div>
+                )}
+
+                {serviceTypeWatched !== "airbnb_turnover" && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
                     <Label>
                       {serviceTypeWatched === "bond_cleaning"
                         ? "Move-out date"
-                        : "Preferred service date"}
+                        : serviceTypeWatched === "recurring_house_cleaning"
+                          ? "Preferred first clean date"
+                          : "Preferred service date"}
+                      {serviceTypeWatched !== "bond_cleaning" && (
+                        <span className="ml-1 font-normal text-muted-foreground dark:text-gray-500">
+                          (optional)
+                        </span>
+                      )}
                     </Label>
                     <FieldHelp
                       label={
@@ -2059,7 +2289,9 @@ export function NewListingForm({
                     >
                       {serviceTypeWatched === "bond_cleaning"
                         ? "When do you need the bond clean completed? Cleaners will use this to plan."
-                        : "When would you like this clean done? You can coordinate exact timing with your cleaner after booking."}
+                        : serviceTypeWatched === "recurring_house_cleaning"
+                          ? "If you have a target first visit, pick it here. You can fine-tune timing with your cleaner."
+                          : "When would you like this clean done? You can coordinate exact timing with your cleaner after booking."}
                     </FieldHelp>
                   </div>
                   <Controller
@@ -2081,7 +2313,9 @@ export function NewListingForm({
                               ? format(field.value, "d MMM yyyy")
                               : serviceTypeWatched === "bond_cleaning"
                                 ? "Select move-out date"
-                                : "Select preferred date"}
+                                : serviceTypeWatched === "recurring_house_cleaning"
+                                  ? "Select preferred first clean"
+                                  : "Select preferred date"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="p-0" align="start">
@@ -2101,6 +2335,7 @@ export function NewListingForm({
                     </p>
                   )}
                 </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -2116,10 +2351,10 @@ export function NewListingForm({
                   <CardDescription className="dark:text-gray-400">
                     Set your starting price and how long cleaners can bid.
                   </CardDescription>
-                  {initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH && (
+                  {minPhotosPublish > 0 && initialPhotoFiles.length < minPhotosPublish && (
                     <p className="mt-2 text-base text-amber-600 dark:text-amber-400 md:text-sm">
-                      Add at least {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} initial condition photos in step 3 to publish (
-                      {initialPhotoFiles.length} of {PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} so far).
+                      Add at least {minPhotosPublish} initial condition photos in step 3 to publish (
+                      {initialPhotoFiles.length} of {minPhotosPublish} so far).
                     </p>
                   )}
                 </CardHeader>
@@ -2132,9 +2367,11 @@ export function NewListingForm({
                       </p>
                       <p className="text-xs text-muted-foreground dark:text-gray-400">
                         {initialPhotoFiles.length}/{PHOTO_LIMITS.LISTING_INITIAL} photos
-                        {initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH
-                          ? ` · at least ${PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH} required to publish`
-                          : ""}
+                        {minPhotosPublish > 0 && initialPhotoFiles.length < minPhotosPublish
+                          ? ` · at least ${minPhotosPublish} required to publish`
+                          : minPhotosPublish === 0
+                            ? " · photos optional for recurring"
+                            : ""}
                         . Add more before you publish if you forgot any angles.
                       </p>
                     </div>
@@ -2515,17 +2752,42 @@ export function NewListingForm({
                 onClick={async () => {
                   let ok = true;
                   if (step === 1) {
-                    ok = await form.trigger([
-                      "propertyType",
-                      "bedrooms",
-                      "bathrooms",
-                      "propertyCondition",
-                      "propertyLevels",
-                    ]);
+                    const st = serviceTypeWatched as ServiceTypeKey;
+                    const fields: (
+                      | "propertyType"
+                      | "bedrooms"
+                      | "bathrooms"
+                      | "propertyCondition"
+                      | "propertyLevels"
+                      | "moveOutDate"
+                      | "recurringFrequency"
+                      | "deepCleanIntensity"
+                    )[] = ["bedrooms", "bathrooms"];
+                    if (st === "bond_cleaning") {
+                      fields.push(
+                        "propertyType",
+                        "propertyCondition",
+                        "propertyLevels"
+                      );
+                    }
+                    if (st === "airbnb_turnover") {
+                      fields.push("moveOutDate");
+                    }
+                    if (st === "recurring_house_cleaning") {
+                      fields.push("recurringFrequency");
+                    }
+                    if (st === "deep_clean") {
+                      fields.push("deepCleanIntensity");
+                    }
+                    ok = await form.trigger(fields);
                   } else if (step === 2) {
                     ok = await form.trigger(["suburb", "postcode"]);
                   } else if (step === 4) {
-                    ok = await form.trigger(["moveOutDate"]);
+                    if (serviceTypeWatched === "bond_cleaning") {
+                      ok = await form.trigger(["moveOutDate"]);
+                    } else {
+                      ok = true;
+                    }
                   }
                   if (ok) setStep((s) => s + 1);
                 }}
@@ -2541,7 +2803,7 @@ export function NewListingForm({
                 disabled={
                   isSubmitting ||
                   uploading ||
-                  initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH ||
+                  initialPhotoFiles.length < minPhotosPublish ||
                   initialPhotoFiles.length > PHOTO_LIMITS.LISTING_INITIAL
                 }
                 className="h-12 min-h-[48px] w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 md:h-10 md:min-h-0 md:w-auto"
@@ -2583,7 +2845,7 @@ export function NewListingForm({
                   disabled={
                     isSubmitting ||
                     uploading ||
-                    initialPhotoFiles.length < PHOTO_LIMITS.LISTING_INITIAL_MIN_PUBLISH
+                    initialPhotoFiles.length < minPhotosPublish
                   }
                   onClick={() => {
                     setPublishConfirmOpen(false);

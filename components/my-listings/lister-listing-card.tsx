@@ -5,6 +5,7 @@ import { MapPin, MoreHorizontal, Gavel, Ban, Trash2, RotateCcw, Briefcase } from
 import { cn } from "@/lib/utils";
 import { formatCents, isListingLive } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
+import { getListingCardServiceUi } from "@/lib/listing-service-details";
 import { ListingCoverImage } from "@/components/listing/listing-cover-image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +88,7 @@ export function ListerListingCard({
     !isLiveBidding &&
     cardAccent === "none" &&
     !auctionOpenOnMarket;
+  const serviceCardUi = getListingCardServiceUi(listing);
 
   return (
     <article
@@ -100,7 +102,8 @@ export function ListerListingCard({
           "border-violet-400/65 bg-violet-50/35 ring-2 ring-violet-500/20 dark:border-violet-600/45 dark:bg-violet-950/30 dark:ring-violet-500/15",
         !isLiveBidding &&
           cardAccent === "job_done" &&
-          "border-emerald-700/35 bg-emerald-950/[0.12] ring-1 ring-emerald-600/15 dark:border-emerald-800/50 dark:bg-emerald-950/20 dark:ring-emerald-500/10"
+          "border-emerald-700/35 bg-emerald-950/[0.12] ring-1 ring-emerald-600/15 dark:border-emerald-800/50 dark:bg-emerald-950/20 dark:ring-emerald-500/10",
+        cardAccent === "none" && serviceCardUi.cardAccentClassName
       )}
     >
       {!isLocalDraft && (cardAccent === "job" || cardAccent === "job_done") && (
@@ -151,6 +154,11 @@ export function ListerListingCard({
               >
                 {listing.title || "Untitled listing"}
               </Link>
+              {serviceCardUi.highlightLine ? (
+                <p className="mt-1 line-clamp-2 text-xs font-medium text-muted-foreground dark:text-gray-500">
+                  {serviceCardUi.highlightLine}
+                </p>
+              ) : null}
               <p className="mt-1 flex items-start gap-1 text-xs text-muted-foreground dark:text-gray-400">
                 <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
                 <span className="line-clamp-2">{addressLine}</span>
@@ -216,6 +224,14 @@ export function ListerListingCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              className={cn(
+                "rounded-lg border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                serviceCardUi.badgeClassName
+              )}
+            >
+              {serviceCardUi.badgeLabel}
+            </Badge>
             <Badge className={cn("rounded-lg border px-2.5 py-0.5 text-[11px] font-semibold", toneClasses[badgeTone])}>
               {badgeLabel}
             </Badge>

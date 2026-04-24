@@ -249,6 +249,8 @@ export interface Database {
           airbnb_turnaround_hours: number | null;
           deep_clean_purpose: string | null;
           is_urgent: boolean;
+          /** Service-specific extras (see lib/listing-service-details.ts). */
+          service_details?: Json | null;
         };
         Insert: {
           id?: string;
@@ -289,6 +291,7 @@ export interface Database {
           airbnb_turnaround_hours?: number | null;
           deep_clean_purpose?: string | null;
           is_urgent?: boolean;
+          service_details?: Json;
         };
         Update: {
           title?: string;
@@ -326,6 +329,7 @@ export interface Database {
           airbnb_turnaround_hours?: number | null;
           deep_clean_purpose?: string | null;
           is_urgent?: boolean;
+          service_details?: Json;
         };
         Relationships: [
           {

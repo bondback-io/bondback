@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
+import { getListingCardServiceUi } from "@/lib/listing-service-details";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import { parseJobTopUpPayments } from "@/lib/job-top-up";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
@@ -196,6 +197,7 @@ function DashboardJobCardInner({
   const title = listingTitleWithoutSuburbSuffix(rawTitle, listing?.suburb);
   const cover = listing && getListingCoverUrl(listing) ? getListingCoverUrl(listing)! : null;
   const secondImage = listing ? getListingSecondImageUrl(listing) : null;
+  const serviceCardUi = listing ? getListingCardServiceUi(listing) : null;
 
   const overdue = daysLeft != null && daysLeft < 0;
   const dueSoon = daysLeft != null && daysLeft >= 0 && daysLeft <= 1;
@@ -263,7 +265,8 @@ function DashboardJobCardInner({
       className={cn(
         "overflow-hidden border-border bg-card shadow-sm transition",
         "hover:shadow-md dark:border-gray-800 dark:bg-gray-900/50",
-        "active:scale-[0.98] md:active:scale-[0.995] md:hover:scale-[1.01]"
+        "active:scale-[0.98] md:active:scale-[0.995] md:hover:scale-[1.01]",
+        serviceCardUi?.cardAccentClassName
       )}
     >
       {/* Mobile */}
@@ -291,6 +294,16 @@ function DashboardJobCardInner({
                   Stripe setup required
                 </Badge>
               )}
+              {serviceCardUi ? (
+                <Badge
+                  className={cn(
+                    "border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide shadow-sm sm:text-xs",
+                    serviceCardUi.badgeClassName
+                  )}
+                >
+                  {serviceCardUi.badgeLabel}
+                </Badge>
+              ) : null}
             </div>
           </div>
         </div>
@@ -298,6 +311,11 @@ function DashboardJobCardInner({
           <h3 className="line-clamp-2 text-base font-semibold leading-snug tracking-tight text-foreground dark:text-gray-50 sm:text-xl sm:font-bold sm:leading-tight">
             {title}
           </h3>
+          {serviceCardUi?.highlightLine ? (
+            <p className="line-clamp-2 text-sm font-medium text-muted-foreground dark:text-gray-400">
+              {serviceCardUi.highlightLine}
+            </p>
+          ) : null}
 
           {counterpartyLine && (
             <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-muted/40 px-3 py-2.5 text-sm font-semibold text-foreground dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-100">
@@ -462,6 +480,16 @@ function DashboardJobCardInner({
                   Stripe setup required
                 </Badge>
               )}
+              {serviceCardUi ? (
+                <Badge
+                  className={cn(
+                    "border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide shadow-sm",
+                    serviceCardUi.badgeClassName
+                  )}
+                >
+                  {serviceCardUi.badgeLabel}
+                </Badge>
+              ) : null}
             </div>
           </div>
         </Link>
@@ -471,6 +499,11 @@ function DashboardJobCardInner({
             <h3 className="line-clamp-2 text-base font-bold leading-tight text-foreground dark:text-gray-100">
               {title}
             </h3>
+            {serviceCardUi?.highlightLine ? (
+              <p className="mt-1 line-clamp-2 text-xs font-medium text-muted-foreground dark:text-gray-400">
+                {serviceCardUi.highlightLine}
+              </p>
+            ) : null}
             <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
               <MapPin className="h-4 w-4 shrink-0" />
               {listing ? formatLocationWithState(listing.suburb, listing.postcode) : "—"}

@@ -62,9 +62,9 @@ import { NEXT_IMAGE_SIZES_LISTING_CARD_DESKTOP } from "@/lib/next-image-sizes";
 import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 import {
   normalizeServiceType,
-  recurringListingBadgeText,
   serviceTypeLabel,
 } from "@/lib/service-types";
+import { getListingCardServiceUi } from "@/lib/listing-service-details";
 
 export type ListingCardProps = {
   listing: ListingRow;
@@ -362,13 +362,9 @@ function ListingCardInner({
     recurring_frequency?: string | null;
     is_urgent?: boolean | null;
   };
-  const recurringBadgeText =
-    normalizeServiceType(listRow.service_type) === "recurring_house_cleaning" &&
-    listRow.recurring_frequency
-      ? recurringListingBadgeText(listRow.recurring_frequency)
-      : null;
   const listerMarkedUrgent = listRow.is_urgent === true;
   const serviceTypeLine = serviceTypeLabel(normalizeServiceType(listRow.service_type));
+  const cardServiceUi = getListingCardServiceUi(listing);
 
   const endTime = parseUtcTimestamp(listing.end_time);
   const hoursLeft = (endTime - Date.now()) / (60 * 60 * 1000);
@@ -446,7 +442,8 @@ function ListingCardInner({
           "dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800",
           "[@media(hover:hover)]:hover:scale-[1.02] [@media(hover:hover)]:hover:shadow-xl [@media(hover:hover)]:hover:ring-2 [@media(hover:hover)]:hover:ring-primary/20 [@media(hover:hover)]:hover:border-primary/30",
           "job-card-tap active:scale-[0.95] md:active:scale-[0.99]",
-          "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:outline-none"
+          "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:outline-none",
+          cardServiceUi.cardAccentClassName
         )}
         role="article"
         aria-label={title}
@@ -492,7 +489,10 @@ function ListingCardInner({
           publicMarketplaceBidCTAs={publicMarketplaceBidCTAs}
           currentUserId={currentUserId}
           signInToBidHref={signInToBidHref}
-          recurringBadge={recurringBadgeText}
+          serviceBadgeLabel={cardServiceUi.badgeLabel}
+          serviceBadgeClassName={cardServiceUi.badgeClassName}
+          highlightLine={cardServiceUi.highlightLine}
+          cardAccentClassName={cardServiceUi.cardAccentClassName}
           listerMarkedUrgent={listerMarkedUrgent}
         />
       </div>
@@ -550,11 +550,14 @@ function ListingCardInner({
             {status === "expired" && "Not live"}
           </Badge>
           <div className="flex flex-col items-end gap-1.5">
-            {recurringBadgeText ? (
-              <Badge className="border border-lime-500/50 bg-lime-400 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-lime-950 shadow-md md:text-[9px] dark:bg-lime-400 dark:text-lime-950">
-                {recurringBadgeText}
-              </Badge>
-            ) : null}
+            <Badge
+              className={cn(
+                "border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow-md md:text-[9px]",
+                cardServiceUi.badgeClassName
+              )}
+            >
+              {cardServiceUi.badgeLabel}
+            </Badge>
             {listerMarkedUrgent ? (
               <Badge className="animate-pulse border border-red-400/80 bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white shadow-md md:text-[9px]">
                 Urgent
@@ -636,6 +639,11 @@ function ListingCardInner({
               </Tooltip>
             )}
           </div>
+          {cardServiceUi.highlightLine ? (
+            <p className="line-clamp-2 text-sm font-medium text-muted-foreground dark:text-gray-400 md:text-xs">
+              {cardServiceUi.highlightLine}
+            </p>
+          ) : null}
           <p
             className={cn(
               "flex items-center gap-2 text-base text-muted-foreground dark:text-gray-400 md:gap-1.5",

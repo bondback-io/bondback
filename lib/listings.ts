@@ -1,4 +1,4 @@
-import type { Database } from "@/types/supabase";
+import type { Database, Json } from "@/types/supabase";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 
@@ -243,6 +243,7 @@ export type ListingInsertPayload = ListingInsert & {
   end_date?: string;
   reserve_price?: number;
   base_price?: number;
+  service_details?: Json;
 };
 
 /**
@@ -342,6 +343,7 @@ export function buildListingInsertRow(params: {
   airbnb_turnaround_hours?: number | null;
   deep_clean_purpose?: string | null;
   is_urgent?: boolean;
+  service_details?: Json | null;
 }): ListingInsertPayload {
   const propertyDescription = params.property_description?.trim() || null;
   const propertyAddress = params.property_address?.trim() || null;
@@ -384,5 +386,6 @@ export function buildListingInsertRow(params: {
     airbnb_turnaround_hours: params.airbnb_turnaround_hours ?? null,
     deep_clean_purpose: params.deep_clean_purpose ?? null,
     is_urgent: params.is_urgent === true,
+    service_details: (params.service_details ?? {}) as Json,
   };
 }

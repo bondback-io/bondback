@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isListingLive, type ListingRow } from "@/lib/listings";
+import { getListingCardServiceUi } from "@/lib/listing-service-details";
 import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 export type DashboardListingCardProps = {
@@ -59,13 +60,15 @@ function DashboardListingCardInner({
   const bathrooms = (listing as { bathrooms?: number }).bathrooms;
   const auctionLive = isListingLive(listing);
   const cardTitle = listingTitleWithoutSuburbSuffix(listing.title, listing.suburb);
+  const cardServiceUi = getListingCardServiceUi(listing);
 
   return (
     <Card
       className={cn(
         "overflow-hidden border-border bg-card shadow-sm transition",
         "hover:shadow-md dark:border-gray-800 dark:bg-gray-900/50",
-        "active:scale-[0.95] md:active:scale-[0.99] md:hover:scale-[1.01]"
+        "active:scale-[0.95] md:active:scale-[0.99] md:hover:scale-[1.01]",
+        cardServiceUi.cardAccentClassName
       )}
     >
       {/* Mobile */}
@@ -98,6 +101,14 @@ function DashboardListingCardInner({
                 Hot
               </Badge>
             )}
+            <Badge
+              className={cn(
+                "border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide shadow-sm sm:text-xs",
+                cardServiceUi.badgeClassName
+              )}
+            >
+              {cardServiceUi.badgeLabel}
+            </Badge>
           </div>
         </div>
         <div className="space-y-4 border-t border-border bg-card px-4 pb-5 pt-4 dark:border-gray-800 dark:bg-gray-950">
@@ -134,6 +145,11 @@ function DashboardListingCardInner({
             </p>
           )}
           <p className="line-clamp-2 text-sm font-semibold text-foreground dark:text-gray-100">{cardTitle}</p>
+          {cardServiceUi.highlightLine ? (
+            <p className="line-clamp-2 text-xs font-medium text-muted-foreground dark:text-gray-400">
+              {cardServiceUi.highlightLine}
+            </p>
+          ) : null}
           <p
             className={cn(
               "flex items-center gap-1 text-xs tabular-nums text-muted-foreground dark:text-gray-400",
@@ -229,6 +245,14 @@ function DashboardListingCardInner({
                   Ending soon
                 </Badge>
               )}
+              <Badge
+                className={cn(
+                  "border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  cardServiceUi.badgeClassName
+                )}
+              >
+                {cardServiceUi.badgeLabel}
+              </Badge>
             </div>
           </div>
         </Link>
@@ -238,6 +262,11 @@ function DashboardListingCardInner({
             <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-foreground dark:text-gray-100">
               {cardTitle}
             </h3>
+            {cardServiceUi.highlightLine ? (
+              <p className="mt-1 line-clamp-2 text-[11px] font-medium text-muted-foreground dark:text-gray-400">
+                {cardServiceUi.highlightLine}
+              </p>
+            ) : null}
             <p className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3 shrink-0" />
               {formatLocationWithState(listing.suburb, listing.postcode)}

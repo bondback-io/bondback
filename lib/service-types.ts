@@ -18,6 +18,7 @@ export const DEEP_CLEAN_PURPOSES = [
   "deep_clean",
   "spring_clean",
   "move_in_clean",
+  "inspection_clean",
 ] as const;
 export type DeepCleanPurposeKey = (typeof DEEP_CLEAN_PURPOSES)[number];
 
@@ -85,6 +86,8 @@ export function deepCleanPurposeLabel(key: string | null | undefined): string {
       return "Spring clean";
     case "move_in_clean":
       return "Move-in clean";
+    case "inspection_clean":
+      return "Inspection clean";
     default:
       return "";
   }

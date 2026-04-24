@@ -77,8 +77,15 @@ export type JobCardMarketplaceMobileProps = {
   /** Second image (e.g. another room) for a split hero preview. */
   secondaryThumb?: string | null;
   propertyType?: string | null;
-  /** e.g. "🔄 Weekly" — bright badge for recurring listings */
+  /** e.g. "🔄 Weekly" — extra flair for recurring (optional; service badge covers type) */
   recurringBadge?: string | null;
+  /** Service-type badge from {@link getListingCardServiceUi} */
+  serviceBadgeLabel?: string | null;
+  serviceBadgeClassName?: string;
+  /** Subtitle under title — check-out, frequency, intensity, bond move-out, etc. */
+  highlightLine?: string | null;
+  /** Subtle ring accent matching service type */
+  cardAccentClassName?: string;
   /** Lister-flagged urgent job */
   listerMarkedUrgent?: boolean;
 };
@@ -116,6 +123,10 @@ function JobCardMarketplaceMobileInner({
   secondaryThumb,
   propertyType,
   recurringBadge = null,
+  serviceBadgeLabel = null,
+  serviceBadgeClassName = "",
+  highlightLine = null,
+  cardAccentClassName = "",
   listerMarkedUrgent = false,
   publicMarketplaceBidCTAs = false,
   currentUserId = null,
@@ -153,7 +164,8 @@ function JobCardMarketplaceMobileInner({
       <div
         className={cn(
           "flex w-full flex-col overflow-hidden rounded-xl bg-transparent",
-          cleanerBoost && "rounded-2xl border border-border/80 bg-card/50 p-1 dark:border-gray-700/80 dark:bg-gray-950/50"
+          cleanerBoost && "rounded-2xl border border-border/80 bg-card/50 p-1 dark:border-gray-700/80 dark:bg-gray-950/50",
+          cardAccentClassName
         )}
       >
         <div className={cn("flex flex-row gap-3", cleanerBoost ? "p-3.5" : "p-3")}>
@@ -199,6 +211,16 @@ function JobCardMarketplaceMobileInner({
                 {title}
               </h3>
               <div className="flex shrink-0 flex-col items-end gap-1">
+                {serviceBadgeLabel ? (
+                  <Badge
+                    className={cn(
+                      "border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow-sm",
+                      serviceBadgeClassName
+                    )}
+                  >
+                    {serviceBadgeLabel}
+                  </Badge>
+                ) : null}
                 {recurringBadge ? (
                   <Badge className="border border-lime-500/40 bg-lime-400 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-lime-950 shadow-sm dark:bg-lime-400 dark:text-lime-950">
                     {recurringBadge}
@@ -212,6 +234,11 @@ function JobCardMarketplaceMobileInner({
                 {menu}
               </div>
             </div>
+            {highlightLine ? (
+              <p className="line-clamp-2 text-xs font-medium text-muted-foreground dark:text-gray-400">
+                {highlightLine}
+              </p>
+            ) : null}
 
             <div className="flex flex-wrap items-center gap-2">
               <div
@@ -459,7 +486,8 @@ function JobCardMarketplaceMobileInner({
     <div
       className={cn(
         "flex w-full flex-col overflow-hidden rounded-2xl",
-        cleanerBoost && "shadow-lg shadow-emerald-950/10 ring-1 ring-border/90 dark:shadow-black/40 dark:ring-gray-700/90"
+        cleanerBoost && "shadow-lg shadow-emerald-950/10 ring-1 ring-border/90 dark:shadow-black/40 dark:ring-gray-700/90",
+        cardAccentClassName
       )}
     >
       {/* Hero — full-width or 50/50 when a second photo exists */}
@@ -524,6 +552,16 @@ function JobCardMarketplaceMobileInner({
         <div className="absolute left-3 right-3 top-3 z-10 flex items-start justify-between gap-2">
           <div className="min-w-0 shrink">{menu}</div>
           <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {serviceBadgeLabel ? (
+              <Badge
+                className={cn(
+                  "border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide shadow-md",
+                  serviceBadgeClassName
+                )}
+              >
+                {serviceBadgeLabel}
+              </Badge>
+            ) : null}
             {recurringBadge ? (
               <Badge className="border border-lime-500/40 bg-lime-400 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-lime-950 shadow-md dark:bg-lime-400 dark:text-lime-950">
                 {recurringBadge}
@@ -565,6 +603,11 @@ function JobCardMarketplaceMobileInner({
         >
           {title}
         </h3>
+        {highlightLine ? (
+          <p className="line-clamp-2 text-sm font-medium text-muted-foreground dark:text-gray-400">
+            {highlightLine}
+          </p>
+        ) : null}
 
         <div
           className={cn(
