@@ -1469,9 +1469,9 @@ export function NewListingForm({
                             <SelectValue placeholder="Select frequency" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="weekly">Weekly (suggested price ×0.88)</SelectItem>
-                            <SelectItem value="fortnightly">Fortnightly (×0.98)</SelectItem>
-                            <SelectItem value="monthly">Monthly (×1.12)</SelectItem>
+                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="fortnightly">Fortnightly</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
                           </SelectContent>
                         </Select>
                       )}
