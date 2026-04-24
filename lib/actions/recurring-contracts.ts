@@ -119,6 +119,7 @@ export async function pauseRecurringContract(
   revalidatePath("/my-listings");
   revalidatePath("/lister/dashboard");
   revalidatePath("/jobs");
+  revalidatePath("/calendar");
   return { ok: true };
 }
 
@@ -230,8 +231,8 @@ export async function skipRecurringOccurrence(
     paused_at: string | null;
   } | null;
 
-  if (!c || (c.lister_id !== user.id && c.cleaner_id !== user.id)) {
-    return { ok: false, error: "Not allowed." };
+  if (!c || c.lister_id !== user.id) {
+    return { ok: false, error: "Only the lister can skip a visit." };
   }
 
   if (c.paused_at) {
@@ -275,7 +276,7 @@ export async function skipRecurringOccurrence(
     .eq("id", c.listing_id);
 
   const reasonLine = `${recurringSkipReasonLabel(parsed.key)}${parsed.detail ? ` — ${parsed.detail}` : ""}`;
-  const otherId = c.lister_id === user.id ? c.cleaner_id : c.lister_id;
+  const otherId = c.cleaner_id;
   if (otherId) {
     try {
       await createNotificationWrapper(
@@ -292,6 +293,7 @@ export async function skipRecurringOccurrence(
 
   revalidatePath(`/listings/${c.listing_id}`);
   revalidatePath("/jobs");
+  revalidatePath("/calendar");
   return { ok: true };
 }
 
@@ -361,8 +363,8 @@ export async function moveRecurringOccurrence(
     paused_at: string | null;
   } | null;
 
-  if (!c || (c.lister_id !== user.id && c.cleaner_id !== user.id)) {
-    return { ok: false, error: "Not allowed." };
+  if (!c || c.lister_id !== user.id) {
+    return { ok: false, error: "Only the lister can move a visit." };
   }
 
   if (c.paused_at) {
@@ -394,6 +396,7 @@ export async function moveRecurringOccurrence(
 
   revalidatePath(`/listings/${c.listing_id}`);
   revalidatePath("/jobs");
+  revalidatePath("/calendar");
   return { ok: true };
 }
 

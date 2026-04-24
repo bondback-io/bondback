@@ -39,6 +39,57 @@ export type ServiceAddonsChecklistsMerged = Record<
 
 const CONFIG_VERSION = 1;
 
+/**
+ * Catalog lines added after initial launch: merged into saved global_settings when missing,
+ * so existing admins keep edits/deletes while new recommendations still appear once.
+ */
+const SERVICE_ADDONS_CATALOG_EXTENSIONS: ServiceAddonsChecklistsMerged = {
+  airbnb_turnover: {
+    priced: [
+      { id: "airbnb_bathroom_deep_clean", name: "Full Bathroom Deep Clean", priceAud: 70 },
+      { id: "airbnb_balcony_patio_clean", name: "Balcony / Patio Clean", priceAud: 50 },
+      { id: "airbnb_laundry_linen_service", name: "Laundry / Linen Service", priceAud: 45 },
+      { id: "airbnb_car_space_garage_sweep", name: "Car Space / Garage Sweep", priceAud: 35 },
+    ],
+    free: [
+      "Dust all surfaces and light fixtures",
+      "Clean all mirrors and glass",
+      "Check and clean inside wardrobes",
+      "Final walkthrough and tidy",
+    ],
+  },
+  recurring_house_cleaning: {
+    priced: [
+      { id: "recurring_full_bathroom_deep_clean", name: "Full Bathroom Deep Clean", priceAud: 55 },
+      { id: "recurring_interior_window_cleaning", name: "Interior Window Cleaning", priceAud: 60 },
+      { id: "recurring_fridge_deep_clean", name: "Fridge Deep Clean", priceAud: 40 },
+      { id: "recurring_wardrobe_cupboard_organise", name: "Wardrobe / Cupboard Organise", priceAud: 50 },
+    ],
+    free: [
+      "Dust all furniture and shelves",
+      "Clean all glass surfaces and mirrors",
+      "Vacuum under furniture",
+      "Quick tidy of living areas",
+    ],
+  },
+  deep_clean: {
+    priced: [
+      { id: "deep_full_window_interior_tracks", name: "Full Window Cleaning (interior + tracks)", priceAud: 95 },
+      { id: "deep_carpet_steam_per_room", name: "Carpet Steam Clean (per room)", priceAud: 85 },
+      { id: "deep_wall_washing_all_walls", name: "Wall Washing (all walls)", priceAud: 70 },
+      { id: "deep_light_fixture_chandelier_clean", name: "Light Fixture / Chandelier Clean", priceAud: 40 },
+      { id: "deep_inside_oven_rangehood_deep_clean", name: "Inside Oven + Rangehood Deep Clean", priceAud: 80 },
+    ],
+    free: [
+      "Clean inside all drawers and cabinets",
+      "Remove cobwebs from ceilings and corners",
+      "Clean baseboards and door frames",
+      "Polish all stainless steel appliances",
+      "Deep clean skirting boards",
+    ],
+  },
+};
+
 /** 2026-style flat add-on pricing (QLD/NSW/VIC short-stay & residential market band). */
 export const DEFAULT_SERVICE_ADDONS_CHECKLISTS: ServiceAddonsChecklistsMerged = {
   airbnb_turnover: {
@@ -47,12 +98,14 @@ export const DEFAULT_SERVICE_ADDONS_CHECKLISTS: ServiceAddonsChecklistsMerged = 
       { id: "airbnb_bbq_outdoor", name: "BBQ / Outdoor Area", priceAud: 55 },
       { id: "airbnb_interior_windows", name: "Interior Window Cleaning", priceAud: 65 },
       { id: "airbnb_fridge_deep", name: "Fridge Deep Clean", priceAud: 45 },
+      ...SERVICE_ADDONS_CATALOG_EXTENSIONS.airbnb_turnover.priced,
     ],
     free: [
       "Change linens & towels",
       "Restock amenities",
       "Empty bins + new liners",
       "Welcome setup",
+      ...SERVICE_ADDONS_CATALOG_EXTENSIONS.airbnb_turnover.free,
     ],
   },
   recurring_house_cleaning: {
@@ -60,12 +113,14 @@ export const DEFAULT_SERVICE_ADDONS_CHECKLISTS: ServiceAddonsChecklistsMerged = 
       { id: "recurring_pet_hair", name: "Extra Pet Hair Treatment", priceAud: 35 },
       { id: "recurring_kitchen_deep_wipe", name: "Kitchen Deep Wipe", priceAud: 40 },
       { id: "recurring_oven_clean", name: "Oven Clean", priceAud: 60 },
+      ...SERVICE_ADDONS_CATALOG_EXTENSIONS.recurring_house_cleaning.priced,
     ],
     free: [
       "Bin emptying",
       "Pet areas focus",
       "Light fridge wipe",
       "Kitchen bench detail",
+      ...SERVICE_ADDONS_CATALOG_EXTENSIONS.recurring_house_cleaning.free,
     ],
   },
   deep_clean: {
@@ -75,6 +130,7 @@ export const DEFAULT_SERVICE_ADDONS_CHECKLISTS: ServiceAddonsChecklistsMerged = 
       { id: "deep_inside_cupboards", name: "Inside Cupboards & Drawers", priceAud: 65 },
       { id: "deep_wall_washing_baseboards", name: "Wall Washing / Baseboards", priceAud: 55 },
       { id: "deep_high_dusting_fixtures", name: "High Dusting & Light Fixtures", priceAud: 40 },
+      ...SERVICE_ADDONS_CATALOG_EXTENSIONS.deep_clean.priced,
     ],
     free: [
       "Behind appliances",
@@ -82,6 +138,7 @@ export const DEFAULT_SERVICE_ADDONS_CHECKLISTS: ServiceAddonsChecklistsMerged = 
       "Baseboards",
       "Window tracks & sills",
       "Full bathroom detail",
+      ...SERVICE_ADDONS_CATALOG_EXTENSIONS.deep_clean.free,
     ],
   },
 };
@@ -139,6 +196,31 @@ function parseFree(raw: unknown): string[] {
 }
 
 /**
+ * After applying saved admin JSON, append catalog extension lines that are not yet present.
+ * Does not restore default items an admin removed — only ids/strings defined in
+ * `SERVICE_ADDONS_CATALOG_EXTENSIONS`.
+ */
+function appendCatalogExtensionsIfMissing(merged: ServiceAddonsChecklistsMerged): void {
+  for (const key of SERVICE_ADDON_CHECKLIST_CUSTOM_TYPES) {
+    const ext = SERVICE_ADDONS_CATALOG_EXTENSIONS[key];
+    const seenIds = new Set(merged[key].priced.map((p) => p.id));
+    for (const p of ext.priced) {
+      if (!seenIds.has(p.id)) {
+        merged[key].priced.push({ ...p });
+        seenIds.add(p.id);
+      }
+    }
+    for (const line of ext.free) {
+      const t = line.trim();
+      if (!t) continue;
+      if (!merged[key].free.some((existing) => existing.trim() === t)) {
+        merged[key].free.push(line);
+      }
+    }
+  }
+}
+
+/**
  * Merge DB JSON with code defaults so every custom service type always has full entries.
  */
 export function mergeServiceAddonsChecklists(raw: unknown): ServiceAddonsChecklistsMerged {
@@ -168,6 +250,7 @@ export function mergeServiceAddonsChecklists(raw: unknown): ServiceAddonsCheckli
       base[key].free = parseFree(b.free);
     }
   }
+  appendCatalogExtensionsIfMissing(base);
   return base;
 }
 

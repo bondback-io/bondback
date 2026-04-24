@@ -46,6 +46,7 @@ import {
   LayoutDashboard,
   Users,
   PlusCircle,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 import { ThemeToggleSheetRow, useThemeToggle } from "@/components/layout/theme-toggle";
@@ -395,6 +396,7 @@ export function UserMenu({ session }: UserMenuProps) {
       "/my-listings",
       "/find-jobs",
       "/earnings",
+      "/calendar",
       "/listings/new",
       LISTER_DASHBOARD_HREF,
       CLEANER_JOBS_DASHBOARD_HREF,
@@ -674,6 +676,16 @@ export function UserMenu({ session }: UserMenuProps) {
                 )}
                 <SheetClose asChild>
                   <Link
+                    href="/calendar"
+                    className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
+                    aria-label="My calendar"
+                  >
+                    <CalendarDays className="h-5 w-5 shrink-0" aria-hidden />
+                    <span>Calendar</span>
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Link
                     href="/messages"
                     className={[MOBILE_ROW_CLASS, "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100"].join(" ")}
                     aria-label="Messages"
@@ -907,6 +919,16 @@ export function UserMenu({ session }: UserMenuProps) {
               <span>My Earnings</span>
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem
+            onSelect={() => {
+              router.push("/calendar");
+            }}
+            className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2.5 focus:bg-muted dark:focus:bg-gray-800"
+            aria-label="My calendar"
+          >
+            <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span>Calendar</span>
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
               void (async () => {

@@ -147,7 +147,7 @@ export function JobRecurringContractPanel({
   const canPauseResume = allowMutations && isJobLister;
   const canSkipMove =
     allowMutations &&
-    (isJobLister || isJobCleaner) &&
+    isJobLister &&
     !contract?.paused_at &&
     scheduledWithoutJob.length > 0;
 
