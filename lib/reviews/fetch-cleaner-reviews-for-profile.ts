@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { formatReviewerDisplayName } from "@/lib/reviews/reviewer-display-name";
+import {
+  isMissingRevieweeRoleColumnError,
+  REVIEWEE_IS_CLEANER_OR,
+} from "@/lib/reviews/cleaner-review-filters";
 import { PUBLIC_REVIEW_VISIBLE } from "@/lib/reviews/public-review-visibility";
 
 type Reviewer = {
@@ -69,10 +73,10 @@ async function enrichReviewerProfiles(
 }
 
 /**
- * Loads reviews left for a cleaner on the public profile. Uses the same DB client as the page
- * (`admin ?? supabase`). Filter is **reviewee_id only** — older rows may have null `reviewee_type` /
- * `reviewee_role`; an extra `.or(reviewee_type.eq.cleaner,…)` dropped those and hid written feedback
- * while `cleaner_total_reviews` still counted them.
+ * Loads reviews **about the cleaner** (reviewee is cleaner — lister→cleaner feedback).
+ * Dual-role users must not see lister-targeted reviews here: those use `reviewee_type` /
+ * `reviewee_role` = `lister` with the same `reviewee_id`.
+ * Filters match `fetchVisibleCleanerReviewAggregatesByCleanerIds` (including fallbacks).
  * If the nested `reviewer` embed fails, falls back to a flat select and merges reviewer names.
  */
 export type FetchCleanerReviewsOptions = {
@@ -92,13 +96,22 @@ export async function fetchCleanerReviewsForPublicProfile(
       ? Math.min(100, Math.floor(options.limit))
       : null;
 
-  const runQuery = async (select: string) => {
-    let q = primary
-      .from("reviews")
-      .select(select)
-      .eq("reviewee_id", cleanerId)
-      .eq("is_approved", PUBLIC_REVIEW_VISIBLE.is_approved as never)
-      .eq("is_hidden", PUBLIC_REVIEW_VISIBLE.is_hidden as never);
+  const runQuery = async (
+    select: string,
+    visibility: "public" | "any",
+    cleanerColumn: "or" | "type"
+  ) => {
+    let q = primary.from("reviews").select(select).eq("reviewee_id", cleanerId);
+    if (visibility === "public") {
+      q = q
+        .eq("is_approved", PUBLIC_REVIEW_VISIBLE.is_approved as never)
+        .eq("is_hidden", PUBLIC_REVIEW_VISIBLE.is_hidden as never);
+    }
+    if (cleanerColumn === "or") {
+      q = q.or(REVIEWEE_IS_CLEANER_OR);
+    } else {
+      q = q.eq("reviewee_type", "cleaner" as never);
+    }
     q = q.order("created_at", order);
     if (cap != null) {
       q = q.limit(cap);
@@ -106,11 +119,22 @@ export async function fetchCleanerReviewsForPublicProfile(
     return q;
   };
 
-  let res = await runQuery(REVIEW_SELECT_WITH_REVIEWER);
+  const runWithFallbacks = async (select: string) => {
+    let res = await runQuery(select, "public", "or");
+    if (res.error && /is_approved|is_hidden|column/i.test(String(res.error.message))) {
+      res = await runQuery(select, "any", "or");
+    }
+    if (res.error && isMissingRevieweeRoleColumnError(res.error)) {
+      res = await runQuery(select, "public", "type");
+    }
+    return res;
+  };
+
+  let res = await runWithFallbacks(REVIEW_SELECT_WITH_REVIEWER);
   let rows = (res.data ?? []) as unknown as CleanerProfileReviewRow[];
 
   if (res.error) {
-    const flat = await runQuery(REVIEW_CORE_FIELDS);
+    const flat = await runWithFallbacks(REVIEW_CORE_FIELDS);
     if (!flat.error && flat.data) {
       rows = flat.data as unknown as CleanerProfileReviewRow[];
       await enrichReviewerProfiles(admin ?? primary, rows);

@@ -11,6 +11,7 @@ import { normalizeServiceType, type ServiceTypeKey } from "@/lib/service-types";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import type {
   UserCalendarEvent,
+  UserCalendarEventKind,
   UserCalendarListingHint,
   UserCalendarPayload,
 } from "@/lib/calendar/user-calendar-types";
@@ -42,6 +43,43 @@ async function loadProfileNames(
     out[r.id] = r.full_name?.trim() || "Lister";
   }
   return out;
+}
+
+/** Calendar shows funded escrow + assigned cleaner only (real scheduled work). */
+function isJobFundedAndAssigned(job: {
+  winner_id: string | null;
+  escrow_funded_at: string | null;
+  status: string;
+}): boolean {
+  if (!String(job.winner_id ?? "").trim()) return false;
+  if (!String(job.escrow_funded_at ?? "").trim()) return false;
+  if (isJobCancelledStatus(job.status)) return false;
+  return true;
+}
+
+/**
+ * When several synthetic rows land on the same listing + day, keep a single tooltip row.
+ * (e.g. preferred date = series start = first recurring visit)
+ */
+const KIND_DEDUPE_PRIORITY: Record<UserCalendarEventKind, number> = {
+  recurring_visit: 0,
+  contract_resume: 1,
+  move_out: 2,
+  preferred: 3,
+  recurring_series_start: 4,
+  auction_end: 5,
+};
+
+function dedupeCalendarEventsByListingAndDate(events: UserCalendarEvent[]): UserCalendarEvent[] {
+  const best = new Map<string, UserCalendarEvent>();
+  for (const e of events) {
+    const key = `${e.listingId}:${e.date}`;
+    const prev = best.get(key);
+    if (!prev || KIND_DEDUPE_PRIORITY[e.kind] < KIND_DEDUPE_PRIORITY[prev.kind]) {
+      best.set(key, e);
+    }
+  }
+  return [...best.values()].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
 }
 
 function listingMissingPrimaryDates(row: {
@@ -79,7 +117,7 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
   const { data: jobs } = await client
     .from("jobs")
     .select(
-      "id, listing_id, status, agreed_amount_cents, lister_id, winner_id, recurring_occurrence_id, created_at"
+      "id, listing_id, status, agreed_amount_cents, lister_id, winner_id, recurring_occurrence_id, created_at, escrow_funded_at"
     )
     .or(`lister_id.eq.${userId},winner_id.eq.${userId}`);
 
@@ -93,10 +131,13 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
       winner_id: string | null;
       recurring_occurrence_id: string | null;
       created_at: string;
+      escrow_funded_at: string | null;
     }[];
 
+  const calendarJobRows = jobRows.filter(isJobFundedAndAssigned);
+
   const listingIdsFromJobs = uniq(
-    jobRows.map((j) => String(j.listing_id)).filter((x) => x.length > 0)
+    calendarJobRows.map((j) => String(j.listing_id)).filter((x) => x.length > 0)
   );
 
   let ownedListingIds: string[] = [];
@@ -161,12 +202,20 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
 
   const profileIds = uniq([
     ...[...listingMap.values()].map((l) => l.lister_id),
-    ...jobRows.map((j) => j.winner_id).filter((x): x is string => Boolean(x)),
+    ...calendarJobRows.map((j) => j.winner_id).filter((x): x is string => Boolean(x)),
   ]);
   const names = admin ? await loadProfileNames(admin, profileIds) : {};
 
-  const jobsByListing = new Map<string, typeof jobRows>();
+  const jobsByListingAll = new Map<string, typeof jobRows>();
   for (const j of jobRows) {
+    const lid = String(j.listing_id);
+    const arr = jobsByListingAll.get(lid) ?? [];
+    arr.push(j);
+    jobsByListingAll.set(lid, arr);
+  }
+
+  const jobsByListing = new Map<string, typeof calendarJobRows>();
+  for (const j of calendarJobRows) {
     const lid = String(j.listing_id);
     const arr = jobsByListing.get(lid) ?? [];
     arr.push(j);
@@ -182,28 +231,52 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
 
   for (const listing of listingMap.values()) {
     const st = normalizeServiceType(listing.service_type) as ServiceTypeKey;
-    const jlist = jobsByListing.get(listing.id) ?? [];
+    const jlistCal = jobsByListing.get(listing.id) ?? [];
+    if (jlistCal.length === 0) {
+      const jAll = jobsByListingAll.get(listing.id) ?? [];
+      const hasPipelineJob = jAll.some(
+        (j) => !isJobCancelledStatus(j.status) && String(j.status).toLowerCase() !== "completed"
+      );
+      const userIsLister = listing.lister_id === userId;
+      const primaryJobHint =
+        jAll.find(
+          (j) => !isJobCancelledStatus(j.status) && String(j.status).toLowerCase() !== "completed"
+        ) ??
+        jAll[0] ??
+        null;
+      if (userHasListerRole && userIsLister && hasPipelineJob && listingMissingPrimaryDates(listing)) {
+        preferredDateHints.push({
+          listingId: listing.id,
+          title: listing.title,
+          serviceType: st,
+          jobId: primaryJobHint?.id ?? null,
+        });
+      }
+      continue;
+    }
+
     const primaryJob =
-      jlist.find((j) => !isJobCancelledStatus(j.status) && String(j.status).toLowerCase() !== "completed") ??
-      jlist[0] ??
-      null;
+      jlistCal.find(
+        (j) => !isJobCancelledStatus(j.status) && String(j.status).toLowerCase() !== "completed"
+      ) ?? jlistCal[0]!;
 
     const listerName = names[listing.lister_id] ?? "Lister";
-    const cleanerName = primaryJob?.winner_id ? names[primaryJob.winner_id] ?? null : null;
+    const cleanerName = primaryJob.winner_id ? names[primaryJob.winner_id] ?? null : null;
     const userIsLister = listing.lister_id === userId;
     const jobPriceAud =
-      primaryJob?.agreed_amount_cents != null && primaryJob.agreed_amount_cents > 0
+      primaryJob.agreed_amount_cents != null && primaryJob.agreed_amount_cents > 0
         ? Math.round(primaryJob.agreed_amount_cents / 100)
         : null;
 
     const jobAllowsEdit =
-      primaryJob != null &&
       !isJobCancelledStatus(primaryJob.status) &&
       String(primaryJob.status).toLowerCase() !== "completed";
 
     const canEditListingDates = userHasListerRole && userIsLister && jobAllowsEdit;
 
-    if (Array.isArray(listing.preferred_dates)) {
+    const isRecurringService = st === "recurring_house_cleaning";
+
+    if (!isRecurringService && Array.isArray(listing.preferred_dates)) {
       for (const rawD of listing.preferred_dates) {
         const d = ymd(rawD);
         if (!d) continue;
@@ -219,8 +292,8 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           listerName,
           cleanerName,
           jobPriceAud,
-          jobId: primaryJob?.id ?? null,
-          jobStatus: primaryJob?.status ?? null,
+          jobId: primaryJob.id,
+          jobStatus: primaryJob.status,
           occurrenceId: null,
           occurrenceStatus: null,
           userIsListerForListing: userIsLister,
@@ -245,8 +318,8 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           listerName,
           cleanerName,
           jobPriceAud,
-          jobId: primaryJob?.id ?? null,
-          jobStatus: primaryJob?.status ?? null,
+          jobId: primaryJob.id,
+          jobStatus: primaryJob.status,
           occurrenceId: null,
           occurrenceStatus: null,
           userIsListerForListing: userIsLister,
@@ -256,7 +329,7 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
       }
     }
 
-    if (listing.recurring_series_start_date?.trim()) {
+    if (!isRecurringService && listing.recurring_series_start_date?.trim()) {
       const d = ymd(listing.recurring_series_start_date);
       if (d) {
         pushEvent({
@@ -271,8 +344,8 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           listerName,
           cleanerName,
           jobPriceAud,
-          jobId: primaryJob?.id ?? null,
-          jobStatus: primaryJob?.status ?? null,
+          jobId: primaryJob.id,
+          jobStatus: primaryJob.status,
           occurrenceId: null,
           occurrenceStatus: null,
           userIsListerForListing: userIsLister,
@@ -282,41 +355,22 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
       }
     }
 
-    if (listing.end_time?.trim()) {
-      const d = ymd(listing.end_time);
-      if (d) {
-        pushEvent({
-          date: d,
-          kind: "auction_end",
-          serviceType: st,
-          listingId: listing.id,
-          title: listing.title,
-          suburb: listing.suburb,
-          postcode: listing.postcode,
-          propertyAddress: listing.property_address,
-          listerName,
-          cleanerName,
-          jobPriceAud,
-          jobId: primaryJob?.id ?? null,
-          jobStatus: primaryJob?.status ?? null,
-          occurrenceId: null,
-          occurrenceStatus: null,
-          userIsListerForListing: userIsLister,
-          canRescheduleOccurrence: false,
-          canEditListingDates: false,
-        });
-      }
-    }
-
-    const hasPipelineJob = jlist.some(
+    const hasPipelineJob = (jobsByListingAll.get(listing.id) ?? []).some(
       (j) => !isJobCancelledStatus(j.status) && String(j.status).toLowerCase() !== "completed"
     );
     if (userHasListerRole && userIsLister && hasPipelineJob && listingMissingPrimaryDates(listing)) {
+      const jAll = jobsByListingAll.get(listing.id) ?? [];
+      const primaryJobHint =
+        jAll.find(
+          (j) => !isJobCancelledStatus(j.status) && String(j.status).toLowerCase() !== "completed"
+        ) ??
+        jAll[0] ??
+        null;
       preferredDateHints.push({
         listingId: listing.id,
         title: listing.title,
         serviceType: st,
-        jobId: primaryJob?.id ?? null,
+        jobId: primaryJobHint?.id ?? null,
       });
     }
   }
@@ -339,34 +393,37 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
       if (c.resume_scheduled_for?.trim() && !c.paused_at) {
         const d = ymd(c.resume_scheduled_for);
         const listing = listingMap.get(String(c.listing_id));
-        if (d && listing) {
-          const st = normalizeServiceType(listing.service_type) as ServiceTypeKey;
-          const jlist = jobsByListing.get(listing.id) ?? [];
-          const primaryJob = jlist[0] ?? null;
-          pushEvent({
-            date: d,
-            kind: "contract_resume",
-            serviceType: st,
-            listingId: listing.id,
-            title: listing.title,
-            suburb: listing.suburb,
-            postcode: listing.postcode,
-            propertyAddress: listing.property_address,
-            listerName: names[listing.lister_id] ?? "Lister",
-            cleanerName: primaryJob?.winner_id ? names[primaryJob.winner_id] ?? null : null,
-            jobPriceAud:
-              primaryJob?.agreed_amount_cents != null && primaryJob.agreed_amount_cents > 0
-                ? Math.round(primaryJob.agreed_amount_cents / 100)
-                : null,
-            jobId: primaryJob?.id ?? null,
-            jobStatus: primaryJob?.status ?? null,
-            occurrenceId: null,
-            occurrenceStatus: null,
-            userIsListerForListing: listing.lister_id === userId,
-            canRescheduleOccurrence: false,
-            canEditListingDates: false,
-          });
-        }
+        if (!d || !listing) continue;
+        const jlist = jobsByListing.get(listing.id) ?? [];
+        if (jlist.length === 0) continue;
+        const primaryJob =
+          jlist.find(
+            (j) => !isJobCancelledStatus(j.status) && String(j.status).toLowerCase() !== "completed"
+          ) ?? jlist[0]!;
+        const st = normalizeServiceType(listing.service_type) as ServiceTypeKey;
+        pushEvent({
+          date: d,
+          kind: "contract_resume",
+          serviceType: st,
+          listingId: listing.id,
+          title: listing.title,
+          suburb: listing.suburb,
+          postcode: listing.postcode,
+          propertyAddress: listing.property_address,
+          listerName: names[listing.lister_id] ?? "Lister",
+          cleanerName: primaryJob.winner_id ? names[primaryJob.winner_id] ?? null : null,
+          jobPriceAud:
+            primaryJob.agreed_amount_cents != null && primaryJob.agreed_amount_cents > 0
+              ? Math.round(primaryJob.agreed_amount_cents / 100)
+              : null,
+          jobId: primaryJob.id,
+          jobStatus: primaryJob.status,
+          occurrenceId: null,
+          occurrenceStatus: null,
+          userIsListerForListing: listing.lister_id === userId,
+          canRescheduleOccurrence: false,
+          canEditListingDates: false,
+        });
       }
     }
 
@@ -398,11 +455,16 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
         if (!d) continue;
         const st = normalizeServiceType(listing.service_type) as ServiceTypeKey;
         const jlist = jobsByListing.get(listing.id) ?? [];
+        if (jlist.length === 0) continue;
         const jobForOcc = o.job_id != null ? jlist.find((j) => j.id === o.job_id) : null;
-        const primaryJob = jobForOcc ?? jlist[0] ?? null;
+        const primaryJob =
+          jobForOcc ??
+          jlist.find(
+            (j) => !isJobCancelledStatus(j.status) && String(j.status).toLowerCase() !== "completed"
+          ) ??
+          jlist[0]!;
         const userIsLister = listing.lister_id === userId;
         const jobAllowsEdit =
-          primaryJob != null &&
           !isJobCancelledStatus(primaryJob.status) &&
           String(primaryJob.status).toLowerCase() !== "completed";
 
@@ -424,13 +486,13 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           postcode: listing.postcode,
           propertyAddress: listing.property_address,
           listerName: names[listing.lister_id] ?? "Lister",
-          cleanerName: primaryJob?.winner_id ? names[primaryJob.winner_id] ?? null : null,
+          cleanerName: primaryJob.winner_id ? names[primaryJob.winner_id] ?? null : null,
           jobPriceAud:
-            primaryJob?.agreed_amount_cents != null && primaryJob.agreed_amount_cents > 0
+            primaryJob.agreed_amount_cents != null && primaryJob.agreed_amount_cents > 0
               ? Math.round(primaryJob.agreed_amount_cents / 100)
               : null,
-          jobId: o.job_id ?? primaryJob?.id ?? null,
-          jobStatus: primaryJob?.status ?? null,
+          jobId: o.job_id ?? primaryJob.id,
+          jobStatus: primaryJob.status,
           occurrenceId: o.id,
           occurrenceStatus: o.status,
           userIsListerForListing: userIsLister,
@@ -441,7 +503,7 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
     }
   }
 
-  events.sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
+  const deduped = dedupeCalendarEventsByListingAndDate(events);
 
-  return { events, preferredDateHints, userHasListerRole, userHasCleanerRole };
+  return { events: deduped, preferredDateHints, userHasListerRole, userHasCleanerRole };
 }

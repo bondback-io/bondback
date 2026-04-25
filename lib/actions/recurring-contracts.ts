@@ -397,6 +397,10 @@ export async function moveRecurringOccurrence(
   revalidatePath(`/listings/${c.listing_id}`);
   revalidatePath("/jobs");
   revalidatePath("/calendar");
+  revalidatePath("/my-listings");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/find-jobs");
   return { ok: true };
 }
 

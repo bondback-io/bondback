@@ -98,6 +98,113 @@ export async function updateListingCleaningDates(
   revalidatePath("/calendar");
   revalidatePath("/my-listings");
   revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/find-jobs");
+  revalidatePath(`/jobs/${listingId}`);
+  revalidatePath(`/listings/${listingId}`);
+  return { ok: true };
+}
+
+export type RelocateListingCalendarDateResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Move a single listing-backed calendar field (preferred / move-out / series start) to a new day.
+ * Used by calendar drag-and-drop; keeps other preferred dates unchanged.
+ */
+export async function relocateListingCalendarDate(
+  listingId: string,
+  input: {
+    fromDate: string;
+    toDate: string;
+    kind: "preferred" | "move_out" | "recurring_series_start";
+  }
+): Promise<RelocateListingCalendarDateResult> {
+  const from = normalizeDay(input.fromDate);
+  const to = normalizeDay(input.toDate);
+  if (!from || !to) {
+    return { ok: false, error: "Invalid date." };
+  }
+  if (from === to) {
+    return { ok: true };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You must be logged in." };
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { ok: false, error: "Server configuration error." };
+
+  const { data: listing } = await admin
+    .from("listings")
+    .select("id, lister_id, preferred_dates, move_out_date, recurring_series_start_date")
+    .eq("id", listingId)
+    .maybeSingle();
+
+  const L = listing as {
+    id: string;
+    lister_id: string;
+    preferred_dates: unknown;
+    move_out_date: string | null;
+    recurring_series_start_date: string | null;
+  } | null;
+
+  if (!L || L.lister_id !== user.id) {
+    return { ok: false, error: "Listing not found or you are not the lister." };
+  }
+
+  const { data: jobs } = await admin
+    .from("jobs")
+    .select("id, status")
+    .eq("listing_id", listingId);
+
+  const hasEditableJob = (jobs ?? []).some((j) =>
+    jobAllowsCleaningDateEdits((j as { status?: string }).status)
+  );
+  if (!hasEditableJob) {
+    return {
+      ok: false,
+      error: "Dates can only be moved while the job is active (not completed or cancelled).",
+    };
+  }
+
+  const patch: Record<string, unknown> = {};
+
+  if (input.kind === "preferred") {
+    const raw = L.preferred_dates;
+    const arr = Array.isArray(raw)
+      ? raw.map((s) => String(s ?? "").trim().slice(0, 10)).filter((s) => DATE_RE.test(s))
+      : [];
+    if (!arr.includes(from)) {
+      return { ok: false, error: "That preferred date is no longer on the listing." };
+    }
+    const merged = new Set(arr.filter((d) => d !== from));
+    merged.add(to);
+    patch.preferred_dates = sanitizeDateList([...merged]);
+  } else if (input.kind === "move_out") {
+    const cur = normalizeDay(L.move_out_date);
+    if (cur !== from) {
+      return { ok: false, error: "Move-out date no longer matches — refresh and try again." };
+    }
+    patch.move_out_date = to;
+  } else {
+    const cur = normalizeDay(L.recurring_series_start_date);
+    if (cur !== from) {
+      return { ok: false, error: "Series start date no longer matches — refresh and try again." };
+    }
+    patch.recurring_series_start_date = to;
+  }
+
+  const { error } = await admin.from("listings").update(patch as never).eq("id", listingId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/calendar");
+  revalidatePath("/my-listings");
+  revalidatePath("/lister/dashboard");
+  revalidatePath("/cleaner/dashboard");
+  revalidatePath("/find-jobs");
   revalidatePath(`/jobs/${listingId}`);
   revalidatePath(`/listings/${listingId}`);
   return { ok: true };

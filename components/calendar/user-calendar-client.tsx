@@ -14,16 +14,30 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, CalendarDays, Pencil, SkipForward, Shuffle } from "lucide-react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  GripVertical,
+  Pencil,
+  SkipForward,
+  Shuffle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -46,13 +60,16 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { UserCalendarEvent, UserCalendarPayload } from "@/lib/calendar/user-calendar-types";
-import {
-  calendarDotClassForService,
-  CALENDAR_EVENT_LEGEND_LABEL,
-  CALENDAR_EVENT_DOT_CLASS,
-} from "@/lib/calendar/service-type-calendar";
+import { CALENDAR_EVENT_LEGEND_LABEL, CALENDAR_EVENT_DOT_CLASS } from "@/lib/calendar/service-type-calendar";
 import type { ServiceTypeKey } from "@/lib/service-types";
-import { updateListingCleaningDates } from "@/lib/actions/user-calendar";
+import {
+  relocateListingCalendarDate,
+  updateListingCleaningDates,
+} from "@/lib/actions/user-calendar";
+import {
+  CalendarServiceIcon,
+  calendarChipBorderClass,
+} from "@/components/calendar/calendar-service-icon";
 import {
   skipRecurringOccurrence,
   moveRecurringOccurrence,
@@ -96,10 +113,141 @@ function eventsByDateMap(events: UserCalendarEvent[]): Map<string, UserCalendarE
   return m;
 }
 
-function eventSummaryLine(e: UserCalendarEvent): string {
-  const price =
-    e.jobPriceAud != null && e.jobPriceAud > 0 ? ` · $${e.jobPriceAud} AUD` : "";
-  return `${kindLabel(e.kind)} · ${e.title}${price}`;
+function eventCanDrag(e: UserCalendarEvent, userHasListerRole: boolean): boolean {
+  if (!userHasListerRole) return false;
+  if (e.canRescheduleOccurrence && e.occurrenceId) return true;
+  if (
+    e.canEditListingDates &&
+    (e.kind === "preferred" || e.kind === "move_out" || e.kind === "recurring_series_start")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function listingRelocateKind(
+  e: UserCalendarEvent
+): "preferred" | "move_out" | "recurring_series_start" | null {
+  if (!e.canEditListingDates) return null;
+  if (e.kind === "preferred") return "preferred";
+  if (e.kind === "move_out") return "move_out";
+  if (e.kind === "recurring_series_start") return "recurring_series_start";
+  return null;
+}
+
+function CalendarEventChip({
+  event,
+  isLister,
+  disabled,
+}: {
+  event: UserCalendarEvent;
+  isLister: boolean;
+  disabled?: boolean;
+}) {
+  const canDrag = eventCanDrag(event, isLister) && !disabled;
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `cal-ev-${event.id}`,
+    disabled: !canDrag,
+    data: { event },
+  });
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` }
+    : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex min-w-0 items-center gap-0.5 rounded-md border bg-card/95 px-0.5 py-0.5 shadow-sm dark:bg-gray-950/90",
+        calendarChipBorderClass(event.serviceType),
+        isDragging && "opacity-40"
+      )}
+    >
+      {canDrag ? (
+        <button
+          type="button"
+          className="touch-none shrink-0 cursor-grab rounded p-0.5 text-muted-foreground hover:bg-muted active:cursor-grabbing dark:text-gray-500"
+          {...listeners}
+          {...attributes}
+          aria-label="Drag to move date"
+        >
+          <GripVertical className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+        </button>
+      ) : null}
+      <CalendarServiceIcon
+        serviceType={event.serviceType}
+        className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5"
+      />
+      <span className="min-w-0 truncate text-[9px] font-medium leading-tight sm:text-[10px]">
+        {event.title.length > 22 ? `${event.title.slice(0, 20)}…` : event.title}
+      </span>
+    </div>
+  );
+}
+
+function CalendarDayCell({
+  day,
+  month,
+  byDate,
+  userHasListerRole,
+  relocationPending,
+  onDayOpen,
+}: {
+  day: Date;
+  month: Date;
+  byDate: Map<string, UserCalendarEvent[]>;
+  userHasListerRole: boolean;
+  relocationPending: boolean;
+  onDayOpen: (key: string) => void;
+}) {
+  const key = format(day, "yyyy-MM-dd");
+  const dayEvents = byDate.get(key) ?? [];
+  const outside = !isSameMonth(day, month);
+  const { setNodeRef, isOver } = useDroppable({ id: `day-${key}` });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex min-h-[4.75rem] flex-col overflow-hidden rounded-xl border p-1 text-left transition-colors sm:min-h-[6rem] sm:p-1.5",
+        outside
+          ? "border-transparent bg-muted/10 opacity-50"
+          : "border-border/60 bg-muted/25 dark:border-gray-800 dark:bg-gray-900/50",
+        !outside &&
+          dayEvents.length > 0 &&
+          "border-primary/25 shadow-sm ring-1 ring-primary/10 dark:ring-primary/20",
+        isOver &&
+          "z-10 border-primary/50 bg-primary/10 ring-2 ring-primary ring-offset-1 ring-offset-background dark:ring-offset-gray-950"
+      )}
+    >
+      <button
+        type="button"
+        className={cn(
+          "w-full rounded-md px-0.5 py-0.5 text-left text-[11px] font-semibold outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring sm:text-xs",
+          outside ? "text-muted-foreground" : "text-foreground dark:text-gray-100"
+        )}
+        onClick={() => onDayOpen(key)}
+      >
+        {format(day, "d")}
+      </button>
+      <div className="mt-0.5 flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
+        {dayEvents.slice(0, 3).map((e) => (
+          <CalendarEventChip
+            key={e.id}
+            event={e}
+            isLister={userHasListerRole}
+            disabled={relocationPending}
+          />
+        ))}
+        {dayEvents.length > 3 ? (
+          <span className="px-0.5 text-[9px] font-medium text-muted-foreground sm:text-[10px]">
+            +{dayEvents.length - 3} more
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }) {
@@ -147,6 +295,15 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
   );
   const [moveDetail, setMoveDetail] = React.useState("");
   const [movePending, setMovePending] = React.useState(false);
+
+  const [activeDragEvent, setActiveDragEvent] = React.useState<UserCalendarEvent | null>(null);
+  const [selectedDayKey, setSelectedDayKey] = React.useState<string | null>(null);
+  const [relocationPending, setRelocationPending] = React.useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 420, tolerance: 8 } })
+  );
 
   const openEditForHint = (h: (typeof hints)[0]) => {
     setEditListingId(h.listingId);
@@ -240,16 +397,79 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
     }
   };
 
+  const handleDragStart = React.useCallback((event: DragStartEvent) => {
+    const ev = event.active.data.current?.event as UserCalendarEvent | undefined;
+    setActiveDragEvent(ev ?? null);
+  }, []);
+
+  const handleDragEnd = React.useCallback(
+    async (event: DragEndEvent) => {
+      const ev = event.active.data.current?.event as UserCalendarEvent | undefined;
+      setActiveDragEvent(null);
+      if (!ev || !event.over) return;
+      const overId = String(event.over.id);
+      if (!overId.startsWith("day-")) return;
+      const toDate = overId.slice(4);
+      if (toDate === ev.date) return;
+
+      setRelocationPending(true);
+      try {
+        if (ev.canRescheduleOccurrence && ev.occurrenceId) {
+          const r = await moveRecurringOccurrence(ev.occurrenceId, toDate, {
+            reasonKey: "scheduling_conflict",
+            reasonDetail: "Moved on calendar",
+          });
+          if (!r.ok) {
+            toast({ variant: "destructive", title: "Could not move visit", description: r.error });
+            return;
+          }
+          toast({ title: "Visit rescheduled", description: `New date: ${toDate}` });
+        } else {
+          const kind = listingRelocateKind(ev);
+          if (!kind) {
+            toast({
+              variant: "destructive",
+              title: "Cannot move",
+              description: "This entry cannot be dragged to a new day.",
+            });
+            return;
+          }
+          const r = await relocateListingCalendarDate(ev.listingId, {
+            fromDate: ev.date,
+            toDate,
+            kind,
+          });
+          if (!r.ok) {
+            toast({ variant: "destructive", title: "Could not update date", description: r.error });
+            return;
+          }
+          toast({ title: "Date updated", description: `Now on ${toDate}` });
+        }
+        router.refresh();
+      } finally {
+        setRelocationPending(false);
+      }
+    },
+    [router, toast]
+  );
+
+  const handleDragCancel = React.useCallback(() => {
+    setActiveDragEvent(null);
+  }, []);
+
+  const selectedDayEvents = selectedDayKey ? (byDate.get(selectedDayKey) ?? []) : [];
+
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 md:py-10">
+    <>
+      <div className="mx-auto w-full max-w-5xl space-y-5 px-3 py-5 sm:space-y-6 sm:px-4 sm:py-6 md:py-10">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground dark:text-gray-100">
               My calendar
             </h1>
             <p className="text-sm text-muted-foreground dark:text-gray-400">
-              Preferred cleans, recurring visits, and key milestones — colour-coded by service type.
+              Funded jobs with an assigned cleaner. Icons match service type; listers can drag the grip
+              on a row to move a date (hold briefly on iPhone), or tap a day for details.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -325,164 +545,184 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
         <Card className="border-border dark:border-gray-800 dark:bg-gray-900/40">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Legend</CardTitle>
-            <CardDescription>Each dot on a day matches the service type colour.</CardDescription>
+            <CardDescription>
+              Icon and colour match the service type on each job row.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
+          <CardContent className="flex flex-wrap gap-x-4 gap-y-2">
             {(Object.keys(CALENDAR_EVENT_DOT_CLASS) as ServiceTypeKey[]).map((k) => (
-              <div key={k} className="flex items-center gap-2 text-xs">
-                <span className={cn("h-2.5 w-2.5 rounded-full", CALENDAR_EVENT_DOT_CLASS[k])} />
-                <span className="text-muted-foreground dark:text-gray-400">
-                  {CALENDAR_EVENT_LEGEND_LABEL[k]}
-                </span>
+              <div
+                key={k}
+                className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs dark:border-gray-800 dark:bg-gray-950/40"
+              >
+                <CalendarServiceIcon serviceType={k} className="h-4 w-4" />
+                <span className={cn("h-2 w-2 rounded-full", CALENDAR_EVENT_DOT_CLASS[k])} aria-hidden />
+                <span className="text-muted-foreground dark:text-gray-400">{CALENDAR_EVENT_LEGEND_LABEL[k]}</span>
               </div>
             ))}
           </CardContent>
         </Card>
 
-        <Card className="border-border dark:border-gray-800 dark:bg-gray-900/40">
-          <CardContent className="p-3 sm:p-4">
-            <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:text-xs">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                <div key={d} className="py-1">
-                  {d}
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {gridDays.map((day) => {
-                const key = format(day, "yyyy-MM-dd");
-                const dayEvents = byDate.get(key) ?? [];
-                const outside = !isSameMonth(day, month);
-                return (
-                  <Tooltip key={key}>
-                    <TooltipTrigger asChild>
-                      <div
-                        className={cn(
-                          "flex min-h-[4.25rem] flex-col rounded-lg border border-transparent p-1 text-left transition-colors sm:min-h-[5rem] sm:p-1.5",
-                          outside && "opacity-40",
-                          !outside && "bg-muted/30 hover:bg-muted/60 dark:bg-gray-800/40 dark:hover:bg-gray-800/70",
-                          dayEvents.length > 0 && !outside && "border-primary/20 ring-1 ring-primary/10"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "text-[11px] font-semibold sm:text-xs",
-                            outside ? "text-muted-foreground" : "text-foreground dark:text-gray-100"
-                          )}
-                        >
-                          {format(day, "d")}
-                        </span>
-                        <div className="mt-auto flex flex-wrap gap-0.5">
-                          {dayEvents.slice(0, 4).map((e) => (
-                            <span
-                              key={e.id}
-                              className={cn(
-                                "h-1.5 w-1.5 rounded-full sm:h-2 sm:w-2",
-                                calendarDotClassForService(e.serviceType)
-                              )}
-                              title={eventSummaryLine(e)}
-                            />
-                          ))}
-                          {dayEvents.length > 4 ? (
-                            <span className="text-[9px] text-muted-foreground">+</span>
-                          ) : null}
-                        </div>
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragEnd={(e) => void handleDragEnd(e)}
+          onDragCancel={handleDragCancel}
+        >
+          <Card className="border-border dark:border-gray-800 dark:bg-gray-900/40">
+            <CardContent className="p-2 sm:p-4">
+              {relocationPending ? (
+                <p className="mb-2 text-center text-xs text-muted-foreground">Updating schedule…</p>
+              ) : null}
+              <div className="mb-1.5 grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:mb-2 sm:gap-1 sm:text-xs">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                  <div key={d} className="py-1">
+                    {d}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
+                {gridDays.map((day) => (
+                  <CalendarDayCell
+                    key={format(day, "yyyy-MM-dd")}
+                    day={day}
+                    month={month}
+                    byDate={byDate}
+                    userHasListerRole={initial.userHasListerRole}
+                    relocationPending={relocationPending}
+                    onDayOpen={setSelectedDayKey}
+                  />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          <DragOverlay dropAnimation={null}>
+            {activeDragEvent ? (
+              <div
+                className={cn(
+                  "flex max-w-[200px] items-center gap-1 rounded-lg border bg-card px-2 py-1.5 text-xs shadow-lg dark:bg-gray-900",
+                  calendarChipBorderClass(activeDragEvent.serviceType)
+                )}
+              >
+                <CalendarServiceIcon serviceType={activeDragEvent.serviceType} className="h-4 w-4" />
+                <span className="truncate font-medium">{activeDragEvent.title}</span>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+
+        <Dialog open={selectedDayKey != null} onOpenChange={(o) => !o && setSelectedDayKey(null)}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto dark:border-gray-800 dark:bg-gray-900 sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="dark:text-gray-100">
+                {selectedDayKey
+                  ? format(parseISO(selectedDayKey), "EEEE d MMMM yyyy")
+                  : "Day"}
+              </DialogTitle>
+              <DialogDescription>
+                {selectedDayEvents.length === 0
+                  ? "No cleans on this day."
+                  : `${selectedDayEvents.length} scheduled ${selectedDayEvents.length === 1 ? "item" : "items"}`}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedDayEvents.length > 0 ? (
+              <ul className="space-y-3">
+                {selectedDayEvents.map((e) => (
+                  <li
+                    key={e.id}
+                    className="rounded-lg border border-border/60 bg-muted/20 p-3 dark:border-gray-800 dark:bg-gray-950/50"
+                  >
+                    <div className="flex items-start gap-2">
+                      <CalendarServiceIcon serviceType={e.serviceType} className="mt-0.5 h-5 w-5 shrink-0" />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="font-semibold text-foreground dark:text-gray-100">{e.title}</p>
+                        <p className="text-xs text-muted-foreground dark:text-gray-400">
+                          {kindLabel(e.kind)} · {CALENDAR_EVENT_LEGEND_LABEL[e.serviceType]}
+                        </p>
+                        <p className="text-xs text-muted-foreground dark:text-gray-400">
+                          {[e.suburb, e.postcode].filter(Boolean).join(" ")}
+                          {e.propertyAddress ? ` · ${e.propertyAddress}` : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground dark:text-gray-400">
+                          Lister: {e.listerName}
+                          {e.cleanerName ? ` · Cleaner: ${e.cleanerName}` : ""}
+                        </p>
+                        {e.jobPriceAud != null && e.jobPriceAud > 0 ? (
+                          <p className="text-sm font-medium text-foreground dark:text-gray-200">
+                            Job price: ${e.jobPriceAud} AUD
+                          </p>
+                        ) : null}
                       </div>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="top"
-                      className="max-w-xs border-border bg-popover p-3 text-xs dark:border-gray-700 dark:bg-gray-900"
-                    >
-                      {dayEvents.length === 0 ? (
-                        <span>No events</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {e.jobId != null ? (
+                        <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                          <Link href={`/jobs/${e.jobId}`}>Open job</Link>
+                        </Button>
                       ) : (
-                        <ul className="space-y-2">
-                          {dayEvents.map((e) => (
-                            <li key={e.id} className="border-b border-border/50 pb-2 last:border-0 last:pb-0 dark:border-gray-800">
-                              <p className="font-semibold text-foreground dark:text-gray-100">{e.title}</p>
-                              <p className="text-muted-foreground dark:text-gray-400">
-                                {kindLabel(e.kind)} · {CALENDAR_EVENT_LEGEND_LABEL[e.serviceType]}
-                              </p>
-                              <p className="text-muted-foreground dark:text-gray-400">
-                                {[e.suburb, e.postcode].filter(Boolean).join(" ")}
-                                {e.propertyAddress ? ` · ${e.propertyAddress}` : ""}
-                              </p>
-                              <p className="text-muted-foreground dark:text-gray-400">
-                                Lister: {e.listerName}
-                                {e.cleanerName ? ` · Cleaner: ${e.cleanerName}` : ""}
-                              </p>
-                              {e.jobPriceAud != null && e.jobPriceAud > 0 ? (
-                                <p className="font-medium text-foreground dark:text-gray-200">
-                                  Job price: ${e.jobPriceAud} AUD
-                                </p>
-                              ) : null}
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {e.jobId != null ? (
-                                  <Button variant="outline" size="sm" className="h-7 text-[10px]" asChild>
-                                    <Link href={`/jobs/${e.jobId}`}>Job</Link>
-                                  </Button>
-                                ) : null}
-                                <Button variant="outline" size="sm" className="h-7 text-[10px]" asChild>
-                                  <Link href={`/listings/${e.listingId}`}>Listing</Link>
-                                </Button>
-                                {e.canEditListingDates ? (
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    className="h-7 text-[10px]"
-                                    type="button"
-                                    onClick={() => openEditFromEvent(e)}
-                                  >
-                                    Edit dates
-                                  </Button>
-                                ) : null}
-                                {e.canRescheduleOccurrence && e.occurrenceId ? (
-                                  <>
-                                    <Button
-                                      variant="secondary"
-                                      size="sm"
-                                      className="h-7 text-[10px]"
-                                      type="button"
-                                      onClick={() => {
-                                        setSkipOccId(e.occurrenceId);
-                                        setSkipOpen(true);
-                                      }}
-                                    >
-                                      <SkipForward className="mr-0.5 h-3 w-3" />
-                                      Skip
-                                    </Button>
-                                    <Button
-                                      variant="secondary"
-                                      size="sm"
-                                      className="h-7 text-[10px]"
-                                      type="button"
-                                      onClick={() => {
-                                        setMoveOccId(e.occurrenceId);
-                                        setMoveDate(parseISO(e.date));
-                                        setMoveOpen(true);
-                                      }}
-                                    >
-                                      <Shuffle className="mr-0.5 h-3 w-3" />
-                                      Move
-                                    </Button>
-                                  </>
-                                ) : null}
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
+                        <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                          <Link href={`/listings/${e.listingId}`}>Listing</Link>
+                        </Button>
                       )}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                      {e.canEditListingDates ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 text-xs"
+                          type="button"
+                          onClick={() => {
+                            setSelectedDayKey(null);
+                            openEditFromEvent(e);
+                          }}
+                        >
+                          Edit dates
+                        </Button>
+                      ) : null}
+                      {e.canRescheduleOccurrence && e.occurrenceId ? (
+                        <>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="h-8 text-xs"
+                            type="button"
+                            onClick={() => {
+                              setSelectedDayKey(null);
+                              setSkipOccId(e.occurrenceId);
+                              setSkipOpen(true);
+                            }}
+                          >
+                            <SkipForward className="mr-1 h-3.5 w-3.5" />
+                            Skip
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="h-8 text-xs"
+                            type="button"
+                            onClick={() => {
+                              setSelectedDayKey(null);
+                              setMoveOccId(e.occurrenceId);
+                              setMoveDate(parseISO(e.date));
+                              setMoveOpen(true);
+                            }}
+                          >
+                            <Shuffle className="mr-1 h-3.5 w-3.5" />
+                            Move
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </DialogContent>
+        </Dialog>
 
         {events.length === 0 ? (
           <p className="text-center text-sm text-muted-foreground dark:text-gray-400">
-            No scheduled dates yet. When you create listings or accept jobs, key dates will appear here.
+            No upcoming cleans yet. After a job is paid and a cleaner is assigned, scheduled visits and key
+            dates show here for both listers and cleaners.
           </p>
         ) : null}
 
@@ -653,6 +893,6 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
           </DialogContent>
         </Dialog>
       </div>
-    </TooltipProvider>
+    </>
   );
 }
