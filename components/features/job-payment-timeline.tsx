@@ -24,7 +24,7 @@ export type JobPaymentTimelineProps = {
   paymentReleasedAt: string | null;
   /** Dispute resolution type if resolved (e.g. partial_refund_accepted, admin_mediation_final). */
   disputeResolution: string | null;
-  /** When dispute was resolved. */
+  /** When dispute was resolved (or lister escrow cancel time when that path sets it). */
   resolutionAt: string | null;
   /** Refund amount in cents from job escrow to the lister (if any). */
   refundAmountCents: number | null;
@@ -36,6 +36,13 @@ export type JobPaymentTimelineProps = {
   netToCleanerCents?: number | null;
   /** When the job had a dispute case — link to hub detail for audit trail. */
   disputeCaseHref?: string | null;
+  /** `lister_escrow_cancel_reason` when lister cancelled after escrow (e.g. non-responsive cleaner). */
+  listerEscrowCancelReasonCode?: string | null;
+  /**
+   * True when job was cancelled with lister refund and no payment release to cleaner.
+   * Swaps the summary for clearer copy vs “final to cleaner”.
+   */
+  isCancelledWithListerEscrowRefund?: boolean;
 };
 
 type TimelineStep = {
@@ -57,6 +64,8 @@ export function JobPaymentTimeline({
   totalAgreedCents = null,
   netToCleanerCents = null,
   disputeCaseHref = null,
+  listerEscrowCancelReasonCode = null,
+  isCancelledWithListerEscrowRefund = false,
 }: JobPaymentTimelineProps) {
   const topUps = topUpPayments ?? [];
   const totalAgreed =
@@ -72,8 +81,19 @@ export function JobPaymentTimeline({
     refundAmountCents != null && refundAmountCents > 0
       ? Math.round(refundAmountCents)
       : null;
-  const refundEventAt = resolutionAt ?? paymentReleasedAt;
-  const showRefundStep = refundCents != null && Boolean(refundEventAt?.trim());
+  const refundEventAt = resolutionAt?.trim() || paymentReleasedAt?.trim() || null;
+  const showRefundStep = refundCents != null && Boolean(refundEventAt);
+
+  function listerCancelRefundSublabel(): string | undefined {
+    const c = (listerEscrowCancelReasonCode ?? "").trim();
+    if (c === "cleaner_non_responsive_escrow_cancel") {
+      return "Lister cancel — cleaner treated as non-responsive; funds returned per policy";
+    }
+    if (c.length > 0) {
+      return `Reason: ${c.replace(/_/g, " ")}`;
+    }
+    return "From escrow to lister (job cancelled)";
+  }
 
   /** Prefer escrow total minus refund whenever a refund is shown — matches the timeline line items. */
   const netReleased =
@@ -136,9 +156,10 @@ export function JobPaymentTimeline({
   if (showRefundStep && refundCents != null && refundEventAt) {
     steps.push({
       label: `Refund to lister — ${formatCents(refundCents)}`,
-      sublabel:
-        disputeResolution?.trim()
-          ? `Recorded as: ${disputeResolution.replace(/_/g, " ")}`
+      sublabel: disputeResolution?.trim()
+        ? `Recorded as: ${disputeResolution.replace(/_/g, " ")}`
+        : isCancelledWithListerEscrowRefund
+          ? listerCancelRefundSublabel()
           : "From job escrow",
       date: refundEventAt,
       icon: <RefreshCw className="h-4 w-4 text-amber-600" />,
@@ -166,6 +187,8 @@ export function JobPaymentTimeline({
   const showSummary =
     totalAgreed > 0 &&
     (refundCents != null || topUps.length > 0 || netReleased != null);
+  const listerCancelSummary =
+    isCancelledWithListerEscrowRefund && refundCents != null && refundCents > 0 && Boolean(refundEventAt);
 
   return (
     <Card className="border-border dark:border-gray-800 dark:bg-gray-900">
@@ -176,7 +199,16 @@ export function JobPaymentTimeline({
         <p className="text-xs text-muted-foreground dark:text-gray-400">
           Payment and payout events for this job.
         </p>
-        {showSummary && netReleased != null && netReleased >= 0 ? (
+        {listerCancelSummary ? (
+          <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
+            <span className="font-semibold">Job cancelled after escrow.</span>{" "}
+            {formatCents(refundCents!)} was refunded to the lister
+            {refundEventAt ? (
+              <> (recorded {format(new Date(refundEventAt), "d MMM yyyy, HH:mm")})</>
+            ) : null}
+            . No payout was released to the cleaner.
+          </p>
+        ) : showSummary && netReleased != null && netReleased >= 0 ? (
           <p className="mt-2 rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-xs leading-relaxed text-foreground dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
             <span className="font-semibold">Final job price (escrow to cleaner):</span>{" "}
             {formatCents(netReleased)}

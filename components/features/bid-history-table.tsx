@@ -53,10 +53,13 @@ function bidderListingLineStats(bid: BidWithBidder) {
 function BidderCellContents({
   bid,
   hideExperienceBadge = false,
+  nameWarningBadge,
 }: {
   bid: BidWithBidder;
   /** Mobile cards show the badge in the &quot;Bidder&quot; header — omit inline badge. */
   hideExperienceBadge?: boolean;
+  /** Shown after the name when the job was cancelled and refunded (e.g. lister cancel). */
+  nameWarningBadge?: string | null;
 }) {
   const { rating, jobs } = bidderListingLineStats(bid);
   const name = bidderDisplayNameForBid(bid);
@@ -82,6 +85,14 @@ function BidderCellContents({
         ({jobs})
       </span>
       <span className="min-w-0 break-words font-medium text-primary dark:text-blue-300">{name}</span>
+      {nameWarningBadge ? (
+        <Badge
+          variant="outline"
+          className="max-w-full shrink-0 border-amber-400/90 bg-amber-50/90 text-[10px] font-medium leading-tight text-amber-950 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100"
+        >
+          {nameWarningBadge}
+        </Badge>
+      ) : null}
       {!hideExperienceBadge ? <CleanerExperienceBadge jobs={jobs} /> : null}
     </span>
   );
@@ -107,7 +118,36 @@ export type BidHistoryTableProps = {
   closedAuctionBidStatus?: ClosedAuctionBidStatus | null;
   /** When the job was secured via Buy Now — shows a clear record even if no bid rows exist. */
   buyNowJobOutcome?: { amountCents: number } | null;
+  /**
+   * Agreed / secured job price. When the winning `accepted` bid `amount_cents` differs, Amount shows
+   * this as the line price and the bid as "on file" (e.g. Buy Now at $800 with a $900 high bid on record).
+   */
+  jobSecuredAmountCents?: number | null;
+  /** Job row: secured via buy now. */
+  securedViaBuyNow?: boolean;
+  /**
+   * When set, shown on the `accepted` winning bid (and after name) for cancelled+refund jobs
+   * (e.g. lister non-responsive cancel).
+   */
+  winnerBidStatusWarning?: string | null;
 };
+
+function displayAmountForBid(
+  bid: BidWithBidder,
+  jobSecuredAmountCents: number | null | undefined,
+  securedViaBuyNow: boolean | undefined
+): { primary: number; onFile: number | null } {
+  const primary =
+    jobSecuredAmountCents != null &&
+    jobSecuredAmountCents > 0 &&
+    bid.status === "accepted" &&
+    (securedViaBuyNow || jobSecuredAmountCents !== bid.amount_cents)
+      ? jobSecuredAmountCents
+      : bid.amount_cents;
+  const onFile =
+    primary !== bid.amount_cents && bid.status === "accepted" ? bid.amount_cents : null;
+  return { primary, onFile };
+}
 
 export function BidHistoryTable({
   bids,
@@ -119,6 +159,9 @@ export function BidHistoryTable({
   largeTouch = false,
   closedAuctionBidStatus = null,
   buyNowJobOutcome = null,
+  jobSecuredAmountCents = null,
+  securedViaBuyNow = false,
+  winnerBidStatusWarning = null,
 }: BidHistoryTableProps) {
   const { toast } = useToast();
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -224,9 +267,19 @@ export function BidHistoryTable({
   const statusLabel = (bid: BidWithBidder) => {
     if (bid.status === "accepted") {
       return (
-        <Badge className="border-0 bg-emerald-600 font-normal text-white hover:bg-emerald-600 dark:bg-emerald-700 dark:hover:bg-emerald-700">
-          Bidder won
-        </Badge>
+        <div className="flex flex-col items-start gap-1.5 sm:items-stretch">
+          <Badge className="border-0 bg-emerald-600 font-normal text-white hover:bg-emerald-600 dark:bg-emerald-700 dark:hover:bg-emerald-700">
+            Bidder won
+          </Badge>
+          {winnerBidStatusWarning ? (
+            <Badge
+              variant="outline"
+              className="max-w-full whitespace-normal border-amber-500/80 bg-amber-50/90 text-[10px] font-medium leading-tight text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+            >
+              {winnerBidStatusWarning}
+            </Badge>
+          ) : null}
+        </div>
       );
     }
     if (bid.status === "pending_confirmation") {
@@ -268,6 +321,12 @@ export function BidHistoryTable({
         {sorted.map((bid) => {
           const statusEl = statusLabel(bid);
           const { jobs: headerJobs } = bidderListingLineStats(bid);
+          const amountParts = displayAmountForBid(
+            bid,
+            jobSecuredAmountCents,
+            securedViaBuyNow
+          );
+          const nameWarn = bid.status === "accepted" ? winnerBidStatusWarning : null;
           return (
             <li
               key={bid.id}
@@ -285,7 +344,11 @@ export function BidHistoryTable({
                   onClick={() => void openBidderPreview(bid)}
                   className="break-words text-left text-sm underline-offset-4 hover:underline"
                 >
-                  <BidderCellContents bid={bid} hideExperienceBadge />
+                  <BidderCellContents
+                    bid={bid}
+                    hideExperienceBadge
+                    nameWarningBadge={nameWarn}
+                  />
                 </button>
               </div>
               <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-border pt-3 dark:border-gray-700">
@@ -294,8 +357,14 @@ export function BidHistoryTable({
                     Amount
                   </p>
                   <p className="text-lg font-bold tabular-nums text-foreground dark:text-gray-50">
-                    {formatCents(bid.amount_cents)}
+                    {formatCents(amountParts.primary)}
                   </p>
+                  {amountParts.onFile != null ? (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground dark:text-gray-500">
+                      Bid on file: {formatCents(amountParts.onFile)}
+                      {securedViaBuyNow ? " · job secured with Buy Now at this job price" : null}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-right">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-gray-400">
@@ -355,7 +424,14 @@ export function BidHistoryTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((bid) => (
+            {sorted.map((bid) => {
+              const amountParts = displayAmountForBid(
+                bid,
+                jobSecuredAmountCents,
+                securedViaBuyNow
+              );
+              const nameWarn = bid.status === "accepted" ? winnerBidStatusWarning : null;
+              return (
               <tr
                 key={bid.id}
                 className="border-b border-border last:border-0 dark:border-gray-700/80"
@@ -366,11 +442,19 @@ export function BidHistoryTable({
                     onClick={() => void openBidderPreview(bid)}
                     className="text-left underline-offset-4 hover:underline"
                   >
-                    <BidderCellContents bid={bid} />
+                    <BidderCellContents bid={bid} nameWarningBadge={nameWarn} />
                   </button>
                 </td>
-                <td className="px-3 py-2 text-right font-medium tabular-nums text-foreground dark:text-gray-100">
-                  {formatCents(bid.amount_cents)}
+                <td className="px-3 py-2 text-right text-foreground dark:text-gray-100">
+                  <div className="font-medium tabular-nums">
+                    {formatCents(amountParts.primary)}
+                  </div>
+                  {amountParts.onFile != null ? (
+                    <div className="mt-0.5 max-w-[12rem] text-left text-[10px] leading-snug text-muted-foreground dark:text-gray-500 sm:text-right sm:ml-auto sm:max-w-none">
+                      Bid on file {formatCents(amountParts.onFile)}
+                      {securedViaBuyNow ? " · Buy Now at job price" : ""}
+                    </div>
+                  ) : null}
                 </td>
                 <td className="px-3 py-2 text-right text-muted-foreground dark:text-gray-400">
                   {format(new Date(bid.created_at), "d MMM yyyy, HH:mm")}
@@ -401,7 +485,8 @@ export function BidHistoryTable({
                   </td>
                 )}
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>

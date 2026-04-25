@@ -615,6 +615,8 @@ export type JobDetailProps = {
   } | null;
   /** Server-only eligibility for escrow non-responsive cancel (lister menu). */
   listerNonResponsiveCancel?: ListerNonResponsiveCancelPreview | null;
+  /** `jobs.lister_escrow_cancel_reason` when lister cancelled after escrow (bids / timeline). */
+  listerEscrowCancelReason?: string | null;
   /** When set, job had a dispute hub case — deep link for audit trail. */
   disputeCaseHref?: string | null;
   /** Admin-priced add-on id → label for non-bond listings (from global settings). */
@@ -859,6 +861,7 @@ export function JobDetail({
   requireStripeConnectBeforePaymentRelease = true,
   pendingListerAdditionalPayment = null,
   listerNonResponsiveCancel = null,
+  listerEscrowCancelReason = null,
   disputeCaseHref = null,
   pricedAddonLabelById = null,
 }: JobDetailProps) {
@@ -1223,6 +1226,20 @@ export function JobDetail({
   const isListingCancelled = String(listing.status).toLowerCase() === "cancelled";
   const isJobCancelled =
     isJobCancelledStatus(localJobStatus) || isJobCancelledStatus(jobStatus);
+  /** Winning bid row: warn when lister cancelled after escrow with refund. */
+  const winnerBidRefundWarning = useMemo(() => {
+    if (!isJobCancelled) return null;
+    const st = localJobStatus ?? jobStatus ?? "";
+    if (st !== "cancelled_by_lister") return null;
+    const r = (listerEscrowCancelReason ?? "").trim();
+    if (r === "cleaner_non_responsive_escrow_cancel") {
+      return "Refunded — cleaner non-responsive";
+    }
+    if (r.length > 0) return "Refunded to lister";
+    return "Cancelled after escrow";
+  }, [isJobCancelled, localJobStatus, jobStatus, listerEscrowCancelReason]);
+  const bidTableSecuredAmountCents =
+    agreedAmountCents > 0 && (hasActiveJob || isJobCancelled) ? agreedAmountCents : null;
   /** Hide auction/timer/bid UI for cleaners on cancelled listing or cancelled job only */
   const hideCleanerCancelledAuctionUi =
     isCleaner && (isListingCancelled || isJobCancelled);
@@ -5086,6 +5103,9 @@ export function JobDetail({
                   }
                   largeTouch
                   buyNowJobOutcome={buyNowBidHistoryOutcome}
+                  jobSecuredAmountCents={bidTableSecuredAmountCents}
+                  securedViaBuyNow={securedViaBuyNow}
+                  winnerBidStatusWarning={winnerBidRefundWarning}
                 />
                 {isListingOwner && !hasActiveJob && isLive && (
                   <p className="text-sm text-muted-foreground dark:text-gray-400">
@@ -5126,6 +5146,9 @@ export function JobDetail({
             largeTouch={detailUiBoost}
             defaultOpen={false}
             buyNowJobOutcome={buyNowBidHistoryOutcome}
+            jobSecuredAmountCents={bidTableSecuredAmountCents}
+            securedViaBuyNow={securedViaBuyNow}
+            winnerBidStatusWarning={winnerBidRefundWarning}
             className={cn(
               "mt-4 border-t border-border pt-4 text-muted-foreground dark:border-gray-700 dark:text-gray-500",
               detailUiBoost ? "text-sm" : "text-[11px]"
@@ -5470,6 +5493,10 @@ export function JobDetail({
                     showRevertLastBid={showRevertLastBidInHistory}
                     onRevertLastBid={showRevertLastBidInHistory ? handleRevertLastBid : undefined}
                     largeTouch
+                    buyNowJobOutcome={buyNowBidHistoryOutcome}
+                    jobSecuredAmountCents={bidTableSecuredAmountCents}
+                    securedViaBuyNow={securedViaBuyNow}
+                    winnerBidStatusWarning={winnerBidRefundWarning}
                   />
                 </CardContent>
               </details>
@@ -5684,6 +5711,9 @@ function BidHistorySection({
   /** Collapsed until the user opens the section (job / listing detail). */
   defaultOpen = false,
   buyNowJobOutcome = null,
+  jobSecuredAmountCents = null,
+  securedViaBuyNow = false,
+  winnerBidStatusWarning = null,
 }: {
   listingId: string;
   bids: BidWithBidder[];
@@ -5698,6 +5728,9 @@ function BidHistorySection({
   largeTouch?: boolean;
   defaultOpen?: boolean;
   buyNowJobOutcome?: { amountCents: number } | null;
+  jobSecuredAmountCents?: number | null;
+  securedViaBuyNow?: boolean;
+  winnerBidStatusWarning?: string | null;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -5738,6 +5771,9 @@ function BidHistorySection({
           onRevertLastBid={onRevertLastBid}
           largeTouch={largeTouch}
           buyNowJobOutcome={buyNowJobOutcome}
+          jobSecuredAmountCents={jobSecuredAmountCents}
+          securedViaBuyNow={securedViaBuyNow}
+          winnerBidStatusWarning={winnerBidStatusWarning}
         />
       </div>
     </details>

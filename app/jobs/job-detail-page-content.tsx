@@ -313,26 +313,54 @@ export async function JobDetailPageContent({
     jobId != null && job && jobQualifiesForDisputeHub(job as never)
       ? `/disputes/${jobId}`
       : null;
+
+  const le = job as {
+    lister_escrow_cancelled_at?: string | null;
+    lister_escrow_cancel_refund_cents?: number | null;
+    lister_escrow_cancel_reason?: string | null;
+  } | null;
+  const listerEscrowCancelReason = le?.lister_escrow_cancel_reason ?? null;
+  const hasListerEscrowCancel = Boolean(String(le?.lister_escrow_cancelled_at ?? "").trim());
+  const listerEscrowRefundCents =
+    le != null &&
+    le.lister_escrow_cancel_refund_cents != null &&
+    le.lister_escrow_cancel_refund_cents > 0
+      ? Math.round(Number(le.lister_escrow_cancel_refund_cents))
+      : null;
+  const isListerEscrowOnlyCancel = job?.status === "cancelled_by_lister" && hasListerEscrowCancel;
+
   const paymentTimeline =
-    job && (j?.payment_intent_id || j?.payment_released_at || j?.dispute_resolution)
+    job &&
+    (j?.payment_intent_id ||
+      j?.payment_released_at ||
+      j?.dispute_resolution ||
+      hasListerEscrowCancel)
       ? {
           hasPaymentHold,
           heldAmountCents: hasPaymentHold ? agreedAmountCents : null,
           paymentReleasedAt: j.payment_released_at ?? null,
           disputeResolution: j.dispute_resolution ?? null,
-          resolutionAt: j.resolution_at ?? null,
-          refundAmountCents:
-            timelineRefundCentsResolved ??
-            (j.refund_amount ??
-              proposedRefundAmount ??
-              counterProposalAmount ??
-              null),
+          resolutionAt:
+            isListerEscrowOnlyCancel && hasListerEscrowCancel
+              ? (le?.lister_escrow_cancelled_at ?? null)
+              : (j.resolution_at ?? null),
+          refundAmountCents: isListerEscrowOnlyCancel
+            ? (listerEscrowRefundCents ?? (j.refund_amount as number | null) ?? null)
+            : (timelineRefundCentsResolved ??
+              (j.refund_amount ??
+                proposedRefundAmount ??
+                counterProposalAmount ??
+                null)),
           topUpPayments,
           totalAgreedCents: agreedAmountCents,
           netToCleanerCents:
             completedCleanerEscrowPayoutCents ??
             (job?.status === "completed" ? agreedAmountCents : null),
           disputeCaseHref,
+          listerEscrowCancelReasonCode: le?.lister_escrow_cancel_reason ?? null,
+          isCancelledWithListerEscrowRefund: Boolean(
+            isListerEscrowOnlyCancel && (listerEscrowRefundCents != null && listerEscrowRefundCents > 0)
+          ),
         }
       : null;
 
@@ -824,6 +852,7 @@ export async function JobDetailPageContent({
           securedViaBuyNow={
             Boolean((job as JobRow | null)?.secured_via_buy_now) === true
           }
+          listerEscrowCancelReason={listerEscrowCancelReason}
           initialChecklist={initialChecklist}
           initialAfterPhotos={initialAfterPhotos}
           expandListerReviewOfCleaner={expandListerReviewOfCleaner}
