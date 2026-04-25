@@ -53,7 +53,6 @@ import {
 } from "@/lib/disputes/dispute-thread-and-notify";
 import { getListerNonResponsiveCancelPreview } from "@/lib/jobs/lister-nonresponsive-cancel-server";
 import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
-import { JOB_TYPED_SELECT } from "@/lib/supabase/queries";
 import { getSiteUrl } from "@/lib/site";
 import { clearExpiredMarketplaceBanIfNeeded } from "@/lib/auth/clear-expired-ban";
 import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
@@ -2068,13 +2067,26 @@ export async function cancelEscrowJobNonResponsiveCleaner(
     return { ok: false, error: "Server configuration error." };
   }
 
+  // Use `*` so a production DB that lags one column in JOB_TYPED_SELECT does not make this
+  // action fail with a PostgREST error (previously surfaced as "Job not found.").
   const { data: job, error: jobErr } = await admin
     .from("jobs")
-    .select(JOB_TYPED_SELECT)
+    .select("*")
     .eq("id", jobId)
     .maybeSingle();
 
-  if (jobErr || !job) {
+  if (jobErr) {
+    console.error(
+      "[cancelEscrowJobNonResponsiveCleaner] jobs select failed",
+      { jobId, message: jobErr.message, code: jobErr.code, details: jobErr.details }
+    );
+    return {
+      ok: false,
+      error:
+        "Could not load this job from the server. It may be missing, or a database error occurred. Please refresh and try again.",
+    };
+  }
+  if (!job) {
     return { ok: false, error: "Job not found." };
   }
 
