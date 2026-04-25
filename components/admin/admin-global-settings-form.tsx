@@ -164,6 +164,8 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   const [autoReleaseHours, setAutoReleaseHours] = React.useState(
     initial?.autoReleaseHours ?? 48
   );
+  const [listerNonresponsiveCancelIdleDays, setListerNonresponsiveCancelIdleDays] =
+    React.useState(initial?.listerNonresponsiveCancelIdleDays ?? 5);
   const [emailsEnabled, setEmailsEnabled] = React.useState(
     initial?.emailsEnabled ?? true
   );
@@ -487,6 +489,10 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
         Math.min(100, Number(minProfileCompletion) || 0)
       ),
       autoReleaseHours: Math.max(1, Number(autoReleaseHours) || 1),
+      listerNonresponsiveCancelIdleDays: Math.max(
+        0,
+        Math.min(7, Math.floor(Number(listerNonresponsiveCancelIdleDays) || 0))
+      ),
       emailsEnabled,
       announcementText: announcementText,
       announcementActive,
@@ -2075,6 +2081,57 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
+        <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900 md:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold dark:text-gray-100">
+              Lister cancel (non-responsive cleaner, escrow)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-xs sm:text-sm text-muted-foreground dark:text-gray-300">
+            <div className="flex flex-col gap-2 sm:max-w-md">
+              <Label
+                htmlFor="listerNonresponsiveCancelIdleDays"
+                className="text-xs font-medium text-muted-foreground dark:text-gray-300"
+              >
+                Cleaner inactivity (full days) before the cancel action is available
+              </Label>
+              <Select
+                value={String(
+                  [0, 1, 2, 3, 4, 5, 6, 7].includes(listerNonresponsiveCancelIdleDays)
+                    ? listerNonresponsiveCancelIdleDays
+                    : 5
+                )}
+                onValueChange={(v) => setListerNonresponsiveCancelIdleDays(Number(v))}
+              >
+                <SelectTrigger
+                  id="listerNonresponsiveCancelIdleDays"
+                  className="h-9 text-xs dark:bg-gray-900 dark:border-gray-700"
+                >
+                  <SelectValue placeholder="Days" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0" className="text-xs">
+                    0 — no inactivity wait (idle check off; cancel when other rules pass)
+                  </SelectItem>
+                  {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                    <SelectItem key={d} value={String(d)} className="text-xs">
+                      {d} {d === 1 ? "day" : "days"} — no cleaner activity for {d} full{" "}
+                      {d === 1 ? "day" : "days"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-[11px] text-muted-foreground dark:text-gray-400 max-w-2xl">
+              Applies to paid, active jobs in escrow. Listers only see the cancel action when the job
+              qualifies. Shown on the job page and from My listings (⋯) for in-progress work. 0
+              turns off the inactivity wait (the idle check is inactive); 1–7 require that many full
+              calendar days with no messages, photos, or other tracked cleaner activity. Default 5
+              matches the previous platform behaviour.
+            </p>
+          </CardContent>
+        </Card>
+
         <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
           <CardHeader>
             <CardTitle className="text-sm font-semibold dark:text-gray-100">

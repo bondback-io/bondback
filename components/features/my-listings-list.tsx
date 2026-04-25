@@ -1246,6 +1246,11 @@ export function MyListingsList({
                   onRelist={canRelistFromNoBidsPool ? () => openRelistDialog(listing) : undefined}
                   relistLoading={relistingId === String(listing.id)}
                   completedCleanerNetCents={completedCleanerNetCents}
+                  escrowCancelAnchorHref={
+                    cardAccent === "job" && directJobHref
+                      ? `${directJobHref}#lister-escrow-cancel`
+                      : null
+                  }
                 />
               );
             })}

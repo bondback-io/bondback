@@ -96,7 +96,10 @@ import { ReviewForm } from "@/components/features/review-form";
 import { GuidedDisputeForm } from "@/components/features/guided-dispute-form";
 import { ListerAdditionalPaymentReviewDialog } from "@/components/disputes/lister-additional-payment-review-dialog";
 import { ListerNonresponsiveCancelMenu } from "@/components/jobs/lister-nonresponsive-cancel-menu";
-import type { ListerNonResponsiveCancelPreview } from "@/lib/jobs/lister-nonresponsive-cancel";
+import {
+  shouldShowListerNonResponsiveCancelControl,
+  type ListerNonResponsiveCancelPreview,
+} from "@/lib/jobs/lister-nonresponsive-cancel";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import { useToast } from "@/components/ui/use-toast";
 import { showAppErrorToast } from "@/components/errors/show-app-error-toast";
@@ -2012,11 +2015,15 @@ export function JobDetail({
       )}
     >
       {(isListingOwner || isJobLister) &&
-        listerNonResponsiveCancel?.eligible === true &&
+        listerNonResponsiveCancel != null &&
+        shouldShowListerNonResponsiveCancelControl(listerNonResponsiveCancel) &&
         numericJobId != null &&
         Number.isFinite(numericJobId) &&
         numericJobId > 0 && (
-          <div className="-mb-2 flex justify-end">
+          <div
+            id="lister-escrow-cancel"
+            className="-mb-2 flex w-full scroll-mt-24 flex-col items-stretch justify-end gap-1 sm:items-end"
+          >
             <ListerNonresponsiveCancelMenu
               jobId={numericJobId}
               preview={listerNonResponsiveCancel}

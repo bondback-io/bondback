@@ -34,6 +34,39 @@ export function ListerNonresponsiveCancelMenu({
   preview,
 }: {
   jobId: number;
+  preview: ListerNonResponsiveCancelPreview;
+}) {
+  if (!preview.eligible) {
+    return (
+      <div className="flex w-full flex-col gap-1.5 rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/25 sm:max-w-md sm:items-end sm:py-2">
+        <p className="text-xs font-semibold text-amber-950 dark:text-amber-100">
+          Cancel after escrow (non-responsive cleaner)
+        </p>
+        <p className="text-left text-[11px] leading-snug text-amber-900/90 dark:text-amber-200/90">
+          {preview.reason}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 w-full shrink-0 border-amber-300/90 text-amber-950 disabled:opacity-70 dark:border-amber-800 dark:text-amber-100 sm:ml-auto sm:w-auto"
+          disabled
+          aria-disabled
+        >
+          Not available yet
+        </Button>
+      </div>
+    );
+  }
+
+  return <ListerNonresponsiveCancelMenuEligible jobId={jobId} preview={preview} />;
+}
+
+function ListerNonresponsiveCancelMenuEligible({
+  jobId,
+  preview,
+}: {
+  jobId: number;
   preview: Extract<ListerNonResponsiveCancelPreview, { eligible: true }>;
 }) {
   const router = useRouter();
@@ -84,13 +117,13 @@ export function ListerNonresponsiveCancelMenu({
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-8 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground dark:text-gray-500 dark:hover:text-gray-200"
-            aria-label="More options"
+            className="h-9 gap-1.5 border-amber-200/90 px-3 text-xs font-medium text-amber-950 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/40"
+            aria-label="Cancel job options"
           >
             <MoreHorizontal className="h-4 w-4" aria-hidden />
-            More
+            Cancel job
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-[min(100vw-2rem,280px)]">
@@ -122,8 +155,11 @@ export function ListerNonresponsiveCancelMenu({
                 <DialogDescription asChild>
                   <div className="space-y-3 pt-1 text-left text-sm text-muted-foreground dark:text-gray-400">
                     <p>
-                      This action should only be used when the cleaner has been completely non-responsive
-                      for 5+ days.
+                      {preview.requiredIdleDays <= 0
+                        ? "Use this only when the cleaner is not completing the work and is not responsive in line with your agreement. Site policy does not require a long inactivity wait for this path."
+                        : preview.requiredIdleDays === 1
+                          ? "This action should only be used when the cleaner has been completely non-responsive for at least 1 full day."
+                          : `This action should only be used when the cleaner has been completely non-responsive for at least ${preview.requiredIdleDays} full days.`}
                     </p>
                     <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
                       <p className="font-semibold text-foreground dark:text-gray-50">Cancelling will:</p>

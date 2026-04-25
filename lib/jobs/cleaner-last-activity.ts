@@ -1,6 +1,13 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
-const IDLE_MS = 5 * 24 * 60 * 60 * 1000; // 120 hours
+/** Legacy default (5×24h) — non-responsive cancel now uses `global_settings.lister_nonresponsive_cancel_idle_days`. */
+const IDLE_MS = 5 * 24 * 60 * 60 * 1000;
+
+export function nonResponsiveCancelIdleMsFromDays(days: number): number {
+  const d = Math.max(0, Math.min(7, Math.floor(Number(days) || 0)));
+  if (d <= 0) return 0;
+  return d * 24 * 60 * 60 * 1000;
+}
 
 /**
  * Latest timestamp (ms) of cleaner-attributable activity on the job, or null if none found.
@@ -61,7 +68,8 @@ export async function getCleanerLastActivityAtMs(
 export function idleLongEnoughForNonResponsiveCancel(
   lastCleanerActivityMs: number | null,
   escrowFundedAtIso: string | null,
-  jobCreatedAtIso: string | null
+  jobCreatedAtIso: string | null,
+  requiredIdleMs: number
 ): { ok: boolean; idleSinceMs: number } {
   const now = Date.now();
   const escrowMs = escrowFundedAtIso?.trim()
@@ -71,7 +79,11 @@ export function idleLongEnoughForNonResponsiveCancel(
   const baselineMs =
     lastCleanerActivityMs ??
     (Number.isFinite(escrowMs) ? escrowMs : Number.isFinite(createdMs) ? createdMs : now);
-  return { ok: now - baselineMs >= IDLE_MS, idleSinceMs: baselineMs };
+  if (!Number.isFinite(requiredIdleMs) || requiredIdleMs <= 0) {
+    return { ok: true, idleSinceMs: baselineMs };
+  }
+  return { ok: now - baselineMs >= requiredIdleMs, idleSinceMs: baselineMs };
 }
 
+/** @deprecated Use `nonResponsiveCancelIdleMsFromDays` from global settings. */
 export { IDLE_MS as NONRESPONSIVE_CANCEL_IDLE_MS };

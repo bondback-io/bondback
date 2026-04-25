@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminGlobalSettingsForm } from "@/components/admin/admin-global-settings-form";
-import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { getGlobalSettings, normalizeListerNonresponsiveCancelIdleDays } from "@/lib/actions/global-settings";
 import { parseDefaultSiteThemeFromSettings } from "@/lib/global-settings-default-theme";
 import {
   DEFAULT_PRICING_MODIFIERS,
@@ -65,6 +65,9 @@ export default async function AdminGlobalSettingsPage() {
             .require_stripe_connect_before_payment_release !== false,
         minProfileCompletion: existing.min_profile_completion ?? 70,
         autoReleaseHours: existing.auto_release_hours ?? 48,
+        listerNonresponsiveCancelIdleDays: normalizeListerNonresponsiveCancelIdleDays(
+          (existing as { lister_nonresponsive_cancel_idle_days?: unknown }).lister_nonresponsive_cancel_idle_days
+        ),
         emailsEnabled: existing.emails_enabled ?? true,
         announcementText: existing.announcement_text ?? "",
         announcementActive: existing.announcement_active ?? false,

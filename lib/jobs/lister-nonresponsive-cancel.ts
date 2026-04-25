@@ -1,11 +1,14 @@
 import { fetchPlatformFeePercentForListing } from "@/lib/platform-fee";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import { getGlobalSettings } from "@/lib/actions/global-settings";
+import {
+  getGlobalSettings,
+  normalizeListerNonresponsiveCancelIdleDays,
+} from "@/lib/actions/global-settings";
 import {
   getCleanerLastActivityAtMs,
   idleLongEnoughForNonResponsiveCancel,
-  NONRESPONSIVE_CANCEL_IDLE_MS,
+  nonResponsiveCancelIdleMsFromDays,
 } from "@/lib/jobs/cleaner-last-activity";
 import { trimStr } from "@/lib/utils";
 
@@ -38,8 +41,22 @@ export type ListerNonResponsiveCancelPreview =
       platformFeeCents: number;
       platformFeePercent: number;
       idleHours: number;
+      /** Site setting: 0 = no inactivity wait; 1–7 = full days required before cancel. */
+      requiredIdleDays: number;
     }
   | { eligible: false; reason: string };
+
+/**
+ * When true, show the lister "cancel (non-responsive cleaner)" control on the job page.
+ * It must appear while the job is in escrow and active, even if the lister is not yet
+ * allowed to complete the cancel (per admin idle days) — otherwise the action looked missing.
+ */
+export function shouldShowListerNonResponsiveCancelControl(
+  preview: ListerNonResponsiveCancelPreview
+): boolean {
+  if (preview.eligible) return true;
+  return /not eligible yet|no activity for at least/i.test(preview.reason);
+}
 
 /**
  * Server-only preview for lister job UI (caller must ensure viewer is lister).
@@ -85,21 +102,28 @@ export async function getListerNonResponsiveCancelPreview(
     return { eligible: false, reason: "No cleaner is assigned." };
   }
 
+  const settings = await getGlobalSettings();
+  const requiredIdleDays = normalizeListerNonresponsiveCancelIdleDays(
+    settings?.lister_nonresponsive_cancel_idle_days
+  );
+  const requiredIdleMs = nonResponsiveCancelIdleMsFromDays(requiredIdleDays);
+
   const lastAct = await getCleanerLastActivityAtMs(job.id, job.winner_id);
   const idle = idleLongEnoughForNonResponsiveCancel(
     lastAct,
     job.escrow_funded_at ?? null,
-    job.created_at ?? null
+    job.created_at ?? null,
+    requiredIdleMs
   );
   if (!idle.ok) {
-    const hours = (NONRESPONSIVE_CANCEL_IDLE_MS / (60 * 60 * 1000)).toFixed(0);
+    const dayWord =
+      requiredIdleDays === 1 ? "1 day" : `${Math.max(1, requiredIdleDays)} full days`;
     return {
       eligible: false,
-      reason: `The cleaner must have no activity for at least ${hours} hours. Not eligible yet.`,
+      reason: `The cleaner must have no activity for at least ${dayWord}. Not eligible yet.`,
     };
   }
 
-  const settings = await getGlobalSettings();
   const feePercent = await fetchPlatformFeePercentForListing(
     supabase,
     job.listing_id,
@@ -120,5 +144,6 @@ export async function getListerNonResponsiveCancelPreview(
     ...amounts,
     platformFeePercent: feePercent,
     idleHours,
+    requiredIdleDays,
   };
 }

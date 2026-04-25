@@ -125,6 +125,10 @@ type GlobalSettingsRow = {
   enable_daily_browse_jobs_nudge?: boolean | null;
   /** Non-bond services: priced add-ons + free checklist labels (see lib/service-addons-checklists.ts). */
   service_addons_checklists?: unknown;
+  /**
+   * 0 = no cleaner inactivity wait. 1–7 = that many full days of no activity before the lister can use non-responsive escrow cancel.
+   */
+  lister_nonresponsive_cancel_idle_days?: number | null;
 };
 
 /** Normalize DB boolean (PostgREST returns boolean; guard edge cases). */
@@ -172,6 +176,14 @@ function sanitizePricingBaseMultiplierByServiceForDb(
     }
   }
   return out;
+}
+
+/** Clamp 0–7; default 5 (legacy five-day idle). */
+export function normalizeListerNonresponsiveCancelIdleDays(raw: unknown): number {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return Math.max(0, Math.min(7, Math.floor(raw)));
+  }
+  return 5;
 }
 
 function sanitizePricingBathroomRateByServiceForDb(
@@ -506,6 +518,10 @@ export type SaveGlobalSettingsInput = {
    * Bond cleaning ignores this (legacy pricing + default checklist card).
    */
   serviceAddonsChecklists?: ServiceAddonsChecklistsMerged | null;
+  /**
+   * 0–7 full days of cleaner inactivity before non-responsive escrow cancel; 0 = no inactivity wait (idle check off).
+   */
+  listerNonresponsiveCancelIdleDays?: number;
 };
 
 export type SaveGlobalSettingsResult =
@@ -704,6 +720,9 @@ export async function saveGlobalSettings(
     service_addons_checklists: sanitizeServiceAddonsChecklistsForDb(
       data.serviceAddonsChecklists ?? null
     ),
+    lister_nonresponsive_cancel_idle_days: normalizeListerNonresponsiveCancelIdleDays(
+      data.listerNonresponsiveCancelIdleDays
+    ),
   };
 
   const { error } = admin
@@ -722,6 +741,8 @@ export async function saveGlobalSettings(
             ? " Add cleaner new-listing channel columns (see sql/20260417100000_global_settings_new_listing_channel_toggles.sql)."
           : msg.includes("service_addons_checklists")
             ? " Add column global_settings.service_addons_checklists (see sql/20260419120000_global_settings_service_addons_checklists.sql)."
+          : msg.includes("lister_nonresponsive_cancel_idle_days")
+            ? " Add column global_settings.lister_nonresponsive_cancel_idle_days (see supabase/sql/20260418100000_global_settings_lister_nonresponsive_cancel_idle_days.sql)."
           : " Run supabase/sql/20260417140000_global_settings_ensure_columns_admin_save.sql in the Supabase SQL editor (adds all columns used by Admin → Global Settings save), or apply the individual migrations under supabase/migrations."
         : "";
     return { ok: false, error: msg + hint };

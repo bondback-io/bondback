@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MapPin, MoreHorizontal, Gavel, Ban, Trash2, RotateCcw, Briefcase } from "lucide-react";
+import { MapPin, MoreHorizontal, Gavel, Ban, Trash2, RotateCcw, Briefcase, FileWarning } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCents, isListingLive } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
@@ -52,6 +52,11 @@ export type ListerListingCardProps = {
   /** When set, card is a local draft resume row (not a DB listing) */
   isLocalDraft?: boolean;
   /**
+   * Paid in-progress job: `⋯` menu includes a jump to the job page escrow / non-responsive
+   * cancel section (`#lister-escrow-cancel`).
+   */
+  escrowCancelAnchorHref?: string | null;
+  /**
    * Completed jobs: net amount paid to the cleaner from escrow (after dispute refunds).
    * When set, replaces the auction “highest bid” figure so listers see what actually went to the cleaner.
    */
@@ -77,6 +82,7 @@ export function ListerListingCard({
   onDiscardDraft,
   isLocalDraft = false,
   completedCleanerNetCents = null,
+  escrowCancelAnchorHref = null,
 }: ListerListingCardProps) {
   const openCtaLabel =
     cardAccent === "job" || cardAccent === "job_done" ? "Open job" : "Open listing";
@@ -188,6 +194,14 @@ export function ListerListingCard({
                         View bids &amp; job
                       </Link>
                     </DropdownMenuItem>
+                    {escrowCancelAnchorHref ? (
+                      <DropdownMenuItem asChild className="min-h-11 cursor-pointer text-base text-amber-800 focus:text-amber-900 dark:text-amber-200/95 dark:focus:text-amber-100">
+                        <Link prefetch href={escrowCancelAnchorHref} scroll>
+                          <FileWarning className="mr-2 h-4 w-4" />
+                          Cancel job (escrow)…
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : null}
                     {showEndEarly && onEndEarly && (
                       <DropdownMenuItem
                         className="min-h-11 cursor-pointer text-base text-amber-700 focus:text-amber-800 dark:text-amber-300"
