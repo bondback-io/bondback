@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isDeepCleanServiceType } from "@/lib/service-types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -56,11 +57,17 @@ export async function updateListingCleaningDates(
 
   const { data: listing } = await admin
     .from("listings")
-    .select("id, lister_id")
+    .select("id, lister_id, service_type, preferred_dates, move_out_date")
     .eq("id", listingId)
     .maybeSingle();
 
-  const L = listing as { id: string; lister_id: string } | null;
+  const L = listing as {
+    id: string;
+    lister_id: string;
+    service_type: string | null;
+    preferred_dates: unknown;
+    move_out_date: string | null;
+  } | null;
   if (!L || L.lister_id !== user.id) {
     return { ok: false, error: "Listing not found or you are not the lister." };
   }
@@ -90,6 +97,23 @@ export async function updateListingCleaningDates(
   }
   if ("recurringSeriesStartDate" in input) {
     patch.recurring_series_start_date = normalizeDay(input.recurringSeriesStartDate ?? null);
+  }
+
+  if ("preferredDates" in input && isDeepCleanServiceType(L.service_type)) {
+    const pd = patch.preferred_dates;
+    if (Array.isArray(pd) && pd.length > 0 && typeof pd[0] === "string") {
+      patch.move_out_date = String(pd[0]).trim().slice(0, 10);
+    } else if (pd === null) {
+      if (!("moveOutDate" in input)) {
+        patch.move_out_date = null;
+      }
+    }
+  }
+  if ("moveOutDate" in input && isDeepCleanServiceType(L.service_type)) {
+    const mo = normalizeDay(input.moveOutDate ?? null);
+    if (mo) {
+      patch.preferred_dates = [mo];
+    }
   }
 
   const { error } = await admin.from("listings").update(patch as never).eq("id", listingId);
@@ -139,7 +163,7 @@ export async function relocateListingCalendarDate(
 
   const { data: listing } = await admin
     .from("listings")
-    .select("id, lister_id, preferred_dates, move_out_date, recurring_series_start_date")
+    .select("id, lister_id, preferred_dates, move_out_date, recurring_series_start_date, service_type")
     .eq("id", listingId)
     .maybeSingle();
 
@@ -149,6 +173,7 @@ export async function relocateListingCalendarDate(
     preferred_dates: unknown;
     move_out_date: string | null;
     recurring_series_start_date: string | null;
+    service_type: string | null;
   } | null;
 
   if (!L || L.lister_id !== user.id) {
@@ -183,6 +208,9 @@ export async function relocateListingCalendarDate(
     const merged = new Set(arr.filter((d) => d !== from));
     merged.add(to);
     patch.preferred_dates = sanitizeDateList([...merged]);
+    if (isDeepCleanServiceType(L.service_type)) {
+      patch.move_out_date = to;
+    }
   } else if (input.kind === "move_out") {
     const cur = normalizeDay(L.move_out_date);
     if (cur !== from) {

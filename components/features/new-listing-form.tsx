@@ -338,6 +338,13 @@ function buildListingSchema(
             message: "Select clean intensity",
           });
         }
+        if (!data.moveOutDate) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["moveOutDate"],
+            message: "Select your preferred service date",
+          });
+        }
       }
       if (data.buyNowPrice?.trim()) {
         const numeric = Number(data.buyNowPrice);
@@ -1447,6 +1454,58 @@ export function NewListingForm({
                   {serviceTypeLabel(serviceTypeWatched)}
                 </span>
               </p>
+              {serviceTypeWatched === "deep_clean" && (
+                <div className="mt-4 space-y-2 border-t border-border/60 pt-4 dark:border-gray-700">
+                  <div className="flex items-center gap-2">
+                    <Label>
+                      <span className="text-foreground">Preferred service date</span>
+                      <span className="ml-1 text-destructive" aria-hidden>
+                        *
+                      </span>
+                    </Label>
+                    <FieldHelp label="Service date help">
+                      When do you need this clean? It appears on your calendar and the job — you can
+                      fine-tune with your cleaner after booking.
+                    </FieldHelp>
+                  </div>
+                  <Controller
+                    control={form.control}
+                    name="moveOutDate"
+                    render={({ field }) => (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            type="button"
+                            className={cn(
+                              "w-full justify-start text-left font-normal dark:bg-gray-800 dark:border-gray-700",
+                              !field.value && "text-muted-foreground dark:text-gray-400"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {field.value
+                              ? format(field.value, "d MMM yyyy")
+                              : "Select preferred date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={(d) => field.onChange(d ?? undefined)}
+                            fromDate={new Date()}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  />
+                  {form.formState.errors.moveOutDate && (
+                    <p className="text-xs text-destructive">
+                      {form.formState.errors.moveOutDate.message}
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -2661,33 +2720,12 @@ export function NewListingForm({
                   </div>
                 )}
 
-                {serviceTypeWatched !== "airbnb_turnover" && (
+                {serviceTypeWatched === "bond_cleaning" && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Label>
-                      {serviceTypeWatched === "bond_cleaning"
-                        ? "Move-out date"
-                        : serviceTypeWatched === "recurring_house_cleaning"
-                          ? "Preferred first clean date"
-                          : "Preferred service date"}
-                      {serviceTypeWatched !== "bond_cleaning" && (
-                        <span className="ml-1 font-normal text-muted-foreground dark:text-gray-500">
-                          (optional)
-                        </span>
-                      )}
-                    </Label>
-                    <FieldHelp
-                      label={
-                        serviceTypeWatched === "bond_cleaning"
-                          ? "Move-out date help"
-                          : "Service date help"
-                      }
-                    >
-                      {serviceTypeWatched === "bond_cleaning"
-                        ? "When do you need the bond clean completed? Cleaners will use this to plan."
-                        : serviceTypeWatched === "recurring_house_cleaning"
-                          ? "If you have a target first visit, pick it here. You can fine-tune timing with your cleaner."
-                          : "When would you like this clean done? You can coordinate exact timing with your cleaner after booking."}
+                    <Label>Move-out date</Label>
+                    <FieldHelp label="Move-out date help">
+                      When do you need the bond clean completed? Cleaners will use this to plan.
                     </FieldHelp>
                   </div>
                   <Controller
@@ -2707,11 +2745,7 @@ export function NewListingForm({
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {field.value
                               ? format(field.value, "d MMM yyyy")
-                              : serviceTypeWatched === "bond_cleaning"
-                                ? "Select move-out date"
-                                : serviceTypeWatched === "recurring_house_cleaning"
-                                  ? "Select preferred first clean"
-                                  : "Select preferred date"}
+                              : "Select move-out date"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="p-0" align="start">
@@ -3174,7 +3208,7 @@ export function NewListingForm({
                       fields.push("recurringFrequency", "recurringSeriesStartDate");
                     }
                     if (st === "deep_clean") {
-                      fields.push("deepCleanIntensity");
+                      fields.push("deepCleanIntensity", "moveOutDate");
                     }
                     ok = await form.trigger(fields);
                   } else if (step === 2) {

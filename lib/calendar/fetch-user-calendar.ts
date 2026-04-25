@@ -7,7 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { normalizeServiceType, type ServiceTypeKey } from "@/lib/service-types";
+import { isDeepCleanServiceType, normalizeServiceType, type ServiceTypeKey } from "@/lib/service-types";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import type {
   UserCalendarEvent,
@@ -311,27 +311,33 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
     if (listing.move_out_date?.trim()) {
       const d = ymd(listing.move_out_date);
       if (d) {
-        pushEvent({
-          date: d,
-          kind: "move_out",
-          serviceType: st,
-          listingId: listing.id,
-          title: listing.title,
-          suburb: listing.suburb,
-          postcode: listing.postcode,
-          propertyAddress: listing.property_address,
-          listerName,
-          cleanerName,
-          jobPriceAud,
-          jobId: primaryJob.id,
-          jobStatus: primaryJob.status,
-          occurrenceId: null,
-          occurrenceStatus: null,
-          userIsListerForListing: userIsLister,
-          canRescheduleOccurrence: false,
-          canEditListingDates,
-          isCompleted: jobIsComplete(primaryJob.status),
-        });
+        const moveOutCoveredByPreferred =
+          isDeepCleanServiceType(listing.service_type) &&
+          Array.isArray(listing.preferred_dates) &&
+          listing.preferred_dates.some((raw) => ymd(String(raw)) === d);
+        if (!moveOutCoveredByPreferred) {
+          pushEvent({
+            date: d,
+            kind: "move_out",
+            serviceType: st,
+            listingId: listing.id,
+            title: listing.title,
+            suburb: listing.suburb,
+            postcode: listing.postcode,
+            propertyAddress: listing.property_address,
+            listerName,
+            cleanerName,
+            jobPriceAud,
+            jobId: primaryJob.id,
+            jobStatus: primaryJob.status,
+            occurrenceId: null,
+            occurrenceStatus: null,
+            userIsListerForListing: userIsLister,
+            canRescheduleOccurrence: false,
+            canEditListingDates,
+            isCompleted: jobIsComplete(primaryJob.status),
+          });
+        }
       }
     }
 
@@ -464,7 +470,15 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
         const st = normalizeServiceType(listing.service_type) as ServiceTypeKey;
         const jlist = jobsByListing.get(listing.id) ?? [];
         if (jlist.length === 0) continue;
-        const jobForOcc = o.job_id != null ? jlist.find((j) => j.id === o.job_id) : null;
+        const allJobsForListing = jobsByListingAll.get(listing.id) ?? [];
+        /**
+         * Occurrence `job_id` can point to an awaiting-escrow job; `jlist` only has funded+assigned
+         * rows. Match the job from all listing jobs so move/skip (and drag) match moveRecurringOccurrence.
+         */
+        const jobForOcc =
+          o.job_id != null
+            ? allJobsForListing.find((j) => Number(j.id) === Number(o.job_id)) ?? null
+            : null;
         const primaryJob =
           jobForOcc ??
           jlist.find(

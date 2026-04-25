@@ -550,28 +550,51 @@ async function ListerDashboardContent() {
         </div>
       </div>
 
-      {/* Completed jobs — vertical list (no horizontal swipe) */}
+      {/* Completed jobs — collapsed by default (like Cancelled); count on header */}
       <ScrollToHash anchorId="completed-jobs" />
-      <div
+      <details
         id="completed-jobs"
-        className="scroll-mt-[calc(6rem+env(safe-area-inset-top,0px))] rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:scroll-mt-24 md:rounded-xl md:border"
+        className="group scroll-mt-[calc(6rem+env(safe-area-inset-top,0px))] rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:scroll-mt-24 md:rounded-xl md:border"
       >
-        <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
-          <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
-            Completed Jobs
-          </h2>
-          {completedJobs.length > 0 && (
-            <Link
-              href="/my-listings?tab=completed"
-              className="min-h-10 px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline md:min-h-0 md:text-xs md:font-medium"
-            >
-              View all
-            </Link>
-          )}
-        </div>
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+          <div className="border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
+                    Completed Jobs
+                  </h2>
+                  {completedJobs.length > 0 && (
+                    <Badge variant="secondary" className="px-2.5 py-0.5 text-sm md:text-xs">
+                      {completedJobs.length}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm leading-snug text-muted-foreground dark:text-gray-400 md:text-xs">
+                  Finished work and net amount settled. Tap to expand and view up to five recent
+                  completions.
+                </p>
+              </div>
+              <ChevronDown
+                className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 md:h-4 md:w-4"
+                aria-hidden
+              />
+            </div>
+          </div>
+        </summary>
         <div className="p-4 md:p-3">
+          {completedJobs.length > 0 ? (
+            <div className="mb-2 flex justify-end">
+              <Link
+                href="/my-listings?tab=completed"
+                className="text-sm font-semibold text-primary underline-offset-4 hover:underline md:text-xs md:font-medium"
+              >
+                View all
+              </Link>
+            </div>
+          ) : null}
           {completedJobs.length === 0 ? (
-            <p className="py-6 text-center text-base text-muted-foreground dark:text-gray-400 md:py-5 md:text-sm">
+            <p className="py-4 text-center text-base text-muted-foreground dark:text-gray-400 md:py-3 md:text-sm">
               No completed jobs yet. When a job finishes, it will appear here.
             </p>
           ) : (
@@ -612,7 +635,7 @@ async function ListerDashboardContent() {
             </ul>
           )}
         </div>
-      </div>
+      </details>
 
       {/* Cancelled listings / jobs — same card chrome as cleaner dashboard; below completed */}
       <details className="group rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:rounded-xl md:border">

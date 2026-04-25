@@ -30,6 +30,11 @@ export function normalizeServiceType(raw: string | null | undefined): ServiceTyp
   return DEFAULT_SERVICE_TYPE;
 }
 
+/** Deep / spring / move-in / inspection cleans use the same `listings.service_type` value. */
+export function isDeepCleanServiceType(raw: string | null | undefined): boolean {
+  return normalizeServiceType(raw) === "deep_clean";
+}
+
 export function serviceTypeLabel(key: ServiceTypeKey | string | null | undefined): string {
   switch (normalizeServiceType(key)) {
     case "bond_cleaning":

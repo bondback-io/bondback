@@ -73,7 +73,7 @@ import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction
 import { isListerNoBidsRelistListing } from "@/lib/my-listings/lister-listing-helpers";
 import { formatListingAddonDisplayNameForService } from "@/lib/listing-addon-prices";
 import { isListingAddonSpecialArea } from "@/lib/listing-special-areas";
-import { normalizeServiceType } from "@/lib/service-types";
+import { isDeepCleanServiceType, normalizeServiceType } from "@/lib/service-types";
 import {
   PHOTO_LIMITS,
   PHOTO_VALIDATION,
@@ -346,7 +346,11 @@ export function ListingAuctionDetail({
     return dt ? formatDateDdMmYyyy(dt) : d;
   });
 
-  const showPreferredFromMoveOut = moveOutDate != null && preferredWindowFromMoveOut != null;
+  const isDeepCleanListing = isDeepCleanServiceType(listing.service_type);
+  const showPreferredFromMoveOut =
+    !isDeepCleanListing &&
+    moveOutDate != null &&
+    preferredWindowFromMoveOut != null;
   const showPreferredFallbackList =
     !showPreferredFromMoveOut && preferredDatesFormatted.length > 0;
 
@@ -1160,12 +1164,32 @@ export function ListingAuctionDetail({
             <div className="grid gap-5 text-sm md:grid-cols-2 md:gap-6 lg:gap-8">
               {moveOut && (
                 <div className="min-w-0 space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                    Move-out
-                  </p>
-                  <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
-                    {moveOutDisplay}
-                  </p>
+                  {isDeepCleanListing ? (
+                    <>
+                      <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                        Preferred service date{" "}
+                        <span className="font-normal text-muted-foreground dark:text-gray-400">
+                          (optional)
+                        </span>
+                      </p>
+                      <p className="flex items-center gap-2 text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                        <Calendar
+                          className="h-4 w-4 shrink-0 text-muted-foreground"
+                          aria-hidden
+                        />
+                        {moveOutDisplay}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                        Move-out
+                      </p>
+                      <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                        {moveOutDisplay}
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
               {showPreferredFromMoveOut && (

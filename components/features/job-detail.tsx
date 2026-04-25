@@ -139,8 +139,9 @@ import { compressImage } from "@/lib/utils/compressImage";
 import { NEXT_IMAGE_SIZES_THUMB_GRID } from "@/lib/next-image-sizes";
 import { getStateFromPostcode, formatLocationWithState } from "@/lib/state-from-postcode";
 import { getBondGuidelineForState } from "@/lib/bond-cleaning-guidelines";
-import { normalizeServiceType } from "@/lib/service-types";
+import { isDeepCleanServiceType, normalizeServiceType } from "@/lib/service-types";
 import { JobRecurringContractPanel } from "@/components/features/job-recurring-contract-panel";
+import { JobRecurringDatesCard } from "@/components/features/job-recurring-dates-section";
 import { canSendJobChatMessages } from "@/lib/chat-unlock";
 import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction-control";
 import { JobPaymentTimeline, type JobPaymentTimelineProps } from "@/components/features/job-payment-timeline";
@@ -623,6 +624,8 @@ export type JobDetailProps = {
   pricedAddonLabelById?: Record<string, string> | null;
   /** `jobs.recurring_occurrence_id` is set for a visit in a recurring series. */
   isRecurringVisitJob?: boolean;
+  /** Links this job to `recurring_occurrences` (recurring_house_cleaning Dates card). */
+  recurringOccurrenceId?: string | null;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -867,6 +870,7 @@ export function JobDetail({
   disputeCaseHref = null,
   pricedAddonLabelById = null,
   isRecurringVisitJob = false,
+  recurringOccurrenceId = null,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -1065,6 +1069,12 @@ export function JobDetail({
   const supabase = createBrowserSupabaseClient();
 
   const numericJobId = jobId != null ? Number(jobId) : null;
+  const showRecurringDatesCard =
+    listingServiceType === "recurring_house_cleaning" &&
+    hasActiveJob &&
+    numericJobId != null &&
+    Number.isFinite(numericJobId) &&
+    numericJobId > 0;
 
   /** Agreed job payment in escrow: lister refund ask vs remainder paid to cleaner if accepted. */
   const disputeRefundDisplay = useMemo(() => {
@@ -1740,7 +1750,11 @@ export function JobDetail({
     const dt = parseListingCalendarDate(d);
     return dt ? formatDateDdMmYyyy(dt) : d;
   });
-  const showPreferredFromMoveOut = moveOutDate != null && preferredWindowFromMoveOut != null;
+  const isDeepCleanService = isDeepCleanServiceType(listing.service_type);
+  const showPreferredFromMoveOut =
+    !isDeepCleanService &&
+    moveOutDate != null &&
+    preferredWindowFromMoveOut != null;
   const showPreferredFallbackList =
     !showPreferredFromMoveOut && preferredDatesFormatted.length > 0;
   const startingCents = listing.starting_price_cents ?? 0;
@@ -2548,7 +2562,13 @@ export function JobDetail({
                 </CardContent>
               </Card>
 
-              {(moveOutRaw || showPreferredFallbackList) && (
+              {showRecurringDatesCard ? (
+                <JobRecurringDatesCard
+                  listingId={listingId}
+                  jobId={numericJobId!}
+                  recurringOccurrenceId={recurringOccurrenceId}
+                />
+              ) : (moveOutRaw || showPreferredFallbackList) ? (
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -2560,12 +2580,32 @@ export function JobDetail({
                     <div className="grid gap-5 text-sm md:grid-cols-2 md:gap-6 lg:gap-8">
                       {moveOutRaw && (
                         <div className="min-w-0 space-y-1">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                            Move-out
-                          </p>
-                          <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
-                            {moveOutDisplay}
-                          </p>
+                          {isDeepCleanService ? (
+                            <>
+                              <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                                Preferred service date{" "}
+                                <span className="font-normal text-muted-foreground dark:text-gray-400">
+                                  (optional)
+                                </span>
+                              </p>
+                              <p className="flex items-center gap-2 text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                                <Calendar
+                                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                                  aria-hidden
+                                />
+                                {moveOutDisplay}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                                Move-out
+                              </p>
+                              <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                                {moveOutDisplay}
+                              </p>
+                            </>
+                          )}
                         </div>
                       )}
                       {showPreferredFromMoveOut && (
@@ -2612,7 +2652,7 @@ export function JobDetail({
                     </div>
                   </CardContent>
                 </Card>
-              )}
+              ) : null}
 
               <Card>
                 <CardHeader className="space-y-2">
@@ -4176,9 +4216,11 @@ export function JobDetail({
                       htmlFor="pay-next-recurring"
                       className="cursor-pointer text-sm leading-snug text-foreground dark:text-gray-200"
                     >
-                      After this release, also <span className="font-semibold">Pay &amp; Start</span> the next
-                      scheduled visit in this recurring series (same saved card, or Stripe checkout). If you
-                      leave this off, you can pay from the next job when you&apos;re ready.
+                      After this release, also{" "}
+                      <span className="font-semibold">Pay &amp; Start</span>{" "}
+                      the next scheduled visit in this recurring series (same saved card, or Stripe
+                      checkout). If you leave this off, you can pay from the next job when you&apos;re
+                      ready.
                     </label>
                   </div>
                 ) : null}
@@ -5415,7 +5457,13 @@ export function JobDetail({
                 )}
               </CardContent>
             </Card>
-            {(moveOutRaw || showPreferredFallbackList) && (
+            {showRecurringDatesCard ? (
+              <JobRecurringDatesCard
+                listingId={listingId}
+                jobId={numericJobId!}
+                recurringOccurrenceId={recurringOccurrenceId}
+              />
+            ) : (moveOutRaw || showPreferredFallbackList) ? (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-lg">
@@ -5427,12 +5475,32 @@ export function JobDetail({
                   <div className="grid gap-5 text-sm md:grid-cols-2 md:gap-6 lg:gap-8">
                     {moveOutRaw && (
                       <div className="min-w-0 space-y-1">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
-                          Move-out
-                        </p>
-                        <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
-                          {moveOutDisplay}
-                        </p>
+                        {isDeepCleanService ? (
+                          <>
+                            <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                              Preferred service date{" "}
+                              <span className="font-normal text-muted-foreground dark:text-gray-400">
+                                (optional)
+                              </span>
+                            </p>
+                            <p className="flex items-center gap-2 text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                              <Calendar
+                                className="h-4 w-4 shrink-0 text-muted-foreground"
+                                aria-hidden
+                              />
+                              {moveOutDisplay}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-gray-400">
+                              Move-out
+                            </p>
+                            <p className="text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
+                              {moveOutDisplay}
+                            </p>
+                          </>
+                        )}
                       </div>
                     )}
                     {showPreferredFromMoveOut && (
@@ -5482,7 +5550,7 @@ export function JobDetail({
                   </div>
                 </CardContent>
               </Card>
-            )}
+            ) : null}
             <Card>
               <CardHeader className="space-y-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">

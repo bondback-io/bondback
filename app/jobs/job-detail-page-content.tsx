@@ -865,6 +865,7 @@ export async function JobDetailPageContent({
           isRecurringVisitJob={Boolean(
             job && (job as JobRow).recurring_occurrence_id != null
           )}
+          recurringOccurrenceId={(job as JobRow | null)?.recurring_occurrence_id ?? null}
         />
       </section>
     </OfflineJobsPrimer>
