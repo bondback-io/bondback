@@ -222,16 +222,30 @@ function FitInitialBounds({
           padding: [44, 52],
           maxZoom: 13,
         };
-    map.fitBounds(b, fitOpts);
+    try {
+      map.fitBounds(b, fitOpts);
+    } catch {
+      try {
+        map.setView([centerLat, centerLon], isMobile ? 9 : 10);
+      } catch {
+        // ignore
+      }
+    }
   }, [map, points, signature, centerLat, centerLon, radiusM, isMobile, visibilityRev]);
   return null;
 }
 
-/** Re-run invalidateSize + refit when the map is shown after display:none (mobile list/map tabs). */
+/**
+ * Re-run invalidateSize + refit when the map is shown after display:none (mobile list/map tabs).
+ * `invalidateSize` before Leaflet has built panes (or after unmount) throws: reading `_leaflet_pos`.
+ * All work is deferred to `map.whenReady`, container presence is checked, and calls are wrapped.
+ */
 function MapSizeSync() {
   const map = useMap();
   const prev = React.useRef({ w: 0, h: 0 });
   const visTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRaf = React.useRef<number | null>(null);
+  const extraTimers = React.useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const bumpVisibility = React.useCallback(() => {
     if (visTimer.current) clearTimeout(visTimer.current);
@@ -245,41 +259,75 @@ function MapSizeSync() {
     const el = map.getContainer();
     if (!el) return;
 
-    const runInvalidate = () => {
-      requestAnimationFrame(() => {
-        map.invalidateSize();
+    const safeInvalidate = () => {
+      if (!el.isConnected) return;
+      try {
+        map.invalidateSize({ animate: false });
+      } catch {
+        // Leaflet can throw if panes aren’t ready or map is tearing down
+      }
+    };
+
+    const scheduleInvalidate = () => {
+      if (pendingRaf.current != null) cancelAnimationFrame(pendingRaf.current);
+      pendingRaf.current = requestAnimationFrame(() => {
+        pendingRaf.current = null;
+        safeInvalidate();
       });
     };
 
-    const onResize = () => runInvalidate();
+    const afterDelay = (ms: number) => {
+      const id = setTimeout(safeInvalidate, ms);
+      extraTimers.current.push(id);
+    };
 
-    const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect();
-      const w = r.width;
-      const h = r.height;
-      runInvalidate();
-      const was = prev.current;
-      if ((was.w < 4 || was.h < 4) && w > 32 && h > 32) {
-        bumpVisibility();
-        runInvalidate();
-        window.setTimeout(runInvalidate, 100);
-        window.setTimeout(runInvalidate, 350);
-      }
-      prev.current = { w, h };
-    });
-    ro.observe(el);
+    const clearExtraTimers = () => {
+      extraTimers.current.forEach(clearTimeout);
+      extraTimers.current = [];
+    };
 
-    map.whenReady(() => {
-      runInvalidate();
-      window.setTimeout(runInvalidate, 100);
-      window.setTimeout(runInvalidate, 400);
-    });
+    let ro: ResizeObserver | null = null;
+    let cancelled = false;
+    const onWinResize = () => scheduleInvalidate();
 
-    window.addEventListener("resize", onResize);
+    const onMapReady = () => {
+      if (cancelled) return;
+      ro = new ResizeObserver(() => {
+        if (cancelled) return;
+        const r = el.getBoundingClientRect();
+        const w = r.width;
+        const h = r.height;
+        scheduleInvalidate();
+        const was = prev.current;
+        if ((was.w < 4 || was.h < 4) && w > 32 && h > 32) {
+          bumpVisibility();
+          afterDelay(100);
+          afterDelay(350);
+        }
+        prev.current = { w, h };
+      });
+      ro.observe(el);
+      scheduleInvalidate();
+      afterDelay(100);
+      afterDelay(400);
+    };
+
+    map.whenReady(onMapReady);
+
+    window.addEventListener("resize", onWinResize);
     return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", onResize);
-      if (visTimer.current) clearTimeout(visTimer.current);
+      cancelled = true;
+      if (pendingRaf.current != null) {
+        cancelAnimationFrame(pendingRaf.current);
+        pendingRaf.current = null;
+      }
+      clearExtraTimers();
+      ro?.disconnect();
+      if (visTimer.current) {
+        clearTimeout(visTimer.current);
+        visTimer.current = null;
+      }
+      window.removeEventListener("resize", onWinResize);
     };
   }, [map, bumpVisibility]);
 
