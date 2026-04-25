@@ -19,19 +19,36 @@ export function listingsToFindJobsMapPoints(
     const bids = bidCountByListingId?.[id] ?? 0;
     const currentCents = l.current_lowest_bid_cents ?? 0;
     const buyNow = l.buy_now_cents;
-    const loc = [l.suburb, l.postcode].filter(Boolean).join(" ") || "—";
+    const suburb = String(l.suburb ?? "").trim();
+    const postcode = String(l.postcode ?? "").trim();
+    const rowState = l as ListingRow & { state?: string | null };
+    const stateRaw = rowState.state != null ? String(rowState.state).trim() : "";
+    const state = stateRaw !== "" ? stateRaw : null;
+    const loc = [suburb, postcode].filter(Boolean).join(" ") || "—";
     const rowExt = l as ListingRow & {
       service_type?: string | null;
       recurring_frequency?: string | null;
       is_urgent?: boolean | null;
     };
+    const fullTitle = (l.title ?? "Bond clean").slice(0, 200);
+    const titleShort =
+      fullTitle.length > 96 ? `${fullTitle.slice(0, 93)}…` : fullTitle;
+    const typeLabel = String(l.property_type ?? "property").replace(/_/g, " ");
+    const beds = Math.max(0, Math.floor(Number(l.bedrooms ?? 0)));
+    const baths = Math.max(0, Math.floor(Number(l.bathrooms ?? 0)));
+    const propertySummary = `${beds} bed${beds === 1 ? "" : "s"} · ${baths} bath${baths === 1 ? "" : "s"} · ${typeLabel}`;
     out.push({
       id,
-      title: (l.title ?? "Bond clean").slice(0, 200),
+      title: fullTitle,
+      titleShort,
       priceLabel: formatCents(currentCents),
       lat: row.lat,
       lon: row.lon,
       locationLabel: loc,
+      suburb,
+      postcode,
+      state,
+      propertySummary,
       currentBidLabel: formatCents(currentCents),
       buyNowLabel:
         typeof buyNow === "number" && buyNow > 0 ? formatCents(buyNow) : null,

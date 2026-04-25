@@ -61,20 +61,35 @@ function escapeMapTooltipText(s: string): string {
 
 /** Hover preview for map pins (clustered markers) */
 function mapPointTooltipHtml(p: FindJobsMapPoint): string {
-  const title = escapeMapTooltipText(p.title || "Job");
-  const loc = escapeMapTooltipText(p.locationLabel);
+  const title = escapeMapTooltipText(p.titleShort || p.title || "Job");
+  const locParts = [p.suburb, p.postcode, p.state].filter(
+    (x) => x != null && String(x).trim() !== ""
+  ) as string[];
+  const locLine = escapeMapTooltipText(
+    locParts.length > 0 ? locParts.join(" · ") : p.locationLabel || "—"
+  );
+  const prop = escapeMapTooltipText(p.propertySummary || "—");
   const price = escapeMapTooltipText(p.priceLabel);
-  const bidInfo = escapeMapTooltipText(p.currentBidLabel);
-  const urgent = p.isUrgent
-    ? `<span style="color:#b91c1c;font-weight:600;">Urgent</span> · `
+  const buyNow =
+    p.buyNowLabel != null && p.buyNowLabel !== ""
+      ? escapeMapTooltipText(p.buyNowLabel)
+      : null;
+  const urgentRow = p.isUrgent
+    ? `<div class="bb-map-job-tip-urgent"><span class="bb-map-job-tip-urgent-badge">Urgent</span></div>`
     : "";
+  const buyNowDd = buyNow != null ? buyNow : "—";
   return `<div class="bb-map-job-tip-inner">
+    ${urgentRow}
     <div class="bb-map-job-tip-title">${title}</div>
-    <div class="bb-map-job-tip-row bb-map-job-tip-price">${urgent}${price}</div>
-    <div class="bb-map-job-tip-row bb-map-job-tip-loc">${loc}</div>
-    <div class="bb-map-job-tip-row bb-map-job-tip-bids">${bidInfo} · ${p.bidCount} bid${
+    <dl class="bb-map-job-tip-dl">
+      <div class="bb-map-job-tip-dlrow"><dt>Location</dt><dd>${locLine}</dd></div>
+      <div class="bb-map-job-tip-dlrow"><dt>Property</dt><dd>${prop}</dd></div>
+      <div class="bb-map-job-tip-dlrow"><dt>Current lowest</dt><dd class="bb-map-job-tip-em">${price}</dd></div>
+      <div class="bb-map-job-tip-dlrow"><dt>Bids</dt><dd>${p.bidCount} bid${
     p.bidCount === 1 ? "" : "s"
-  }</div>
+  }</dd></div>
+      <div class="bb-map-job-tip-dlrow"><dt>Buy now</dt><dd class="bb-map-job-tip-buy">${buyNowDd}</dd></div>
+    </dl>
   </div>`;
 }
 
@@ -522,46 +537,86 @@ function MapPinPulseStyle() {
   padding: 0;
   pointer-events: none;
   white-space: normal;
+  min-width: 14rem;
+  width: max-content;
   max-width: min(22rem, calc(100vw - 1.5rem));
   box-sizing: border-box;
 }
 .leaflet-tooltip.bb-map-job-tooltip::before { border-top-color: #fff; }
 .bb-map-job-tip-inner {
   display: block;
-  min-width: 0;
-  max-width: 100%;
+  min-width: 14rem;
+  max-width: min(22rem, calc(100vw - 1.5rem));
+  width: 100%;
   box-sizing: border-box;
   padding: 10px 12px 11px;
   text-align: left;
+}
+.bb-map-job-tip-urgent {
+  margin: 0 0 6px 0;
+}
+.bb-map-job-tip-urgent-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b91c1c;
+  background: rgba(185,28,28,0.1);
+  border-radius: 6px;
+  padding: 2px 8px;
 }
 .bb-map-job-tip-title {
   font-weight: 600;
   font-size: 13px;
   line-height: 1.4;
-  margin: 0 0 6px 0;
+  margin: 0 0 8px 0;
   word-break: break-word;
   overflow-wrap: anywhere;
   hyphens: auto;
 }
-.bb-map-job-tip-row {
+.bb-map-job-tip-dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bb-map-job-tip-dlrow {
+  display: grid;
+  grid-template-columns: 5.75rem minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.bb-map-job-tip-dlrow dt {
+  margin: 0;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.bb-map-job-tip-dlrow dd {
   margin: 0;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
-.bb-map-job-tip-price {
+.bb-map-job-tip-em {
+  font-weight: 700;
   font-size: 12px;
-  line-height: 1.4;
-  opacity: 0.95;
+  color: #059669;
 }
-.bb-map-job-tip-loc, .bb-map-job-tip-bids {
-  font-size: 11px;
-  line-height: 1.45;
-  opacity: 0.88;
-  margin-top: 4px;
+.bb-map-job-tip-buy {
+  font-weight: 600;
+  color: #7c3aed;
 }
-.dark .bb-map-job-tip-loc, .dark .bb-map-job-tip-bids,
-html.dark .bb-map-job-tip-loc, html.dark .bb-map-job-tip-bids {
-  opacity: 0.9;
+.dark .bb-map-job-tip-em {
+  color: #34d399;
+}
+.dark .bb-map-job-tip-buy {
+  color: #c4b5fd;
+}
+.dark .bb-map-job-tip-urgent-badge {
+  color: #fecaca;
+  background: rgba(185,28,28,0.2);
 }
 .dark .leaflet-tooltip.bb-map-job-tooltip, html.dark .leaflet-tooltip.bb-map-job-tooltip {
   background: #1f2937;
