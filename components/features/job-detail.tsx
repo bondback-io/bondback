@@ -2896,6 +2896,15 @@ export function JobDetail({
           )}
           {hasActiveJob &&
             !listerCompletedBoostTidy &&
+            isJobCleaner &&
+            localJobStatus === "completed_pending_approval" &&
+            !cleanerReviewPendingMinimal && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2.5 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
+                You&apos;ve requested payment. Waiting for the property lister to review and release funds.
+              </p>
+            )}
+          {hasActiveJob &&
+            !listerCompletedBoostTidy &&
             normalizeServiceType(listing.service_type) === "recurring_house_cleaning" && (
               <JobRecurringContractPanel
                 listingId={listingId}
@@ -3889,25 +3898,6 @@ export function JobDetail({
                           Tick every checklist item and upload at least 3 after-photos to continue.
                         </p>
                       )}
-                      {allCompleted && hasAfterPhotos && numericJobId ? (
-                        <Button asChild variant="outline" className="w-full min-h-11">
-                          <Link href={`/jobs/${numericJobId}/request-additional-payment`}>
-                            Request additional payment
-                          </Link>
-                        </Button>
-                      ) : null}
-                    </div>
-                  )}
-                  {localJobStatus === "completed_pending_approval" && (
-                    <div className="space-y-2">
-                      <p className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2.5 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
-                        You&apos;ve requested payment. Waiting for the property lister to review and release funds.
-                      </p>
-                      <Button asChild variant="outline" className="w-full min-h-11">
-                        <Link href={`/jobs/${numericJobId}/request-additional-payment`}>
-                          Request additional payment
-                        </Link>
-                      </Button>
                     </div>
                   )}
                   {isJobCleaner &&
