@@ -13,6 +13,8 @@ import type { DashboardJobCardProps } from "@/components/dashboard/dashboard-job
 import { DashboardJobCardWithSwipe } from "@/components/dashboard/dashboard-cards-swipe";
 import { BROWSE_JOBS_NAV_LABEL } from "@/lib/navigation/browse-jobs-labels";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
+import type { ServiceTypeKey } from "@/lib/service-types";
+import { ServiceTypeCalendarLegendMark } from "@/components/calendar/calendar-service-icon";
 
 /** Primary contextual FAB for lister/cleaner dashboards (mobile only). Sits above the tab bar; leaves room for the layout icon FAB on the right. */
 export function MobileDashboardFab({
@@ -119,6 +121,8 @@ export type ListerActiveJobItem = {
   cleanerFirstName: string | null;
   /** Cleaner has not finished Stripe Connect while release requires it. */
   stripePayoutSetupRequired?: boolean;
+  /** `listings.service_type` — calendar legend icon + border colour. */
+  serviceType: ServiceTypeKey;
 };
 
 function listerActiveJobCopy(item: ListerActiveJobItem): {
@@ -238,6 +242,11 @@ export function ListerActiveJobsList({
                   >
                     {label}
                   </span>
+                  <ServiceTypeCalendarLegendMark
+                    serviceType={item.serviceType}
+                    className="p-1 md:p-0.5"
+                    iconClassName="h-3.5 w-3.5 md:h-3.5 md:w-3.5"
+                  />
                   {item.stripePayoutSetupRequired &&
                   item.status !== "completed" &&
                   !isJobCancelledStatus(item.status) ? (

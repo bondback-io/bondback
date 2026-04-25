@@ -26,6 +26,7 @@ import {
 } from "@/lib/listings";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
+import { normalizeServiceType } from "@/lib/service-types";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
 import { fetchAllListerListingIds, fetchListingsForLister } from "@/lib/actions/listings";
 import {
@@ -307,6 +308,9 @@ async function ListerDashboardContent() {
             ? "Assigned cleaner"
             : null,
       stripePayoutSetupRequired,
+      serviceType: normalizeServiceType(
+        (listing as { service_type?: string | null } | null)?.service_type
+      ),
     };
   };
 

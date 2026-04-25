@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { formatCents, isListingLive } from "@/lib/listings";
 import type { ListingRow } from "@/lib/listings";
 import { getListingCardServiceUi } from "@/lib/listing-service-details";
+import { ServiceTypeCalendarLegendMark } from "@/components/calendar/calendar-service-icon";
 import { ListingCoverImage } from "@/components/listing/listing-cover-image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -238,6 +239,10 @@ export function ListerListingCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <ServiceTypeCalendarLegendMark
+              className="p-0.5"
+              serviceType={(listing as { service_type?: string | null }).service_type}
+            />
             <Badge
               className={cn(
                 "rounded-lg border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",

@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { isListingLive, type ListingRow } from "@/lib/listings";
 import { getListingCardServiceUi } from "@/lib/listing-service-details";
+import { ServiceTypeCalendarLegendMark } from "@/components/calendar/calendar-service-icon";
 import { hrefListingOrJob } from "@/lib/navigation/listing-or-job-href";
 
 export type DashboardListingCardProps = {
@@ -101,6 +102,10 @@ function DashboardListingCardInner({
                 Hot
               </Badge>
             )}
+            <ServiceTypeCalendarLegendMark
+              className="p-0.5"
+              serviceType={listing.service_type}
+            />
             <Badge
               className={cn(
                 "border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide shadow-sm sm:text-xs",
@@ -245,6 +250,10 @@ function DashboardListingCardInner({
                   Ending soon
                 </Badge>
               )}
+              <ServiceTypeCalendarLegendMark
+                className="p-0.5"
+                serviceType={listing.service_type}
+              />
               <Badge
                 className={cn(
                   "border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",

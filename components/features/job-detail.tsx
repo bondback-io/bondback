@@ -2583,10 +2583,7 @@ export function JobDetail({
                           {isDeepCleanService ? (
                             <>
                               <p className="text-sm font-semibold text-foreground dark:text-gray-100">
-                                Preferred service date{" "}
-                                <span className="font-normal text-muted-foreground dark:text-gray-400">
-                                  (optional)
-                                </span>
+                                Preferred service date
                               </p>
                               <p className="flex items-center gap-2 text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
                                 <Calendar
@@ -5478,10 +5475,7 @@ export function JobDetail({
                         {isDeepCleanService ? (
                           <>
                             <p className="text-sm font-semibold text-foreground dark:text-gray-100">
-                              Preferred service date{" "}
-                              <span className="font-normal text-muted-foreground dark:text-gray-400">
-                                (optional)
-                              </span>
+                              Preferred service date
                             </p>
                             <p className="flex items-center gap-2 text-base font-semibold tabular-nums text-foreground dark:text-gray-100">
                               <Calendar

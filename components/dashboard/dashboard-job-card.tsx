@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ListingRow } from "@/lib/listings";
 import { getListingCardServiceUi } from "@/lib/listing-service-details";
+import { ServiceTypeCalendarLegendMark } from "@/components/calendar/calendar-service-icon";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import { parseJobTopUpPayments } from "@/lib/job-top-up";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
@@ -278,6 +279,12 @@ function DashboardJobCardInner({
               <Badge className={cn("px-2.5 py-1 text-xs font-bold shadow-sm", statusClass)}>
                 {statusLabel}
               </Badge>
+              {listing ? (
+                <ServiceTypeCalendarLegendMark
+                  className="p-0.5"
+                  serviceType={(listing as { service_type?: string | null }).service_type}
+                />
+              ) : null}
               {overdue && (
                 <Badge className="border border-red-600/90 bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">
                   Overdue
@@ -465,6 +472,12 @@ function DashboardJobCardInner({
             ) : null}
             <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-1.5">
               <Badge className={cn("px-2.5 py-1 text-xs font-bold", statusClass)}>{statusLabel}</Badge>
+              {listing ? (
+                <ServiceTypeCalendarLegendMark
+                  className="p-0.5"
+                  serviceType={(listing as { service_type?: string | null }).service_type}
+                />
+              ) : null}
               {overdue && (
                 <Badge className="bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">
                   Overdue
