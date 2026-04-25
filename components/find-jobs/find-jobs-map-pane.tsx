@@ -50,6 +50,34 @@ import { FIND_JOBS_MAP_POINTS_SOFT_CAP } from "@/lib/find-jobs/map-points-from-l
 
 const MARKER_TO_POINT = new WeakMap<L.Marker, FindJobsMapPoint>();
 
+function escapeMapTooltipText(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Hover preview for map pins (clustered markers) */
+function mapPointTooltipHtml(p: FindJobsMapPoint): string {
+  const title = escapeMapTooltipText(p.title || "Job");
+  const loc = escapeMapTooltipText(p.locationLabel);
+  const price = escapeMapTooltipText(p.priceLabel);
+  const bidInfo = escapeMapTooltipText(p.currentBidLabel);
+  const urgent = p.isUrgent
+    ? `<span style="color:#b91c1c;font-weight:600;">Urgent</span> · `
+    : "";
+  return `<div class="bb-map-job-tip-inner" style="text-align:left;min-width:11rem;max-width:16rem">
+    <div style="font-weight:600;margin-bottom:4px;font-size:13px;line-height:1.3;">${title}</div>
+    <div style="font-size:12px;opacity:0.95;">${urgent}${price}</div>
+    <div style="font-size:11px;opacity:0.88;margin-top:3px;">${loc}</div>
+    <div style="font-size:11px;opacity:0.88;margin-top:2px;">${bidInfo} · ${p.bidCount} bid${
+    p.bidCount === 1 ? "" : "s"
+  }</div>
+  </div>`;
+}
+
 type MarkerClusterGroupWithIcons = L.LayerGroup & {
   clearLayers: () => void;
   addLayer: (layer: L.Layer) => L.LayerGroup;
@@ -137,6 +165,8 @@ function userLocationIcon() {
   });
 }
 
+const FIND_JOBS_MAP_VISIBILITY = "bondback:find-jobs-map-visibility";
+
 function FitInitialBounds({
   points,
   centerLat,
@@ -149,9 +179,18 @@ function FitInitialBounds({
   const map = useMap();
   const signature = React.useMemo(() => points.map((p) => p.id).join(","), [points]);
   const lastSig = React.useRef<string | null>(null);
+  const [visibilityRev, setVisibilityRev] = React.useState(0);
 
   React.useEffect(() => {
-    if (signature === lastSig.current) return;
+    const bump = () => setVisibilityRev((n) => n + 1);
+    window.addEventListener(FIND_JOBS_MAP_VISIBILITY, bump);
+    return () => window.removeEventListener(FIND_JOBS_MAP_VISIBILITY, bump);
+  }, []);
+
+  React.useEffect(() => {
+    if (visibilityRev === 0) {
+      if (signature === lastSig.current) return;
+    }
     lastSig.current = signature;
     const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon));
     if (valid.length === 0) {
@@ -161,7 +200,66 @@ function FitInitialBounds({
     const b = L.latLngBounds(valid.map((p) => [p.lat, p.lon] as [number, number]));
     b.extend([centerLat, centerLon]);
     map.fitBounds(b, { padding: [40, 40], maxZoom: 14 });
-  }, [map, points, signature, centerLat, centerLon]);
+  }, [map, points, signature, centerLat, centerLon, visibilityRev]);
+  return null;
+}
+
+/** Re-run invalidateSize + refit when the map is shown after display:none (mobile list/map tabs). */
+function MapSizeSync() {
+  const map = useMap();
+  const prev = React.useRef({ w: 0, h: 0 });
+  const visTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const bumpVisibility = React.useCallback(() => {
+    if (visTimer.current) clearTimeout(visTimer.current);
+    visTimer.current = setTimeout(() => {
+      visTimer.current = null;
+      window.dispatchEvent(new CustomEvent(FIND_JOBS_MAP_VISIBILITY));
+    }, 40);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    const el = map.getContainer();
+    if (!el) return;
+
+    const runInvalidate = () => {
+      requestAnimationFrame(() => {
+        map.invalidateSize();
+      });
+    };
+
+    const onResize = () => runInvalidate();
+
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      const w = r.width;
+      const h = r.height;
+      runInvalidate();
+      const was = prev.current;
+      if ((was.w < 4 || was.h < 4) && w > 32 && h > 32) {
+        bumpVisibility();
+        runInvalidate();
+        window.setTimeout(runInvalidate, 100);
+        window.setTimeout(runInvalidate, 350);
+      }
+      prev.current = { w, h };
+    });
+    ro.observe(el);
+
+    map.whenReady(() => {
+      runInvalidate();
+      window.setTimeout(runInvalidate, 100);
+      window.setTimeout(runInvalidate, 400);
+    });
+
+    window.addEventListener("resize", onResize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", onResize);
+      if (visTimer.current) clearTimeout(visTimer.current);
+    };
+  }, [map, bumpVisibility]);
+
   return null;
 }
 
@@ -245,17 +343,18 @@ function useIsMobileMap() {
 
 function ClusteredJobMarkers({
   points,
-  onPinSelect,
+  onMarkerClick,
   markerRefs,
+  isMobile,
 }: {
   points: FindJobsMapPoint[];
-  onPinSelect: (id: string) => void;
+  onMarkerClick: (p: FindJobsMapPoint, marker: L.Marker) => void;
   markerRefs: React.MutableRefObject<Map<string, L.Marker>>;
+  isMobile: boolean;
 }) {
   const map = useMap();
   const { highlightedListingId } = useFindJobsMap();
   const clusterRef = React.useRef<MarkerClusterGroupWithIcons | null>(null);
-  const isMobile = useIsMobileMap();
 
   React.useEffect(() => {
     const Lc = L as typeof L & {
@@ -300,12 +399,19 @@ function ClusteredJobMarkers({
       const icon = makeServiceIcon(p, selected);
       const marker = L.marker([p.lat, p.lon], { icon });
       MARKER_TO_POINT.set(marker, p);
-      marker.on("click", () => onPinSelect(p.id));
+      marker.on("click", () => onMarkerClick(p, marker));
+      marker.bindTooltip(mapPointTooltipHtml(p), {
+        direction: "top",
+        offset: L.point(0, -4),
+        sticky: true,
+        opacity: 1,
+        className: "bb-map-job-tooltip",
+      });
       marker.setZIndexOffset(selected ? 3500 : 200 + stackIndex);
       markerRefs.current.set(p.id, marker);
       mcg.addLayer(marker);
     });
-  }, [points, highlightedListingId, onPinSelect, markerRefs]);
+  }, [points, highlightedListingId, onMarkerClick, markerRefs]);
 
   return null;
 }
@@ -315,6 +421,25 @@ function MapPinPulseStyle() {
   return (
     <style>{`
 @keyframes bb-pin-pulse { 0%, 100% { opacity: 1; filter: brightness(1); transform: scale(1); } 50% { opacity: 0.92; filter: brightness(1.08); transform: scale(1.06); } }
+.leaflet-tooltip.bb-map-job-tooltip {
+  background: #fff;
+  color: #111827;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  padding: 0;
+  pointer-events: none;
+}
+.leaflet-tooltip.bb-map-job-tooltip::before { border-top-color: #fff; }
+.dark .leaflet-tooltip.bb-map-job-tooltip, html.dark .leaflet-tooltip.bb-map-job-tooltip {
+  background: #1f2937;
+  color: #f9fafb;
+  border-color: #374151;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+.dark .leaflet-tooltip.bb-map-job-tooltip::before, html.dark .leaflet-tooltip.bb-map-job-tooltip::before {
+  border-top-color: #1f2937;
+}
 `}</style>
   );
 }
@@ -339,6 +464,7 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
 
   const markerRefs = React.useRef<Map<string, L.Marker>>(new Map());
   const isMobile = useIsMobileMap();
+  const mobilePinPreviewIdRef = React.useRef<string | null>(null);
 
   const [userLoc, setUserLoc] = React.useState<{ lat: number; lon: number } | null>(null);
   const [filterOpen, setFilterOpen] = React.useState(false);
@@ -356,7 +482,12 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
     );
   }, []);
 
-  const onPinSelect = React.useCallback(
+  /** Clear one-tap preview when detail opens (e.g. from list) */
+  React.useEffect(() => {
+    if (detailListing) mobilePinPreviewIdRef.current = null;
+  }, [detailListing]);
+
+  const openDetailForPin = React.useCallback(
     (id: string) => {
       if (detailListing && String(detailListing.id) === id) {
         setDetailListing(null);
@@ -369,6 +500,31 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
       el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     },
     [detailListing, setHighlightedListingId, getListingById, setDetailListing]
+  );
+
+  const onMarkerMapClick = React.useCallback(
+    (p: FindJobsMapPoint, marker: L.Marker) => {
+      if (!isMobile) {
+        openDetailForPin(p.id);
+        return;
+      }
+      if (mobilePinPreviewIdRef.current === p.id) {
+        mobilePinPreviewIdRef.current = null;
+        marker.closeTooltip();
+        openDetailForPin(p.id);
+        return;
+      }
+      mobilePinPreviewIdRef.current = p.id;
+      setHighlightedListingId(p.id);
+      setDetailListing(null);
+      markerRefs.current.forEach((m, otherId) => {
+        if (otherId !== p.id) m.closeTooltip();
+      });
+      marker.openTooltip();
+      const el = document.querySelector(`[data-find-job-card="${CSS.escape(p.id)}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    },
+    [isMobile, openDetailForPin, setDetailListing, setHighlightedListingId]
   );
 
   const [previewRadiusKm, setPreviewRadiusKm] = React.useState(radiusKm);
@@ -454,9 +610,15 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
         <ZoomControl position="topright" />
+        <MapSizeSync />
         <Circle center={[centerLat, centerLon]} radius={radiusM} pathOptions={circlePathOptions} />
         <FitInitialBounds points={points} centerLat={centerLat} centerLon={centerLon} />
-        <ClusteredJobMarkers points={points} onPinSelect={onPinSelect} markerRefs={markerRefs} />
+        <ClusteredJobMarkers
+          points={points}
+          onMarkerClick={onMarkerMapClick}
+          markerRefs={markerRefs}
+          isMobile={isMobile}
+        />
         <MapFlyToListener />
         <MapFocusSync
           focusRequest={mapFocusRequest}

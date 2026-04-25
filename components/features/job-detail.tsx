@@ -2324,22 +2324,16 @@ export function JobDetail({
             </div>
           ) : isSold ? (
             <>
-              <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
-                <CardContent className="p-0">
-                  <div
-                    className={cn(
-                      "grid grid-cols-1 divide-y divide-border dark:divide-gray-800",
-                      "md:divide-y-0 md:divide-x md:divide-border/80",
-                      showCleanerWonForCallout
-                        ? hasBuyNowJob
-                          ? "md:grid-cols-2"
-                          : "md:grid-cols-1"
-                        : hasBuyNowJob
-                          ? "md:grid-cols-3"
-                          : "md:grid-cols-2"
-                    )}
-                  >
-                    {!showCleanerWonForCallout && (
+              {!showCleanerWonForCallout ? (
+                <Card className="overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+                  <CardContent className="p-0">
+                    <div
+                      className={cn(
+                        "grid grid-cols-1 divide-y divide-border dark:divide-gray-800",
+                        "md:divide-y-0 md:divide-x md:divide-border/80",
+                        "md:grid-cols-1"
+                      )}
+                    >
                       <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-emerald-500/[0.06] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-emerald-950/30">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
                           {localJobStatus === "completed" ? "Job amount (paid)" : "Agreed job price"}
@@ -2348,28 +2342,10 @@ export function JobDetail({
                           {formatCents(soldGridJobPaymentDisplayCents)}
                         </p>
                       </div>
-                    )}
-                    <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-card px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-gray-950/40">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                        Starting bid
-                      </p>
-                      <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100 sm:text-3xl">
-                        {formatCents(startingCents)}
-                      </p>
                     </div>
-                    {hasBuyNowJob && (
-                      <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-violet-500/[0.07] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-violet-950/35">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
-                          Buy now
-                        </p>
-                        <p className="text-2xl font-bold tabular-nums tracking-tight text-violet-700 dark:text-violet-300 sm:text-3xl">
-                          {formatCents(buyNowCentsJob!)}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              ) : null}
               {showCleanerWonForCallout && (
                 <div className="space-y-2 rounded-md border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/40">
                   <WonForHeaderWithBuyNowBadge showBuyNow={securedViaBuyNow} />
@@ -3470,6 +3446,42 @@ export function JobDetail({
             numericJobId && (
             <JobHistoryCollapsible enabled={false}>
             <>
+              {localJobStatus === "completed" && (startingCents > 0 || hasBuyNowJob) && (
+                <Card className="mb-4 overflow-hidden border-border/90 shadow-sm dark:border-gray-800">
+                  <CardContent className="p-0">
+                    <div
+                      className={cn(
+                        "grid grid-cols-1 divide-y divide-border dark:divide-gray-800",
+                        "md:divide-y-0 md:divide-x md:divide-border/80",
+                        startingCents > 0 && hasBuyNowJob
+                          ? "md:grid-cols-2"
+                          : "md:grid-cols-1"
+                      )}
+                    >
+                      {startingCents > 0 ? (
+                        <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-card px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-gray-950/40">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                            Starting bid
+                          </p>
+                          <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground dark:text-gray-100 sm:text-3xl">
+                            {formatCents(startingCents)}
+                          </p>
+                        </div>
+                      ) : null}
+                      {hasBuyNowJob ? (
+                        <div className="flex min-h-[5.25rem] flex-col justify-center gap-1 bg-violet-500/[0.07] px-5 py-4 sm:px-6 md:min-h-[6rem] md:px-8 md:py-6 dark:bg-violet-950/35">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/95 dark:text-gray-400">
+                            Buy now
+                          </p>
+                          <p className="text-2xl font-bold tabular-nums tracking-tight text-violet-700 dark:text-violet-300 sm:text-3xl">
+                            {formatCents(buyNowCentsJob!)}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               {topUpPayments.length > 0 && (
                 <div className="mb-3 space-y-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.04] px-3 py-3 dark:border-emerald-800/40 dark:bg-emerald-950/25 sm:px-4">
                   <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">
