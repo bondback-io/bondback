@@ -68,11 +68,11 @@ function mapPointTooltipHtml(p: FindJobsMapPoint): string {
   const urgent = p.isUrgent
     ? `<span style="color:#b91c1c;font-weight:600;">Urgent</span> · `
     : "";
-  return `<div class="bb-map-job-tip-inner" style="text-align:left;min-width:11rem;max-width:16rem">
-    <div style="font-weight:600;margin-bottom:4px;font-size:13px;line-height:1.3;">${title}</div>
-    <div style="font-size:12px;opacity:0.95;">${urgent}${price}</div>
-    <div style="font-size:11px;opacity:0.88;margin-top:3px;">${loc}</div>
-    <div style="font-size:11px;opacity:0.88;margin-top:2px;">${bidInfo} · ${p.bidCount} bid${
+  return `<div class="bb-map-job-tip-inner">
+    <div class="bb-map-job-tip-title">${title}</div>
+    <div class="bb-map-job-tip-row bb-map-job-tip-price">${urgent}${price}</div>
+    <div class="bb-map-job-tip-row bb-map-job-tip-loc">${loc}</div>
+    <div class="bb-map-job-tip-row bb-map-job-tip-bids">${bidInfo} · ${p.bidCount} bid${
     p.bidCount === 1 ? "" : "s"
   }</div>
   </div>`;
@@ -171,13 +171,22 @@ function FitInitialBounds({
   points,
   centerLat,
   centerLon,
+  radiusM,
+  isMobile,
 }: {
   points: FindJobsMapPoint[];
   centerLat: number;
   centerLon: number;
+  /** Search radius in metres (must match the green circle on the map). */
+  radiusM: number;
+  isMobile: boolean;
 }) {
   const map = useMap();
-  const signature = React.useMemo(() => points.map((p) => p.id).join(","), [points]);
+  const signature = React.useMemo(
+    () =>
+      [points.map((p) => p.id).join(","), Math.round(radiusM), centerLat, centerLon].join("|"),
+    [points, radiusM, centerLat, centerLon]
+  );
   const lastSig = React.useRef<string | null>(null);
   const [visibilityRev, setVisibilityRev] = React.useState(0);
 
@@ -192,15 +201,29 @@ function FitInitialBounds({
       if (signature === lastSig.current) return;
     }
     lastSig.current = signature;
+    const rM = Math.max(1000, radiusM);
+    const circleBounds = L.circle([centerLat, centerLon], { radius: rM }).getBounds();
+    const b = L.latLngBounds(circleBounds.getSouthWest(), circleBounds.getNorthEast());
+
     const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon));
-    if (valid.length === 0) {
-      map.setView([centerLat, centerLon], 10);
-      return;
+    for (const p of valid) {
+      b.extend([p.lat, p.lon] as L.LatLngExpression);
     }
-    const b = L.latLngBounds(valid.map((p) => [p.lat, p.lon] as [number, number]));
-    b.extend([centerLat, centerLon]);
-    map.fitBounds(b, { padding: [40, 40], maxZoom: 14 });
-  }, [map, points, signature, centerLat, centerLon, visibilityRev]);
+    b.extend([centerLat, centerLon] as L.LatLngExpression);
+
+    // Mobile: more padding (bottom sheet) + lower max zoom so a large % of the search ring is visible.
+    // Desktop: slightly more padding and a bit lower cap than before so the radius ring isn’t cropped.
+    const fitOpts: L.FitBoundsOptions = isMobile
+      ? {
+          padding: [20, 96],
+          maxZoom: 10,
+        }
+      : {
+          padding: [44, 52],
+          maxZoom: 13,
+        };
+    map.fitBounds(b, fitOpts);
+  }, [map, points, signature, centerLat, centerLon, radiusM, isMobile, visibilityRev]);
   return null;
 }
 
@@ -429,8 +452,48 @@ function MapPinPulseStyle() {
   box-shadow: 0 8px 20px rgba(0,0,0,0.12);
   padding: 0;
   pointer-events: none;
+  white-space: normal;
+  max-width: min(22rem, calc(100vw - 1.5rem));
+  box-sizing: border-box;
 }
 .leaflet-tooltip.bb-map-job-tooltip::before { border-top-color: #fff; }
+.bb-map-job-tip-inner {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px 11px;
+  text-align: left;
+}
+.bb-map-job-tip-title {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0 0 6px 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.bb-map-job-tip-row {
+  margin: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.bb-map-job-tip-price {
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.95;
+}
+.bb-map-job-tip-loc, .bb-map-job-tip-bids {
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.88;
+  margin-top: 4px;
+}
+.dark .bb-map-job-tip-loc, .dark .bb-map-job-tip-bids,
+html.dark .bb-map-job-tip-loc, html.dark .bb-map-job-tip-bids {
+  opacity: 0.9;
+}
 .dark .leaflet-tooltip.bb-map-job-tooltip, html.dark .leaflet-tooltip.bb-map-job-tooltip {
   background: #1f2937;
   color: #f9fafb;
@@ -612,7 +675,13 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
         <ZoomControl position="topright" />
         <MapSizeSync />
         <Circle center={[centerLat, centerLon]} radius={radiusM} pathOptions={circlePathOptions} />
-        <FitInitialBounds points={points} centerLat={centerLat} centerLon={centerLon} />
+        <FitInitialBounds
+          points={points}
+          centerLat={centerLat}
+          centerLon={centerLon}
+          radiusM={radiusM}
+          isMobile={isMobile}
+        />
         <ClusteredJobMarkers
           points={points}
           onMarkerClick={onMarkerMapClick}
