@@ -195,7 +195,7 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
 
   const { data: occ } = await admin
     .from("recurring_occurrences")
-    .select("id, contract_id, scheduled_date, status")
+    .select("id, contract_id, scheduled_date, status, one_off_pattern_resume_from")
     .eq("id", row.recurring_occurrence_id)
     .maybeSingle();
 
@@ -204,6 +204,7 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
     contract_id: string;
     scheduled_date: string;
     status: string;
+    one_off_pattern_resume_from: string | null;
   } | null;
   if (!occRow) {
     return { nextJobId: null, nextVisitDate: null };
@@ -242,7 +243,8 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
   }
 
   const nowIso = new Date().toISOString();
-  const fromDate = parseDateOnly(occRow.scheduled_date) ?? new Date();
+  const patternAnchor = occRow.one_off_pattern_resume_from?.trim() || occRow.scheduled_date;
+  const fromDate = parseDateOnly(patternAnchor) ?? new Date();
   let nextDate = nextRecurringDate(fromDate, freq);
   const endDate = parseDateOnly(c.series_end_date);
   const visitsNext = (c.visits_completed ?? 0) + 1;

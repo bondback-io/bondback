@@ -23,6 +23,7 @@ import { getEmailForUserId } from "@/lib/supabase/admin";
 import { getSiteUrl } from "@/lib/site";
 import { trimStr } from "@/lib/utils";
 import type { CreateNotificationOptions, NotificationType } from "@/lib/actions/notifications";
+import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 
 export type RecurringActionResult = { ok: true } | { ok: false; error: string };
 
@@ -308,11 +309,31 @@ async function createNotificationWrapper(
   await createNotification(userId, type, jobId, message, options);
 }
 
-/** Reschedule a future occurrence that has no job yet. */
+/** "This visit" vs shift the long-term series anchor (e.g. every Tuesday → every Thursday). */
+export type RecurringRescheduleMode = "this_visit_only" | "update_series";
+
+function jobAllowsRecurringReschedule(status: string | null | undefined): boolean {
+  const s = String(status ?? "").toLowerCase();
+  if (s.length === 0) return false;
+  if (s === "completed" || isJobCancelledStatus(s)) return false;
+  if (s === "disputed" || s === "dispute_negotiating") return false;
+  return true;
+}
+
+/**
+ * Lister reschedules a recurring visit. Works for scheduled (no job / awaiting pay) and active visit jobs;
+ * "this_visit_only" keeps the original cadence for future dates after this job completes; "update_series"
+ * also updates the contract/listing series anchor so the new weekday repeats.
+ */
 export async function moveRecurringOccurrence(
   occurrenceId: string,
   newDateIso: string,
-  input: { reasonKey: string; reasonDetail?: string | null }
+  input: {
+    reasonKey: string;
+    reasonDetail?: string | null;
+    /** @default "update_series" — matches drag-and-previous one-off-occurrence move semantics. */
+    mode?: RecurringRescheduleMode;
+  }
 ): Promise<RecurringActionResult> {
   const parsed = parseRecurringSkipReason(input.reasonKey, input.reasonDetail);
   if (!parsed.ok) return { ok: false, error: parsed.error };
@@ -321,6 +342,8 @@ export async function moveRecurringOccurrence(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
     return { ok: false, error: "Invalid date." };
   }
+
+  const mode: RecurringRescheduleMode = input.mode ?? "update_series";
 
   const supabase = await createServerSupabaseClient();
   const {
@@ -345,20 +368,41 @@ export async function moveRecurringOccurrence(
     job_id: number | null;
   } | null;
 
-  if (!o || o.status !== "scheduled" || o.job_id != null) {
-    return { ok: false, error: "Only a scheduled visit without a job can be moved." };
+  if (!o) {
+    return { ok: false, error: "Visit not found." };
+  }
+  if (o.status === "completed" || o.status === "skipped") {
+    return { ok: false, error: "This visit is already finished or was skipped." };
+  }
+  if (o.status !== "scheduled" && o.status !== "in_progress") {
+    return { ok: false, error: "This visit cannot be rescheduled." };
+  }
+
+  if (o.job_id != null) {
+    const { data: jRow } = await admin
+      .from("jobs")
+      .select("id, status")
+      .eq("id", o.job_id)
+      .maybeSingle();
+    const job = jRow as { id: number; status: string } | null;
+    if (!job || !jobAllowsRecurringReschedule(job.status)) {
+      return { ok: false, error: "Reschedule is not available for this job in its current state." };
+    }
+  } else {
+    if (o.status === "in_progress") {
+      return { ok: false, error: "Inconsistent visit state. Please contact support." };
+    }
   }
 
   const { data: contract } = await admin
     .from("recurring_contracts")
-    .select("id, lister_id, cleaner_id, listing_id, paused_at")
+    .select("id, lister_id, listing_id, paused_at")
     .eq("id", o.contract_id)
     .maybeSingle();
 
   const c = contract as {
     id: string;
     lister_id: string;
-    cleaner_id: string | null;
     listing_id: string;
     paused_at: string | null;
   } | null;
@@ -372,27 +416,53 @@ export async function moveRecurringOccurrence(
   }
 
   const nowIso = new Date().toISOString();
+  const oldDate = o.scheduled_date;
+  const oneOffResume =
+    mode === "this_visit_only" ? oldDate : null;
+
   const { error } = await admin
     .from("recurring_occurrences")
     .update({
       scheduled_date: d,
       skip_reason_key: parsed.key,
       skip_reason_detail: parsed.detail,
+      one_off_pattern_resume_from: oneOffResume,
       updated_at: nowIso,
     } as never)
     .eq("id", o.id);
 
   if (error) return { ok: false, error: error.message };
 
-  await admin
-    .from("recurring_contracts")
-    .update({ next_occurrence_on: d, updated_at: nowIso } as never)
-    .eq("id", c.id);
-
-  await admin
-    .from("listings")
-    .update({ recurring_next_occurrence_on: d } as never)
-    .eq("id", c.listing_id);
+  if (mode === "update_series") {
+    const { error: cErr } = await admin
+      .from("recurring_contracts")
+      .update({
+        series_start_date: d,
+        next_occurrence_on: d,
+        updated_at: nowIso,
+      } as never)
+      .eq("id", c.id);
+    if (cErr) return { ok: false, error: cErr.message };
+    const { error: lErr } = await admin
+      .from("listings")
+      .update({
+        recurring_series_start_date: d,
+        recurring_next_occurrence_on: d,
+      } as never)
+      .eq("id", c.listing_id);
+    if (lErr) return { ok: false, error: lErr.message };
+  } else {
+    const { error: cErr } = await admin
+      .from("recurring_contracts")
+      .update({ next_occurrence_on: d, updated_at: nowIso } as never)
+      .eq("id", c.id);
+    if (cErr) return { ok: false, error: cErr.message };
+    const { error: lErr } = await admin
+      .from("listings")
+      .update({ recurring_next_occurrence_on: d } as never)
+      .eq("id", c.listing_id);
+    if (lErr) return { ok: false, error: lErr.message };
+  }
 
   revalidatePath(`/listings/${c.listing_id}`);
   revalidatePath("/jobs");

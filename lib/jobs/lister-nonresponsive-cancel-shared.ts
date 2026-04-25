@@ -33,10 +33,10 @@ export type ListerNonResponsiveCancelPreview =
 
 /**
  * When true, show the lister "cancel (non-responsive cleaner)" control on the job page.
+ * Only after server-side policy passes (e.g. cleaner idle / non-response threshold met).
  */
 export function shouldShowListerNonResponsiveCancelControl(
   preview: ListerNonResponsiveCancelPreview
-): boolean {
-  if (preview.eligible) return true;
-  return /not eligible yet|no activity for at least/i.test(preview.reason);
+): preview is Extract<ListerNonResponsiveCancelPreview, { eligible: true }> {
+  return preview.eligible;
 }

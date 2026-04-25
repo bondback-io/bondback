@@ -707,6 +707,7 @@ export interface Database {
           job_id: number | null;
           skip_reason_key: string | null;
           skip_reason_detail: string | null;
+          one_off_pattern_resume_from: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -718,6 +719,7 @@ export interface Database {
           job_id?: number | null;
           skip_reason_key?: string | null;
           skip_reason_detail?: string | null;
+          one_off_pattern_resume_from?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -727,6 +729,7 @@ export interface Database {
           job_id?: number | null;
           skip_reason_key?: string | null;
           skip_reason_detail?: string | null;
+          one_off_pattern_resume_from?: string | null;
           updated_at?: string;
         };
         Relationships: [];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Dialog,
@@ -39,19 +39,30 @@ export function JobPaymentReturnAck({
 }: JobPaymentReturnAckProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [dismissed, setDismissed] = useState(false);
 
-  const stripQuery = useCallback(() => {
-    if (typeof window !== "undefined") {
-      window.history.replaceState(
-        window.history.state,
-        "",
-        `${pathname}${window.location.hash ?? ""}`
-      );
-    }
-    scheduleRouterAction(() => router.replace(pathname, { scroll: false }));
+  /**
+   * Close the UI first (sync), strip the query from the address bar, then run `router.replace`
+   * on the next macrotask. Doing `router.replace` immediately kept the dialog mounted until a
+   * full RSC refetch finished because `notice` stayed true from server props (multi-second delay).
+   */
+  const dismiss = useCallback(() => {
+    setDismissed(true);
+    if (typeof window === "undefined") return;
+    const clean = `${pathname}${window.location.hash ?? ""}`;
+    window.history.replaceState(window.history.state, "", clean);
+    window.setTimeout(() => {
+      scheduleRouterAction(() => {
+        try {
+          router.replace(pathname, { scroll: false });
+        } catch {
+          // ignore
+        }
+      });
+    }, 0);
   }, [router, pathname]);
 
-  if (!notice) return null;
+  if (!notice || dismissed) return null;
 
   const jobAmount = formatAudFromCents(agreedAmountCents);
   const feeCents = Math.round((agreedAmountCents * feePercentage) / 100);
@@ -62,7 +73,7 @@ export function JobPaymentReturnAck({
       <Dialog
         open
         onOpenChange={(next) => {
-          if (!next) stripQuery();
+          if (!next) dismiss();
         }}
       >
         <DialogContent className="max-w-md sm:max-w-lg">
@@ -92,7 +103,7 @@ export function JobPaymentReturnAck({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-3">
-            <Button type="button" onClick={stripQuery} className="w-full sm:w-auto">
+            <Button type="button" onClick={dismiss} className="w-full sm:w-auto">
               Got it
             </Button>
           </DialogFooter>
@@ -106,7 +117,7 @@ export function JobPaymentReturnAck({
       <Dialog
         open
         onOpenChange={(next) => {
-          if (!next) stripQuery();
+          if (!next) dismiss();
         }}
       >
         <DialogContent className="max-w-md sm:max-w-lg">
@@ -136,7 +147,7 @@ export function JobPaymentReturnAck({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-3">
-            <Button type="button" onClick={stripQuery} className="w-full sm:w-auto">
+            <Button type="button" onClick={dismiss} className="w-full sm:w-auto">
               Got it
             </Button>
           </DialogFooter>
@@ -153,7 +164,7 @@ export function JobPaymentReturnAck({
             We could not confirm your payment from Stripe. If a charge appears on your card,
             contact support with your checkout session details.
           </span>
-          <Button type="button" variant="secondary" size="sm" onClick={stripQuery} className="shrink-0">
+          <Button type="button" variant="secondary" size="sm" onClick={dismiss} className="shrink-0">
             Dismiss
           </Button>
         </AlertDescription>
@@ -165,7 +176,7 @@ export function JobPaymentReturnAck({
     <Alert variant="warning" className="text-sm">
       <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span>Payment was canceled. You can try again when you are ready.</span>
-        <Button type="button" variant="secondary" size="sm" onClick={stripQuery} className="shrink-0">
+        <Button type="button" variant="secondary" size="sm" onClick={dismiss} className="shrink-0">
           Dismiss
         </Button>
       </AlertDescription>

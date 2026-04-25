@@ -39,7 +39,9 @@ import {
   resumeRecurringContract,
   skipRecurringOccurrence,
   moveRecurringOccurrence,
+  type RecurringRescheduleMode,
 } from "@/lib/actions/recurring-contracts";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/components/ui/use-toast";
 
 type ContractRow = {
@@ -90,6 +92,8 @@ export function JobRecurringContractPanel({
   const [moveDate, setMoveDate] = useState<Date | undefined>(undefined);
   const [moveReason, setMoveReason] = useState<string>(RECURRING_SKIP_REASON_KEYS[0]);
   const [moveDetail, setMoveDetail] = useState("");
+  const [moveRescheduleMode, setMoveRescheduleMode] =
+    useState<RecurringRescheduleMode>("update_series");
 
   const [pending, startTransition] = useTransition();
 
@@ -296,6 +300,7 @@ export function JobRecurringContractPanel({
                           setMoveDate(undefined);
                           setMoveReason(RECURRING_SKIP_REASON_KEYS[0]);
                           setMoveDetail("");
+                          setMoveRescheduleMode("update_series");
                         }}
                       >
                         Move date
@@ -493,9 +498,44 @@ export function JobRecurringContractPanel({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Move visit date</DialogTitle>
-            <DialogDescription>Pick a new date for this scheduled visit.</DialogDescription>
+            <DialogDescription>
+              Pick a new date. You can move only this visit or set a new regular day for the series.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              <Label>Apply to</Label>
+              <RadioGroup
+                className="grid gap-2"
+                value={moveRescheduleMode}
+                onValueChange={(v) => setMoveRescheduleMode(v as RecurringRescheduleMode)}
+              >
+                <label
+                  className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 p-2.5 text-sm"
+                  htmlFor="job-move-mode-series"
+                >
+                  <RadioGroupItem id="job-move-mode-series" value="update_series" className="mt-0.5" />
+                  <span>
+                    <span className="font-medium">New recurring day</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Future visits repeat on the same weekday as the date you pick.
+                    </span>
+                  </span>
+                </label>
+                <label
+                  className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 p-2.5 text-sm"
+                  htmlFor="job-move-mode-once"
+                >
+                  <RadioGroupItem id="job-move-mode-once" value="this_visit_only" className="mt-0.5" />
+                  <span>
+                    <span className="font-medium">This visit only</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      After this job, the schedule returns to the original pattern.
+                    </span>
+                  </span>
+                </label>
+              </RadioGroup>
+            </div>
             <div className="space-y-2">
               <Label>New date</Label>
               <Popover>
@@ -563,6 +603,7 @@ export function JobRecurringContractPanel({
                   const r = await moveRecurringOccurrence(id, format(startOfDay(moveDate), "yyyy-MM-dd"), {
                     reasonKey: moveReason,
                     reasonDetail: moveDetail.trim() || null,
+                    mode: moveRescheduleMode,
                   });
                   setMoveTargetId(null);
                   afterMutate(r.ok, "error" in r ? r.error : undefined);

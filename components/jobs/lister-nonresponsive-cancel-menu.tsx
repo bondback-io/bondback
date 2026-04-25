@@ -34,31 +34,8 @@ export function ListerNonresponsiveCancelMenu({
   preview,
 }: {
   jobId: number;
-  preview: ListerNonResponsiveCancelPreview;
+  preview: Extract<ListerNonResponsiveCancelPreview, { eligible: true }>;
 }) {
-  if (!preview.eligible) {
-    return (
-      <div className="flex w-full flex-col gap-1.5 rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/25 sm:max-w-md sm:items-end sm:py-2">
-        <p className="text-xs font-semibold text-amber-950 dark:text-amber-100">
-          Cancel after escrow (non-responsive cleaner)
-        </p>
-        <p className="text-left text-[11px] leading-snug text-amber-900/90 dark:text-amber-200/90">
-          {preview.reason}
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-9 w-full shrink-0 border-amber-300/90 text-amber-950 disabled:opacity-70 dark:border-amber-800 dark:text-amber-100 sm:ml-auto sm:w-auto"
-          disabled
-          aria-disabled
-        >
-          Not available yet
-        </Button>
-      </div>
-    );
-  }
-
   return <ListerNonresponsiveCancelMenuEligible jobId={jobId} preview={preview} />;
 }
 

@@ -59,6 +59,7 @@ import {
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import type { UserCalendarEvent, UserCalendarPayload } from "@/lib/calendar/user-calendar-types";
 import { CALENDAR_EVENT_LEGEND_LABEL, CALENDAR_EVENT_DOT_CLASS } from "@/lib/calendar/service-type-calendar";
@@ -74,6 +75,7 @@ import {
 import {
   skipRecurringOccurrence,
   moveRecurringOccurrence,
+  type RecurringRescheduleMode,
 } from "@/lib/actions/recurring-contracts";
 import {
   RECURRING_SKIP_REASON_KEYS,
@@ -332,6 +334,8 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
   );
   const [moveDetail, setMoveDetail] = React.useState("");
   const [movePending, setMovePending] = React.useState(false);
+  const [moveRescheduleMode, setMoveRescheduleMode] =
+    React.useState<RecurringRescheduleMode>("update_series");
 
   const [activeDragEvent, setActiveDragEvent] = React.useState<UserCalendarEvent | null>(null);
   const [selectedDayKey, setSelectedDayKey] = React.useState<string | null>(null);
@@ -420,12 +424,19 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
       const r = await moveRecurringOccurrence(moveOccId, iso, {
         reasonKey: moveReason,
         reasonDetail: moveDetail.trim() || null,
+        mode: moveRescheduleMode,
       });
       if (!r.ok) {
         toast({ variant: "destructive", title: "Move failed", description: r.error });
         return;
       }
-      toast({ title: "Visit moved" });
+      toast({
+        title: "Visit moved",
+        description:
+          moveRescheduleMode === "update_series"
+            ? "Future visits will follow the new day."
+            : "This visit was moved. Later visits keep the original pattern.",
+      });
       setMoveOpen(false);
       setMoveOccId(null);
       router.refresh();
@@ -455,6 +466,7 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
           const r = await moveRecurringOccurrence(ev.occurrenceId, toDate, {
             reasonKey: "scheduling_conflict",
             reasonDetail: "Moved on calendar",
+            mode: "update_series",
           });
           if (!r.ok) {
             toast({ variant: "destructive", title: "Could not move visit", description: r.error });
@@ -752,6 +764,7 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
                               setSelectedDayKey(null);
                               setMoveOccId(e.occurrenceId);
                               setMoveDate(parseISO(e.date));
+                              setMoveRescheduleMode("update_series");
                               setMoveOpen(true);
                             }}
                           >
@@ -882,7 +895,10 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
           <DialogContent className="dark:border-gray-800 dark:bg-gray-900">
             <DialogHeader>
               <DialogTitle>Move visit</DialogTitle>
-              <DialogDescription>Choose a new date for this scheduled occurrence. Lister only.</DialogDescription>
+              <DialogDescription>
+                Choose a new date. You can change only this visit or make this the new regular day
+                (e.g. every Wednesday → every Thursday). Lister only.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1">
@@ -897,6 +913,39 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
                     <Calendar mode="single" selected={moveDate} onSelect={setMoveDate} initialFocus />
                   </PopoverContent>
                 </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label>Apply to</Label>
+                <RadioGroup
+                  className="grid gap-2"
+                  value={moveRescheduleMode}
+                  onValueChange={(v) => setMoveRescheduleMode(v as RecurringRescheduleMode)}
+                >
+                  <label
+                    className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 p-2.5 text-sm dark:border-gray-800"
+                    htmlFor="move-mode-series"
+                  >
+                    <RadioGroupItem id="move-mode-series" value="update_series" className="mt-0.5" />
+                    <span>
+                      <span className="font-medium text-foreground">New recurring day</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        Future visits repeat on the same weekday as the date you pick.
+                      </span>
+                    </span>
+                  </label>
+                  <label
+                    className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 p-2.5 text-sm dark:border-gray-800"
+                    htmlFor="move-mode-once"
+                  >
+                    <RadioGroupItem id="move-mode-once" value="this_visit_only" className="mt-0.5" />
+                    <span>
+                      <span className="font-medium text-foreground">This visit only</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        After this job, the schedule returns to the original day pattern.
+                      </span>
+                    </span>
+                  </label>
+                </RadioGroup>
               </div>
               <div className="space-y-1">
                 <Label>Reason</Label>

@@ -480,13 +480,31 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           o.status === "completed" || (jobForOcc != null && jobIsComplete(jobForOcc.status));
 
         const occContract = contractRows.find((x) => x.id === o.contract_id);
-        const canRescheduleOccurrence =
+        let canRescheduleOccurrence = false;
+        if (
           userHasListerRole &&
           userIsLister &&
-          o.status === "scheduled" &&
-          o.job_id == null &&
           !occContract?.paused_at &&
-          !isOccRowCompleted;
+          !isOccRowCompleted
+        ) {
+          if (o.status === "scheduled" && o.job_id == null) {
+            canRescheduleOccurrence = true;
+          } else if (
+            (o.status === "scheduled" || o.status === "in_progress") &&
+            o.job_id != null &&
+            jobForOcc
+          ) {
+            const st = String(jobForOcc.status).toLowerCase();
+            if (
+              st !== "completed" &&
+              !isJobCancelledStatus(jobForOcc.status) &&
+              st !== "disputed" &&
+              st !== "dispute_negotiating"
+            ) {
+              canRescheduleOccurrence = true;
+            }
+          }
+        }
 
         pushEvent({
           date: d,
