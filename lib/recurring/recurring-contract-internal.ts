@@ -161,10 +161,19 @@ function contractHitsCap(
 /**
  * After a recurring visit job is fully completed (funds released + status completed), roll the series forward.
  */
+export type ScheduleNextRecurringResult = {
+  nextJobId: number | null;
+  nextVisitDate: string | null;
+};
+
+/**
+ * Roll recurring series to the next visit: completes the current occurrence, inserts the next
+ * scheduled occurrence, and creates the follow-up `jobs` row (accepted, awaiting lister payment).
+ */
 export async function scheduleNextRecurringVisitAfterJobCompleted(
   admin: AdminClient,
   completedJobId: number
-): Promise<void> {
+): Promise<ScheduleNextRecurringResult> {
   const { data: job } = await admin
     .from("jobs")
     .select("id, listing_id, lister_id, winner_id, recurring_occurrence_id, status")
@@ -180,7 +189,9 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
     status: string;
   } | null;
 
-  if (!row?.recurring_occurrence_id || !row.listing_id || !row.winner_id) return;
+  if (!row?.recurring_occurrence_id || !row.listing_id || !row.winner_id) {
+    return { nextJobId: null, nextVisitDate: null };
+  }
 
   const { data: occ } = await admin
     .from("recurring_occurrences")
@@ -194,7 +205,9 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
     scheduled_date: string;
     status: string;
   } | null;
-  if (!occRow) return;
+  if (!occRow) {
+    return { nextJobId: null, nextVisitDate: null };
+  }
 
   const { data: contract } = await admin
     .from("recurring_contracts")
@@ -219,10 +232,14 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
     resume_scheduled_for: string | null;
   } | null;
 
-  if (!c) return;
+  if (!c) {
+    return { nextJobId: null, nextVisitDate: null };
+  }
 
   const freq = asFreq(c.frequency);
-  if (!freq) return;
+  if (!freq) {
+    return { nextJobId: null, nextVisitDate: null };
+  }
 
   const nowIso = new Date().toISOString();
   const fromDate = parseDateOnly(occRow.scheduled_date) ?? new Date();
@@ -250,7 +267,7 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
       .update({ next_occurrence_on: nextShow, updated_at: nowIso } as never)
       .eq("id", c.id);
     await mirrorListingNextDate(admin, c.listing_id, nextShow);
-    return;
+    return { nextJobId: null, nextVisitDate: null };
   }
 
   if (contractHitsCap(visitsNext, c.max_occurrences, nextDate, endDate)) {
@@ -259,7 +276,7 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
       .update({ next_occurrence_on: null, updated_at: nowIso } as never)
       .eq("id", c.id);
     await mirrorListingNextDate(admin, c.listing_id, null);
-    return;
+    return { nextJobId: null, nextVisitDate: null };
   }
 
   if (endDate && nextDate > endDate) {
@@ -268,7 +285,7 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
       .update({ next_occurrence_on: null, updated_at: nowIso } as never)
       .eq("id", c.id);
     await mirrorListingNextDate(admin, c.listing_id, null);
-    return;
+    return { nextJobId: null, nextVisitDate: null };
   }
 
   const nextDateStr = nextDate.toISOString().slice(0, 10);
@@ -285,7 +302,7 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
 
   if (insOccErr || !newOcc) {
     console.error("[recurring] insert occurrence failed", insOccErr);
-    return;
+    return { nextJobId: null, nextVisitDate: null };
   }
 
   const newOccId = (newOcc as { id: string }).id;
@@ -308,7 +325,7 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
 
   if (jobErr || !newJob) {
     console.error("[recurring] insert follow-up job failed", jobErr);
-    return;
+    return { nextJobId: null, nextVisitDate: null };
   }
 
   const newJobId = (newJob as { id: number }).id;
@@ -350,6 +367,8 @@ export async function scheduleNextRecurringVisitAfterJobCompleted(
   } catch (e) {
     console.error("[recurring] cleaner notify failed", e);
   }
+
+  return { nextJobId: newJobId, nextVisitDate: nextDateStr };
 }
 
 export async function notifyRecurringPauseResume(params: {

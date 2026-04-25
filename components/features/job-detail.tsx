@@ -621,6 +621,8 @@ export type JobDetailProps = {
   disputeCaseHref?: string | null;
   /** Admin-priced add-on id → label for non-bond listings (from global settings). */
   pricedAddonLabelById?: Record<string, string> | null;
+  /** `jobs.recurring_occurrence_id` is set for a visit in a recurring series. */
+  isRecurringVisitJob?: boolean;
 };
 
 function CompactSubmittedJobReview({ overall_rating, review_text }: JobDetailMySubmittedReview) {
@@ -864,6 +866,7 @@ export function JobDetail({
   listerEscrowCancelReason = null,
   disputeCaseHref = null,
   pricedAddonLabelById = null,
+  isRecurringVisitJob = false,
 }: JobDetailProps) {
   const [listing, setListing] = useState<ListingRow>(initialListing);
   const [bids, setBids] = useState<BidWithBidder[]>(initialBids);
@@ -967,10 +970,8 @@ export function JobDetail({
   const [afterPhotosUploading, setAfterPhotosUploading] = useState(false);
 
   useEffect(() => {
-    if (initialAfterPhotos != null) {
-      setAfterPhotoEntries(initialAfterPhotos);
-    }
-  }, [initialAfterPhotos]);
+    setAfterPhotoEntries(initialAfterPhotos ?? []);
+  }, [initialAfterPhotos, jobId]);
 
   const [initialPhotoEntries, setInitialPhotoEntries] = useState<InitialPhotoEntry[]>([]);
   const [initialPhotosLoading, setInitialPhotosLoading] = useState(false);
@@ -1000,6 +1001,10 @@ export function JobDetail({
   const [showOpenDisputeForm, setShowOpenDisputeForm] = useState(false);
   const [showCleanerDisputeForm, setShowCleanerDisputeForm] = useState(false);
   const [showApproveReleaseConfirm, setShowApproveReleaseConfirm] = useState(false);
+  const [payNextRecurringOnRelease, setPayNextRecurringOnRelease] = useState(false);
+  useEffect(() => {
+    if (showApproveReleaseConfirm) setPayNextRecurringOnRelease(false);
+  }, [showApproveReleaseConfirm]);
   const [disputeResponseReason, setDisputeResponseReason] = useState("");
   const [disputeResponseMessage, setDisputeResponseMessage] = useState("");
   const [disputeResponsePhotos, setDisputeResponsePhotos] = useState<File[]>([]);
@@ -1813,7 +1818,9 @@ export function JobDetail({
     // Rely on server validation; client state (checklist/after-photos) can be stale or still loading.
     startFinalizing(async () => {
       const { finalizeJobPayment } = await import("@/lib/actions/jobs");
-      const res = await finalizeJobPayment(jobId);
+      const res = await finalizeJobPayment(jobId, {
+        payAndStartNextRecurring: payNextRecurringOnRelease,
+      });
       if (!res.ok) {
         toast({
           variant: "destructive",
@@ -1824,6 +1831,24 @@ export function JobDetail({
       }
       if (isStripeTestMode && res.ok && "transferId" in res) {
         console.log("[Stripe Test] Funds released — Transfer ID:", res.transferId, "PaymentIntent ID:", res.paymentIntentId);
+      }
+      if (res.nextPaymentCheckoutUrl) {
+        setShowApproveReleaseConfirm(false);
+        toast({
+          title: "Funds released",
+          description: "Opening checkout for the next visit in this series…",
+        });
+        window.location.href = res.nextPaymentCheckoutUrl;
+        return;
+      }
+      if (res.nextPaymentAlreadyInEscrow && res.nextRecurringJobId) {
+        setShowApproveReleaseConfirm(false);
+        toast({
+          title: "Funds released",
+          description: "The next visit is paid and ready — taking you to that job.",
+        });
+        scheduleRouterAction(() => router.push(`/jobs/${res.nextRecurringJobId}`));
+        return;
       }
       toast({
         title: isStripeTestMode ? "Funds released to cleaner (test mode)" : "Funds released",
@@ -4136,6 +4161,24 @@ export function JobDetail({
                   to the cleaner (you already paid any Service Fee when securing the job). The cleaner will
                   be notified. This action cannot be undone here.
                 </DialogDescription>
+                {isRecurringVisitJob && isJobLister ? (
+                  <div className="mt-3 flex gap-2 rounded-lg border border-border/70 bg-muted/25 px-3 py-2.5 text-left dark:border-gray-700 dark:bg-gray-900/50">
+                    <Checkbox
+                      id="pay-next-recurring"
+                      checked={payNextRecurringOnRelease}
+                      onCheckedChange={(v) => setPayNextRecurringOnRelease(v === true)}
+                      className="mt-0.5"
+                    />
+                    <label
+                      htmlFor="pay-next-recurring"
+                      className="cursor-pointer text-sm leading-snug text-foreground dark:text-gray-200"
+                    >
+                      After this release, also <span className="font-semibold">Pay &amp; Start</span> the next
+                      scheduled visit in this recurring series (same saved card, or Stripe checkout). If you
+                      leave this off, you can pay from the next job when you&apos;re ready.
+                    </label>
+                  </div>
+                ) : null}
               </DialogHeader>
               <DialogFooter className="gap-2 sm:gap-3">
                 <Button

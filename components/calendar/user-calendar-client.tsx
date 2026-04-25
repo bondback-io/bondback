@@ -30,6 +30,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
+  Check,
   GripVertical,
   Pencil,
   SkipForward,
@@ -139,10 +140,14 @@ function CalendarEventChip({
   event,
   isLister,
   disabled,
+  dateKey,
+  onOpenDay,
 }: {
   event: UserCalendarEvent;
   isLister: boolean;
   disabled?: boolean;
+  dateKey: string;
+  onOpenDay: (key: string) => void;
 }) {
   const canDrag = eventCanDrag(event, isLister) && !disabled;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -153,13 +158,16 @@ function CalendarEventChip({
   const style = transform
     ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` }
     : undefined;
+  const isCompleted = Boolean(event.isCompleted);
+  const shortTitle =
+    event.title.length > 22 ? `${event.title.slice(0, 20)}…` : event.title;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex min-w-0 items-center gap-0.5 rounded-md border bg-card/95 px-0.5 py-0.5 shadow-sm dark:bg-gray-950/90",
+        "flex min-w-0 items-center gap-0.5 rounded-md border bg-card/95 py-0.5 pl-0.5 pr-0 shadow-sm dark:bg-gray-950/90",
         calendarChipBorderClass(event.serviceType),
         isDragging && "opacity-40"
       )}
@@ -175,13 +183,40 @@ function CalendarEventChip({
           <GripVertical className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
         </button>
       ) : null}
-      <CalendarServiceIcon
-        serviceType={event.serviceType}
-        className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5"
-      />
-      <span className="min-w-0 truncate text-[9px] font-medium leading-tight sm:text-[10px]">
-        {event.title.length > 22 ? `${event.title.slice(0, 20)}…` : event.title}
-      </span>
+      <button
+        type="button"
+        onClick={() => onOpenDay(dateKey)}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-0.5 rounded-sm px-0.5 text-left outline-none transition-colors",
+          "hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring",
+          isCompleted && "opacity-95"
+        )}
+        title={
+          isCompleted
+            ? `${event.title} — completed (${CALENDAR_EVENT_LEGEND_LABEL[event.serviceType]})`
+            : `${event.title} — open details`
+        }
+        aria-label={
+          isCompleted
+            ? `${shortTitle}, completed, ${CALENDAR_EVENT_LEGEND_LABEL[event.serviceType]}. Open day details.`
+            : `${shortTitle}. Open day details.`
+        }
+      >
+        <CalendarServiceIcon
+          serviceType={event.serviceType}
+          className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5"
+        />
+        {isCompleted ? (
+          <Check
+            className="h-2.5 w-2.5 shrink-0 text-emerald-500 dark:text-emerald-400"
+            strokeWidth={3}
+            aria-hidden
+          />
+        ) : null}
+        <span className="min-w-0 truncate text-[9px] font-medium leading-tight sm:text-[10px]">
+          {shortTitle}
+        </span>
+      </button>
     </div>
   );
 }
@@ -238,6 +273,8 @@ function CalendarDayCell({
             event={e}
             isLister={userHasListerRole}
             disabled={relocationPending}
+            dateKey={key}
+            onOpenDay={onDayOpen}
           />
         ))}
         {dayEvents.length > 3 ? (
@@ -468,8 +505,9 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
               My calendar
             </h1>
             <p className="text-sm text-muted-foreground dark:text-gray-400">
-              Funded jobs with an assigned cleaner. Icons match service type; listers can drag the grip
-              on a row to move a date (hold briefly on iPhone), or tap a day for details.
+              Funded jobs with an assigned cleaner. Icons match the service type; a green check marks a
+              completed visit. Tap a job row or the day number to open details — or drag the grip to
+              move a date (lister, hold briefly on iPhone).
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -633,7 +671,18 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
                     className="rounded-lg border border-border/60 bg-muted/20 p-3 dark:border-gray-800 dark:bg-gray-950/50"
                   >
                     <div className="flex items-start gap-2">
-                      <CalendarServiceIcon serviceType={e.serviceType} className="mt-0.5 h-5 w-5 shrink-0" />
+                      <div className="mt-0.5 flex shrink-0 items-center gap-1.5">
+                        <CalendarServiceIcon serviceType={e.serviceType} className="h-5 w-5" />
+                        {Boolean(e.isCompleted) ? (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300"
+                            title="This visit or job is completed"
+                          >
+                            <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden />
+                            Done
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="min-w-0 flex-1 space-y-1">
                         <p className="font-semibold text-foreground dark:text-gray-100">{e.title}</p>
                         <p className="text-xs text-muted-foreground dark:text-gray-400">
@@ -721,8 +770,8 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
 
         {events.length === 0 ? (
           <p className="text-center text-sm text-muted-foreground dark:text-gray-400">
-            No upcoming cleans yet. After a job is paid and a cleaner is assigned, scheduled visits and key
-            dates show here for both listers and cleaners.
+            No scheduled dates yet. After escrow is paid and a cleaner is assigned, visits and key dates
+            appear on the grid for listers and cleaners. Past and completed visits stay visible with a check.
           </p>
         ) : null}
 

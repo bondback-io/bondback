@@ -51,6 +51,9 @@ export function JobProgressTimeline({
     isCompleted ||
     isDispute;
 
+  /** Checklist and after-photos only apply after work is underway (or job finished), not while awaiting lister payment */
+  const workStartedOrClosed = inProgressOrLater;
+
   const fundsReleased = isCompleted;
 
   const paidStepTitle =
@@ -88,7 +91,7 @@ export function JobProgressTimeline({
     {
       id: "confirmed",
       title: "Job confirmed",
-      done: !!hasActiveJob,
+      done: Boolean(hasActiveJob && hasPaymentHold),
       hintLister: hasPaymentHold
         ? "Funds are in escrow. Tap Start Job when you’re ready."
         : "Tap Pay & Start Job to hold funds in escrow and unlock the checklist.",
@@ -107,14 +110,14 @@ export function JobProgressTimeline({
     {
       id: "checklist",
       title: "Checklist complete",
-      done: allCompleted,
+      done: allCompleted && workStartedOrClosed,
       hintLister: "Every task must be ticked before you can approve payment.",
       hintCleaner: "Tick each line when that part of the clean is done.",
     },
     {
       id: "photos",
       title: "After photos uploaded",
-      done: hasAfterPhotos,
+      done: hasAfterPhotos && workStartedOrClosed,
       hintLister: "You need at least three after photos before releasing funds.",
       hintCleaner: "Upload at least three after photos when the clean is finished.",
     },

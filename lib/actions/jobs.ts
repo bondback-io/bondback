@@ -3147,15 +3147,27 @@ export async function executeRefund(
 }
 
 export type FinalizeJobPaymentResult =
-  | { ok: true; transferId?: string; paymentIntentId?: string }
+  | {
+      ok: true;
+      transferId?: string;
+      paymentIntentId?: string;
+      /** Follow-up job id when a new recurring visit row was created */
+      nextRecurringJobId?: number | null;
+      /** Set when `payAndStartNextRecurring` — redirect lister to Stripe or payment applied */
+      nextPaymentCheckoutUrl?: string | null;
+      /** When the next visit was paid with a saved card in the same request */
+      nextPaymentAlreadyInEscrow?: boolean;
+    }
   | { ok: false; error: string };
 
 /**
  * Lister approves and releases funds from escrow: capture PaymentIntent, transfer to cleaner, mark job completed.
  * Requires cleaner to have marked job complete (photos/checklist). Pay & Start Job must have run first (funds in escrow).
+ * For the last visit in a recurring series step, pass `payAndStartNextRecurring` to optionally charge Pay & Start for the newly created follow-up job in the same flow.
  */
 export async function finalizeJobPayment(
-  jobId: string | number
+  jobId: string | number,
+  options?: { payAndStartNextRecurring?: boolean }
 ): Promise<FinalizeJobPaymentResult> {
   const supabase = await createServerSupabaseClient();
 
@@ -3330,11 +3342,31 @@ export async function finalizeJobPayment(
       .eq("id", row.listing_id as never);
   }
 
+  let nextRecurringJobId: number | null = null;
   if (admin && isRecurringVisit) {
     try {
-      await scheduleNextRecurringVisitAfterJobCompleted(admin, numericJobId);
+      const sched = await scheduleNextRecurringVisitAfterJobCompleted(
+        admin,
+        numericJobId
+      );
+      nextRecurringJobId = sched.nextJobId;
     } catch (e) {
       console.error("[finalizeJobPayment] scheduleNextRecurringVisitAfterJobCompleted", e);
+    }
+  }
+
+  let nextPaymentCheckoutUrl: string | null = null;
+  let nextPaymentAlreadyInEscrow = false;
+  if (
+    options?.payAndStartNextRecurring === true &&
+    nextRecurringJobId != null &&
+    nextRecurringJobId > 0
+  ) {
+    const payNext = await createJobCheckoutSession(nextRecurringJobId);
+    if (payNext.ok && "url" in payNext && payNext.url) {
+      nextPaymentCheckoutUrl = payNext.url;
+    } else if (payNext.ok && "alreadyPaid" in payNext && payNext.alreadyPaid) {
+      nextPaymentAlreadyInEscrow = true;
     }
   }
 
@@ -3401,8 +3433,17 @@ export async function finalizeJobPayment(
   revalidatePath("/dashboard");
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${row.id}`);
+  if (nextRecurringJobId != null) {
+    revalidatePath(`/jobs/${nextRecurringJobId}`);
+  }
 
-  return { ok: true, ...debugPayload };
+  return {
+    ok: true,
+    ...debugPayload,
+    nextRecurringJobId: nextRecurringJobId ?? null,
+    nextPaymentCheckoutUrl: nextPaymentCheckoutUrl ?? null,
+    ...(nextPaymentAlreadyInEscrow ? { nextPaymentAlreadyInEscrow: true } : {}),
+  };
 }
 
 export type ProcessAutoReleaseResult = {

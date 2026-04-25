@@ -862,6 +862,9 @@ export async function JobDetailPageContent({
           listerNonResponsiveCancel={listerNonResponsiveCancel}
           disputeCaseHref={disputeCaseHref}
           pricedAddonLabelById={pricedAddonLabelById}
+          isRecurringVisitJob={Boolean(
+            job && (job as JobRow).recurring_occurrence_id != null
+          )}
         />
       </section>
     </OfflineJobsPrimer>

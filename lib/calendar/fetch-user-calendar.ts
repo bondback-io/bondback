@@ -57,6 +57,10 @@ function isJobFundedAndAssigned(job: {
   return true;
 }
 
+function jobIsComplete(status: string | null | undefined): boolean {
+  return String(status ?? "").toLowerCase() === "completed";
+}
+
 /**
  * When several synthetic rows land on the same listing + day, keep a single tooltip row.
  * (e.g. preferred date = series start = first recurring visit)
@@ -299,6 +303,7 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           userIsListerForListing: userIsLister,
           canRescheduleOccurrence: false,
           canEditListingDates,
+          isCompleted: jobIsComplete(primaryJob.status),
         });
       }
     }
@@ -325,6 +330,7 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           userIsListerForListing: userIsLister,
           canRescheduleOccurrence: false,
           canEditListingDates,
+          isCompleted: jobIsComplete(primaryJob.status),
         });
       }
     }
@@ -351,6 +357,7 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           userIsListerForListing: userIsLister,
           canRescheduleOccurrence: false,
           canEditListingDates,
+          isCompleted: jobIsComplete(primaryJob.status),
         });
       }
     }
@@ -423,6 +430,7 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           userIsListerForListing: listing.lister_id === userId,
           canRescheduleOccurrence: false,
           canEditListingDates: false,
+          isCompleted: jobIsComplete(primaryJob.status),
         });
       }
     }
@@ -463,10 +471,13 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
             (j) => !isJobCancelledStatus(j.status) && String(j.status).toLowerCase() !== "completed"
           ) ??
           jlist[0]!;
+        const priceJob = jobForOcc ?? primaryJob;
         const userIsLister = listing.lister_id === userId;
         const jobAllowsEdit =
           !isJobCancelledStatus(primaryJob.status) &&
           String(primaryJob.status).toLowerCase() !== "completed";
+        const isOccRowCompleted =
+          o.status === "completed" || (jobForOcc != null && jobIsComplete(jobForOcc.status));
 
         const occContract = contractRows.find((x) => x.id === o.contract_id);
         const canRescheduleOccurrence =
@@ -474,7 +485,8 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           userIsLister &&
           o.status === "scheduled" &&
           o.job_id == null &&
-          !occContract?.paused_at;
+          !occContract?.paused_at &&
+          !isOccRowCompleted;
 
         pushEvent({
           date: d,
@@ -486,18 +498,20 @@ export async function fetchUserCalendarPayload(userId: string): Promise<UserCale
           postcode: listing.postcode,
           propertyAddress: listing.property_address,
           listerName: names[listing.lister_id] ?? "Lister",
-          cleanerName: primaryJob.winner_id ? names[primaryJob.winner_id] ?? null : null,
+          cleanerName: priceJob.winner_id ? names[priceJob.winner_id] ?? null : null,
           jobPriceAud:
-            primaryJob.agreed_amount_cents != null && primaryJob.agreed_amount_cents > 0
-              ? Math.round(primaryJob.agreed_amount_cents / 100)
+            priceJob.agreed_amount_cents != null && priceJob.agreed_amount_cents > 0
+              ? Math.round(priceJob.agreed_amount_cents / 100)
               : null,
           jobId: o.job_id ?? primaryJob.id,
-          jobStatus: primaryJob.status,
+          jobStatus: priceJob.status,
           occurrenceId: o.id,
           occurrenceStatus: o.status,
           userIsListerForListing: userIsLister,
           canRescheduleOccurrence,
-          canEditListingDates: userHasListerRole && userIsLister && jobAllowsEdit,
+          /** Occurrences use Skip / Move; listing-level date edit is for other row kinds */
+          canEditListingDates: false,
+          isCompleted: isOccRowCompleted,
         });
       }
     }

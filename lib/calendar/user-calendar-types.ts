@@ -33,6 +33,8 @@ export type UserCalendarEvent = {
   canRescheduleOccurrence: boolean;
   /** Lister may edit preferred / move-out style dates on the listing */
   canEditListingDates: boolean;
+  /** Visit or job finished (e.g. recurring occurrence completed, or job status completed) */
+  isCompleted: boolean;
 };
 
 export type UserCalendarListingHint = {
