@@ -2,8 +2,43 @@ import type { FindJobsMapPoint } from "@/lib/find-jobs/map-types";
 import { formatCents, type ListingRow } from "@/lib/listings";
 import { normalizeServiceType } from "@/lib/service-types";
 
-/** Cap pins for first paint; cluster + pan still feels full — rest appear on zoom/interaction if extended later. */
+/** Cap pins for first paint; rest may be trimmed if extended later. */
 export const FIND_JOBS_MAP_POINTS_SOFT_CAP = 200;
+
+const PIN_SPREAD_M = 85;
+const EARTH_M_PER_DEG_LAT = 111_320;
+
+/**
+ * Nudge marks that share the same suburb centre (identical lat/lon) in a small ring so
+ * list cards remain accurate while the map shows separate pins.
+ */
+function spreadDuplicateMapPinLocations(points: FindJobsMapPoint[]): FindJobsMapPoint[] {
+  if (points.length < 2) return points;
+  const groups = new Map<string, FindJobsMapPoint[]>();
+  for (const p of points) {
+    const key = `${p.lat.toFixed(5)}|${p.lon.toFixed(5)}`;
+    const arr = groups.get(key) ?? [];
+    arr.push(p);
+    groups.set(key, arr);
+  }
+  const out: FindJobsMapPoint[] = [];
+  for (const g of groups.values()) {
+    if (g.length === 1) {
+      out.push(g[0]!);
+      continue;
+    }
+    const n = g.length;
+    for (let i = 0; i < n; i++) {
+      const p = g[i]!;
+      const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+      const mLat = (PIN_SPREAD_M / EARTH_M_PER_DEG_LAT) * Math.cos(angle);
+      const cosLat = Math.max(0.2, Math.cos((p.lat * Math.PI) / 180));
+      const mLon = (PIN_SPREAD_M / (EARTH_M_PER_DEG_LAT * cosLat)) * Math.sin(angle);
+      out.push({ ...p, lat: p.lat + mLat, lon: p.lon + mLon });
+    }
+  }
+  return out;
+}
 
 /** Build map markers from listing rows that include `lat` / `lon` (suburb-centre coords). */
 export function listingsToFindJobsMapPoints(
@@ -59,5 +94,5 @@ export function listingsToFindJobsMapPoints(
       isUrgent: rowExt.is_urgent === true,
     });
   }
-  return out;
+  return spreadDuplicateMapPinLocations(out);
 }

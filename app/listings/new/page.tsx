@@ -118,6 +118,14 @@ const NewListingPage = async () => {
     (settings as { service_addons_checklists?: unknown } | null)?.service_addons_checklists
   );
 
+  const rawBondChecklist = (settings as { default_cleaner_checklist_items?: unknown } | null)
+    ?.default_cleaner_checklist_items;
+  const defaultBondCleanerChecklistItems = Array.isArray(rawBondChecklist)
+    ? rawBondChecklist
+        .map((x) => String(x ?? "").trim())
+        .filter((s) => s.length > 0)
+    : undefined;
+
   return (
     <NewListingFormLazy
       listerId={session.user.id}
@@ -127,6 +135,7 @@ const NewListingPage = async () => {
       feePercentageByService={feePercentageByService}
       pricingModifiers={pricingModifiers}
       serviceAddonsChecklists={serviceAddonsChecklists}
+      defaultBondCleanerChecklistItems={defaultBondCleanerChecklistItems}
       allowLowAmountListings={allowLowAmountListings}
       allowTwoMinuteAuctionTest={allowTwoMinuteAuctionTest}
     />

@@ -13,9 +13,6 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import "leaflet.markercluster/dist/MarkerCluster.css";
-import "leaflet.markercluster/dist/MarkerCluster.Default.css";
-import "leaflet.markercluster";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Filter, Navigation, Plus } from "lucide-react";
@@ -42,10 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  dominantServiceTypeFromCounts,
-  type ServiceTypeKey,
-} from "@/lib/service-types";
+import type { ServiceTypeKey } from "@/lib/service-types";
 import { FIND_JOBS_MAP_POINTS_SOFT_CAP } from "@/lib/find-jobs/map-points-from-listings";
 
 const MARKER_TO_POINT = new WeakMap<L.Marker, FindJobsMapPoint>();
@@ -59,7 +53,7 @@ function escapeMapTooltipText(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Hover preview for map pins (clustered markers) */
+/** Hover preview for map pins */
 function mapPointTooltipHtml(p: FindJobsMapPoint): string {
   const title = escapeMapTooltipText(p.titleShort || p.title || "Job");
   const locParts = [p.suburb, p.postcode, p.state].filter(
@@ -91,38 +85,6 @@ function mapPointTooltipHtml(p: FindJobsMapPoint): string {
       <div class="bb-map-job-tip-dlrow"><dt>Buy now</dt><dd class="bb-map-job-tip-buy">${buyNowDd}</dd></div>
     </dl>
   </div>`;
-}
-
-type MarkerClusterGroupWithIcons = L.LayerGroup & {
-  clearLayers: () => void;
-  addLayer: (layer: L.Layer) => L.LayerGroup;
-  removeLayer: (layer: L.Layer) => L.LayerGroup;
-  getBounds: () => L.LatLngBounds;
-  on: (ev: string, fn: (e: L.LeafletEvent) => void) => unknown;
-};
-
-function clusterColorForService(st: ServiceTypeKey): string {
-  switch (st) {
-    case "recurring_house_cleaning":
-      return "rgb(22 163 74)";
-    case "airbnb_turnover":
-      return "rgb(217 119 6)";
-    case "deep_clean":
-      return "rgb(147 51 234)";
-    default:
-      return "rgb(37 99 235)";
-  }
-}
-
-function makeClusterIcon(count: number, dominant: ServiceTypeKey): L.DivIcon {
-  const bg = clusterColorForService(dominant);
-  const html = `<div style="min-width:36px;height:36px;border-radius:9999px;background:${bg};border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:white;font-family:system-ui,sans-serif;padding:0 8px;">${count}</div>`;
-  return L.divIcon({
-    className: "bondback-cluster-icon",
-    html,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-  });
 }
 
 function pinInnerHtml(p: FindJobsMapPoint, selected: boolean): string {
@@ -239,30 +201,40 @@ function FitInitialBounds({
     }
     lastSig.current = signature;
     const rM = Math.max(1000, radiusM);
-    const b = searchRadiusToLatLngBounds(centerLat, centerLon, rM);
 
+    // Mobile: default view is the search-radius circle (search centre in the frame), not a box
+    // stretched to include all pins.
+    if (isMobile) {
+      const ringOnly = searchRadiusToLatLngBounds(centerLat, centerLon, rM);
+      const fitOpts: L.FitBoundsOptions = { padding: [20, 96], maxZoom: 12 };
+      try {
+        map.fitBounds(ringOnly, fitOpts);
+      } catch {
+        try {
+          map.setView([centerLat, centerLon], 10);
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
+    const b = searchRadiusToLatLngBounds(centerLat, centerLon, rM);
     const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon));
     for (const p of valid) {
       b.extend([p.lat, p.lon] as L.LatLngExpression);
     }
     b.extend([centerLat, centerLon] as L.LatLngExpression);
 
-    // Mobile: more padding (bottom sheet) + lower max zoom so a large % of the search ring is visible.
-    // Desktop: slightly more padding and a bit lower cap than before so the radius ring isn’t cropped.
-    const fitOpts: L.FitBoundsOptions = isMobile
-      ? {
-          padding: [20, 96],
-          maxZoom: 10,
-        }
-      : {
-          padding: [44, 52],
-          maxZoom: 13,
-        };
+    const fitOpts: L.FitBoundsOptions = {
+      padding: [44, 52],
+      maxZoom: 13,
+    };
     try {
       map.fitBounds(b, fitOpts);
     } catch {
       try {
-        map.setView([centerLat, centerLon], isMobile ? 9 : 10);
+        map.setView([centerLat, centerLon], 10);
       } catch {
         // ignore
       }
@@ -448,57 +420,37 @@ function useIsMobileMap() {
   return m;
 }
 
-function ClusteredJobMarkers({
+/**
+ * Individual markers (no `leaflet.markercluster` grouping). Screen-space clustering was merging
+ * jobs several km apart on typical zoom, which looked like one pin in the wrong place.
+ */
+function JobMapMarkers({
   points,
   onMarkerClick,
   markerRefs,
-  isMobile,
 }: {
   points: FindJobsMapPoint[];
   onMarkerClick: (p: FindJobsMapPoint, marker: L.Marker) => void;
   markerRefs: React.MutableRefObject<Map<string, L.Marker>>;
-  isMobile: boolean;
 }) {
   const map = useMap();
   const { highlightedListingId } = useFindJobsMap();
-  const clusterRef = React.useRef<MarkerClusterGroupWithIcons | null>(null);
+  const groupRef = React.useRef<L.LayerGroup | null>(null);
 
   React.useEffect(() => {
-    const Lc = L as typeof L & {
-      markerClusterGroup: (opts?: Record<string, unknown>) => MarkerClusterGroupWithIcons;
-    };
-    const mcg = Lc.markerClusterGroup({
-      maxClusterRadius: isMobile ? 52 : 72,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      zoomToBoundsOnClick: true,
-      iconCreateFunction: (cluster: {
-        getChildCount: () => number;
-        getAllChildMarkers: () => L.Marker[];
-      }) => {
-        const markers = cluster.getAllChildMarkers();
-        const counts: Partial<Record<ServiceTypeKey, number>> = {};
-        for (const mk of markers) {
-          const pt = MARKER_TO_POINT.get(mk);
-          if (!pt) continue;
-          counts[pt.serviceType] = (counts[pt.serviceType] ?? 0) + 1;
-        }
-        const dominant = dominantServiceTypeFromCounts(counts);
-        return makeClusterIcon(cluster.getChildCount(), dominant);
-      },
-    });
-    clusterRef.current = mcg;
-    map.addLayer(mcg);
+    const g = L.layerGroup();
+    groupRef.current = g;
+    map.addLayer(g);
     return () => {
-      map.removeLayer(mcg);
-      clusterRef.current = null;
+      map.removeLayer(g);
+      groupRef.current = null;
     };
-  }, [map, isMobile]);
+  }, [map]);
 
   React.useEffect(() => {
-    const mcg = clusterRef.current;
-    if (!mcg) return;
-    mcg.clearLayers();
+    const g = groupRef.current;
+    if (!g) return;
+    g.clearLayers();
     markerRefs.current.clear();
     const capped = points.slice(0, FIND_JOBS_MAP_POINTS_SOFT_CAP);
     capped.forEach((p, stackIndex) => {
@@ -516,14 +468,14 @@ function ClusteredJobMarkers({
       });
       marker.setZIndexOffset(selected ? 3500 : 200 + stackIndex);
       markerRefs.current.set(p.id, marker);
-      mcg.addLayer(marker);
+      g.addLayer(marker);
     });
   }, [points, highlightedListingId, onMarkerClick, markerRefs]);
 
   return null;
 }
 
-/** Non-clustered tooltips require Marker children — render lightweight duplicate markers for hover only when not practical; cluster handles click. */
+/** Keyframes for recurring / urgent map pins. */
 function MapPinPulseStyle() {
   return (
     <style>{`
@@ -806,11 +758,10 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
           radiusM={radiusM}
           isMobile={isMobile}
         />
-        <ClusteredJobMarkers
+        <JobMapMarkers
           points={points}
           onMarkerClick={onMarkerMapClick}
           markerRefs={markerRefs}
-          isMobile={isMobile}
         />
         <MapFlyToListener />
         <MapFocusSync

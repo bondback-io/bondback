@@ -66,6 +66,7 @@ import {
   Hash,
   ChevronRight,
   ChevronLeft,
+  ListChecks,
   Repeat2,
   X,
   Sparkles,
@@ -142,6 +143,20 @@ import {
   sumSelectedServicePricedAddonsAud,
   type ServiceAddonsChecklistsMerged,
 } from "@/lib/service-addons-checklists";
+
+function getDefaultFreeChecklistLinesForForm(
+  st: ServiceTypeKey,
+  serviceAddonsChecklists: ServiceAddonsChecklistsMerged,
+  bondDefaults: string[] | undefined
+): string[] {
+  if (st === "bond_cleaning") {
+    return (bondDefaults ?? []).map((s) => String(s).trim()).filter((s) => s.length > 0);
+  }
+  if (st === "airbnb_turnover" || st === "recurring_house_cleaning" || st === "deep_clean") {
+    return [...serviceAddonsChecklists[st].free];
+  }
+  return [];
+}
 
 const serviceTypeZodEnum = z.enum(SERVICE_TYPES as unknown as [string, ...string[]]);
 
@@ -461,6 +476,8 @@ export type NewListingFormProps = {
   pricingModifiers: PricingModifiersConfig;
   /** Airbnb / recurring / deep: admin-configured priced add-ons + free checklist templates. */
   serviceAddonsChecklists: ServiceAddonsChecklistsMerged;
+  /** Bond cleaning: default checklist lines from global settings (same seed as job creation). */
+  defaultBondCleanerChecklistItems?: string[];
   /** When true (admin global setting), starting price may be below $100 for live payment tests. */
   allowLowAmountListings?: boolean;
   /** When true, auction duration may include a 2-minute test option (admin global setting). */
@@ -498,6 +515,7 @@ export function NewListingForm({
   feePercentageByService,
   pricingModifiers,
   serviceAddonsChecklists,
+  defaultBondCleanerChecklistItems,
   allowLowAmountListings = false,
   allowTwoMinuteAuctionTest = false,
 }: NewListingFormProps) {
@@ -718,6 +736,16 @@ export function NewListingForm({
       }
     }
   }, [serviceTypeWatched, watchedValues.addons, form, serviceAddonsChecklists]);
+
+  const freeRoutineChecklistLines = useMemo(
+    () =>
+      getDefaultFreeChecklistLinesForForm(
+        normalizeServiceType(serviceTypeWatched as ServiceTypeKey),
+        serviceAddonsChecklists,
+        defaultBondCleanerChecklistItems
+      ),
+    [serviceTypeWatched, serviceAddonsChecklists, defaultBondCleanerChecklistItems]
+  );
 
   useEffect(() => {
     if (!reserveTouched) {
@@ -2511,6 +2539,72 @@ export function NewListingForm({
                         })()}
                   </div>
                 </div>
+
+                <TooltipProvider delayDuration={200}>
+                  <div className="rounded-lg border border-border/90 bg-muted/20 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+                    <div className="flex gap-3">
+                      <ListChecks
+                        className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                            Cleaner routine job checklist
+                          </p>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                aria-label="What is the routine job checklist?"
+                              >
+                                <CircleHelp className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="top"
+                              className="max-w-sm border-border/80 bg-popover p-3 text-left text-xs text-popover-foreground shadow-md"
+                            >
+                              <p className="mb-1.5 font-semibold text-foreground">Preview</p>
+                              <p className="leading-relaxed text-muted-foreground">
+                                When a job starts, these free tasks are added to the cleaner&apos;s
+                                in-app checklist (alongside any top-ups from priced add-ons). They are
+                                guidance only and do <span className="font-medium text-foreground">not</span> change
+                                your suggested price. Tasks can be adjusted on the job if you and the
+                                cleaner agree.
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <p className="text-xs text-muted-foreground dark:text-gray-400">
+                          Default free items for <strong className="font-medium text-foreground dark:text-gray-200">{serviceTypeLabel(serviceTypeWatched as ServiceTypeKey)}</strong>
+                          {normalizeServiceType(serviceTypeWatched as ServiceTypeKey) === "bond_cleaning"
+                            ? " — same defaults admins configure under Global Settings."
+                            : " — from platform service settings (admin can adjust)."}
+                        </p>
+                        {freeRoutineChecklistLines.length > 0 ? (
+                          <ul className="list-none space-y-1.5 border-t border-border/60 pt-2 dark:border-gray-700">
+                            {freeRoutineChecklistLines.map((line, i) => (
+                              <li
+                                key={`${i}-${line.slice(0, 32)}`}
+                                className="flex gap-2 text-sm leading-snug text-foreground dark:text-gray-200"
+                              >
+                                <span className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-500">✓</span>
+                                <span>{line}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="border-t border-border/60 pt-2 text-xs text-muted-foreground dark:text-gray-500">
+                            Standard platform tasks are applied when the job checklist is first created
+                            (your admin can customize defaults in Global Settings).
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </TooltipProvider>
 
                 <div className="space-y-2">
                   <Label htmlFor="propertyDescription">Property description</Label>

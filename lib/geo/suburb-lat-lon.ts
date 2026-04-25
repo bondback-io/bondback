@@ -59,6 +59,7 @@ export async function getSuburbLatLonForPostcodeAndSuburb(
     .select("suburb, lat, lon")
     .eq("postcode", pc)
     .ilike("suburb", `%${sub}%`)
+    .order("suburb", { ascending: true })
     .limit(25);
 
   if (!Array.isArray(rows) || rows.length === 0) return null;
