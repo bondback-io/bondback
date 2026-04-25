@@ -2130,6 +2130,18 @@ export async function cancelEscrowJobNonResponsiveCleaner(
     .eq("id", jobId);
 
   if (jobUpdErr) {
+    const msg = String(jobUpdErr.message ?? "");
+    if (msg.includes("jobs_status_check")) {
+      console.error(
+        "[cancelEscrowJobNonResponsiveCleaner] jobs update blocked by status CHECK; run supabase/sql/20260425120000_jobs_status_check_cancelled_by_lister.sql",
+        { jobId, msg }
+      );
+      return {
+        ok: false,
+        error:
+          "Database is missing the cancelled_by_lister status. Ask an admin to run the latest jobs_status_check migration (see supabase/sql/20260425120000_jobs_status_check_cancelled_by_lister.sql), then try again. Your card refund may have already succeeded — do not pay twice; contact support if unsure.",
+      };
+    }
     return { ok: false, error: jobUpdErr.message };
   }
 
