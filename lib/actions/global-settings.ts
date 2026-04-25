@@ -15,6 +15,7 @@ import {
   type ServiceAddonsChecklistsMerged,
   type ServicePricedAddon,
 } from "@/lib/service-addons-checklists";
+import { normalizeListerNonresponsiveCancelIdleDays } from "@/lib/global-settings/lister-nonresponsive-idle-days";
 
 /** When to send the email. instant = immediately; 5m, 1h, 1d etc. = delayed (requires worker); on_dob = on user's date of birth (birthday template only). */
 export type SendAfterOption = "instant" | "5m" | "15m" | "30m" | "1h" | "2h" | "1d" | "2d" | "3d" | "5d" | "7d" | "10d" | "14d" | "21d" | "30d" | "60d" | "on_dob";
@@ -176,16 +177,6 @@ function sanitizePricingBaseMultiplierByServiceForDb(
     }
   }
   return out;
-}
-
-/** Clamp 0–7; default 0 = no inactivity wait when unset. */
-export function normalizeListerNonresponsiveCancelIdleDays(raw: unknown): number {
-  if (raw === null || raw === undefined) return 0;
-  const n = typeof raw === "number" ? raw : Number(raw);
-  if (Number.isFinite(n)) {
-    return Math.max(0, Math.min(7, Math.floor(n)));
-  }
-  return 0;
 }
 
 function sanitizePricingBathroomRateByServiceForDb(

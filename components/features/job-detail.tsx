@@ -99,7 +99,7 @@ import { ListerNonresponsiveCancelMenu } from "@/components/jobs/lister-nonrespo
 import {
   shouldShowListerNonResponsiveCancelControl,
   type ListerNonResponsiveCancelPreview,
-} from "@/lib/jobs/lister-nonresponsive-cancel";
+} from "@/lib/jobs/lister-nonresponsive-cancel-shared";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import { useToast } from "@/components/ui/use-toast";
 import { showAppErrorToast } from "@/components/errors/show-app-error-toast";

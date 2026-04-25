@@ -51,7 +51,7 @@ import {
   notifyAdminUsersAboutJob,
   sendDisputeActivityEmail,
 } from "@/lib/disputes/dispute-thread-and-notify";
-import { getListerNonResponsiveCancelPreview } from "@/lib/jobs/lister-nonresponsive-cancel";
+import { getListerNonResponsiveCancelPreview } from "@/lib/jobs/lister-nonresponsive-cancel-server";
 import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 import { JOB_TYPED_SELECT } from "@/lib/supabase/queries";
 import { getSiteUrl } from "@/lib/site";

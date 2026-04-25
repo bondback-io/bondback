@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminGlobalSettingsForm } from "@/components/admin/admin-global-settings-form";
-import { getGlobalSettings, normalizeListerNonresponsiveCancelIdleDays } from "@/lib/actions/global-settings";
+import { getGlobalSettings } from "@/lib/actions/global-settings";
+import { normalizeListerNonresponsiveCancelIdleDays } from "@/lib/global-settings/lister-nonresponsive-idle-days";
 import { parseDefaultSiteThemeFromSettings } from "@/lib/global-settings-default-theme";
 import {
   DEFAULT_PRICING_MODIFIERS,

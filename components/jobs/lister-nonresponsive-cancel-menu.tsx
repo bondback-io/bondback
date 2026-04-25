@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cancelEscrowJobNonResponsiveCleaner } from "@/lib/actions/jobs";
-import type { ListerNonResponsiveCancelPreview } from "@/lib/jobs/lister-nonresponsive-cancel";
+import type { ListerNonResponsiveCancelPreview } from "@/lib/jobs/lister-nonresponsive-cancel-shared";
 import { useToast } from "@/components/ui/use-toast";
 
 function formatAud(cents: number): string {
