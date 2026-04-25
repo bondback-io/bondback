@@ -166,6 +166,28 @@ function userLocationIcon() {
 }
 
 const FIND_JOBS_MAP_VISIBILITY = "bondback:find-jobs-map-visibility";
+const EARTH_MEAN_RADIUS_M = 6371000;
+
+/**
+ * Axis-aligned lat/lon bounds for a search circle (no map / renderer required).
+ * `L.circle(...).getBounds()` on a layer not added to a map can throw
+ * (Leaflet needs `map.layerPointToLatLng` for pixel projection).
+ */
+function searchRadiusToLatLngBounds(
+  centerLat: number,
+  centerLon: number,
+  radiusM: number
+): L.LatLngBounds {
+  const r = Math.max(0, radiusM);
+  const R = EARTH_MEAN_RADIUS_M;
+  const dLat = (r / R) * (180 / Math.PI);
+  const cosLat = Math.cos((centerLat * Math.PI) / 180);
+  const dLon = Math.min(180, (cosLat < 1e-6 ? r / R : r / (R * cosLat)) * (180 / Math.PI));
+  return L.latLngBounds(
+    [centerLat - dLat, centerLon - dLon] as L.LatLngExpression,
+    [centerLat + dLat, centerLon + dLon] as L.LatLngExpression
+  );
+}
 
 function FitInitialBounds({
   points,
@@ -202,8 +224,7 @@ function FitInitialBounds({
     }
     lastSig.current = signature;
     const rM = Math.max(1000, radiusM);
-    const circleBounds = L.circle([centerLat, centerLon], { radius: rM }).getBounds();
-    const b = L.latLngBounds(circleBounds.getSouthWest(), circleBounds.getNorthEast());
+    const b = searchRadiusToLatLngBounds(centerLat, centerLon, rM);
 
     const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon));
     for (const p of valid) {
