@@ -269,9 +269,12 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                   Completed
                 </TableHead>
                 <TableHead className="hidden lg:table-cell text-right whitespace-nowrap">
-                  Escrow cancel
+                  Fee
                 </TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="hidden lg:table-cell text-right whitespace-nowrap">
+                  Refund
+                </TableHead>
+                <TableHead className="w-[1%] text-right pr-1">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -327,56 +330,69 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-right text-[11px] tabular-nums text-muted-foreground">
                       {job.lister_escrow_cancelled_at
-                        ? `Fee $${(Number(job.lister_escrow_cancel_fee_cents ?? 0) / 100).toFixed(0)} · Refund $${(Number(job.lister_escrow_cancel_refund_cents ?? 0) / 100).toFixed(0)}`
+                        ? `$${(Number(job.lister_escrow_cancel_fee_cents ?? 0) / 100).toFixed(0)}`
                         : "—"}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
+                    <TableCell className="hidden lg:table-cell text-right text-[11px] tabular-nums text-muted-foreground">
+                      {job.lister_escrow_cancelled_at
+                        ? `$${(Number(job.lister_escrow_cancel_refund_cents ?? 0) / 100).toFixed(0)}`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="align-middle text-right">
+                      <div className="inline-flex w-full min-w-0 flex-nowrap items-center justify-end gap-0.5 overflow-x-auto">
                         <Button
                           asChild
                           size="xs"
                           variant="outline"
-                          className="text-[11px]"
+                          className="h-7 shrink-0 px-1.5 text-[10px]"
                         >
                           <a href={`/jobs/${job.id}`}>View</a>
                         </Button>
                         {String(job.status) !== "completed" ? (
-                          <form action={adminForceCompleteJob}>
+                          <form action={adminForceCompleteJob} className="inline">
                             <input type="hidden" name="jobId" value={job.id} />
                             <Button
                               type="submit"
                               size="xs"
                               variant="outline"
-                              className="text-[11px]"
+                              className="h-7 shrink-0 px-1.5 text-[10px]"
+                              title="Force mark job as completed"
                             >
-                              Force complete
+                              Complete
                             </Button>
                           </form>
                         ) : (
-                          <form action={adminReinstateJob}>
+                          <form action={adminReinstateJob} className="inline">
                             <input type="hidden" name="jobId" value={job.id} />
                             <Button
                               type="submit"
                               size="xs"
                               variant="outline"
-                              className="text-[11px]"
+                              className="h-7 shrink-0 px-1.5 text-[10px]"
+                              title="Re-instate job from completed"
                             >
-                              Re-instate
+                              Restore
                             </Button>
                           </form>
                         )}
-                        <form action={adminRefundJob}>
+                        <form action={adminRefundJob} className="inline">
                           <input type="hidden" name="jobId" value={job.id} />
                           <Button
                             type="submit"
                             size="xs"
                             variant="outline"
-                            className="text-[11px]"
+                            className="h-7 shrink-0 px-1.5 text-[10px]"
+                            title="Process refund (stub)"
                           >
-                            Refund (stub)
+                            Refund
                           </Button>
                         </form>
-                        <AdminDeleteJobButton jobId={job.id} />
+                        <div className="inline-flex shrink-0">
+                          <AdminDeleteJobButton
+                            jobId={job.id}
+                            buttonClassName="h-7 px-1.5 text-[10px]"
+                          />
+                        </div>
                       </div>
                     </TableCell>
                   </TableRow>

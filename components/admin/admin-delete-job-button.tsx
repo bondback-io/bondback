@@ -15,8 +15,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { adminDeleteJob } from "@/lib/actions/admin-jobs";
+import { cn } from "@/lib/utils";
 
-export function AdminDeleteJobButton({ jobId }: { jobId: number }) {
+export function AdminDeleteJobButton({
+  jobId,
+  buttonClassName,
+}: {
+  jobId: number;
+  /** Extra classes for the trigger button (e.g. compact table row). */
+  buttonClassName?: string;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [deleteStep1Open, setDeleteStep1Open] = useState(false);
@@ -52,7 +60,7 @@ export function AdminDeleteJobButton({ jobId }: { jobId: number }) {
         type="button"
         size="xs"
         variant="destructive"
-        className="text-[11px]"
+        className={cn("text-[11px]", buttonClassName)}
         onClick={() => setDeleteStep1Open(true)}
         disabled={isDeleting}
       >
