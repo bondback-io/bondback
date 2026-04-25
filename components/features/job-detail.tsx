@@ -47,7 +47,7 @@ import {
   formatDateDdMmYyyy,
   humanizePropertyCondition,
   listingPropertyDescriptionBody,
-  preferredWindowFromMoveOutDate,
+  preferredWindowRangeFromMoveOutDate,
   specialInstructionsForDisplay,
 } from "@/lib/listing-detail-presenters";
 import { parseUtcTimestamp, cn } from "@/lib/utils";
@@ -1730,7 +1730,7 @@ export function JobDetail({
   const moveOutRaw = listing.move_out_date?.trim() ? listing.move_out_date : null;
   const moveOutDate = moveOutRaw ? parseListingCalendarDate(moveOutRaw) : null;
   const moveOutDisplay = moveOutDate ? formatDateDdMmYyyy(moveOutDate) : moveOutRaw;
-  const preferredWindowFromMoveOut = preferredWindowFromMoveOutDate(moveOutDate);
+  const preferredWindowFromMoveOut = preferredWindowRangeFromMoveOutDate(moveOutDate);
   const preferredRaw = (listing as { preferred_dates?: string[] | null }).preferred_dates;
   const preferredDates =
     Array.isArray(preferredRaw) && preferredRaw.length > 0
@@ -2583,7 +2583,8 @@ export function JobDetail({
                             {preferredWindowFromMoveOut}
                           </p>
                           <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
-                            Target window starts 5 days before your move-out date.
+                            Target window runs from 5 days before your move-out through your
+                            move-out date.
                           </p>
                         </div>
                       )}
@@ -5449,7 +5450,8 @@ export function JobDetail({
                           {preferredWindowFromMoveOut}
                         </p>
                         <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
-                          Target window starts 5 days before your move-out date.
+                          Target window runs from 5 days before your move-out through your
+                          move-out date.
                         </p>
                       </div>
                     )}

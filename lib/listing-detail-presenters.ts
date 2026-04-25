@@ -49,6 +49,12 @@ export function preferredWindowFromMoveOutDate(moveOutDate: Date | null): string
   return formatDateDdMmYyyy(subDays(moveOutDate, 5));
 }
 
+/** Start (5 days before move-out) through move-out, e.g. `23/04/2026 - 28/04/2026`. */
+export function preferredWindowRangeFromMoveOutDate(moveOutDate: Date | null): string | null {
+  if (moveOutDate == null) return null;
+  return `${formatDateDdMmYyyy(subDays(moveOutDate, 5))} - ${formatDateDdMmYyyy(moveOutDate)}`;
+}
+
 /**
  * Legacy `listings.description` sometimes bundled "Property address: …", duplicated "Special areas: …",
  * or free text. Strip machine-prefixed lines for display; prefer `property_description` on new rows.

@@ -66,7 +66,7 @@ import {
   parseListingCalendarDate,
   formatDateDdMmYyyy,
   humanizePropertyCondition,
-  preferredWindowFromMoveOutDate,
+  preferredWindowRangeFromMoveOutDate,
   specialInstructionsForDisplay,
 } from "@/lib/listing-detail-presenters";
 import { ListerEndAuctionControl } from "@/components/listing/lister-end-auction-control";
@@ -333,8 +333,8 @@ export function ListingAuctionDetail({
     : null;
   const moveOutDate = moveOut ? parseListingCalendarDate(moveOut) : null;
   const moveOutDisplay = moveOutDate ? formatDateDdMmYyyy(moveOutDate) : moveOut;
-  /** Listing detail: show preferred window as 5 days before move-out when move-out is known. */
-  const preferredWindowFromMoveOut = preferredWindowFromMoveOutDate(moveOutDate);
+  /** Listing detail: show preferred window (5 days before move-out through move-out) when known. */
+  const preferredWindowFromMoveOut = preferredWindowRangeFromMoveOutDate(moveOutDate);
 
   const preferredRaw = (listing as { preferred_dates?: string[] | null }).preferred_dates;
   const preferredDates =
@@ -1183,7 +1183,8 @@ export function ListingAuctionDetail({
                     {preferredWindowFromMoveOut}
                   </p>
                   <p className="text-xs leading-snug text-muted-foreground dark:text-gray-500">
-                    Target window starts 5 days before your move-out date.
+                    Target window runs from 5 days before your move-out through your
+                    move-out date.
                   </p>
                 </div>
               )}

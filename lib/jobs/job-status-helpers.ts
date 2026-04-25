@@ -10,3 +10,15 @@ export function isJobCancelledStatus(status: string | null | undefined): boolean
  */
 export const JOB_STATUS_NOT_IN_LISTING_SLOT =
   "(cancelled,cancelled_by_lister,completed)";
+
+/**
+ * Lister dashboard: `accepted` with no Stripe payment / escrow on the job yet
+ * (matches the lister “Awaiting payment” job card when escrow is not yet held).
+ */
+export function isListerJobAwaitingPayment(job: {
+  status?: string | null;
+  payment_intent_id?: string | null;
+}): boolean {
+  if (String(job.status ?? "").trim().toLowerCase() !== "accepted") return false;
+  return !String(job.payment_intent_id ?? "").trim();
+}

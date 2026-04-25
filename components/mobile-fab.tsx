@@ -265,7 +265,11 @@ export function ListerActiveJobsList({
                 ) : null}
                 {item.cleanerFirstName ? (
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
-                    Cleaner · {item.cleanerFirstName}
+                    {item.cleanerFirstName === "Assigned cleaner" ? (
+                      item.cleanerFirstName
+                    ) : (
+                      <>Cleaner · {item.cleanerFirstName}</>
+                    )}
                   </p>
                 ) : null}
                 {hint ? (

@@ -48,7 +48,7 @@ import {
   isDashboardCompletedJob,
 } from "@/lib/jobs/dispute-hub-helpers";
 import { resolveListerDashboardJobSelect } from "@/lib/jobs/dashboard-jobs-select";
-import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
+import { isJobCancelledStatus, isListerJobAwaitingPayment } from "@/lib/jobs/job-status-helpers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -199,6 +199,12 @@ async function ListerDashboardContent() {
 
   const completedJobs = jobs.filter((j) => isDashboardCompletedJob(j));
   const activeJobs = jobs.filter((j) => isDashboardActivePipelineJob(j));
+  const awaitingPaymentJobs = activeJobs.filter((j) =>
+    isListerJobAwaitingPayment(j as JobRow & { payment_intent_id?: string | null })
+  );
+  const activeJobsExcludingAwaitingPayment = activeJobs.filter(
+    (j) => !isListerJobAwaitingPayment(j as JobRow & { payment_intent_id?: string | null })
+  );
   const cancelledJobs = jobs.filter((j) => isJobCancelledStatus(j.status));
   const cancelledJobListingIdSet = new Set(
     cancelledJobs.map((j) => String(j.listing_id))
@@ -213,25 +219,27 @@ async function ListerDashboardContent() {
   const totalCancelledItems = cancelledJobs.length + cancelledEarlyListings.length;
   const listingMap = new Map(listings.map((l) => [String(l.id), l]));
 
-  const activeJobPreview = activeJobs.slice(0, 5);
+  const activeJobPreview = activeJobsExcludingAwaitingPayment.slice(0, 5);
+  const awaitingPaymentPreview = awaitingPaymentJobs.slice(0, 5);
   const winnerIds = [
     ...new Set(
-      activeJobPreview
+      [...activeJobPreview, ...awaitingPaymentPreview]
         .map((j) => (j as JobRow & { winner_id?: string | null }).winner_id)
         .filter((id): id is string => typeof id === "string" && id.length > 0)
     ),
   ];
   let winnerFirstNameById: Record<string, string> = {};
   if (winnerIds.length > 0) {
-    const { data: winnerProfiles } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .in("id", winnerIds);
+    /** Service role so lister can read assigned cleaners' names (user-scoped client is often RLS-blocked). */
+    const admin = createSupabaseAdminClient();
+    const { data: winnerProfiles } = admin
+      ? await admin.from("profiles").select("id, full_name").in("id", winnerIds)
+      : await supabase.from("profiles").select("id, full_name").in("id", winnerIds);
     for (const row of winnerProfiles ?? []) {
       const r = row as { id: string; full_name: string | null };
       const raw = (r.full_name ?? "").trim();
       const first = raw.split(/\s+/)[0] ?? "";
-      winnerFirstNameById[r.id] = first || "Cleaner";
+      winnerFirstNameById[r.id] = first || raw || "Assigned cleaner";
     }
   }
 
@@ -256,6 +264,51 @@ async function ListerDashboardContent() {
       }
     }
   }
+
+  const toListerActiveJobListItem = (job: JobRow) => {
+    const listing = listingMap.get(String(job.listing_id));
+    const j = job as JobRow & {
+      agreed_amount_cents?: number | null;
+      payment_intent_id?: string | null;
+      winner_id?: string | null;
+      cleaner_confirmed_complete?: boolean | null;
+    };
+    const agreed =
+      j.agreed_amount_cents != null && j.agreed_amount_cents > 0
+        ? j.agreed_amount_cents
+        : (listing as { current_lowest_bid_cents?: number | null } | undefined)
+            ?.current_lowest_bid_cents ?? null;
+    const winnerId = j.winner_id?.trim() ?? null;
+    const stripePayoutSetupRequired =
+      requireStripeRelease &&
+      winnerId != null &&
+      winnerPayoutReadyById.has(winnerId) &&
+      winnerPayoutReadyById.get(winnerId) !== true;
+    const locationLabel =
+      listing != null ? formatLocationWithState(listing.suburb, listing.postcode) : null;
+    return {
+      jobId: Number(job.id),
+      listingId: String(job.listing_id),
+      winnerId: j.winner_id?.trim() ? j.winner_id : null,
+      title: listing?.title ?? `Job #${job.id}`,
+      status: job.status,
+      agreedAmountCents: typeof agreed === "number" && agreed > 0 ? agreed : null,
+      hasEscrowPayment: !!j.payment_intent_id?.trim(),
+      locationLabel,
+      coverUrl: getListingCoverUrl(listing ?? null),
+      bedrooms:
+        listing != null ? (listing as { bedrooms?: number | null }).bedrooms ?? null : null,
+      bathrooms:
+        listing != null ? (listing as { bathrooms?: number | null }).bathrooms ?? null : null,
+      cleanerFirstName:
+        winnerId && winnerFirstNameById[winnerId]
+          ? winnerFirstNameById[winnerId]
+          : winnerId
+            ? "Assigned cleaner"
+            : null,
+      stripePayoutSetupRequired,
+    };
+  };
 
   type CancelledDashboardRow =
     | { kind: "job"; id: string; cancelledAt: string; job: JobRow }
@@ -433,6 +486,38 @@ async function ListerDashboardContent() {
         )}
       </div>
 
+      {/* Awaiting payment (accepted, no escrow yet) */}
+      <ScrollToHash anchorId="awaiting-payment" />
+      <div
+        id="awaiting-payment"
+        className="scroll-mt-[calc(6rem+env(safe-area-inset-top,0px))] rounded-2xl border-2 border-border bg-card dark:border-gray-800 dark:bg-gray-900/50 md:scroll-mt-24 md:rounded-xl md:border"
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4 dark:border-gray-800 md:px-4 md:py-3">
+          <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
+            Awaiting Payment
+          </h2>
+          {awaitingPaymentJobs.length > 0 && (
+            <Link
+              href="/my-listings?tab=active"
+              className="min-h-10 px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline md:min-h-0 md:text-xs md:font-medium"
+            >
+              View all
+            </Link>
+          )}
+        </div>
+        <div className="p-4 md:p-3">
+          {awaitingPaymentJobs.length === 0 ? (
+            <p className="py-8 text-center text-base text-muted-foreground dark:text-gray-400 md:py-6 md:text-sm">
+              No jobs awaiting payment.
+            </p>
+          ) : (
+            <ListerActiveJobsList
+              items={awaitingPaymentPreview.map(toListerActiveJobListItem)}
+            />
+          )}
+        </div>
+      </div>
+
       {/* Active jobs */}
       <ScrollToHash anchorId="active-jobs" />
       <div
@@ -443,7 +528,7 @@ async function ListerDashboardContent() {
           <h2 className="text-xl font-bold text-foreground dark:text-gray-100 md:text-sm md:font-semibold">
             Active Jobs
           </h2>
-          {activeJobs.length > 0 && (
+          {activeJobsExcludingAwaitingPayment.length > 0 && (
             <Link
               href="/my-listings?tab=active"
               className="min-h-10 px-2 text-sm font-semibold text-primary underline-offset-4 hover:underline md:min-h-0 md:text-xs md:font-medium"
@@ -453,62 +538,13 @@ async function ListerDashboardContent() {
           )}
         </div>
         <div className="p-4 md:p-3">
-          {activeJobs.length === 0 ? (
+          {activeJobsExcludingAwaitingPayment.length === 0 ? (
             <p className="py-8 text-center text-base text-muted-foreground dark:text-gray-400 md:py-6 md:text-sm">
               No active jobs.
             </p>
           ) : (
             <ListerActiveJobsList
-              items={activeJobPreview.map((job) => {
-                const listing = listingMap.get(String(job.listing_id));
-                const j = job as JobRow & {
-                  agreed_amount_cents?: number | null;
-                  payment_intent_id?: string | null;
-                  winner_id?: string | null;
-                  cleaner_confirmed_complete?: boolean | null;
-                };
-                const agreed =
-                  j.agreed_amount_cents != null && j.agreed_amount_cents > 0
-                    ? j.agreed_amount_cents
-                    : (listing as { current_lowest_bid_cents?: number | null } | undefined)
-                        ?.current_lowest_bid_cents ?? null;
-                const winnerId = j.winner_id?.trim() ?? null;
-                const stripePayoutSetupRequired =
-                  requireStripeRelease &&
-                  winnerId != null &&
-                  winnerPayoutReadyById.has(winnerId) &&
-                  winnerPayoutReadyById.get(winnerId) !== true;
-                const locationLabel =
-                  listing != null
-                    ? formatLocationWithState(listing.suburb, listing.postcode)
-                    : null;
-                return {
-                  jobId: Number(job.id),
-                  listingId: String(job.listing_id),
-                  winnerId: j.winner_id?.trim() ? j.winner_id : null,
-                  title: listing?.title ?? `Job #${job.id}`,
-                  status: job.status,
-                  agreedAmountCents: typeof agreed === "number" && agreed > 0 ? agreed : null,
-                  hasEscrowPayment: !!j.payment_intent_id?.trim(),
-                  locationLabel,
-                  coverUrl: getListingCoverUrl(listing ?? null),
-                  bedrooms:
-                    listing != null
-                      ? (listing as { bedrooms?: number | null }).bedrooms ?? null
-                      : null,
-                  bathrooms:
-                    listing != null
-                      ? (listing as { bathrooms?: number | null }).bathrooms ?? null
-                      : null,
-                  cleanerFirstName:
-                    winnerId && winnerFirstNameById[winnerId]
-                      ? winnerFirstNameById[winnerId]
-                      : winnerId
-                        ? "Cleaner"
-                        : null,
-                  stripePayoutSetupRequired,
-                };
-              })}
+              items={activeJobPreview.map(toListerActiveJobListItem)}
             />
           )}
         </div>
