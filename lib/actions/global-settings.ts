@@ -178,12 +178,14 @@ function sanitizePricingBaseMultiplierByServiceForDb(
   return out;
 }
 
-/** Clamp 0–7; default 5 (legacy five-day idle). */
+/** Clamp 0–7; default 0 = no inactivity wait when unset. */
 export function normalizeListerNonresponsiveCancelIdleDays(raw: unknown): number {
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return Math.max(0, Math.min(7, Math.floor(raw)));
+  if (raw === null || raw === undefined) return 0;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (Number.isFinite(n)) {
+    return Math.max(0, Math.min(7, Math.floor(n)));
   }
-  return 5;
+  return 0;
 }
 
 function sanitizePricingBathroomRateByServiceForDb(

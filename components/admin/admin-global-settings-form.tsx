@@ -165,7 +165,7 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
     initial?.autoReleaseHours ?? 48
   );
   const [listerNonresponsiveCancelIdleDays, setListerNonresponsiveCancelIdleDays] =
-    React.useState(initial?.listerNonresponsiveCancelIdleDays ?? 5);
+    React.useState(initial?.listerNonresponsiveCancelIdleDays ?? 0);
   const [emailsEnabled, setEmailsEnabled] = React.useState(
     initial?.emailsEnabled ?? true
   );
@@ -622,6 +622,58 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           Lister pays this on top of job price. Cleaner receives full bid amount. Edit below.
         </p>
       </div>
+
+      <Card className="border-amber-200/80 bg-amber-50/50 dark:border-amber-800/60 dark:bg-amber-950/30">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+            Lister cancel — non-responsive cleaner (escrow)
+          </CardTitle>
+          <p className="text-[11px] text-amber-900/80 dark:text-amber-200/90">
+            Minimum <strong>full calendar days</strong> with no cleaner activity (messages, job photos, etc.) before
+            a lister can use the paid-job cancel for a non-responsive cleaner. Also used from My listings (⋯) → jump
+            to the job. Platform default is <strong>0</strong> (no inactivity wait).
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3 text-xs sm:text-sm text-muted-foreground dark:text-gray-300">
+          <div className="flex flex-col gap-2 sm:max-w-md">
+            <Label
+              htmlFor="listerNonresponsiveCancelIdleDays"
+              className="text-xs font-medium text-foreground dark:text-gray-200"
+            >
+              Required cleaner inactivity (days)
+            </Label>
+            <Select
+              value={String(
+                [0, 1, 2, 3, 4, 5, 6, 7].includes(listerNonresponsiveCancelIdleDays)
+                  ? listerNonresponsiveCancelIdleDays
+                  : 0
+              )}
+              onValueChange={(v) => setListerNonresponsiveCancelIdleDays(Number(v))}
+            >
+              <SelectTrigger
+                id="listerNonresponsiveCancelIdleDays"
+                className="h-9 w-full max-w-sm text-xs dark:bg-gray-900 dark:border-amber-800/50"
+              >
+                <SelectValue placeholder="Days" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0" className="text-xs">
+                  0 — no inactivity wait (listers can cancel as soon as other job rules pass)
+                </SelectItem>
+                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                  <SelectItem key={d} value={String(d)} className="text-xs">
+                    {d} {d === 1 ? "day" : "days"} — at least {d} full {d === 1 ? "day" : "days"} with no activity
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-[11px] text-muted-foreground dark:text-gray-400 max-w-2xl">
+            Saves with the <strong className="text-foreground">Save global settings</strong> button at the bottom
+            of this page.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card className="border-border bg-card dark:border-gray-800 dark:bg-gray-950/50">
         <CardHeader>
@@ -1922,59 +1974,6 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </CardContent>
         </Card>
       </div>
-
-      <Card className="border-amber-200/80 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/20">
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold text-amber-950 dark:text-amber-100">
-            Lister cancel (non-responsive cleaner, escrow)
-          </CardTitle>
-          <p className="text-[11px] text-amber-900/80 dark:text-amber-200/90">
-            How long a cleaner must be inactive (no messages, job photos, etc.) before a lister can use the paid-job
-            escrow cancel for a non-responsive cleaner. Same setting powers the job page and My listings (⋯) shortcut.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3 text-xs sm:text-sm text-muted-foreground dark:text-gray-300">
-          <div className="flex flex-col gap-2 sm:max-w-md">
-            <Label
-              htmlFor="listerNonresponsiveCancelIdleDays"
-              className="text-xs font-medium text-foreground dark:text-gray-200"
-            >
-              Cleaner inactivity (full days) before the cancel action is available
-            </Label>
-            <Select
-              value={String(
-                [0, 1, 2, 3, 4, 5, 6, 7].includes(listerNonresponsiveCancelIdleDays)
-                  ? listerNonresponsiveCancelIdleDays
-                  : 5
-              )}
-              onValueChange={(v) => setListerNonresponsiveCancelIdleDays(Number(v))}
-            >
-              <SelectTrigger
-                id="listerNonresponsiveCancelIdleDays"
-                className="h-9 text-xs dark:bg-gray-900 dark:border-gray-700"
-              >
-                <SelectValue placeholder="Days" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0" className="text-xs">
-                  0 — no inactivity wait (idle check off; cancel when other rules pass)
-                </SelectItem>
-                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                  <SelectItem key={d} value={String(d)} className="text-xs">
-                    {d} {d === 1 ? "day" : "days"} — no cleaner activity for {d} full {d === 1 ? "day" : "days"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <p className="text-[11px] text-muted-foreground dark:text-gray-400 max-w-2xl">
-            Applies to paid, active jobs in escrow. <strong className="text-foreground">0</strong> turns off the
-            inactivity wait; <strong className="text-foreground">1–7</strong> require that many full calendar
-            days. Default 5 matches the previous platform behaviour. Saves with <strong>Save global settings</strong>{" "}
-            at the bottom of this page.
-          </p>
-        </CardContent>
-      </Card>
 
       {/* Row 4: Referral Program Settings */}
       <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
