@@ -22,9 +22,14 @@ export function jobsBrowsePageRange(page: number): { from: number; to: number } 
   return { from: offset, to: offset + pageSize - 1 };
 }
 
-/** Full `public.listings` row — cards, dashboards, job detail. */
+/**
+ * Full `public.listings` row — cards, dashboards, job detail.
+ * Note: `state` is in generated types; include `state` in this list only after
+ * `supabase/migrations/*_listings_add_state.sql` is applied to the database, or PostgREST
+ * will error 42703 on environments without that column.
+ */
 export const LISTING_FULL_SELECT =
-  "id, lister_id, title, description, property_description, property_address, suburb, state, postcode, property_type, bedrooms, bathrooms, addons, special_areas, special_instructions, move_out_date, preferred_dates, photo_urls, initial_photos, cover_photo_url, reserve_cents, buy_now_cents, starting_price_cents, current_lowest_bid_cents, duration_days, status, end_time, created_at, platform_fee_percentage, cancelled_early_at, property_condition, property_levels, service_type, recurring_frequency, airbnb_guest_capacity, airbnb_turnaround_hours, deep_clean_purpose, is_urgent";
+  "id, lister_id, title, description, property_description, property_address, suburb, postcode, property_type, bedrooms, bathrooms, addons, special_areas, special_instructions, move_out_date, preferred_dates, photo_urls, initial_photos, cover_photo_url, reserve_cents, buy_now_cents, starting_price_cents, current_lowest_bid_cents, duration_days, status, end_time, created_at, platform_fee_percentage, cancelled_early_at, property_condition, property_levels, service_type, recurring_frequency, airbnb_guest_capacity, airbnb_turnaround_hours, deep_clean_purpose, is_urgent";
 
 /** Cleaner “live bids” section — fields used after fetch + `isListingLive`. */
 export const LISTING_LIVE_BID_CARD_SELECT =
