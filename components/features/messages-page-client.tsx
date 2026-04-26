@@ -443,12 +443,16 @@ export function MessagesPageClient({
                     ? `${c.listingSuburb ?? ""} ${c.listingPostcode ?? ""}`.trim()
                     : null;
                 return (
-                  <li key={c.jobId}>
+                  <li key={c.jobId} className="relative z-10">
+                    {/*
+                      No <p> inside <button> — invalid HTML; parsers can hoist content outside the
+                      button and break taps on mobile. Use block spans only.
+                    */}
                     <button
                       type="button"
                       onClick={() => setSelectedJobId(c.jobId)}
                       className={cn(
-                        "flex w-full items-start gap-2 rounded-xl border px-2 py-1.5 text-left transition active:scale-[0.99]",
+                        "flex min-h-11 w-full touch-manipulation items-start gap-2 rounded-xl border px-2 py-2 text-left transition [-webkit-tap-highlight-color:transparent] active:scale-[0.99]",
                         isSelected && activeCleanerTheme
                           ? "border-emerald-400/90 bg-emerald-50 shadow-sm dark:border-emerald-500/50 dark:bg-emerald-950/50"
                           : isSelected
@@ -465,9 +469,9 @@ export function MessagesPageClient({
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
-                          <p className="break-words text-[11px] font-semibold leading-snug text-slate-900 dark:text-slate-50">
+                          <span className="block break-words text-[11px] font-semibold leading-snug text-slate-900 dark:text-slate-50">
                             {titleLine}
-                          </p>
+                          </span>
                           {relativeLabel ? (
                             <span className="shrink-0 text-[9px] tabular-nums text-slate-400 dark:text-slate-500">
                               {relativeLabel}
@@ -475,14 +479,14 @@ export function MessagesPageClient({
                           ) : null}
                         </div>
                         {loc ? (
-                          <p className="mt-0.5 truncate text-[9px] text-slate-400 dark:text-slate-500">
+                          <span className="mt-0.5 block truncate text-[9px] text-slate-400 dark:text-slate-500">
                             {loc}
-                          </p>
+                          </span>
                         ) : null}
                         {c.lastMessageText ? (
-                          <p className="mt-0.5 line-clamp-2 text-[10px] italic leading-snug text-slate-500 dark:text-slate-400">
+                          <span className="mt-0.5 block line-clamp-2 text-[10px] italic leading-snug text-slate-500 dark:text-slate-400">
                             {c.lastMessageText}
-                          </p>
+                          </span>
                         ) : null}
                       </div>
                     </button>
@@ -552,9 +556,9 @@ export function MessagesPageClient({
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-1">
-                        <p className="break-words text-[12px] font-semibold leading-tight text-slate-900 dark:text-slate-100 sm:text-[13px]">
+                        <span className="block break-words text-[12px] font-semibold leading-tight text-slate-900 dark:text-slate-100 sm:text-[13px]">
                           {titleLine}
-                        </p>
+                        </span>
                         {relativeLabel && (
                           <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
                             {relativeLabel}
@@ -562,14 +566,14 @@ export function MessagesPageClient({
                         )}
                       </div>
                       {loc && (
-                        <p className="truncate text-[9px] text-slate-400 dark:text-slate-500 sm:text-[10px]">
+                        <span className="block truncate text-[9px] text-slate-400 dark:text-slate-500 sm:text-[10px]">
                           {loc}
-                        </p>
+                        </span>
                       )}
                       {c.lastMessageText && (
-                        <p className="mt-0.5 line-clamp-1 text-[10px] italic text-slate-500 dark:text-slate-400">
+                        <span className="mt-0.5 block line-clamp-1 text-[10px] italic text-slate-500 dark:text-slate-400">
                           {c.lastMessageText}
-                        </p>
+                        </span>
                       )}
                     </div>
                   </button>
