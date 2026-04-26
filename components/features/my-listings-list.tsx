@@ -125,6 +125,8 @@ type JobRowState = {
   counter_proposal_amount?: number | null;
   payment_released_at?: string | null;
   completed_at?: string | null;
+  /** Server: matches job page non-responsive escrow cancel visibility. */
+  escrowCancelMenuEligible?: boolean;
 };
 
 export type MyListingsListProps = {
@@ -154,6 +156,7 @@ export type MyListingsListProps = {
       counter_proposal_amount?: number | null;
       payment_released_at?: string | null;
       completed_at?: string | null;
+      escrowCancelMenuEligible?: boolean;
     }
   >;
   tabCounts: {
@@ -201,6 +204,7 @@ function snapshotToActiveJobsRecord(
       counter_proposal_amount: row.counter_proposal_amount ?? null,
       payment_released_at: row.payment_released_at ?? null,
       completed_at: row.completed_at ?? null,
+      escrowCancelMenuEligible: row.escrowCancelMenuEligible ?? false,
     };
   }
   return out;
@@ -349,6 +353,7 @@ export function MyListingsList({
         counter_proposal_amount?: number | null;
         payment_released_at?: string | null;
         completed_at?: string | null;
+        escrow_cancel_menu_eligible?: boolean;
       }[];
 
       const jobsByListing = new Map<string, (typeof jobs)[number][]>();
@@ -399,6 +404,7 @@ export function MyListingsList({
           counter_proposal_amount: j.counter_proposal_amount ?? null,
           payment_released_at: j.payment_released_at ?? null,
           completed_at: j.completed_at ?? null,
+          escrowCancelMenuEligible: j.escrow_cancel_menu_eligible === true,
         };
       }
       setActiveJobs(jobMap);
@@ -1247,7 +1253,9 @@ export function MyListingsList({
                   relistLoading={relistingId === String(listing.id)}
                   completedCleanerNetCents={completedCleanerNetCents}
                   escrowCancelAnchorHref={
-                    cardAccent === "job" && directJobHref
+                    cardAccent === "job" &&
+                    directJobHref &&
+                    job?.escrowCancelMenuEligible === true
                       ? `${directJobHref}#lister-escrow-cancel`
                       : null
                   }

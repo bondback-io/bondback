@@ -19,6 +19,10 @@ import {
 } from "@/lib/my-listings/lister-listing-helpers";
 import { isDashboardCompletedJob } from "@/lib/jobs/dispute-hub-helpers";
 import { resolveListerMyListingsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
+import {
+  escrowCancelMenuEligibleByJobId,
+  type MyListingsJobForEscrowPreview,
+} from "@/lib/jobs/my-listings-escrow-cancel-menu";
 import { parseUtcTimestamp } from "@/lib/utils";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
 import { ArrowLeft } from "lucide-react";
@@ -207,6 +211,7 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
       counter_proposal_amount?: number | null;
       payment_released_at?: string | null;
       completed_at?: string | null;
+      escrowCancelMenuEligible: boolean;
     }
       >
     | undefined;
@@ -225,6 +230,7 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
     type JobRowMyListings = {
       id: string | number;
       listing_id: string | number;
+      lister_id?: string | null;
       winner_id: string | null;
       status: string | null;
       cleaner_confirmed_complete?: boolean | null;
@@ -235,11 +241,15 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
       dispute_status?: string | null;
       dispute_opened_by?: string | null;
       agreed_amount_cents?: number | null;
+      payment_intent_id?: string | null;
       dispute_resolution?: string | null;
       refund_amount?: number | null;
       proposed_refund_amount?: number | null;
       counter_proposal_amount?: number | null;
       payment_released_at?: string | null;
+      escrow_funded_at?: string | null;
+      created_at?: string | null;
+      lister_escrow_cancelled_at?: string | null;
       completed_at?: string | null;
     };
 
@@ -253,6 +263,11 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
         .in("listing_id", slice as string[]);
       jobs.push(...((jobsData ?? []) as unknown as JobRowMyListings[]));
     }
+
+    const eligibleByJob = await escrowCancelMenuEligibleByJobId(
+      jobsClient as never,
+      jobs as MyListingsJobForEscrowPreview[]
+    );
 
     const winnerIds = [
       ...new Set(jobs.map((j) => j.winner_id).filter((id): id is string => Boolean(id))),
@@ -299,6 +314,7 @@ async function MyListingsPageContent({ searchParams }: MyListingsPageProps) {
         counter_proposal_amount: j.counter_proposal_amount ?? null,
         payment_released_at: j.payment_released_at ?? null,
         completed_at: j.completed_at ?? null,
+        escrowCancelMenuEligible: eligibleByJob.get(Number(j.id)) ?? false,
       };
     }
     initialActiveJobsSnapshot = jobByListing;

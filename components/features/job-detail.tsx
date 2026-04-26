@@ -714,8 +714,12 @@ function PartyMetaCell({
       </div>
       <div className="min-w-0 flex-1 space-y-1">
         <p className={labelClass}>{label}</p>
-        <p className={nameClass}>{name}</p>
-        {badges ? <div className="pt-1">{badges}</div> : null}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <p className={nameClass}>{name}</p>
+          {badges ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5">{badges}</div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

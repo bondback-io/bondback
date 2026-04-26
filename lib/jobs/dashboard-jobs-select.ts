@@ -118,11 +118,12 @@ export async function resolveCleanerEarningsJobSelect(
 }
 
 const MY_LISTINGS_JOB_SELECT_FALLBACK =
-  "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, agreed_amount_cents, dispute_status, payment_released_at, completed_at";
+  "id, listing_id, lister_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, agreed_amount_cents, payment_intent_id, dispute_status, disputed_at, payment_released_at, completed_at, created_at";
 
 const MY_LISTINGS_JOB_SELECT_VARIANTS: readonly string[] = [
-  "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at, completed_at",
-  "id, listing_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, dispute_status, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, payment_released_at, completed_at",
+  "id, listing_id, lister_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, payment_intent_id, payment_released_at, escrow_funded_at, created_at, lister_escrow_cancelled_at, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, completed_at",
+  "id, listing_id, lister_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, disputed_at, dispute_reason, dispute_status, dispute_opened_by, agreed_amount_cents, payment_intent_id, payment_released_at, created_at, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, completed_at",
+  "id, listing_id, lister_id, winner_id, status, cleaner_confirmed_complete, cleaner_confirmed_at, updated_at, dispute_status, agreed_amount_cents, payment_intent_id, payment_released_at, created_at, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, completed_at",
   MY_LISTINGS_JOB_SELECT_FALLBACK,
 ];
 

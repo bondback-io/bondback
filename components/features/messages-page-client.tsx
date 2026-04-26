@@ -434,35 +434,38 @@ export function MessagesPageClient({
               No active conversations.
             </p>
           ) : (
-            <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-2 pb-1 [-webkit-overflow-scrolling:touch]">
+            <ul className="flex flex-col gap-1.5 px-2 pb-2">
               {activeConvos.map((c) => {
                 const isSelected = c.jobId === selectedJobId;
                 const { titleLine, initial, relativeLabel, activeCleanerTheme } = threadMeta(c);
+                const loc =
+                  c.listingSuburb || c.listingPostcode
+                    ? `${c.listingSuburb ?? ""} ${c.listingPostcode ?? ""}`.trim()
+                    : null;
                 return (
-                  <button
-                    key={c.jobId}
-                    type="button"
-                    onClick={() => setSelectedJobId(c.jobId)}
-                    className={cn(
-                      "snap-start shrink-0 rounded-xl border px-2 py-1.5 text-left transition active:scale-[0.99]",
-                      "w-max overflow-visible",
-                      isSelected && activeCleanerTheme
-                        ? "border-emerald-400/90 bg-emerald-50 shadow-sm dark:border-emerald-500/50 dark:bg-emerald-950/50"
-                        : isSelected
-                          ? "border-sky-400/90 bg-sky-50 shadow-sm dark:border-sky-500/50 dark:bg-sky-950/45"
-                          : "border-slate-200/80 bg-white/90 dark:border-slate-700 dark:bg-slate-900/60"
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
+                  <li key={c.jobId}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJobId(c.jobId)}
+                      className={cn(
+                        "flex w-full items-start gap-2 rounded-xl border px-2 py-1.5 text-left transition active:scale-[0.99]",
+                        isSelected && activeCleanerTheme
+                          ? "border-emerald-400/90 bg-emerald-50 shadow-sm dark:border-emerald-500/50 dark:bg-emerald-950/50"
+                          : isSelected
+                            ? "border-sky-400/90 bg-sky-50 shadow-sm dark:border-sky-500/50 dark:bg-sky-950/45"
+                            : "border-slate-200/80 bg-white/90 dark:border-slate-700 dark:bg-slate-900/60"
+                      )}
+                    >
                       <ConversationPickerAvatar
                         photoUrl={otherPartyAvatarUrl(c)}
                         initial={initial}
                         isSelected={isSelected}
                         activeCleanerTheme={activeCleanerTheme}
+                        className="mt-0.5"
                       />
-                      <div className="min-w-0 shrink-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="whitespace-nowrap text-[11px] font-semibold leading-tight text-slate-900 dark:text-slate-50">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className="break-words text-[11px] font-semibold leading-snug text-slate-900 dark:text-slate-50">
                             {titleLine}
                           </p>
                           {relativeLabel ? (
@@ -471,12 +474,22 @@ export function MessagesPageClient({
                             </span>
                           ) : null}
                         </div>
+                        {loc ? (
+                          <p className="mt-0.5 truncate text-[9px] text-slate-400 dark:text-slate-500">
+                            {loc}
+                          </p>
+                        ) : null}
+                        {c.lastMessageText ? (
+                          <p className="mt-0.5 line-clamp-2 text-[10px] italic leading-snug text-slate-500 dark:text-slate-400">
+                            {c.lastMessageText}
+                          </p>
+                        ) : null}
                       </div>
-                    </div>
-                  </button>
+                    </button>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
           {completedConvos.length > 0 && (
             <div

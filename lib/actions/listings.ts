@@ -17,6 +17,10 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { isListerRelistPoolListingStatus } from "@/lib/my-listings/lister-listing-helpers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveListerMyListingsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
+import {
+  escrowCancelMenuEligibleByJobId,
+  type MyListingsJobForEscrowPreview,
+} from "@/lib/jobs/my-listings-escrow-cancel-menu";
 import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 
 type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
@@ -849,5 +853,17 @@ export async function fetchListerJobsForMyListingsRefresh(listingIds: string[]) 
   if (error) {
     return { ok: false as const, error: error.message };
   }
-  return { ok: true as const, jobs: data ?? [] };
+  const rows = data ?? [];
+  const eligibleByJob = await escrowCancelMenuEligibleByJobId(
+    client as never,
+    rows as MyListingsJobForEscrowPreview[]
+  );
+  const jobs = (rows as Record<string, unknown>[]).map((row) => {
+    const id = Number(row.id);
+    return {
+      ...row,
+      escrow_cancel_menu_eligible: eligibleByJob.get(id) ?? false,
+    };
+  });
+  return { ok: true as const, jobs };
 }
