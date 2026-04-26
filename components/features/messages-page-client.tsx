@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Pin, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Pin, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { OptimizedImage } from "@/components/ui/optimized-image";
@@ -471,7 +471,7 @@ function MessagesInboxToolbar({
     <div className={cn("space-y-1.5", compact && "space-y-1")}>
       <div className="relative">
         <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+          className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500"
           aria-hidden
         />
         <Input
@@ -479,8 +479,9 @@ function MessagesInboxToolbar({
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search chats…"
           className={cn(
-            "h-8 border-slate-200/90 bg-white/90 pl-8 text-[12px] shadow-none placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900/60 dark:placeholder:text-slate-500",
-            compact && "h-7 rounded-lg py-1 text-[11px]"
+            "min-h-0 border-slate-200/90 bg-white/90 py-1 pl-9 pr-3 text-[12px] shadow-none placeholder:text-slate-400 focus-visible:ring-offset-0 dark:border-slate-700 dark:bg-slate-900/60 dark:placeholder:text-slate-500",
+            "md:h-9 md:py-1 md:pl-9 md:pr-3 md:text-sm",
+            compact ? "h-7 rounded-lg text-[11px] md:h-7" : "h-8 md:h-9"
           )}
           aria-label="Search conversations"
         />
@@ -696,10 +697,18 @@ export function MessagesPageClient({
   const [pinnedJobIds, setPinnedJobIds] = useState<number[]>([]);
   const [inboxQuery, setInboxQuery] = useState("");
   const [inboxFilter, setInboxFilter] = useState<"all" | ServiceTypeKey>("all");
+  /** Mobile: full inbox steals vertical space from messages — default collapsed when a thread is selected. */
+  const [mobileInboxExpanded, setMobileInboxExpanded] = useState(false);
 
   useEffect(() => {
     setPinnedJobIds(readPinnedJobIds());
   }, []);
+
+  useEffect(() => {
+    if (selectedJobId == null) {
+      setMobileInboxExpanded(true);
+    }
+  }, [selectedJobId]);
 
   const filteredActiveConvos = useMemo(() => {
     let list = activeConvos;
@@ -732,6 +741,11 @@ export function MessagesPageClient({
       writePinnedJobIds(next);
       return next;
     });
+  };
+
+  const pickMobileActiveChat = (jobId: number) => {
+    setSelectedJobId(jobId);
+    setMobileInboxExpanded(false);
   };
 
   const togglePastThread = (jobId: number) => {
@@ -809,7 +823,12 @@ export function MessagesPageClient({
               <li key={c.jobId}>
                 <button
                   type="button"
-                  onClick={() => togglePastThread(c.jobId)}
+                  onClick={() => {
+                    if (selectedJobId !== c.jobId) {
+                      setMobileInboxExpanded(false);
+                    }
+                    togglePastThread(c.jobId);
+                  }}
                   className={cn(
                     "flex w-full items-center gap-2 px-2 py-1.5 text-left transition",
                     isSelected
@@ -846,67 +865,114 @@ export function MessagesPageClient({
         "lg:min-h-[min(480px,calc(100dvh-12rem))]"
       )}
     >
-      {/* Mobile: thread picker + past chats (height-capped + internal scroll so chat panel + toasts aren’t crowded) */}
-      <div className="flex min-h-0 max-h-[min(52dvh,380px)] shrink-0 flex-col lg:hidden">
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain rounded-xl border border-slate-200/90 bg-slate-50/90 dark:border-slate-800 dark:bg-slate-950/80">
-          <div className="min-h-0 shrink-0 space-y-1 border-b border-slate-200/70 px-2 pb-1.5 pt-1.5 dark:border-slate-800/90">
-            <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Chats
-            </p>
-            <MessagesInboxToolbar
-              query={inboxQuery}
-              onQueryChange={setInboxQuery}
-              filter={inboxFilter}
-              onFilterChange={setInboxFilter}
-              compact
+      {/* Mobile: collapsible thread picker so the message composer stays on-screen */}
+      <div className="flex shrink-0 flex-col gap-1.5 lg:hidden">
+        {selected && !mobileInboxExpanded ? (
+          <button
+            type="button"
+            onClick={() => setMobileInboxExpanded(true)}
+            className="flex w-full touch-manipulation items-center gap-2 rounded-xl border border-slate-200/90 bg-slate-50/95 px-2.5 py-2 text-left shadow-sm transition active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900/80 [-webkit-tap-highlight-color:transparent]"
+          >
+            <ChevronDown
+              className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400"
+              aria-hidden
             />
-          </div>
-          {activeConvos.length === 0 ? (
-            <p className="px-2 py-2 text-[11px] text-slate-500 dark:text-slate-400">
-              No active conversations.
-            </p>
-          ) : filteredActiveConvos.length === 0 ? (
-            <p className="px-2 py-2 text-[11px] text-slate-500 dark:text-slate-400">
-              No chats match your search or filters.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-1 px-2 py-1.5">
-              {filteredActiveConvos.map((c) => {
-                const isSelected = c.jobId === selectedJobId;
-                const unread = unreadByJob[c.jobId] ?? 0;
-                const isPinned = pinnedJobIds.includes(c.jobId);
-                return (
-                  <li key={c.jobId} className="relative z-10">
-                    <CompactChatRow
-                      c={c}
-                      isSelected={isSelected}
-                      currentUserId={currentUserId}
-                      unreadCount={unread}
-                      isPinned={isPinned}
-                      onSelect={() => setSelectedJobId(c.jobId)}
-                      onTogglePin={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        togglePinJob(c.jobId);
-                      }}
-                      density="mobile"
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {completedConvos.length > 0 && (
-            <div
-              className={cn(
-                "min-h-0 shrink-0 border-t border-slate-200/80 px-2 pb-2 pt-1.5 dark:border-slate-800",
-                activeConvos.length === 0 && "border-t-0 pt-0"
-              )}
-            >
-              {historyBlockMobile}
+            <div className="min-w-0 flex-1">
+              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Chats · tap to switch
+              </span>
+              <span className="mt-0.5 block truncate text-[13px] font-semibold leading-tight text-slate-900 dark:text-slate-50">
+                {selected.otherPartyDisplayName}
+                {selected.otherPartyUsername
+                  ? ` · @${selected.otherPartyUsername}`
+                  : ""}
+              </span>
             </div>
-          )}
-        </div>
+            {activeConvos.length > 0 ? (
+              <span className="shrink-0 rounded-full bg-slate-200/90 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                {activeConvos.length} active
+              </span>
+            ) : null}
+          </button>
+        ) : (
+          <div
+            className={cn(
+              "flex max-h-[min(38dvh,280px)] min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-slate-50/90 dark:border-slate-800 dark:bg-slate-950/80"
+            )}
+          >
+            <div className="min-h-0 shrink-0 space-y-1 border-b border-slate-200/70 px-2 pb-1.5 pt-1.5 dark:border-slate-800/90">
+              <div className="flex items-start justify-between gap-2">
+                <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Chats
+                </p>
+                {selected && selectedJobId != null ? (
+                  <button
+                    type="button"
+                    onClick={() => setMobileInboxExpanded(false)}
+                    className="flex shrink-0 items-center gap-0.5 rounded-md border border-slate-200/80 bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-300"
+                  >
+                    <ChevronUp className="h-3 w-3" aria-hidden />
+                    Messages
+                  </button>
+                ) : null}
+              </div>
+              <MessagesInboxToolbar
+                query={inboxQuery}
+                onQueryChange={setInboxQuery}
+                filter={inboxFilter}
+                onFilterChange={setInboxFilter}
+                compact
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain">
+              {activeConvos.length === 0 ? (
+                <p className="px-2 py-2 text-[11px] text-slate-500 dark:text-slate-400">
+                  No active conversations.
+                </p>
+              ) : filteredActiveConvos.length === 0 ? (
+                <p className="px-2 py-2 text-[11px] text-slate-500 dark:text-slate-400">
+                  No chats match your search or filters.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-1 px-2 py-1.5">
+                  {filteredActiveConvos.map((c) => {
+                    const isSelected = c.jobId === selectedJobId;
+                    const unread = unreadByJob[c.jobId] ?? 0;
+                    const isPinned = pinnedJobIds.includes(c.jobId);
+                    return (
+                      <li key={c.jobId} className="relative z-10">
+                        <CompactChatRow
+                          c={c}
+                          isSelected={isSelected}
+                          currentUserId={currentUserId}
+                          unreadCount={unread}
+                          isPinned={isPinned}
+                          onSelect={() => pickMobileActiveChat(c.jobId)}
+                          onTogglePin={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            togglePinJob(c.jobId);
+                          }}
+                          density="mobile"
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {completedConvos.length > 0 && (
+                <div
+                  className={cn(
+                    "shrink-0 border-t border-slate-200/80 px-2 pb-2 pt-1.5 dark:border-slate-800",
+                    activeConvos.length === 0 && "border-t-0 pt-0"
+                  )}
+                >
+                  {historyBlockMobile}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Desktop: conversation list */}
