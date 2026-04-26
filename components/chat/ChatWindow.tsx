@@ -164,6 +164,8 @@ export function ChatWindow({
   const [error, setError] = useState<string | null>(null);
   const [typingPeerLabel, setTypingPeerLabel] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const listBottomRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingSendCooldownRef = useRef(0);
   const typingChannelRef = useRef<ReturnType<
@@ -206,12 +208,46 @@ export function ChatWindow({
     Boolean(trimStr(agreedPriceLabel)) && agreedPriceLabel !== "—";
   const headerLocationOrPriceRow = Boolean(headerLocationTail) || headerShowPrice;
 
-  const scrollToBottom = useCallback(() => {
+  const isNarrowMessagesLayout = useCallback(() => {
+    if (!messagesLayout || typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 1023px)").matches;
+  }, [messagesLayout]);
+
+  const scrollMessagesToBottom = useCallback(() => {
     const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const anchor = listBottomRef.current;
+    if (anchor) {
+      try {
+        anchor.scrollIntoView({ block: "end", inline: "nearest" });
+      } catch {
+        /* ignore */
+      }
     }
+    el.scrollTop = el.scrollHeight;
   }, []);
+
+  /** Run after layout — mobile Safari often needs a follow-up frame (and sometimes a short delay). */
+  const scrollToBottom = useCallback(() => {
+    const run = () => {
+      scrollMessagesToBottom();
+      if (messagesLayout && isNarrowMessagesLayout()) {
+        composerRef.current?.scrollIntoView({
+          block: "end",
+          behavior: "auto",
+        });
+      }
+    };
+    run();
+    requestAnimationFrame(() => {
+      run();
+      requestAnimationFrame(run);
+    });
+    if (messagesLayout) {
+      window.setTimeout(run, 50);
+      window.setTimeout(run, 150);
+    }
+  }, [isNarrowMessagesLayout, messagesLayout, scrollMessagesToBottom]);
 
   useEffect(() => {
     if (!participantRole) {
@@ -281,9 +317,25 @@ export function ChatWindow({
     };
   }, [supabase, jobId, currentUserId, participantRole]);
 
+  const lastMessageFingerprint =
+    messages.length > 0
+      ? `${messages[messages.length - 1]!.id}:${messages[messages.length - 1]!.created_at}:${messages[messages.length - 1]!.message_text?.length ?? 0}`
+      : "none";
+
   useEffect(() => {
     scrollToBottom();
-  }, [messages.length, typingPeerLabel, scrollToBottom]);
+  }, [lastMessageFingerprint, messages.length, typingPeerLabel, scrollToBottom]);
+
+  useEffect(() => {
+    if (!messagesLayout || typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const bump = () => scrollToBottom();
+    vv.addEventListener("resize", bump);
+    return () => {
+      vv.removeEventListener("resize", bump);
+    };
+  }, [messagesLayout, scrollToBottom]);
 
   const markRead = useCallback(() => {
     void markJobMessagesRead(jobId);
@@ -425,6 +477,7 @@ export function ChatWindow({
 
     setText("");
     setMessages((prev) => [...prev, optimistic]);
+    scrollToBottom();
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent("bondback:job-message-sent", {
@@ -514,6 +567,7 @@ export function ChatWindow({
         sender_role: shellRole ?? "lister",
       };
       setMessages((prev) => [...prev, optimistic]);
+      scrollToBottom();
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("bondback:job-message-sent", {
@@ -749,22 +803,29 @@ export function ChatWindow({
         )}
 
         {typingPeerLabel && <TypingIndicator label={typingPeerLabel} />}
+        <div
+          ref={listBottomRef}
+          className="h-0 w-full shrink-0 overflow-hidden"
+          aria-hidden
+        />
       </div>
 
-      <ChatInput
-        value={text}
-        onChange={(v) => {
-          setText(v);
-          if (v.trim().length > 0) broadcastTyping();
-        }}
-        onSend={() => void handleSend()}
-        sending={uploadingImage}
-        isOffline={isOffline}
-        onPhotoSelected={(files) => void handlePhotoSelected(files)}
-        accentRole={shellRole}
-        disabled={readOnly}
-        placeholder={readOnly ? "Read-only chat" : "Aa"}
-      />
+      <div ref={composerRef} className="shrink-0">
+        <ChatInput
+          value={text}
+          onChange={(v) => {
+            setText(v);
+            if (v.trim().length > 0) broadcastTyping();
+          }}
+          onSend={() => void handleSend()}
+          sending={uploadingImage}
+          isOffline={isOffline}
+          onPhotoSelected={(files) => void handlePhotoSelected(files)}
+          accentRole={shellRole}
+          disabled={readOnly}
+          placeholder={readOnly ? "Read-only chat" : "Aa"}
+        />
+      </div>
       {error && (
         <p className="border-t border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-[11px] text-destructive dark:bg-destructive/15">
           {error}
