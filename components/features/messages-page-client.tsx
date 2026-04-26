@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Pin, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { cn, trimStr } from "@/lib/utils";
 import { ACTIVE_ROLE_CHANGED_EVENT } from "@/lib/active-role-events";
@@ -18,6 +20,127 @@ import {
   messengerPeerCleanerUsername,
   messengerPeerDisplayName,
 } from "@/lib/chat-messenger-display";
+import {
+  deepCleanPurposeLabel,
+  normalizeServiceType,
+  recurringFrequencyShortLabel,
+  type ServiceTypeKey,
+} from "@/lib/service-types";
+
+const MESSAGE_PINS_STORAGE_KEY = "bb-message-pins-v1";
+
+const INBOX_FILTER_CHIPS: { key: "all" | ServiceTypeKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "recurring_house_cleaning", label: "Recurring" },
+  { key: "bond_cleaning", label: "Bond" },
+  { key: "airbnb_turnover", label: "Airbnb" },
+  { key: "deep_clean", label: "Deep" },
+];
+
+function serviceBadgeClasses(st: ServiceTypeKey): string {
+  switch (st) {
+    case "recurring_house_cleaning":
+      return "bg-sky-500/12 text-sky-800 dark:bg-sky-400/14 dark:text-sky-200";
+    case "bond_cleaning":
+      return "bg-orange-500/12 text-orange-900 dark:bg-orange-400/14 dark:text-orange-200";
+    case "airbnb_turnover":
+      return "bg-teal-500/12 text-teal-900 dark:bg-teal-400/14 dark:text-teal-200";
+    case "deep_clean":
+      return "bg-violet-500/12 text-violet-900 dark:bg-violet-400/14 dark:text-violet-200";
+    default:
+      return "bg-slate-500/10 text-slate-700 dark:bg-slate-400/12 dark:text-slate-200";
+  }
+}
+
+function serviceBadgeShortLabel(st: ServiceTypeKey): string {
+  switch (st) {
+    case "recurring_house_cleaning":
+      return "Recurring";
+    case "bond_cleaning":
+      return "Bond";
+    case "airbnb_turnover":
+      return "Airbnb";
+    case "deep_clean":
+      return "Deep";
+    default:
+      return "Job";
+  }
+}
+
+function buildConversationJobSummaryLine(c: {
+  serviceType: ServiceTypeKey;
+  recurringFrequency: string | null;
+  deepCleanPurpose: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  listingSuburb: string | null;
+}): string {
+  const br =
+    c.bedrooms != null && c.bedrooms > 0 ? `${c.bedrooms}BR` : null;
+  const ba =
+    c.bathrooms != null && c.bathrooms > 0 ? `${c.bathrooms}BA` : null;
+  const bedBath = [br, ba].filter(Boolean).join(" ");
+  const place = trimStr(c.listingSuburb ?? "") || null;
+
+  let servicePart: string;
+  switch (c.serviceType) {
+    case "recurring_house_cleaning": {
+      const freq = recurringFrequencyShortLabel(c.recurringFrequency);
+      servicePart = freq ? `Recurring ${freq}` : "Recurring";
+      break;
+    }
+    case "bond_cleaning":
+      servicePart = "Bond clean";
+      break;
+    case "airbnb_turnover":
+      servicePart = "Airbnb";
+      break;
+    case "deep_clean":
+      servicePart = deepCleanPurposeLabel(c.deepCleanPurpose) || "Deep clean";
+      break;
+    default:
+      servicePart = "Cleaning";
+  }
+
+  const parts = [servicePart];
+  if (bedBath) parts.push(bedBath);
+  if (place) parts.push(place);
+  return parts.join(" • ");
+}
+
+function conversationRelativeTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const diffMs = Date.now() - d.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "now";
+  if (diffMin < 60) return `${diffMin}m`;
+  if (diffMin < 60 * 24) return `${Math.floor(diffMin / 60)}h`;
+  return `${Math.floor(diffMin / (60 * 24))}d`;
+}
+
+function readPinnedJobIds(): number[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(MESSAGE_PINS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((x) => (typeof x === "number" ? x : Number(x)))
+      .filter((n) => Number.isFinite(n));
+  } catch {
+    return [];
+  }
+}
+
+function writePinnedJobIds(ids: number[]) {
+  try {
+    window.localStorage.setItem(MESSAGE_PINS_STORAGE_KEY, JSON.stringify(ids));
+  } catch {
+    /* ignore */
+  }
+}
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -121,10 +244,274 @@ export type Conversation = {
   hasPaymentHold: boolean;
   /** When set, chat is read-only (funds released to cleaner). */
   paymentReleasedAt: string | null;
+  serviceType: ServiceTypeKey;
+  recurringFrequency: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  deepCleanPurpose: string | null;
+  jobSummaryLine: string;
 };
+
+function sortConversationsForInbox(
+  list: Conversation[],
+  pinnedJobIds: number[]
+): Conversation[] {
+  const pinRank = new Map(pinnedJobIds.map((id, i) => [id, i]));
+  return [...list].sort((a, b) => {
+    const aPin = pinRank.has(a.jobId);
+    const bPin = pinRank.has(b.jobId);
+    if (aPin && !bPin) return -1;
+    if (!aPin && bPin) return 1;
+    if (aPin && bPin) {
+      return (pinRank.get(a.jobId) ?? 0) - (pinRank.get(b.jobId) ?? 0);
+    }
+    const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+    const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+    return tb - ta;
+  });
+}
 
 function otherPartyAvatarUrl(c: Conversation): string | null {
   return c.otherPartyRole === "cleaner" ? c.cleanerAvatarUrl : c.listerAvatarUrl;
+}
+
+type CompactChatRowProps = {
+  c: Conversation;
+  isSelected: boolean;
+  currentUserId: string;
+  unreadCount: number;
+  isPinned: boolean;
+  onSelect: () => void;
+  onTogglePin: (e: MouseEvent<HTMLButtonElement>) => void;
+  density: "mobile" | "desktop";
+};
+
+function CompactChatRow({
+  c,
+  isSelected,
+  currentUserId,
+  unreadCount,
+  isPinned,
+  onSelect,
+  onTogglePin,
+  density,
+}: CompactChatRowProps) {
+  const display = String(c.otherPartyDisplayName ?? "");
+  const uname = c.otherPartyUsername;
+  const initial = (
+    display.replace(/^@/, "").trim().charAt(0) || "?"
+  ).toUpperCase();
+  const isCurrentUserLister = isJobListerUser(currentUserId, c.listerId);
+  const activeCleanerTheme = isCurrentUserLister && c.cleanerId != null;
+  const relativeLabel = conversationRelativeTime(c.lastMessageAt);
+  const escrowActive = c.hasPaymentHold && c.paymentReleasedAt == null;
+  const st = c.serviceType;
+  const isDesktop = density === "desktop";
+
+  return (
+    <div
+      className={cn(
+        "relative flex min-h-[58px] items-stretch overflow-hidden rounded-xl border transition [-webkit-tap-highlight-color:transparent]",
+        isSelected && activeCleanerTheme
+          ? "border-emerald-400/90 bg-emerald-50/95 shadow-sm dark:border-emerald-500/45 dark:bg-emerald-950/40"
+          : isSelected
+            ? "border-sky-400/90 bg-sky-50/95 shadow-sm dark:border-sky-500/45 dark:bg-sky-950/40"
+            : "border-slate-200/80 bg-white/95 dark:border-slate-700/90 dark:bg-slate-900/55"
+      )}
+    >
+      {unreadCount > 0 ? (
+        <span
+          className="pointer-events-none absolute left-0 top-2 bottom-2 z-10 w-[3px] rounded-full bg-sky-500 dark:bg-sky-400"
+          aria-hidden
+        />
+      ) : null}
+      <button
+        type="button"
+        onClick={onSelect}
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 touch-manipulation items-center gap-2 py-1.5 pl-2 pr-1 text-left active:scale-[0.995]",
+          isDesktop ? "gap-2.5 pl-2.5" : "gap-1.5"
+        )}
+      >
+        <ConversationPickerAvatar
+          photoUrl={otherPartyAvatarUrl(c)}
+          initial={initial}
+          isSelected={isSelected}
+          activeCleanerTheme={activeCleanerTheme}
+          size={isDesktop ? "desktop" : "default"}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-1.5">
+            <span className="min-w-0 flex-1">
+              <span
+                className={cn(
+                  "block truncate font-semibold leading-tight text-slate-900 dark:text-slate-50",
+                  isDesktop ? "text-[12px] sm:text-[13px]" : "text-[11px]"
+                )}
+              >
+                {display}
+              </span>
+              {uname ? (
+                <span
+                  className={cn(
+                    "block truncate text-slate-500 dark:text-slate-400",
+                    isDesktop ? "text-[10px]" : "text-[9px]"
+                  )}
+                >
+                  @{uname}
+                </span>
+              ) : null}
+            </span>
+            <span className="flex shrink-0 flex-col items-end gap-0.5">
+              {relativeLabel ? (
+                <span
+                  className={cn(
+                    "tabular-nums text-slate-400 dark:text-slate-500",
+                    isDesktop ? "text-[10px]" : "text-[9px]"
+                  )}
+                >
+                  {relativeLabel}
+                </span>
+              ) : null}
+              {unreadCount > 0 ? (
+                <span
+                  className={cn(
+                    "flex min-w-[1.125rem] items-center justify-center rounded-full bg-sky-600 px-1 font-semibold text-white dark:bg-sky-500",
+                    isDesktop ? "text-[9px]" : "text-[8px]"
+                  )}
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              ) : null}
+            </span>
+          </div>
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
+            <span
+              className={cn(
+                "inline-flex shrink-0 rounded px-1 py-px text-[8px] font-semibold uppercase tracking-wide",
+                serviceBadgeClasses(st)
+              )}
+            >
+              {serviceBadgeShortLabel(st)}
+            </span>
+            {escrowActive ? (
+              <span className="inline-flex shrink-0 rounded bg-emerald-500/14 px-1 py-px text-[7px] font-semibold tracking-wide text-emerald-800 dark:bg-emerald-400/16 dark:text-emerald-200">
+                FUNDS IN ESCROW
+              </span>
+            ) : null}
+          </div>
+          <span
+            className={cn(
+              "block min-w-0 truncate text-slate-600 dark:text-slate-400",
+              isDesktop ? "text-[10px]" : "text-[9px]"
+            )}
+          >
+            {c.jobSummaryLine}
+          </span>
+          {c.lastMessageText ? (
+            <span
+              className={cn(
+                "mt-0.5 block truncate text-slate-500 dark:text-slate-400",
+                isDesktop ? "text-[10px]" : "text-[9px]"
+              )}
+            >
+              {c.lastMessageText}
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "mt-0.5 block truncate italic text-slate-400 dark:text-slate-500",
+                isDesktop ? "text-[10px]" : "text-[9px]"
+              )}
+            >
+              No messages yet
+            </span>
+          )}
+        </div>
+      </button>
+      <button
+        type="button"
+        onClick={onTogglePin}
+        className={cn(
+          "flex shrink-0 touch-manipulation items-center justify-center border-l border-slate-200/80 bg-slate-50/80 px-1.5 dark:border-slate-700/80 dark:bg-slate-900/40",
+          isPinned && "bg-amber-50/90 dark:bg-amber-950/25"
+        )}
+        aria-label={isPinned ? "Unpin chat" : "Pin chat"}
+      >
+        <Pin
+          className={cn(
+            "h-3.5 w-3.5",
+            isPinned
+              ? "fill-amber-400/35 text-amber-600 dark:text-amber-400"
+              : "text-slate-400 dark:text-slate-500"
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
+type MessagesInboxToolbarProps = {
+  query: string;
+  onQueryChange: (v: string) => void;
+  filter: "all" | ServiceTypeKey;
+  onFilterChange: (v: "all" | ServiceTypeKey) => void;
+  /** Tighter spacing on small screens */
+  compact?: boolean;
+};
+
+function MessagesInboxToolbar({
+  query,
+  onQueryChange,
+  filter,
+  onFilterChange,
+  compact,
+}: MessagesInboxToolbarProps) {
+  return (
+    <div className={cn("space-y-1.5", compact && "space-y-1")}>
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+          aria-hidden
+        />
+        <Input
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Search chats…"
+          className={cn(
+            "h-8 border-slate-200/90 bg-white/90 pl-8 text-[12px] shadow-none placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900/60 dark:placeholder:text-slate-500",
+            compact && "h-7 rounded-lg py-1 text-[11px]"
+          )}
+          aria-label="Search conversations"
+        />
+      </div>
+      <div
+        className={cn(
+          "flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          compact && "gap-0.5"
+        )}
+      >
+        {INBOX_FILTER_CHIPS.map(({ key, label }) => {
+          const active = filter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onFilterChange(key)}
+              className={cn(
+                "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition",
+                active
+                  ? "border-sky-400/80 bg-sky-500/12 text-sky-900 dark:border-sky-500/50 dark:bg-sky-400/12 dark:text-sky-100"
+                  : "border-slate-200/80 bg-white/80 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:bg-slate-800/80"
+              )}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /** Matches `activeConvos` — threads that are not archived as “past” on /messages. */
@@ -226,6 +613,22 @@ export function MessagesPageClient({
             ? messengerPeerCleanerUsername(cleanerProfile)
             : messengerPeerCleanerUsername(listerProfile);
 
+        const serviceType = normalizeServiceType(listing?.service_type);
+        const recurringFrequency = listing?.recurring_frequency ?? null;
+        const bedrooms =
+          listing?.bedrooms != null ? Number(listing.bedrooms) : null;
+        const bathrooms =
+          listing?.bathrooms != null ? Number(listing.bathrooms) : null;
+        const deepCleanPurpose = listing?.deep_clean_purpose ?? null;
+        const jobSummaryLine = buildConversationJobSummaryLine({
+          serviceType,
+          recurringFrequency,
+          deepCleanPurpose,
+          bedrooms: Number.isFinite(bedrooms) ? bedrooms : null,
+          bathrooms: Number.isFinite(bathrooms) ? bathrooms : null,
+          listingSuburb: listing?.suburb ?? null,
+        });
+
         return {
           jobId: job.id as number,
           listingId:
@@ -259,6 +662,12 @@ export function MessagesPageClient({
             jr.payment_released_at == null
               ? null
               : trimStr(jr.payment_released_at) || null,
+          serviceType,
+          recurringFrequency,
+          bedrooms: Number.isFinite(bedrooms) ? bedrooms : null,
+          bathrooms: Number.isFinite(bathrooms) ? bathrooms : null,
+          deepCleanPurpose,
+          jobSummaryLine,
         };
       }),
     [jobs, listingById, latestByJob, profileById, currentUserId]
@@ -274,40 +683,56 @@ export function MessagesPageClient({
 
   const selected = conversations.find((c) => c.jobId === selectedJobId) ?? null;
 
-  function threadMeta(c: Conversation) {
-    const display = String(c.otherPartyDisplayName ?? "");
-    const uname = c.otherPartyUsername;
-    const looksUsernameOnly = display.trim().startsWith("@");
-    const titleLine =
-      uname && !looksUsernameOnly ? `${display} (@${uname})` : display;
-    const initial = (
-      display.replace(/^@/, "").trim().charAt(0) || "?"
-    ).toUpperCase();
-
-    let relativeLabel: string | null = null;
-    if (c.lastMessageAt) {
-      const d = new Date(c.lastMessageAt);
-      const diffMs = Date.now() - d.getTime();
-      const diffMin = Math.floor(diffMs / 60000);
-      if (diffMin < 1) relativeLabel = "now";
-      else if (diffMin < 60) relativeLabel = `${diffMin}m`;
-      else if (diffMin < 60 * 24) {
-        relativeLabel = `${Math.floor(diffMin / 60)}h`;
-      } else {
-        relativeLabel = `${Math.floor(diffMin / (60 * 24))}d`;
-      }
+  const unreadByJob = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const m of messages) {
+      if (m.sender_id === currentUserId) continue;
+      if (m.read_at != null && trimStr(m.read_at) !== "") continue;
+      counts[m.job_id] = (counts[m.job_id] ?? 0) + 1;
     }
+    return counts;
+  }, [messages, currentUserId]);
 
-    const isCurrentUserLister = isJobListerUser(currentUserId, c.listerId);
-    const activeCleanerTheme = isCurrentUserLister && c.cleanerId != null;
+  const [pinnedJobIds, setPinnedJobIds] = useState<number[]>([]);
+  const [inboxQuery, setInboxQuery] = useState("");
+  const [inboxFilter, setInboxFilter] = useState<"all" | ServiceTypeKey>("all");
 
-    return {
-      titleLine,
-      initial,
-      relativeLabel,
-      activeCleanerTheme,
-    };
-  }
+  useEffect(() => {
+    setPinnedJobIds(readPinnedJobIds());
+  }, []);
+
+  const filteredActiveConvos = useMemo(() => {
+    let list = activeConvos;
+    if (inboxFilter !== "all") {
+      list = list.filter((c) => c.serviceType === inboxFilter);
+    }
+    const q = inboxQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((c) => {
+        const hay = [
+          c.otherPartyDisplayName,
+          c.otherPartyUsername ? `@${c.otherPartyUsername}` : "",
+          c.jobSummaryLine,
+          c.lastMessageText ?? "",
+          c.listingTitle ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    return sortConversationsForInbox(list, pinnedJobIds);
+  }, [activeConvos, inboxFilter, inboxQuery, pinnedJobIds]);
+
+  const togglePinJob = (jobId: number) => {
+    setPinnedJobIds((prev) => {
+      const next = prev.includes(jobId)
+        ? prev.filter((id) => id !== jobId)
+        : [jobId, ...prev];
+      writePinnedJobIds(next);
+      return next;
+    });
+  };
 
   const togglePastThread = (jobId: number) => {
     setSelectedJobId((prev) => (prev === jobId ? null : jobId));
@@ -422,74 +847,50 @@ export function MessagesPageClient({
       )}
     >
       {/* Mobile: thread picker + past chats (height-capped + internal scroll so chat panel + toasts aren’t crowded) */}
-      <div className="flex min-h-0 max-h-[min(46dvh,320px)] shrink-0 flex-col lg:hidden">
+      <div className="flex min-h-0 max-h-[min(52dvh,380px)] shrink-0 flex-col lg:hidden">
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain rounded-xl border border-slate-200/90 bg-slate-50/90 dark:border-slate-800 dark:bg-slate-950/80">
-          <div className="min-h-0 shrink-0 px-2 pb-1 pt-1.5">
+          <div className="min-h-0 shrink-0 space-y-1 border-b border-slate-200/70 px-2 pb-1.5 pt-1.5 dark:border-slate-800/90">
             <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Chats
             </p>
+            <MessagesInboxToolbar
+              query={inboxQuery}
+              onQueryChange={setInboxQuery}
+              filter={inboxFilter}
+              onFilterChange={setInboxFilter}
+              compact
+            />
           </div>
           {activeConvos.length === 0 ? (
-            <p className="px-2 pb-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="px-2 py-2 text-[11px] text-slate-500 dark:text-slate-400">
               No active conversations.
             </p>
+          ) : filteredActiveConvos.length === 0 ? (
+            <p className="px-2 py-2 text-[11px] text-slate-500 dark:text-slate-400">
+              No chats match your search or filters.
+            </p>
           ) : (
-            <ul className="flex flex-col gap-1.5 px-2 pb-2">
-              {activeConvos.map((c) => {
+            <ul className="flex flex-col gap-1 px-2 py-1.5">
+              {filteredActiveConvos.map((c) => {
                 const isSelected = c.jobId === selectedJobId;
-                const { titleLine, initial, relativeLabel, activeCleanerTheme } = threadMeta(c);
-                const loc =
-                  c.listingSuburb || c.listingPostcode
-                    ? `${c.listingSuburb ?? ""} ${c.listingPostcode ?? ""}`.trim()
-                    : null;
+                const unread = unreadByJob[c.jobId] ?? 0;
+                const isPinned = pinnedJobIds.includes(c.jobId);
                 return (
                   <li key={c.jobId} className="relative z-10">
-                    {/*
-                      No <p> inside <button> — invalid HTML; parsers can hoist content outside the
-                      button and break taps on mobile. Use block spans only.
-                    */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedJobId(c.jobId)}
-                      className={cn(
-                        "flex min-h-11 w-full touch-manipulation items-start gap-2 rounded-xl border px-2 py-2 text-left transition [-webkit-tap-highlight-color:transparent] active:scale-[0.99]",
-                        isSelected && activeCleanerTheme
-                          ? "border-emerald-400/90 bg-emerald-50 shadow-sm dark:border-emerald-500/50 dark:bg-emerald-950/50"
-                          : isSelected
-                            ? "border-sky-400/90 bg-sky-50 shadow-sm dark:border-sky-500/50 dark:bg-sky-950/45"
-                            : "border-slate-200/80 bg-white/90 dark:border-slate-700 dark:bg-slate-900/60"
-                      )}
-                    >
-                      <ConversationPickerAvatar
-                        photoUrl={otherPartyAvatarUrl(c)}
-                        initial={initial}
-                        isSelected={isSelected}
-                        activeCleanerTheme={activeCleanerTheme}
-                        className="mt-0.5"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="block break-words text-[11px] font-semibold leading-snug text-slate-900 dark:text-slate-50">
-                            {titleLine}
-                          </span>
-                          {relativeLabel ? (
-                            <span className="shrink-0 text-[9px] tabular-nums text-slate-400 dark:text-slate-500">
-                              {relativeLabel}
-                            </span>
-                          ) : null}
-                        </div>
-                        {loc ? (
-                          <span className="mt-0.5 block truncate text-[9px] text-slate-400 dark:text-slate-500">
-                            {loc}
-                          </span>
-                        ) : null}
-                        {c.lastMessageText ? (
-                          <span className="mt-0.5 block line-clamp-2 text-[10px] italic leading-snug text-slate-500 dark:text-slate-400">
-                            {c.lastMessageText}
-                          </span>
-                        ) : null}
-                      </div>
-                    </button>
+                    <CompactChatRow
+                      c={c}
+                      isSelected={isSelected}
+                      currentUserId={currentUserId}
+                      unreadCount={unread}
+                      isPinned={isPinned}
+                      onSelect={() => setSelectedJobId(c.jobId)}
+                      onTogglePin={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        togglePinJob(c.jobId);
+                      }}
+                      density="mobile"
+                    />
                   </li>
                 );
               })}
@@ -510,13 +911,21 @@ export function MessagesPageClient({
 
       {/* Desktop: conversation list */}
       <div className="hidden w-full max-h-[min(38vh,300px)] flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-gradient-to-b from-slate-50/95 to-white shadow-sm dark:border-slate-800 dark:from-slate-950 dark:to-slate-900/95 lg:flex lg:max-h-none lg:w-[min(100%,19rem)] lg:shrink-0 xl:w-[21rem]">
-        <div className="shrink-0 border-b border-slate-200/80 px-3 py-1.5 dark:border-slate-800">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Chats
-          </p>
-          <p className="text-[10px] leading-snug text-slate-500 dark:text-slate-500">
-            Select a thread. View job opens from the chat header.
-          </p>
+        <div className="shrink-0 space-y-2 border-b border-slate-200/80 px-2.5 py-2 dark:border-slate-800 sm:px-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Chats
+            </p>
+            <p className="text-[10px] leading-snug text-slate-500 dark:text-slate-500">
+              Select a thread. Job details are in the chat header.
+            </p>
+          </div>
+          <MessagesInboxToolbar
+            query={inboxQuery}
+            onQueryChange={setInboxQuery}
+            filter={inboxFilter}
+            onFilterChange={setInboxFilter}
+          />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 py-1.5 sm:px-2">
@@ -525,60 +934,34 @@ export function MessagesPageClient({
               <p className="px-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-400/90">
                 Active
               </p>
-              {activeConvos.map((c) => {
-                const isSelected = c.jobId === selectedJobId;
-                const { titleLine, initial, relativeLabel, activeCleanerTheme } = threadMeta(c);
-                const loc =
-                  c.listingSuburb || c.listingPostcode
-                    ? `${c.listingSuburb ?? ""} ${c.listingPostcode ?? ""}`.trim()
-                    : null;
-
-                return (
-                  <button
-                    key={c.jobId}
-                    type="button"
-                    onClick={() => setSelectedJobId(c.jobId)}
-                    className={cn(
-                      "flex w-full items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 text-left transition",
-                      isSelected && activeCleanerTheme
-                        ? "border-emerald-400/85 bg-emerald-50 dark:border-emerald-500/45 dark:bg-emerald-950/45"
-                        : isSelected
-                          ? "border-sky-400/80 bg-sky-50 dark:border-sky-500/50 dark:bg-sky-950/50"
-                          : "border-transparent bg-white/50 hover:bg-slate-100/90 dark:bg-transparent dark:hover:bg-slate-800/70"
-                    )}
-                  >
-                    <ConversationPickerAvatar
-                      photoUrl={otherPartyAvatarUrl(c)}
-                      initial={initial}
+              {filteredActiveConvos.length === 0 ? (
+                <p className="px-1 py-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  No chats match your search or filters.
+                </p>
+              ) : (
+                filteredActiveConvos.map((c) => {
+                  const isSelected = c.jobId === selectedJobId;
+                  const unread = unreadByJob[c.jobId] ?? 0;
+                  const isPinned = pinnedJobIds.includes(c.jobId);
+                  return (
+                    <CompactChatRow
+                      key={c.jobId}
+                      c={c}
                       isSelected={isSelected}
-                      activeCleanerTheme={activeCleanerTheme}
-                      size="desktop"
+                      currentUserId={currentUserId}
+                      unreadCount={unread}
+                      isPinned={isPinned}
+                      onSelect={() => setSelectedJobId(c.jobId)}
+                      onTogglePin={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        togglePinJob(c.jobId);
+                      }}
+                      density="desktop"
                     />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-1">
-                        <span className="block break-words text-[12px] font-semibold leading-tight text-slate-900 dark:text-slate-100 sm:text-[13px]">
-                          {titleLine}
-                        </span>
-                        {relativeLabel && (
-                          <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
-                            {relativeLabel}
-                          </span>
-                        )}
-                      </div>
-                      {loc && (
-                        <span className="block truncate text-[9px] text-slate-400 dark:text-slate-500 sm:text-[10px]">
-                          {loc}
-                        </span>
-                      )}
-                      {c.lastMessageText && (
-                        <span className="mt-0.5 block line-clamp-1 text-[10px] italic text-slate-500 dark:text-slate-400">
-                          {c.lastMessageText}
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           )}
 
