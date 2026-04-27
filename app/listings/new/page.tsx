@@ -6,6 +6,12 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { parsePlatformFeePercentByServiceType } from "@/lib/platform-fee";
 import { resolvePricingModifiersFromGlobal } from "@/lib/pricing-modifiers";
 import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
+import {
+  isLaunchPromoWindowOpen,
+  launchPromoFreeJobSlots,
+  listerQualifiesForZeroPlatformFee,
+  type GlobalSettingsWithLaunchPromo,
+} from "@/lib/launch-promo";
 import { NewListingFormLazy } from "./new-listing-form-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -126,6 +132,26 @@ const NewListingPage = async () => {
         .filter((s) => s.length > 0)
     : undefined;
 
+  const gsPromo = settings as GlobalSettingsWithLaunchPromo | null;
+  const now = new Date();
+  const promoWindowOpen = isLaunchPromoWindowOpen(gsPromo, now);
+  const promoFreeSlots = launchPromoFreeJobSlots(gsPromo);
+  const listerPromoUsed = Math.max(
+    0,
+    Math.floor(
+      Number(
+        (profile as ProfileRow & { launch_promo_lister_jobs_used?: number })
+          .launch_promo_lister_jobs_used ?? 0
+      )
+    )
+  );
+  const listingQualifiesForPromoBanner = listerQualifiesForZeroPlatformFee({
+    baseFeePercent: feePercentage,
+    listerJobsUsed: listerPromoUsed,
+    freeSlots: promoFreeSlots,
+    promoOpen: promoWindowOpen,
+  });
+
   return (
     <NewListingFormLazy
       listerId={session.user.id}
@@ -138,6 +164,15 @@ const NewListingPage = async () => {
       defaultBondCleanerChecklistItems={defaultBondCleanerChecklistItems}
       allowLowAmountListings={allowLowAmountListings}
       allowTwoMinuteAuctionTest={allowTwoMinuteAuctionTest}
+      launchPromo={
+        listingQualifiesForPromoBanner
+          ? {
+              userId: session.user.id,
+              used: listerPromoUsed,
+              freeSlots: promoFreeSlots,
+            }
+          : undefined
+      }
     />
   );
 };

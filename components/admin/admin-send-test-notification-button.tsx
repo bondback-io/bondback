@@ -33,6 +33,9 @@ const TEST_TYPES: { type: NotificationType; label: string }[] = [
   { type: "listing_assigned_buy_now", label: "Buy now taken (loser)" },
   { type: "listing_expired_no_bids", label: "Auction ended, no bids" },
   { type: "referral_reward", label: "Referral reward" },
+  { type: "launch_promo_active", label: "Launch promo active" },
+  { type: "launch_promo_progress", label: "Launch promo progress" },
+  { type: "launch_promo_ended", label: "Launch promo ended" },
 ];
 
 /** Admin QA: in-app notification samples (no email/SMS/push). */

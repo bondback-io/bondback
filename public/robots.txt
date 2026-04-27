@@ -1,0 +1,12 @@
+﻿# https://www.bondback.io — Bond Back
+User-agent: *
+Allow: /
+
+Disallow: /api/
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /settings/
+Disallow: /login
+Disallow: /signup
+
+Sitemap: https://www.bondback.io/sitemap.xml

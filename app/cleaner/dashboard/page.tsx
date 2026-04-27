@@ -56,6 +56,12 @@ import { getNotificationHref } from "@/lib/notifications/display";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import CleanerDashboardLoading from "./loading";
+import {
+  buildLaunchPromoDashboardModel,
+  type GlobalSettingsWithLaunchPromo,
+} from "@/lib/launch-promo";
+import { LaunchPromoStatusCard } from "@/components/dashboard/launch-promo-status-card";
+import { LaunchPromoDashboardBar } from "@/components/promo/launch-promo-dashboard-bar";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -301,6 +307,27 @@ async function CleanerDashboardContent() {
   const showWelcomeBanner =
     createdAtMs > 0 && nowMs - createdAtMs < welcomeWithinMs;
 
+  const platformFeePercentForPromo =
+    (globalForDash as { platform_fee_percentage?: number; fee_percentage?: number } | null)
+      ?.platform_fee_percentage ??
+    (globalForDash as { fee_percentage?: number } | null)?.fee_percentage ??
+    12;
+  const launchPromoCleanerUsed = Math.max(
+    0,
+    Math.floor(
+      Number(
+        (profile as ProfileRow & { launch_promo_cleaner_jobs_used?: number })
+          .launch_promo_cleaner_jobs_used ?? 0
+      )
+    )
+  );
+  const launchPromoModel = buildLaunchPromoDashboardModel({
+    used: launchPromoCleanerUsed,
+    settings: globalForDash,
+    now: new Date(nowMs),
+    normalFeePercent: platformFeePercentForPromo,
+  });
+
   /** Live listings the cleaner has bid on (auction still open, no job assigned yet). */
   /** Include legacy rows where status was never set (null). Exclude cancelled only. */
   const { data: bidsRaw } = await supabase
@@ -390,6 +417,23 @@ async function CleanerDashboardContent() {
         </header>
       </div>
 
+      {launchPromoModel.phase === "active" ? (
+        <LaunchPromoDashboardBar
+          userId={user.id}
+          variant="cleaner"
+          used={launchPromoModel.used}
+          freeSlots={launchPromoModel.freeSlots}
+          endsAtIso={
+            globalForDash
+              ? (globalForDash as GlobalSettingsWithLaunchPromo).launch_promo_ends_at != null
+                ? String((globalForDash as GlobalSettingsWithLaunchPromo).launch_promo_ends_at)
+                : null
+              : null
+          }
+          settings={globalForDash as GlobalSettingsWithLaunchPromo | null}
+        />
+      ) : null}
+
       {showWelcomeBanner && (
         <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-background shadow-sm dark:border-emerald-800/60 dark:from-emerald-950/40 dark:to-gray-950">
           <CardHeader className="space-y-1 pb-2 pt-5 sm:pt-4">
@@ -402,6 +446,8 @@ async function CleanerDashboardContent() {
           </CardHeader>
         </Card>
       )}
+
+      <LaunchPromoStatusCard model={launchPromoModel} />
 
       {/* Quick stats — larger type + padding on mobile; rating stays prominent */}
       <QuickStatsRow

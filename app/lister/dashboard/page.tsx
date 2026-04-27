@@ -51,6 +51,12 @@ import {
 import { resolveListerDashboardJobSelect } from "@/lib/jobs/dashboard-jobs-select";
 import { isJobCancelledStatus, isListerJobAwaitingPayment } from "@/lib/jobs/job-status-helpers";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  buildLaunchPromoDashboardModel,
+  type GlobalSettingsWithLaunchPromo,
+} from "@/lib/launch-promo";
+import { LaunchPromoStatusCard } from "@/components/dashboard/launch-promo-status-card";
+import { LaunchPromoDashboardBar } from "@/components/promo/launch-promo-dashboard-bar";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -404,6 +410,22 @@ async function ListerDashboardContent() {
   const showWelcomeBanner =
     createdAtMs > 0 && nowMs - createdAtMs < welcomeWithinMs;
 
+  const launchPromoListerUsed = Math.max(
+    0,
+    Math.floor(
+      Number(
+        (profile as ProfileRow & { launch_promo_lister_jobs_used?: number })
+          .launch_promo_lister_jobs_used ?? 0
+      )
+    )
+  );
+  const launchPromoModel = buildLaunchPromoDashboardModel({
+    used: launchPromoListerUsed,
+    settings: globalSettings,
+    now: new Date(nowMs),
+    normalFeePercent: feePercentage,
+  });
+
   return (
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
       {/* Mobile: title — sticky; desktop: title only (no job search / radius — listers use Browse Cleaners / listings) */}
@@ -425,6 +447,23 @@ async function ListerDashboardContent() {
         </header>
       </div>
 
+      {launchPromoModel.phase === "active" ? (
+        <LaunchPromoDashboardBar
+          userId={user.id}
+          variant="lister"
+          used={launchPromoModel.used}
+          freeSlots={launchPromoModel.freeSlots}
+          endsAtIso={
+            globalSettings
+              ? (globalSettings as GlobalSettingsWithLaunchPromo).launch_promo_ends_at != null
+                ? String((globalSettings as GlobalSettingsWithLaunchPromo).launch_promo_ends_at)
+                : null
+              : null
+          }
+          settings={globalSettings as GlobalSettingsWithLaunchPromo | null}
+        />
+      ) : null}
+
       {showWelcomeBanner && (
         <Card className="border-sky-200/80 bg-gradient-to-br from-sky-50 to-background shadow-sm dark:border-sky-800/60 dark:from-sky-950/40 dark:to-gray-950">
           <CardHeader className="space-y-1 pb-2 pt-5 sm:pt-4">
@@ -437,6 +476,8 @@ async function ListerDashboardContent() {
           </CardHeader>
         </Card>
       )}
+
+      <LaunchPromoStatusCard model={launchPromoModel} />
 
       {/* Quick stats — horizontal scroll on mobile; larger touch + type on small screens */}
       <QuickStatsRow

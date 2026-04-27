@@ -14,6 +14,10 @@ import {
   resolvePlatformFeePercent,
 } from "@/lib/platform-fee";
 import {
+  fetchListerPlatformFeePercentWithLaunchPromo,
+  incrementLaunchPromoJobCompletionsIfNeeded,
+} from "@/lib/launch-promo";
+import {
   getStripeServer,
   createJobCheckoutSessionUrl,
   createJobPaymentIntentWithSavedMethod,
@@ -345,9 +349,10 @@ export async function createJobPayment(
   }
 
   const settings = await getGlobalSettings();
-  const feePercent = await fetchPlatformFeePercentForListing(
+  const feePercent = await fetchListerPlatformFeePercentWithLaunchPromo(
     supabase,
     j.listing_id,
+    j.lister_id,
     settings
   );
   const feeCents = Math.round((agreedCents * feePercent) / 100);
@@ -949,10 +954,11 @@ export async function createJobCheckoutSession(
   }
 
   const settings = await getGlobalSettings();
-  const feePercent = resolvePlatformFeePercent(
-    (listing as { platform_fee_percentage?: number | null }).platform_fee_percentage,
-    settings,
-    (listing as { service_type?: string | null }).service_type ?? null
+  const feePercent = await fetchListerPlatformFeePercentWithLaunchPromo(
+    supabase,
+    row.listing_id,
+    row.lister_id,
+    settings
   );
 
   const { data: listerProfile } = await supabase
@@ -1204,9 +1210,10 @@ export async function createJobTopUpCheckoutSession(
   }
 
   const settings = await getGlobalSettings();
-  const feePercent = await fetchPlatformFeePercentForListing(
+  const feePercent = await fetchListerPlatformFeePercentWithLaunchPromo(
     supabase,
     row.listing_id,
+    row.lister_id,
     settings
   );
 
@@ -1465,9 +1472,10 @@ export async function fulfillJobTopUpFromSession(
       return { ok: true, notice: "top_up_success" };
     }
 
-    const feePercent = await fetchPlatformFeePercentForListing(
+    const feePercent = await fetchListerPlatformFeePercentWithLaunchPromo(
       supabase,
       j.listing_id,
+      j.lister_id,
       await getGlobalSettings()
     );
     const feeCents = Math.round((agreedFromMeta * feePercent) / 100);
@@ -2672,7 +2680,7 @@ export async function releaseJobFunds(
   const { data: job, error: jobError } = await supabase
     .from("jobs")
     .select(
-      "id, listing_id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id, top_up_payments, disputed_at, dispute_reason, dispute_status"
+      "id, lister_id, listing_id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id, top_up_payments, disputed_at, dispute_reason, dispute_status"
     )
     .eq("id", numericJobId)
     .maybeSingle();
@@ -2682,6 +2690,7 @@ export async function releaseJobFunds(
   }
 
   const j = job as {
+    lister_id: string;
     listing_id: string | null;
     payment_intent_id: string | null;
     agreed_amount_cents: number | null;
@@ -2740,9 +2749,15 @@ export async function releaseJobFunds(
      * Transfer at most: min(cleaner leg amount, charge_remaining − platform fee on that leg).
      * If nothing remains for the cleaner, skip Connect transfers and still mark escrow settled.
      */
-    const listingFeePercent = await fetchPlatformFeePercentForListing(
+    const basePlatformFeePercent = await fetchPlatformFeePercentForListing(
       supabase,
       j.listing_id,
+      globalForRelease
+    );
+    const listingFeePercent = await fetchListerPlatformFeePercentWithLaunchPromo(
+      supabase,
+      j.listing_id,
+      j.lister_id,
       globalForRelease
     );
     const topUpsParsed = parseJobTopUpPayments(j.top_up_payments as never);
@@ -2905,6 +2920,34 @@ export async function releaseJobFunds(
 
     if (updateError) {
       return { ok: false, error: updateError.message };
+    }
+
+    const adminPromo = createSupabaseAdminClient();
+    if (adminPromo) {
+      try {
+        const promoResult = await incrementLaunchPromoJobCompletionsIfNeeded(adminPromo, {
+          listerId: j.lister_id,
+          winnerId: j.winner_id,
+          baseFeePercent: basePlatformFeePercent,
+          appliedFeePercent: listingFeePercent,
+        });
+        if (promoResult.bumped) {
+          const { handleLaunchPromoAfterFeeWaivedCompletion } = await import(
+            "@/lib/actions/launch-promo-transactional"
+          );
+          await handleLaunchPromoAfterFeeWaivedCompletion({
+            jobId: numericJobId,
+            listerId: j.lister_id,
+            winnerId: j.winner_id,
+            listerUsedAfter: promoResult.listerUsedAfter,
+            cleanerUsedAfter: promoResult.cleanerUsedAfter,
+          });
+        }
+      } catch (e) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[releaseJobFunds] launch promo increment failed", e);
+        }
+      }
     }
 
     const testMode = await isStripeTestMode();

@@ -152,6 +152,15 @@ export function buildNotificationPersistFields(
     case "recurring_occurrence_skipped":
       title = "Recurring visit skipped";
       break;
+    case "launch_promo_active":
+      title = "0% fee promo active";
+      break;
+    case "launch_promo_progress":
+      title = jobId != null ? `Launch promo · Job #${jobId}` : "Launch promo progress";
+      break;
+    case "launch_promo_ended":
+      title = "Launch promo ended";
+      break;
     default:
       title = "Update";
   }

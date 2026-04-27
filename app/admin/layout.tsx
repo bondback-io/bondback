@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getSessionWithProfile } from "@/lib/supabase/session";
+import { AdminNavExtrasProvider } from "@/components/admin/admin-nav-extras";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -29,6 +30,8 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="min-h-[60vh] bg-muted/15 dark:bg-gray-950/80">{children}</div>
+    <AdminNavExtrasProvider showPromoTools={session.isSuperAdmin === true}>
+      <div className="min-h-[60vh] bg-muted/15 dark:bg-gray-950/80">{children}</div>
+    </AdminNavExtrasProvider>
   );
 }

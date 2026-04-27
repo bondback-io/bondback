@@ -49,6 +49,12 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
     (typeof isAdminValue === "string" &&
       ["true", "t", "yes", "1"].includes(String(isAdminValue).toLowerCase().trim()));
 
+  const isSuperAdminRaw = (row as { is_super_admin?: unknown } | null)?.is_super_admin;
+  const isSuperAdmin =
+    isSuperAdminRaw === true ||
+    (typeof isSuperAdminRaw === "string" &&
+      ["true", "t", "yes", "1"].includes(String(isSuperAdminRaw).toLowerCase().trim()));
+
   /**
    * Roles: `[]` in DB = signed up but not yet chosen lister/cleaner (Airtasker-style flow).
    * `null` on legacy rows = treat as lister-only for backwards compatibility.
@@ -101,6 +107,7 @@ export const getSessionWithProfile = cache(async (): Promise<SessionWithProfile 
     roles,
     activeRole,
     isAdmin,
+    isSuperAdmin: isAdmin ? isSuperAdmin : false,
   };
   return out;
 });

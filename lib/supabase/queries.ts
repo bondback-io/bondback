@@ -74,7 +74,7 @@ export const PROFILE_ADMIN_TABLE_SELECT = PROFILE_TYPED_FULL_SELECT;
 
 /** Lister dashboard — `getProfileCompletion` (lister branch) + welcome banner. */
 export const PROFILE_LISTER_DASHBOARD_SELECT =
-  "id, roles, active_role, full_name, phone, suburb, created_at, stripe_connect_id, stripe_onboarding_complete";
+  "id, roles, active_role, full_name, phone, suburb, created_at, stripe_connect_id, stripe_onboarding_complete, launch_promo_lister_jobs_used, launch_promo_cleaner_jobs_used";
 
 /**
  * Cleaner dashboard — same columns as lister dashboard.

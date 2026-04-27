@@ -125,6 +125,22 @@ export async function createListingForPublish(
   // Lister "listing live" + cleaner radius alerts run once from the client after photos/cover
   // are saved (`new-listing-form.tsx`). Do not schedule here — `after()` would duplicate those calls.
 
+  if (admin) {
+    const { count, error: countErr } = await admin
+      .from("listings")
+      .select("id", { count: "exact", head: true })
+      .eq("lister_id", user.id);
+    if (!countErr && count === 1) {
+      import("@/lib/actions/launch-promo-transactional")
+        .then((m) => m.notifyLaunchPromoInAppFirstListingIfNeeded(user.id))
+        .catch((e) => {
+          console.warn("[createListingForPublish] launch_promo_first_listing_notify", {
+            message: e instanceof Error ? e.message : String(e),
+          });
+        });
+    }
+  }
+
   return { ok: true, id: String(data.id) };
 }
 

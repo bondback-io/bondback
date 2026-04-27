@@ -31,6 +31,8 @@ export type SessionWithProfile = {
   activeRole: ProfileRole | null;
   /** True when profiles.is_admin = true for this user. */
   isAdmin?: boolean;
+  /** True when profiles.is_super_admin = true (Promo Tools, etc.). Still requires is_admin. */
+  isSuperAdmin?: boolean;
 };
 
 /** Vehicle type for cleaner profile */

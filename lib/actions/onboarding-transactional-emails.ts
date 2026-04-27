@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getGlobalSettings, getEmailTemplateOverrides } from "@/lib/actions/global-settings";
 import { getNotificationPrefs } from "@/lib/supabase/admin";
 import { buildTutorialEmail, buildWelcomeEmail, sendEmail } from "@/lib/notifications/email";
+import { sendLaunchPromoWelcomeEmailIfNeeded } from "@/lib/actions/launch-promo-transactional";
 import type { ProfileRole } from "@/lib/types";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import { DEFAULT_RESEND_FROM } from "@/lib/email-default-from";
@@ -124,6 +125,7 @@ export async function sendWelcomeEmailAfterEmailVerification(params: {
   const trigger = params.trigger ?? "auth_session";
   logEmailEnvSnapshot(`welcome:${trigger}`);
 
+  try {
   const email =
     params.session.user.email?.trim() ||
     (await (async () => {
@@ -278,6 +280,23 @@ export async function sendWelcomeEmailAfterEmailVerification(params: {
   console.info("[email:welcome]", { outcome: "sent", userId: params.userId, trigger });
   console.info("[email:user-journey] welcome_sent", { userId: params.userId, trigger });
   return { ok: true };
+  } finally {
+    if (!params.force) {
+      try {
+        await sendLaunchPromoWelcomeEmailIfNeeded({
+          userId: params.userId,
+          session: params.session,
+          trigger,
+        });
+      } catch (e) {
+        console.warn("[email:launch_promo_welcome] hook_failed", {
+          userId: params.userId,
+          trigger,
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+  }
 }
 
 /**

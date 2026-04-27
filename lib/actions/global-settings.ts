@@ -111,6 +111,11 @@ type GlobalSettingsRow = {
   allow_low_amount_listings?: boolean;
   /** When true, new listing form may offer a 2-minute auction (duration_days = 0 sentinel). */
   allow_two_minute_auction_test?: boolean;
+  /** 0% platform fee launch promo — see lib/launch-promo.ts */
+  launch_promo_active?: boolean | null;
+  launch_promo_ends_at?: string | null;
+  launch_promo_free_job_slots?: number | null;
+  launch_promo_show_bond_pro_nudge?: boolean | null;
   /** Default light/dark for guests and new signups. */
   default_site_theme?: string | null;
   /** Cleaner new listing #1 (within preferred km). Requires sql/20260417100000_global_settings_new_listing_channel_toggles.sql */

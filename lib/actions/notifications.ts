@@ -58,7 +58,10 @@ export type NotificationType =
   | "listing_expired_no_bids"
   | "recurring_next_visit"
   | "recurring_contract"
-  | "recurring_occurrence_skipped";
+  | "recurring_occurrence_skipped"
+  | "launch_promo_active"
+  | "launch_promo_progress"
+  | "launch_promo_ended";
 
 export type NewJobChannelDelivery = Partial<{
   email: boolean;
@@ -718,6 +721,22 @@ export async function sendAdminTestNotificationByType(
         listingTitle: "2 Bed Unit",
         adminTest: true,
       },
+    },
+    launch_promo_active: {
+      jobId: null,
+      message:
+        "Sample: 🎉 Your 0% Fee Promo is Active! You have 2 free jobs remaining.",
+      options: { adminTest: true },
+    },
+    launch_promo_progress: {
+      jobId: null,
+      message: "Sample: 1 of 2 free jobs used. One more job with 0% fee!",
+      options: { adminTest: true },
+    },
+    launch_promo_ended: {
+      jobId: null,
+      message: "Sample: Your launch promo has ended. Normal 12% fee now applies.",
+      options: { adminTest: true },
     },
   };
 

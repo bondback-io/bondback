@@ -21,6 +21,9 @@ import { JobCancelledByLister } from "@/emails/JobCancelledByLister";
 import { NewBid } from "@/emails/NewBid";
 import { PaymentReceipt } from "@/emails/PaymentReceipt";
 import { Welcome } from "@/emails/Welcome";
+import { LaunchPromoWelcome } from "@/emails/LaunchPromoWelcome";
+import { LaunchPromoProgress } from "@/emails/LaunchPromoProgress";
+import { LaunchPromoEndingSoon } from "@/emails/LaunchPromoEndingSoon";
 import { ListerTutorial } from "@/emails/ListerTutorial";
 import { CleanerTutorial } from "@/emails/CleanerTutorial";
 import { GenericNotification } from "@/emails/GenericNotification";
@@ -784,6 +787,62 @@ export async function buildTutorialEmail(
     });
     throw e;
   }
+  return { subject, html };
+}
+
+export async function buildLaunchPromoWelcomeEmail(
+  firstName: string | undefined,
+  role: "lister" | "cleaner" | "both",
+  freeJobSlots: number
+): Promise<{ subject: string; html: string }> {
+  const n = Math.max(1, Math.floor(freeJobSlots));
+  const subject =
+    n === 2
+      ? "Welcome to Bond Back – Your First 2 Jobs Are Fee-Free! 🎉"
+      : `Welcome to Bond Back – Your first ${n} jobs are fee-free! 🎉`;
+  const templateProps = {
+    firstName: firstName?.trim() || undefined,
+    role,
+    freeJobSlots,
+  };
+  const element = React.createElement(LaunchPromoWelcome, templateProps);
+  const html = await render(element);
+  return { subject, html };
+}
+
+export async function buildLaunchPromoProgressEmail(params: {
+  firstName: string | undefined;
+  role: "lister" | "cleaner";
+  completedCount: number;
+  freeJobSlots: number;
+}): Promise<{ subject: string; html: string }> {
+  const n = Math.max(1, Math.floor(params.freeJobSlots));
+  const done = Math.max(1, Math.min(params.completedCount, n));
+  const subject = `Great work! ${done} of ${n} free jobs completed ✅`;
+  const element = React.createElement(LaunchPromoProgress, {
+    firstName: params.firstName?.trim() || undefined,
+    role: params.role,
+    completedCount: params.completedCount,
+    freeJobSlots: params.freeJobSlots,
+  });
+  const html = await render(element);
+  return { subject, html };
+}
+
+export async function buildLaunchPromoEndingSoonEmail(params: {
+  firstName: string | undefined;
+  freeJobSlotsRemaining: number;
+  promoEndsAtIso?: string | null;
+  normalFeePercent: number;
+}): Promise<{ subject: string; html: string }> {
+  const subject = "Your 0% fee promo ends soon – don't miss out!";
+  const element = React.createElement(LaunchPromoEndingSoon, {
+    firstName: params.firstName?.trim() || undefined,
+    freeJobSlotsRemaining: params.freeJobSlotsRemaining,
+    promoEndsAtIso: params.promoEndsAtIso ?? null,
+    normalFeePercent: params.normalFeePercent,
+  });
+  const html = await render(element);
   return { subject, html };
 }
 

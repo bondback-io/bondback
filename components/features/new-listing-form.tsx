@@ -107,6 +107,7 @@ import {
   triggerNewListingJobAlerts,
 } from "@/lib/actions/listings";
 import { notifyListerListingLive } from "@/lib/actions/notifications";
+import { LaunchPromoListingFormBanner } from "@/components/promo/launch-promo-listing-form-banner";
 import {
   computeBaseListingPriceAud,
   getListingAddonPriceFromModifiers,
@@ -489,6 +490,12 @@ export type NewListingFormProps = {
   allowLowAmountListings?: boolean;
   /** When true, auction duration may include a 2-minute test option (admin global setting). */
   allowTwoMinuteAuctionTest?: boolean;
+  /** Launch promo contextual banner (lister still has free fee slots). */
+  launchPromo?: {
+    userId: string;
+    used: number;
+    freeSlots: number;
+  };
 };
 
 function platformFeeCents(jobAmountDollars: number, feePct: number): number {
@@ -525,6 +532,7 @@ export function NewListingForm({
   defaultBondCleanerChecklistItems,
   allowLowAmountListings = false,
   allowTwoMinuteAuctionTest = false,
+  launchPromo,
 }: NewListingFormProps) {
   const minReserveAud = allowLowAmountListings
     ? LOW_AMOUNT_MIN_RESERVE_AUD
@@ -1321,6 +1329,13 @@ export function NewListingForm({
             void form.handleSubmit(onSubmit)();
           }}
         />
+        {launchPromo ? (
+          <LaunchPromoListingFormBanner
+            userId={launchPromo.userId}
+            used={launchPromo.used}
+            freeSlots={launchPromo.freeSlots}
+          />
+        ) : null}
         <header className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-sky-50/40 px-4 py-5 shadow-sm ring-1 ring-emerald-500/10 dark:border-emerald-800/60 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25 dark:ring-emerald-400/10 sm:px-6 sm:py-6">
           <div
             className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl dark:bg-emerald-500/15"

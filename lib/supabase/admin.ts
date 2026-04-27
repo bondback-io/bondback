@@ -106,6 +106,7 @@ export function syntheticProfileFromAuthUser(u: User): ProfileRow {
     equipment_notes: null,
     email_preferences_locked: null,
     is_admin: md.is_admin === true ? true : null,
+    is_super_admin: false,
     is_deleted: null,
     is_banned: false,
     banned_reason: null,
@@ -133,6 +134,8 @@ export function syntheticProfileFromAuthUser(u: User): ProfileRow {
     cleaner_username: null,
     cleaner_avg_rating: null,
     cleaner_total_reviews: null,
+    launch_promo_lister_jobs_used: 0,
+    launch_promo_cleaner_jobs_used: 0,
   };
 }
 

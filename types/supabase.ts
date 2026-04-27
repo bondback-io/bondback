@@ -43,6 +43,8 @@ export interface Database {
           email_force_disabled: boolean | null;
           email_preferences_locked: boolean | null;
           is_admin: boolean | null;
+          /** Super-admin-only tools (e.g. Promo Tools). Requires is_admin. */
+          is_super_admin: boolean;
           is_deleted: boolean | null;
           stripe_connect_id: string | null;
           stripe_onboarding_complete: boolean | null;
@@ -76,6 +78,10 @@ export interface Database {
           negative_stars: number;
           /** Temporary ban end time (cleaner marketplace). */
           ban_until: string | null;
+          /** Completed jobs where this user was lister and 0% launch promo fee applied. */
+          launch_promo_lister_jobs_used: number;
+          /** Completed jobs where this user was winning cleaner when lister 0% promo applied. */
+          launch_promo_cleaner_jobs_used: number;
         };
         Insert: {
           id: string;
@@ -106,6 +112,7 @@ export interface Database {
           email_force_disabled?: boolean | null;
           email_preferences_locked?: boolean | null;
           is_admin?: boolean | null;
+          is_super_admin?: boolean;
           is_deleted?: boolean | null;
           stripe_connect_id?: string | null;
           stripe_onboarding_complete?: boolean | null;
@@ -132,6 +139,8 @@ export interface Database {
           banned_reason?: string | null;
           negative_stars?: number;
           ban_until?: string | null;
+          launch_promo_lister_jobs_used?: number;
+          launch_promo_cleaner_jobs_used?: number;
         };
         Update: {
           roles?: string[] | null;
@@ -161,6 +170,7 @@ export interface Database {
           email_force_disabled?: boolean | null;
           email_preferences_locked?: boolean | null;
           is_admin?: boolean | null;
+          is_super_admin?: boolean;
           is_deleted?: boolean | null;
           stripe_connect_id?: string | null;
           stripe_onboarding_complete?: boolean | null;
@@ -186,6 +196,8 @@ export interface Database {
           banned_reason?: string | null;
           negative_stars?: number;
           ban_until?: string | null;
+          launch_promo_lister_jobs_used?: number;
+          launch_promo_cleaner_jobs_used?: number;
         };
         Relationships: [
           {
@@ -890,7 +902,10 @@ export interface Database {
             | "lister_payout_blocked_cleaner_stripe"
             | "bid_outbid"
             | "listing_assigned_buy_now"
-            | "listing_expired_no_bids";
+            | "listing_expired_no_bids"
+            | "launch_promo_active"
+            | "launch_promo_progress"
+            | "launch_promo_ended";
           job_id: number | null;
           message_text: string;
           /** Short label for lists (e.g. New bid · Job #12). */
@@ -931,7 +946,10 @@ export interface Database {
             | "lister_payout_blocked_cleaner_stripe"
             | "bid_outbid"
             | "listing_assigned_buy_now"
-            | "listing_expired_no_bids";
+            | "listing_expired_no_bids"
+            | "launch_promo_active"
+            | "launch_promo_progress"
+            | "launch_promo_ended";
           job_id?: number | null;
           message_text: string;
           title?: string | null;
@@ -969,7 +987,10 @@ export interface Database {
             | "lister_payout_blocked_cleaner_stripe"
             | "bid_outbid"
             | "listing_assigned_buy_now"
-            | "listing_expired_no_bids";
+            | "listing_expired_no_bids"
+            | "launch_promo_active"
+            | "launch_promo_progress"
+            | "launch_promo_ended";
           job_id?: number | null;
           message_text?: string;
           title?: string | null;

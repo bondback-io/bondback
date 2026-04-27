@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { buildHomePageMetadata } from "@/lib/seo/home-metadata";
 import { buildHomePageJsonLd } from "@/lib/seo/home-json-ld";
 import { getSiteUrl } from "@/lib/site";
+import { LaunchPromoHomepageHero } from "@/components/promo/launch-promo-homepage-hero";
 
 export const metadata = buildHomePageMetadata();
 
@@ -56,14 +57,16 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   const homeJsonLd = buildHomePageJsonLd(site.origin);
 
   return (
-    <main className="min-h-[85vh] bg-background pb-20 pt-6 dark:bg-gray-950 sm:pb-24 sm:pt-10 md:pt-14">
+    <main className="min-h-[85vh] bg-background pb-20 pt-0 dark:bg-gray-950 sm:pb-24 md:pt-0">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }}
       />
       {showAdminOnlyToast && <AdminOnlyToast />}
 
-      <div className="container max-w-5xl px-4 sm:px-6">
+      <LaunchPromoHomepageHero />
+
+      <div className="container max-w-5xl px-4 pt-6 sm:px-6 sm:pt-10 md:pt-14">
         {/* Hero */}
         <section
           className={cn(
