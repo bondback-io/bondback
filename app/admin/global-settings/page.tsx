@@ -15,7 +15,13 @@ import {
 } from "@/lib/pricing-modifiers";
 import { parsePlatformFeePercentByServiceType } from "@/lib/platform-fee";
 import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
-import { launchPromoFreeJobSlots } from "@/lib/launch-promo";
+import {
+  launchPromoFreeJobSlots,
+  launchPromoMarketingMonthlyAirbnbRecurringCap,
+  launchPromoMarketingPriceCapAud,
+  launchPromoZeroFeeServiceTypes,
+  type GlobalSettingsWithLaunchPromo,
+} from "@/lib/launch-promo";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 async function requireAdmin() {
@@ -198,6 +204,15 @@ export default async function AdminGlobalSettingsPage() {
         launchPromoShowBondProNudge:
           (existing as { launch_promo_show_bond_pro_nudge?: boolean | null })
             .launch_promo_show_bond_pro_nudge === true,
+        launchPromoZeroFeeServiceTypes: launchPromoZeroFeeServiceTypes(
+          existing as GlobalSettingsWithLaunchPromo | null
+        ),
+        launchPromoMarketingPriceCapAud: launchPromoMarketingPriceCapAud(
+          existing as GlobalSettingsWithLaunchPromo | null
+        ),
+        launchPromoMarketingMonthlyAirbnbRecurringCap: launchPromoMarketingMonthlyAirbnbRecurringCap(
+          existing as GlobalSettingsWithLaunchPromo | null
+        ),
         defaultSiteTheme: parseDefaultSiteThemeFromSettings(existing),
         serviceAddonsChecklists: mergeServiceAddonsChecklists(
           (existing as { service_addons_checklists?: unknown }).service_addons_checklists

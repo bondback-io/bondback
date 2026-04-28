@@ -5,6 +5,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,11 @@ import {
   serviceTypeLabel,
   type ServiceTypeKey,
 } from "@/lib/service-types";
+import {
+  DEFAULT_LAUNCH_PROMO_ZERO_FEE_SERVICE_TYPES,
+  LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP,
+  LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD,
+} from "@/lib/launch-promo";
 import {
   mergeServiceAddonsChecklists,
   serializeServiceAddonsChecklistsForDb,
@@ -250,6 +256,27 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   );
   const [launchPromoShowBondProNudge, setLaunchPromoShowBondProNudge] = React.useState(
     initial?.launchPromoShowBondProNudge === true
+  );
+  const [launchPromoZeroFeeTypes, setLaunchPromoZeroFeeTypes] = React.useState<ServiceTypeKey[]>(() => {
+    const init = initial?.launchPromoZeroFeeServiceTypes;
+    if (Array.isArray(init) && init.length > 0) {
+      return SERVICE_TYPES.filter((k) => init.includes(k));
+    }
+    return [...DEFAULT_LAUNCH_PROMO_ZERO_FEE_SERVICE_TYPES];
+  });
+  const [launchPromoMarketingPriceCapAudState, setLaunchPromoMarketingPriceCapAudState] = React.useState(
+    () =>
+      typeof initial?.launchPromoMarketingPriceCapAud === "number" &&
+      Number.isFinite(initial.launchPromoMarketingPriceCapAud)
+        ? initial.launchPromoMarketingPriceCapAud
+        : LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD
+  );
+  const [launchPromoMarketingMonthlyCapState, setLaunchPromoMarketingMonthlyCapState] = React.useState(
+    () =>
+      typeof initial?.launchPromoMarketingMonthlyAirbnbRecurringCap === "number" &&
+      Number.isFinite(initial.launchPromoMarketingMonthlyAirbnbRecurringCap)
+        ? initial.launchPromoMarketingMonthlyAirbnbRecurringCap
+        : LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP
   );
   const [defaultSiteTheme, setDefaultSiteTheme] = React.useState<"light" | "dark">(
     initial?.defaultSiteTheme === "light" ? "light" : "dark"
@@ -618,6 +645,18 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
         Math.min(20, Math.floor(Number(launchPromoFreeJobSlotsState) || 2))
       ),
       launchPromoShowBondProNudge,
+      launchPromoZeroFeeServiceTypes: launchPromoZeroFeeTypes,
+      launchPromoMarketingPriceCapAud: Math.max(
+        0,
+        Math.min(999999, Math.round(Number(launchPromoMarketingPriceCapAudState) || 0))
+      ),
+      launchPromoMarketingMonthlyAirbnbRecurringCap: Math.max(
+        0,
+        Math.min(
+          100,
+          Math.floor(Number(launchPromoMarketingMonthlyCapState) || 0)
+        )
+      ),
       defaultSiteTheme,
       serviceAddonsChecklists,
     };
@@ -874,6 +913,84 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
             <p className="text-[11px] text-emerald-900/75 dark:text-emerald-200/80">
               How many completed jobs per lister (and cleaner promo logic) get 0% platform fee while the promo is open.
             </p>
+          </div>
+          <div className="space-y-2 rounded-lg border border-emerald-200/70 bg-white/60 px-3 py-3 dark:border-emerald-800/50 dark:bg-emerald-950/25">
+            <p className="text-xs font-medium text-emerald-950 dark:text-emerald-100">
+              0% fee applies to these listing types
+            </p>
+            <p className="text-[11px] text-emerald-900/80 dark:text-emerald-200/85">
+              Checked types can use fee-free slots at escrow release (when the lister still has slots and the promo
+              window is open). Leave all unchecked to disable 0% for every service type.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {SERVICE_TYPES.map((svc) => (
+                <label
+                  key={svc}
+                  htmlFor={`launch-promo-svc-${svc}`}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border border-emerald-200/60 bg-white/80 px-2 py-2 dark:border-emerald-800/50 dark:bg-emerald-950/30"
+                >
+                  <Checkbox
+                    id={`launch-promo-svc-${svc}`}
+                    checked={launchPromoZeroFeeTypes.includes(svc)}
+                    onCheckedChange={() => {
+                      setLaunchPromoZeroFeeTypes((prev) => {
+                        const next = prev.includes(svc)
+                          ? prev.filter((x) => x !== svc)
+                          : [...prev, svc];
+                        return SERVICE_TYPES.filter((k) => next.includes(k));
+                      });
+                    }}
+                  />
+                  <span className="text-[11px] font-medium text-emerald-950 dark:text-emerald-100">
+                    {serviceTypeLabel(svc)}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:max-w-md sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label
+                htmlFor="launch-promo-mkt-price-cap"
+                className="text-xs font-medium text-emerald-950 dark:text-emerald-100"
+              >
+                Marketing: price cap (AUD)
+              </Label>
+              <Input
+                id="launch-promo-mkt-price-cap"
+                type="number"
+                min={0}
+                max={999999}
+                step={1}
+                value={launchPromoMarketingPriceCapAudState}
+                onChange={(e) => setLaunchPromoMarketingPriceCapAudState(Number(e.target.value))}
+                className="text-xs sm:text-sm tabular-nums"
+              />
+              <p className="text-[10px] text-emerald-900/75 dark:text-emerald-200/80">
+                Dashboard copy for the planned monthly Airbnb/recurring tier (not enforced in checkout yet).
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label
+                htmlFor="launch-promo-mkt-monthly"
+                className="text-xs font-medium text-emerald-950 dark:text-emerald-100"
+              >
+                Marketing: jobs / month
+              </Label>
+              <Input
+                id="launch-promo-mkt-monthly"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={launchPromoMarketingMonthlyCapState}
+                onChange={(e) => setLaunchPromoMarketingMonthlyCapState(Number(e.target.value))}
+                className="text-xs sm:text-sm tabular-nums"
+              />
+              <p className="text-[10px] text-emerald-900/75 dark:text-emerald-200/80">
+                Shown as “up to N jobs/mo” in tooltips; calendar enforcement is future work.
+              </p>
+            </div>
           </div>
           <div className="flex items-center justify-between gap-3">
             <Label

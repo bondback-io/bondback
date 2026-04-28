@@ -2,6 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import type { GlobalFeeSettings } from "@/lib/platform-fee";
 import { fetchPlatformFeePercentForListing } from "@/lib/platform-fee";
+import {
+  SERVICE_TYPES,
+  normalizeServiceType,
+  type ServiceTypeKey,
+} from "@/lib/service-types";
 
 /** Optional columns on `global_settings` (see supabase/sql/*_launch_promo.sql). */
 export type LaunchPromoGlobalFields = {
@@ -9,6 +14,12 @@ export type LaunchPromoGlobalFields = {
   launch_promo_ends_at?: string | null;
   launch_promo_free_job_slots?: number | null;
   launch_promo_show_bond_pro_nudge?: boolean | null;
+  /** Subset of `listings.service_type` values that may receive 0% fee during promo. */
+  launch_promo_zero_fee_service_types?: string[] | null;
+  /** Marketing copy: AUD starting-price ceiling for planned monthly Airbnb/recurring tier. */
+  launch_promo_marketing_price_cap_aud?: number | null;
+  /** Marketing copy: per-calendar-month job count for planned tier. */
+  launch_promo_marketing_monthly_airbnb_recurring_cap?: number | null;
 };
 
 export type GlobalSettingsWithLaunchPromo = GlobalFeeSettings & LaunchPromoGlobalFields;
@@ -17,20 +28,76 @@ const DEFAULT_FREE_SLOTS = 2;
 const MAX_FREE_SLOTS_CAP = 20;
 
 /**
- * Product marketing numbers (monthly Airbnb/recurring allowance is not fully tracked in DB yet;
- * dashboards use these for copy + tooltips; enforce price/month caps when you add migrations).
+ * Fallback marketing numbers when DB columns are missing (see `launchPromoMarketing*` helpers).
  */
 export const LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP = 2;
 export const LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD = 350;
 
-/** Bond + deep cleans always charge the normal platform fee (promo slots apply to other service types). */
-export function launchPromoZeroFeeEligibleForServiceType(
-  serviceType: string | null | undefined
+/** Default fee-free types when `launch_promo_zero_fee_service_types` is absent (historical: bond/deep excluded). */
+export const DEFAULT_LAUNCH_PROMO_ZERO_FEE_SERVICE_TYPES: readonly ServiceTypeKey[] = [
+  "airbnb_turnover",
+  "recurring_house_cleaning",
+] as const;
+
+export function launchPromoZeroFeeServiceTypes(
+  settings: GlobalSettingsWithLaunchPromo | null | undefined
+): ServiceTypeKey[] {
+  const raw = settings?.launch_promo_zero_fee_service_types;
+  if (raw === undefined || raw === null) {
+    return [...DEFAULT_LAUNCH_PROMO_ZERO_FEE_SERVICE_TYPES];
+  }
+  if (!Array.isArray(raw)) {
+    return [...DEFAULT_LAUNCH_PROMO_ZERO_FEE_SERVICE_TYPES];
+  }
+  const set = new Set<string>();
+  for (const x of raw) {
+    const t = String(x ?? "").trim().toLowerCase();
+    if ((SERVICE_TYPES as readonly string[]).includes(t)) set.add(t);
+  }
+  return SERVICE_TYPES.filter((k) => set.has(k));
+}
+
+export function launchPromoZeroFeeEligibleWithTypes(
+  serviceType: string | null | undefined,
+  eligibleTypes: readonly ServiceTypeKey[]
 ): boolean {
-  const t = String(serviceType ?? "").trim().toLowerCase();
-  if (!t) return true;
-  if (t === "bond_cleaning" || t === "deep_clean") return false;
-  return true;
+  const raw = String(serviceType ?? "").trim();
+  if (!raw) return true;
+  return eligibleTypes.includes(normalizeServiceType(raw));
+}
+
+/**
+ * Uses `launch_promo_zero_fee_service_types` from global settings when `settings` is passed;
+ * otherwise the default fee-free list (Airbnb + recurring only).
+ */
+export function launchPromoZeroFeeEligibleForServiceType(
+  serviceType: string | null | undefined,
+  settings?: GlobalSettingsWithLaunchPromo | null
+): boolean {
+  return launchPromoZeroFeeEligibleWithTypes(
+    serviceType,
+    launchPromoZeroFeeServiceTypes(settings ?? null)
+  );
+}
+
+export function launchPromoMarketingPriceCapAud(
+  settings: LaunchPromoGlobalFields | null | undefined
+): number {
+  const v = settings?.launch_promo_marketing_price_cap_aud;
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 999999) {
+    return Math.round(v);
+  }
+  return LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD;
+}
+
+export function launchPromoMarketingMonthlyAirbnbRecurringCap(
+  settings: LaunchPromoGlobalFields | null | undefined
+): number {
+  const v = settings?.launch_promo_marketing_monthly_airbnb_recurring_cap;
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100) {
+    return Math.floor(v);
+  }
+  return LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP;
 }
 
 export function launchPromoFreeJobSlots(
@@ -136,7 +203,7 @@ export async function fetchListerPlatformFeePercentWithLaunchPromo(
       .maybeSingle();
     serviceType = (data as { service_type?: string } | null)?.service_type ?? null;
   }
-  if (!launchPromoZeroFeeEligibleForServiceType(serviceType)) {
+  if (!launchPromoZeroFeeEligibleForServiceType(serviceType, settings)) {
     return base;
   }
 

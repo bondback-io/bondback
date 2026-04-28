@@ -9,6 +9,7 @@ import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
 import {
   isLaunchPromoWindowOpen,
   launchPromoFreeJobSlots,
+  launchPromoZeroFeeServiceTypes,
   type GlobalSettingsWithLaunchPromo,
 } from "@/lib/launch-promo";
 import { NewListingFormLazy } from "./new-listing-form-client";
@@ -164,6 +165,7 @@ const NewListingPage = async () => {
               userId: session.user.id,
               used: listerPromoUsed,
               freeSlots: promoFreeSlots,
+              zeroFeeServiceTypes: launchPromoZeroFeeServiceTypes(gsPromo),
             }
           : undefined
       }

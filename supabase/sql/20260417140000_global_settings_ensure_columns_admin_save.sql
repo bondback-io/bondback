@@ -117,6 +117,15 @@ ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS new_listing_outside_
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS new_listing_outside_push boolean NOT NULL DEFAULT true;
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS enable_daily_browse_jobs_nudge boolean NOT NULL DEFAULT true;
 
+-- Launch promo (see supabase/sql/20260426120000_launch_promo.sql + 20260428120000_launch_promo_admin_eligibility.sql)
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS launch_promo_active boolean NOT NULL DEFAULT true;
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS launch_promo_ends_at timestamptz NULL;
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS launch_promo_free_job_slots smallint NOT NULL DEFAULT 2;
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS launch_promo_show_bond_pro_nudge boolean NOT NULL DEFAULT false;
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS launch_promo_zero_fee_service_types text[] NOT NULL DEFAULT ARRAY['airbnb_turnover', 'recurring_house_cleaning']::text[];
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS launch_promo_marketing_price_cap_aud integer NOT NULL DEFAULT 350;
+ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS launch_promo_marketing_monthly_airbnb_recurring_cap smallint NOT NULL DEFAULT 2;
+
 -- Optional: admin cron status card (not required for save, but often deployed with app)
 ALTER TABLE public.global_settings ADD COLUMN IF NOT EXISTS notification_cron_run_status jsonb NOT NULL DEFAULT '{}'::jsonb;
 

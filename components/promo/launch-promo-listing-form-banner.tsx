@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { launchPromoZeroFeeEligibleForServiceType } from "@/lib/launch-promo";
+import {
+  launchPromoZeroFeeEligibleWithTypes,
+} from "@/lib/launch-promo";
+import { normalizeServiceType, serviceTypeLabel, type ServiceTypeKey } from "@/lib/service-types";
 
 const storageKey = (userId: string) => `bb_launch_promo_listing_form_v1:${userId}`;
 
@@ -12,10 +15,12 @@ export type LaunchPromoListingFormBannerProps = {
   userId: string;
   used: number;
   freeSlots: number;
-  /** Current draft service type; bond/deep are excluded from 0% fee. */
+  /** Current draft service type. */
   serviceType?: string | null;
-  /** Admin/default fee for this type; shown when bond/deep excludes 0%. */
+  /** Admin/default fee for this type; shown when this type is not fee-free. */
   standardFeePercent?: number;
+  /** Service types configured for 0% fee in global settings. */
+  zeroFeeServiceTypes: readonly ServiceTypeKey[];
 };
 
 export function LaunchPromoListingFormBanner({
@@ -24,6 +29,7 @@ export function LaunchPromoListingFormBanner({
   freeSlots,
   serviceType,
   standardFeePercent,
+  zeroFeeServiceTypes,
 }: LaunchPromoListingFormBannerProps) {
   const [dismissed, setDismissed] = useState(true);
 
@@ -47,13 +53,18 @@ export function LaunchPromoListingFormBanner({
   if (dismissed) return null;
 
   const remaining = Math.max(0, freeSlots - used);
-  const zeroFeeEligible = launchPromoZeroFeeEligibleForServiceType(serviceType);
+  const zeroFeeEligible = launchPromoZeroFeeEligibleWithTypes(serviceType, zeroFeeServiceTypes);
   const feeLabel =
     typeof standardFeePercent === "number" &&
     Number.isFinite(standardFeePercent) &&
     standardFeePercent >= 0
       ? `${standardFeePercent}%`
       : null;
+  const typeLabel = serviceTypeLabel(normalizeServiceType(serviceType ?? ""));
+  const eligibleSummary =
+    zeroFeeServiceTypes.length > 0
+      ? zeroFeeServiceTypes.map((k) => serviceTypeLabel(k)).join(", ")
+      : "none (admin has not enabled any types for 0% fee)";
 
   return (
     <div
@@ -93,9 +104,9 @@ export function LaunchPromoListingFormBanner({
                 Standard platform fee applies to this job type
               </p>
               <p className="text-xs text-emerald-900/85 dark:text-emerald-200/90 sm:text-sm">
-                Bond and deep cleans are not eligible for the 0% launch offer
-                {feeLabel ? ` — estimated fee for this listing is ${feeLabel}` : ""}. You still have{" "}
-                {remaining} of {freeSlots} free jobs on eligible listing types.
+                {typeLabel} is not in the fee-free service types for this promo
+                {feeLabel ? ` — estimated fee for this listing is ${feeLabel}` : ""}. You still have {remaining} of{" "}
+                {freeSlots} free jobs on eligible types: {eligibleSummary}.
               </p>
             </>
           )}

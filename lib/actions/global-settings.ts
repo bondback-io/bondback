@@ -116,6 +116,9 @@ type GlobalSettingsRow = {
   launch_promo_ends_at?: string | null;
   launch_promo_free_job_slots?: number | null;
   launch_promo_show_bond_pro_nudge?: boolean | null;
+  launch_promo_zero_fee_service_types?: string[] | null;
+  launch_promo_marketing_price_cap_aud?: number | null;
+  launch_promo_marketing_monthly_airbnb_recurring_cap?: number | null;
   /** Default light/dark for guests and new signups. */
   default_site_theme?: string | null;
   /** Cleaner new listing #1 (within preferred km). Requires sql/20260417100000_global_settings_new_listing_channel_toggles.sql */
@@ -196,6 +199,18 @@ function sanitizePricingBathroomRateByServiceForDb(
     }
   }
   return out;
+}
+
+function sanitizeLaunchPromoZeroFeeServiceTypesForDb(
+  input: ServiceTypeKey[] | null | undefined
+): string[] {
+  if (!Array.isArray(input)) return [];
+  const set = new Set<string>();
+  for (const x of input) {
+    const t = String(x ?? "").trim().toLowerCase();
+    if ((SERVICE_TYPES as readonly string[]).includes(t)) set.add(t);
+  }
+  return SERVICE_TYPES.filter((k) => set.has(k));
 }
 
 const PRICED_ADDON_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
@@ -528,6 +543,12 @@ export type SaveGlobalSettingsInput = {
   launchPromoFreeJobSlots?: number;
   /** After promo ends, dashboard may nudge Bond Pro subscription. */
   launchPromoShowBondProNudge?: boolean;
+  /** Service types that may use 0% platform fee during the launch promo (subset of marketplace types). */
+  launchPromoZeroFeeServiceTypes?: ServiceTypeKey[] | null;
+  /** Marketing/tooltip: AUD starting-price ceiling for planned monthly Airbnb+recurring tier. */
+  launchPromoMarketingPriceCapAud?: number;
+  /** Marketing/tooltip: jobs per calendar month for planned tier copy. */
+  launchPromoMarketingMonthlyAirbnbRecurringCap?: number;
 };
 
 export type SaveGlobalSettingsResult =
@@ -739,6 +760,19 @@ export async function saveGlobalSettings(
         ? Math.max(1, Math.min(20, Math.floor(data.launchPromoFreeJobSlots)))
         : 2,
     launch_promo_show_bond_pro_nudge: data.launchPromoShowBondProNudge === true,
+    launch_promo_zero_fee_service_types: sanitizeLaunchPromoZeroFeeServiceTypesForDb(
+      data.launchPromoZeroFeeServiceTypes ?? null
+    ),
+    launch_promo_marketing_price_cap_aud:
+      typeof data.launchPromoMarketingPriceCapAud === "number" &&
+      Number.isFinite(data.launchPromoMarketingPriceCapAud)
+        ? Math.max(0, Math.min(999999, Math.round(data.launchPromoMarketingPriceCapAud)))
+        : 350,
+    launch_promo_marketing_monthly_airbnb_recurring_cap:
+      typeof data.launchPromoMarketingMonthlyAirbnbRecurringCap === "number" &&
+      Number.isFinite(data.launchPromoMarketingMonthlyAirbnbRecurringCap)
+        ? Math.max(0, Math.min(100, Math.floor(data.launchPromoMarketingMonthlyAirbnbRecurringCap)))
+        : 2,
   };
 
   const { error } = admin
@@ -759,6 +793,10 @@ export async function saveGlobalSettings(
             ? " Add column global_settings.service_addons_checklists (see sql/20260419120000_global_settings_service_addons_checklists.sql)."
           : msg.includes("lister_nonresponsive_cancel_idle_days")
             ? " Add column global_settings.lister_nonresponsive_cancel_idle_days (see supabase/sql/20260418100000_global_settings_lister_nonresponsive_cancel_idle_days.sql)."
+          : msg.includes("launch_promo_zero_fee_service_types") ||
+              msg.includes("launch_promo_marketing_price_cap_aud") ||
+              msg.includes("launch_promo_marketing_monthly_airbnb_recurring_cap")
+            ? " Add launch promo admin columns (see supabase/sql/20260428120000_launch_promo_admin_eligibility.sql) or run supabase/sql/20260417140000_global_settings_ensure_columns_admin_save.sql."
           : " Run supabase/sql/20260417140000_global_settings_ensure_columns_admin_save.sql in the Supabase SQL editor (adds all columns used by Admin → Global Settings save), or apply the individual migrations under supabase/migrations."
         : "";
     return { ok: false, error: msg + hint };

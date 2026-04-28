@@ -4,11 +4,13 @@ import { Info, Sparkles } from "lucide-react";
 import {
   buildLaunchPromoDashboardModel,
   launchPromoCalendarDaysRemaining,
-  LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP,
-  LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD,
+  launchPromoMarketingMonthlyAirbnbRecurringCap,
+  launchPromoMarketingPriceCapAud,
+  launchPromoZeroFeeServiceTypes,
   type GlobalSettingsWithLaunchPromo,
   type LaunchPromoDashboardModel,
 } from "@/lib/launch-promo";
+import { SERVICE_TYPES, serviceTypeLabel } from "@/lib/service-types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -37,13 +39,25 @@ export function LaunchPromoStatusCard({
   const ctaHref = variant === "lister" ? "/listings/new" : "/find-jobs";
   const ctaLabel = variant === "lister" ? "Create Another Free Job" : "Browse Jobs as Cleaner";
 
+  const zeroFeeTypes = launchPromoZeroFeeServiceTypes(settings);
+  const feeFreeLabels = zeroFeeTypes.map((k) => serviceTypeLabel(k));
+  const standardFeeLabels = SERVICE_TYPES.filter((k) => !zeroFeeTypes.includes(k)).map((k) =>
+    serviceTypeLabel(k)
+  );
+  const mktMonthly = launchPromoMarketingMonthlyAirbnbRecurringCap(settings);
+  const mktPrice = launchPromoMarketingPriceCapAud(settings);
+
   const feeRulesTooltip =
-    "Bond cleaning and deep / move-in cleans always use the standard platform fee at checkout. " +
-    "Airbnb turnover and recurring house cleaning can use your launch fee-free job slots while the promo is active.";
+    (feeFreeLabels.length > 0
+      ? `Fee-free at escrow release: ${feeFreeLabels.join(", ")}. `
+      : "No service types are set for fee-free promo — standard fees apply everywhere. ") +
+    (standardFeeLabels.length > 0
+      ? `Standard platform fee for: ${standardFeeLabels.join(", ")}.`
+      : "");
 
   const monthlyTooltip =
-    `Planned: up to ${LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP} Airbnb or recurring listings per calendar month ` +
-    `with starting price at or below $${LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD} AUD may stack with other offers. ` +
+    `Planned: up to ${mktMonthly} Airbnb or recurring listings per calendar month ` +
+    `with starting price at or below $${mktPrice} AUD may stack with other offers. ` +
     "Monthly usage counters will appear here when enabled in the backend.";
 
   if (model.phase === "ended") {
@@ -113,8 +127,8 @@ export function LaunchPromoStatusCard({
           <span className="tabular-nums font-bold">{model.freeSlots}</span> fee-free jobs.
         </p>
         <p className="mt-2 text-sm leading-relaxed text-emerald-900/90 dark:text-emerald-200/90" title={feeRulesTooltip}>
-          Standard platform fees apply to your next completions. Bond &amp; deep cleans always used the normal fee;
-          other service types could use your launch promo slots first.
+          Standard platform fees apply to your next completions. Fee-free slots applied first to:{" "}
+          {feeFreeLabels.length > 0 ? feeFreeLabels.join(", ") : "no types (check admin settings)"}.
         </p>
         {model.showBondProNudge ? (
           <p className="mt-3 text-sm text-emerald-800 dark:text-emerald-300">
@@ -217,11 +231,11 @@ export function LaunchPromoStatusCard({
           <span className="inline-flex items-start gap-1.5">
             <Info className={cn(infoIconClass, "mt-0.5")} aria-hidden />
             <span>
-              <span className="font-semibold">Fee-free slots</span> apply at escrow release for eligible service types
-              (not bond or deep clean).{" "}
+              <span className="font-semibold">Fee-free slots</span> apply at escrow release for:{" "}
+              {feeFreeLabels.length > 0 ? feeFreeLabels.join(", ") : "no types (admin config)"}.{" "}
               <span className="whitespace-nowrap font-medium" title={monthlyTooltip}>
-                Free tier: up to {LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP} Airbnb / recurring jobs / mo
-                (≤${LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD} start) — full calendar tracking coming soon.
+                Free tier: up to {mktMonthly} Airbnb / recurring jobs / mo (≤${mktPrice} start) — full calendar
+                tracking coming soon.
               </span>
             </span>
           </span>
@@ -230,8 +244,9 @@ export function LaunchPromoStatusCard({
         <p className="flex items-start gap-1.5 text-[11px] leading-snug text-emerald-900/75 dark:text-emerald-300/80 sm:text-xs">
           <Info className={cn(infoIconClass, "mt-0.5")} aria-hidden />
           <span title={feeRulesTooltip}>
-            Bond cleaning &amp; deep cleans: always normal platform fee. Airbnb turnover &amp; recurring: can use
-            launch promo slots first.
+            {standardFeeLabels.length > 0
+              ? `${standardFeeLabels.join(", ")}: standard platform fee unless included above.`
+              : "All marketplace types may use fee-free slots per admin configuration."}
           </span>
         </p>
       </div>

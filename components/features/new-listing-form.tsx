@@ -110,7 +110,7 @@ import { notifyListerListingLive } from "@/lib/actions/notifications";
 import { LaunchPromoListingFormBanner } from "@/components/promo/launch-promo-listing-form-banner";
 import {
   listerQualifiesForZeroPlatformFee,
-  launchPromoZeroFeeEligibleForServiceType,
+  launchPromoZeroFeeEligibleWithTypes,
 } from "@/lib/launch-promo";
 import {
   computeBaseListingPriceAud,
@@ -499,6 +499,7 @@ export type NewListingFormProps = {
     userId: string;
     used: number;
     freeSlots: number;
+    zeroFeeServiceTypes: ServiceTypeKey[];
   };
 };
 
@@ -660,7 +661,7 @@ export function NewListingForm({
         freeSlots: launchPromo.freeSlots,
         promoOpen: true,
       }) &&
-      launchPromoZeroFeeEligibleForServiceType(serviceTypeWatched)
+      launchPromoZeroFeeEligibleWithTypes(serviceTypeWatched, launchPromo.zeroFeeServiceTypes)
     ) {
       return 0;
     }
@@ -1357,6 +1358,7 @@ export function NewListingForm({
             freeSlots={launchPromo.freeSlots}
             serviceType={serviceTypeWatched}
             standardFeePercent={effectiveFeePercent}
+            zeroFeeServiceTypes={launchPromo.zeroFeeServiceTypes}
           />
         ) : null}
         <header className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-sky-50/40 px-4 py-5 shadow-sm ring-1 ring-emerald-500/10 dark:border-emerald-800/60 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25 dark:ring-emerald-400/10 sm:px-6 sm:py-6">
