@@ -4,10 +4,6 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import {
-  launchPromoZeroFeeEligibleWithTypes,
-} from "@/lib/launch-promo";
-import { normalizeServiceType, serviceTypeLabel, type ServiceTypeKey } from "@/lib/service-types";
 
 const storageKey = (userId: string) => `bb_launch_promo_listing_form_v1:${userId}`;
 
@@ -15,21 +11,12 @@ export type LaunchPromoListingFormBannerProps = {
   userId: string;
   used: number;
   freeSlots: number;
-  /** Current draft service type. */
-  serviceType?: string | null;
-  /** Admin/default fee for this type; shown when this type is not fee-free. */
-  standardFeePercent?: number;
-  /** Service types configured for 0% fee in global settings. */
-  zeroFeeServiceTypes: readonly ServiceTypeKey[];
 };
 
 export function LaunchPromoListingFormBanner({
   userId,
   used,
   freeSlots,
-  serviceType,
-  standardFeePercent,
-  zeroFeeServiceTypes,
 }: LaunchPromoListingFormBannerProps) {
   const [dismissed, setDismissed] = useState(true);
 
@@ -53,18 +40,6 @@ export function LaunchPromoListingFormBanner({
   if (dismissed) return null;
 
   const remaining = Math.max(0, freeSlots - used);
-  const zeroFeeEligible = launchPromoZeroFeeEligibleWithTypes(serviceType, zeroFeeServiceTypes);
-  const feeLabel =
-    typeof standardFeePercent === "number" &&
-    Number.isFinite(standardFeePercent) &&
-    standardFeePercent >= 0
-      ? `${standardFeePercent}%`
-      : null;
-  const typeLabel = serviceTypeLabel(normalizeServiceType(serviceType ?? ""));
-  const eligibleSummary =
-    zeroFeeServiceTypes.length > 0
-      ? zeroFeeServiceTypes.map((k) => serviceTypeLabel(k)).join(", ")
-      : "none (admin has not enabled any types for 0% fee)";
 
   return (
     <div
@@ -86,30 +61,17 @@ export function LaunchPromoListingFormBanner({
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <Badge className="border-emerald-600/30 bg-emerald-600 text-[10px] font-semibold uppercase tracking-wide text-white dark:bg-emerald-600">
-              {zeroFeeEligible ? "Promo active" : "Launch promo"}
+              Launch promo
             </Badge>
           </div>
-          {zeroFeeEligible ? (
-            <>
-              <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-50 sm:text-base">
-                Great news! This job qualifies for 0% platform fee
-              </p>
-              <p className="text-xs text-emerald-900/85 dark:text-emerald-200/90 sm:text-sm">
-                You have {remaining} of {freeSlots} free jobs remaining
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-50 sm:text-base">
-                Standard platform fee applies to this job type
-              </p>
-              <p className="text-xs text-emerald-900/85 dark:text-emerald-200/90 sm:text-sm">
-                {typeLabel} is not in the fee-free service types for this promo
-                {feeLabel ? ` — estimated fee for this listing is ${feeLabel}` : ""}. You still have {remaining} of{" "}
-                {freeSlots} free jobs on eligible types: {eligibleSummary}.
-              </p>
-            </>
-          )}
+          <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-50 sm:text-base">
+            0% platform fee on your next jobs — any service type
+          </p>
+          <p className="text-xs text-emerald-900/85 dark:text-emerald-200/90 sm:text-sm">
+            You have {remaining} of {freeSlots} launch promo jobs left (while the promo window and your 90-day
+            eligibility run). Airbnb and recurring also have a separate monthly free tier with a starting-price cap —
+            see checkout for the fee on this listing.
+          </p>
         </div>
       </div>
     </div>

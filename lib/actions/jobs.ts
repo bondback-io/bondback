@@ -16,6 +16,7 @@ import {
 import {
   fetchListerPlatformFeePercentWithLaunchPromo,
   incrementLaunchPromoJobCompletionsIfNeeded,
+  resolveListerPlatformFeeWithLaunchPromo,
 } from "@/lib/launch-promo";
 import {
   getStripeServer,
@@ -353,7 +354,8 @@ export async function createJobPayment(
     supabase,
     j.listing_id,
     j.lister_id,
-    settings
+    settings,
+    agreedCents
   );
   const feeCents = Math.round((agreedCents * feePercent) / 100);
   const totalCents = agreedCents + feeCents;
@@ -958,7 +960,8 @@ export async function createJobCheckoutSession(
     supabase,
     row.listing_id,
     row.lister_id,
-    settings
+    settings,
+    agreedCents
   );
 
   const { data: listerProfile } = await supabase
@@ -1136,6 +1139,7 @@ export async function createJobTopUpCheckoutSession(
     winner_id: string | null;
     status: string;
     listing_id: string;
+    agreed_amount_cents: number | null;
     payment_intent_id: string | null;
     payment_released_at: string | null;
     top_up_payments?: unknown;
@@ -1210,11 +1214,13 @@ export async function createJobTopUpCheckoutSession(
   }
 
   const settings = await getGlobalSettings();
+  const jobTotalAfterTopUp = Math.max(0, row.agreed_amount_cents ?? 0) + topUpAgreedCents;
   const feePercent = await fetchListerPlatformFeePercentWithLaunchPromo(
     supabase,
     row.listing_id,
     row.lister_id,
-    settings
+    settings,
+    jobTotalAfterTopUp
   );
 
   let url: string | null;
@@ -1472,11 +1478,13 @@ export async function fulfillJobTopUpFromSession(
       return { ok: true, notice: "top_up_success" };
     }
 
+    const nextAgreedTotal = (j.agreed_amount_cents ?? 0) + agreedFromMeta;
     const feePercent = await fetchListerPlatformFeePercentWithLaunchPromo(
       supabase,
       j.listing_id,
       j.lister_id,
-      await getGlobalSettings()
+      await getGlobalSettings(),
+      nextAgreedTotal
     );
     const feeCents = Math.round((agreedFromMeta * feePercent) / 100);
     const noteRaw = String(cs.metadata?.top_up_note ?? "").trim().slice(0, 2000);
@@ -2760,12 +2768,13 @@ export async function releaseJobFunds(
       j.listing_id,
       globalForRelease
     );
-    const listingFeePercent = await fetchListerPlatformFeePercentWithLaunchPromo(
-      supabase,
-      j.listing_id,
-      j.lister_id,
-      globalForRelease
-    );
+    const feeResolution = await resolveListerPlatformFeeWithLaunchPromo(supabase, {
+      listingId: j.listing_id,
+      listerId: j.lister_id,
+      settings: globalForRelease,
+      agreedAmountCents: agreedCentsTotal,
+    });
+    const listingFeePercent = feeResolution.feePercent;
     const topUpsParsed = parseJobTopUpPayments(j.top_up_payments as never);
 
     type PlanRow = {
@@ -2937,8 +2946,9 @@ export async function releaseJobFunds(
           winnerId: j.winner_id,
           baseFeePercent: basePlatformFeePercent,
           appliedFeePercent: listingFeePercent,
+          zeroFeeSource: feeResolution.zeroFeeSource,
         });
-        if (promoResult.bumped) {
+        if (promoResult.bumped && promoResult.zeroFeeSource === "launch_promo") {
           launchPromoFreeJobCompleted = true;
           const { handleLaunchPromoAfterFeeWaivedCompletion } = await import(
             "@/lib/actions/launch-promo-transactional"
@@ -2947,7 +2957,7 @@ export async function releaseJobFunds(
             jobId: numericJobId,
             listerId: j.lister_id,
             winnerId: j.winner_id,
-            listerUsedAfter: promoResult.listerUsedAfter,
+            listerUsedAfter: promoResult.launchListerJobsUsedAfter,
             cleanerUsedAfter: promoResult.cleanerUsedAfter,
           });
         }

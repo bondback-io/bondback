@@ -109,8 +109,8 @@ import {
 import { notifyListerListingLive } from "@/lib/actions/notifications";
 import { LaunchPromoListingFormBanner } from "@/components/promo/launch-promo-listing-form-banner";
 import {
-  listerQualifiesForZeroPlatformFee,
-  launchPromoZeroFeeEligibleWithTypes,
+  estimateListerFeePercentForDraft,
+  LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD,
 } from "@/lib/launch-promo";
 import {
   computeBaseListingPriceAud,
@@ -494,12 +494,25 @@ export type NewListingFormProps = {
   allowLowAmountListings?: boolean;
   /** When true, auction duration may include a 2-minute test option (admin global setting). */
   allowTwoMinuteAuctionTest?: boolean;
-  /** Launch promo contextual banner (lister still has free fee slots). */
+  /** Launch promo contextual banner (lister still has launch fee-free slots). */
   launchPromo?: {
     userId: string;
     used: number;
     freeSlots: number;
-    zeroFeeServiceTypes: ServiceTypeKey[];
+  };
+  /** Admin cap for Airbnb + recurring starting price (AUD); must match server fee rules. */
+  freeTierPriceCapAud?: number;
+  /** Server snapshot for checkout fee preview (launch + ongoing free tier). */
+  promoFeePreview?: {
+    profileCreatedAtIso: string;
+    launchPromoGlobalOpen: boolean;
+    launchGlobalEndsAtMs: number | null;
+    launchFreeSlots: number;
+    launchJobsUsed: number;
+    freeTierPriceCapAud: number;
+    freeTierMonthlyCap: number;
+    freeTierJobsUsedThisMonth: number;
+    freeTierMonthKeyFromServer: string;
   };
 };
 
@@ -538,6 +551,8 @@ export function NewListingForm({
   allowLowAmountListings = false,
   allowTwoMinuteAuctionTest = false,
   launchPromo,
+  freeTierPriceCapAud = LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD,
+  promoFeePreview,
 }: NewListingFormProps) {
   const minReserveAud = allowLowAmountListings
     ? LOW_AMOUNT_MIN_RESERVE_AUD
@@ -651,23 +666,6 @@ export function NewListingForm({
     return feePercentage;
   }, [feePercentageByService, serviceTypeWatched, feePercentage]);
 
-  /** Estimates lister-facing fee on this draft; 0 when launch promo + eligible service type + slots remain. */
-  const displayFeePercent = useMemo(() => {
-    if (
-      launchPromo &&
-      listerQualifiesForZeroPlatformFee({
-        baseFeePercent: effectiveFeePercent,
-        listerJobsUsed: launchPromo.used,
-        freeSlots: launchPromo.freeSlots,
-        promoOpen: true,
-      }) &&
-      launchPromoZeroFeeEligibleWithTypes(serviceTypeWatched, launchPromo.zeroFeeServiceTypes)
-    ) {
-      return 0;
-    }
-    return effectiveFeePercent;
-  }, [launchPromo, effectiveFeePercent, serviceTypeWatched]);
-
   useEffect(() => {
     if (serviceTypeWatched !== "recurring_house_cleaning") {
       form.setValue("recurringFrequency", undefined, { shouldValidate: true });
@@ -695,6 +693,36 @@ export function NewListingForm({
   const watchedValues = form.watch();
   const reservePriceWatched = form.watch("reservePrice");
   const buyNowPriceWatched = form.watch("buyNowPrice");
+
+  /** Estimates lister-facing fee on this draft (launch promo + ongoing Airbnb/recurring tier). */
+  const displayFeePercent = useMemo(() => {
+    if (!promoFeePreview) return effectiveFeePercent;
+    const reserveAud =
+      typeof reservePriceWatched === "number" && Number.isFinite(reservePriceWatched)
+        ? reservePriceWatched
+        : 0;
+    return estimateListerFeePercentForDraft({
+      baseFeePercent: effectiveFeePercent,
+      serviceType: String(serviceTypeWatched),
+      reserveAud,
+      profileCreatedAtIso: promoFeePreview.profileCreatedAtIso,
+      now: new Date(),
+      launchPromoGlobalOpen: promoFeePreview.launchPromoGlobalOpen,
+      launchGlobalEndsAtMs: promoFeePreview.launchGlobalEndsAtMs,
+      launchFreeSlots: promoFeePreview.launchFreeSlots,
+      launchJobsUsed: promoFeePreview.launchJobsUsed,
+      freeTierPriceCapAud: promoFeePreview.freeTierPriceCapAud,
+      freeTierMonthlyCap: promoFeePreview.freeTierMonthlyCap,
+      freeTierJobsUsedThisMonth: promoFeePreview.freeTierJobsUsedThisMonth,
+      freeTierMonthKeyFromServer: promoFeePreview.freeTierMonthKeyFromServer,
+    });
+  }, [
+    promoFeePreview,
+    effectiveFeePercent,
+    serviceTypeWatched,
+    reservePriceWatched,
+  ]);
+
   const reserveFeeCents = useMemo(
     () =>
       platformFeeCents(
@@ -1356,9 +1384,6 @@ export function NewListingForm({
             userId={launchPromo.userId}
             used={launchPromo.used}
             freeSlots={launchPromo.freeSlots}
-            serviceType={serviceTypeWatched}
-            standardFeePercent={effectiveFeePercent}
-            zeroFeeServiceTypes={launchPromo.zeroFeeServiceTypes}
           />
         ) : null}
         <header className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-sky-50/40 px-4 py-5 shadow-sm ring-1 ring-emerald-500/10 dark:border-emerald-800/60 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25 dark:ring-emerald-400/10 sm:px-6 sm:py-6">
@@ -3017,6 +3042,18 @@ export function NewListingForm({
                       {form.formState.errors.reservePrice.message}
                     </p>
                   )}
+                  {(serviceTypeWatched === "airbnb_turnover" ||
+                    serviceTypeWatched === "recurring_house_cleaning") &&
+                    typeof reservePriceWatched === "number" &&
+                    Number.isFinite(reservePriceWatched) &&
+                    reservePriceWatched > freeTierPriceCapAud && (
+                      <Alert className="mt-2 border-amber-200/80 bg-amber-50/90 dark:border-amber-800/60 dark:bg-amber-950/35">
+                        <AlertDescription className="text-sm text-amber-950 dark:text-amber-100">
+                          Free tier jobs are capped at ${freeTierPriceCapAud}. This listing will use the standard
+                          platform fee at checkout.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
                     Cleaners bid down from the starting price. Your bond is most likely returned if the final price covers this amount.
                   </p>

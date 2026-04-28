@@ -5,7 +5,10 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { launchPromoCalendarDaysRemaining } from "@/lib/launch-promo";
+import {
+  launchPromoCalendarDaysRemaining,
+  launchPromoCalendarDaysRemainingForLister,
+} from "@/lib/launch-promo";
 import type { GlobalSettingsWithLaunchPromo } from "@/lib/launch-promo";
 
 const storageKey = (userId: string) => `bb_launch_promo_dash_bar_v1:${userId}`;
@@ -18,6 +21,8 @@ export type LaunchPromoDashboardBarProps = {
   /** ISO end from global_settings; pass null if unset */
   endsAtIso: string | null;
   settings: GlobalSettingsWithLaunchPromo | null;
+  /** Lister: countdown uses min(global end, signup + 90d). */
+  profileCreatedAtIso?: string | null;
 };
 
 export function LaunchPromoDashboardBar({
@@ -27,6 +32,7 @@ export function LaunchPromoDashboardBar({
   freeSlots,
   endsAtIso,
   settings,
+  profileCreatedAtIso,
 }: LaunchPromoDashboardBarProps) {
   const [dismissed, setDismissed] = useState(true);
 
@@ -50,7 +56,10 @@ export function LaunchPromoDashboardBar({
   if (dismissed) return null;
 
   const now = new Date();
-  const daysLeft = launchPromoCalendarDaysRemaining(settings, now);
+  const daysLeft =
+    variant === "lister" && profileCreatedAtIso
+      ? launchPromoCalendarDaysRemainingForLister(settings, profileCreatedAtIso, now)
+      : launchPromoCalendarDaysRemaining(settings, now);
   const pct = freeSlots > 0 ? Math.min(100, Math.round((used / freeSlots) * 100)) : 0;
 
   const countdown =

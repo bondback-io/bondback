@@ -82,6 +82,10 @@ export interface Database {
           launch_promo_lister_jobs_used: number;
           /** Completed jobs where this user was winning cleaner when lister 0% promo applied. */
           launch_promo_cleaner_jobs_used: number;
+          /** Sydney YYYY-MM for `free_tier_airbnb_recurring_jobs_used`; null/other month = counter not active. */
+          free_tier_airbnb_recurring_month_key: string | null;
+          /** Ongoing free-tier completions this month (Airbnb/recurring, not launch). */
+          free_tier_airbnb_recurring_jobs_used: number;
         };
         Insert: {
           id: string;
@@ -141,6 +145,8 @@ export interface Database {
           ban_until?: string | null;
           launch_promo_lister_jobs_used?: number;
           launch_promo_cleaner_jobs_used?: number;
+          free_tier_airbnb_recurring_month_key?: string | null;
+          free_tier_airbnb_recurring_jobs_used?: number;
         };
         Update: {
           roles?: string[] | null;
@@ -198,6 +204,8 @@ export interface Database {
           ban_until?: string | null;
           launch_promo_lister_jobs_used?: number;
           launch_promo_cleaner_jobs_used?: number;
+          free_tier_airbnb_recurring_month_key?: string | null;
+          free_tier_airbnb_recurring_jobs_used?: number;
         };
         Relationships: [
           {

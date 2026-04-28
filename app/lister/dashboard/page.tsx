@@ -53,7 +53,12 @@ import { isJobCancelledStatus, isListerJobAwaitingPayment } from "@/lib/jobs/job
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildLaunchPromoDashboardModel,
+  calendarMonthKeyAuSydney,
+  effectiveFreeTierAirbnbRecurringJobsUsed,
   launchPromoFreeJobSlots,
+  launchPromoMarketingMonthlyAirbnbRecurringCap,
+  launchPromoMarketingPriceCapAud,
+  listerLaunchPromoWindowEndDate,
   type GlobalSettingsWithLaunchPromo,
 } from "@/lib/launch-promo";
 import { LaunchPromoStatusCard } from "@/components/dashboard/launch-promo-status-card";
@@ -425,7 +430,23 @@ async function ListerDashboardContent() {
     settings: globalSettings,
     now: new Date(nowMs),
     normalFeePercent: feePercentage,
+    profileCreatedAt: profile.created_at,
   });
+
+  const listerLaunchEndsAt = listerLaunchPromoWindowEndDate(
+    globalSettings as GlobalSettingsWithLaunchPromo | null,
+    profile.created_at
+  );
+  const listerLaunchEndsAtIso = listerLaunchEndsAt ? listerLaunchEndsAt.toISOString() : null;
+
+  const sydneyMonthKey = calendarMonthKeyAuSydney(new Date(nowMs));
+  const freeTierJobsUsedThisMonth = effectiveFreeTierAirbnbRecurringJobsUsed(
+    profile as ProfileRow & {
+      free_tier_airbnb_recurring_month_key?: string | null;
+      free_tier_airbnb_recurring_jobs_used?: number | null;
+    },
+    sydneyMonthKey
+  );
 
   return (
     <section className="page-inner space-y-10 pb-32 sm:pb-8 md:space-y-6 md:pb-8">
@@ -454,11 +475,9 @@ async function ListerDashboardContent() {
           variant="lister"
           used={launchPromoListerUsed}
           freeSlots={launchPromoFreeJobSlots(globalSettings as GlobalSettingsWithLaunchPromo | null)}
-          endsAtIso={
-            (globalSettings as { launch_promo_ends_at?: string | null } | null)?.launch_promo_ends_at ??
-            null
-          }
+          endsAtIso={listerLaunchEndsAtIso}
           settings={globalSettings as GlobalSettingsWithLaunchPromo | null}
+          profileCreatedAtIso={profile.created_at}
         />
       ) : null}
 
@@ -480,6 +499,14 @@ async function ListerDashboardContent() {
         variant="lister"
         userId={user.id}
         settings={globalSettings as GlobalSettingsWithLaunchPromo | null}
+        profileCreatedAtIso={profile.created_at}
+        freeTierJobsUsedThisMonth={freeTierJobsUsedThisMonth}
+        freeTierMonthlyCap={launchPromoMarketingMonthlyAirbnbRecurringCap(
+          globalSettings as GlobalSettingsWithLaunchPromo | null
+        )}
+        freeTierPriceCapAud={launchPromoMarketingPriceCapAud(
+          globalSettings as GlobalSettingsWithLaunchPromo | null
+        )}
       />
 
       {/* Quick stats — horizontal scroll on mobile; larger touch + type on small screens */}

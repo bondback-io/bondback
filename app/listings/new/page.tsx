@@ -7,9 +7,13 @@ import { parsePlatformFeePercentByServiceType } from "@/lib/platform-fee";
 import { resolvePricingModifiersFromGlobal } from "@/lib/pricing-modifiers";
 import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
 import {
+  calendarMonthKeyAuSydney,
+  effectiveFreeTierAirbnbRecurringJobsUsed,
   isLaunchPromoWindowOpen,
   launchPromoFreeJobSlots,
-  launchPromoZeroFeeServiceTypes,
+  launchPromoMarketingMonthlyAirbnbRecurringCap,
+  launchPromoMarketingPriceCapAud,
+  listerWithinLaunchPromoSignupWindow,
   type GlobalSettingsWithLaunchPromo,
 } from "@/lib/launch-promo";
 import { NewListingFormLazy } from "./new-listing-form-client";
@@ -145,7 +149,18 @@ const NewListingPage = async () => {
       )
     )
   );
-  const showLaunchPromoOnForm = promoWindowOpen && listerPromoUsed < promoFreeSlots;
+  const withinSignupLaunchWindow = listerWithinLaunchPromoSignupWindow(profile.created_at, now);
+  const showLaunchPromoOnForm =
+    promoWindowOpen && withinSignupLaunchWindow && listerPromoUsed < promoFreeSlots;
+
+  const monthKey = calendarMonthKeyAuSydney(now);
+  const freeTierJobsUsedThisMonth = effectiveFreeTierAirbnbRecurringJobsUsed(profile, monthKey);
+  const launchEndRaw = gsPromo?.launch_promo_ends_at;
+  const launchGlobalEndsAtMs = (() => {
+    if (launchEndRaw == null || String(launchEndRaw).trim() === "") return null;
+    const t = new Date(launchEndRaw).getTime();
+    return Number.isFinite(t) ? t : null;
+  })();
 
   return (
     <NewListingFormLazy
@@ -159,13 +174,24 @@ const NewListingPage = async () => {
       defaultBondCleanerChecklistItems={defaultBondCleanerChecklistItems}
       allowLowAmountListings={allowLowAmountListings}
       allowTwoMinuteAuctionTest={allowTwoMinuteAuctionTest}
+      freeTierPriceCapAud={launchPromoMarketingPriceCapAud(gsPromo)}
+      promoFeePreview={{
+        profileCreatedAtIso: profile.created_at,
+        launchPromoGlobalOpen: promoWindowOpen,
+        launchGlobalEndsAtMs,
+        launchFreeSlots: promoFreeSlots,
+        launchJobsUsed: listerPromoUsed,
+        freeTierPriceCapAud: launchPromoMarketingPriceCapAud(gsPromo),
+        freeTierMonthlyCap: launchPromoMarketingMonthlyAirbnbRecurringCap(gsPromo),
+        freeTierJobsUsedThisMonth,
+        freeTierMonthKeyFromServer: monthKey,
+      }}
       launchPromo={
         showLaunchPromoOnForm
           ? {
               userId: session.user.id,
               used: listerPromoUsed,
               freeSlots: promoFreeSlots,
-              zeroFeeServiceTypes: launchPromoZeroFeeServiceTypes(gsPromo),
             }
           : undefined
       }

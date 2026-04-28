@@ -4,9 +4,10 @@ import { Info, Sparkles } from "lucide-react";
 import {
   buildLaunchPromoDashboardModel,
   launchPromoCalendarDaysRemaining,
+  launchPromoCalendarDaysRemainingForLister,
   launchPromoMarketingMonthlyAirbnbRecurringCap,
   launchPromoMarketingPriceCapAud,
-  launchPromoZeroFeeServiceTypes,
+  ongoingFreeTierServiceTypes,
   type GlobalSettingsWithLaunchPromo,
   type LaunchPromoDashboardModel,
 } from "@/lib/launch-promo";
@@ -20,6 +21,12 @@ export type LaunchPromoStatusCardProps = {
   variant: "lister" | "cleaner";
   userId: string;
   settings: GlobalSettingsWithLaunchPromo | null;
+  /** Lister: promo countdown uses signup + 90d vs global end. */
+  profileCreatedAtIso?: string | null;
+  /** Lister: completed 0% jobs this Sydney month (Airbnb / recurring ongoing tier). */
+  freeTierJobsUsedThisMonth?: number;
+  freeTierMonthlyCap?: number;
+  freeTierPriceCapAud?: number;
 };
 
 const infoIconClass =
@@ -33,31 +40,39 @@ export function LaunchPromoStatusCard({
   variant,
   userId,
   settings,
+  profileCreatedAtIso,
+  freeTierJobsUsedThisMonth,
+  freeTierMonthlyCap: freeTierMonthlyCapProp,
+  freeTierPriceCapAud: freeTierPriceCapProp,
 }: LaunchPromoStatusCardProps) {
   const now = new Date();
-  const daysLeft = launchPromoCalendarDaysRemaining(settings, now);
+  const daysLeft =
+    variant === "lister" && profileCreatedAtIso
+      ? launchPromoCalendarDaysRemainingForLister(settings, profileCreatedAtIso, now)
+      : launchPromoCalendarDaysRemaining(settings, now);
   const ctaHref = variant === "lister" ? "/listings/new" : "/find-jobs";
   const ctaLabel = variant === "lister" ? "Create Another Free Job" : "Browse Jobs as Cleaner";
 
-  const zeroFeeTypes = launchPromoZeroFeeServiceTypes(settings);
-  const feeFreeLabels = zeroFeeTypes.map((k) => serviceTypeLabel(k));
-  const standardFeeLabels = SERVICE_TYPES.filter((k) => !zeroFeeTypes.includes(k)).map((k) =>
-    serviceTypeLabel(k)
-  );
-  const mktMonthly = launchPromoMarketingMonthlyAirbnbRecurringCap(settings);
-  const mktPrice = launchPromoMarketingPriceCapAud(settings);
+  const ongoingLabels = ongoingFreeTierServiceTypes().map((k) => serviceTypeLabel(k));
+  const standardFeeLabels = SERVICE_TYPES.filter(
+    (k) => !(ongoingFreeTierServiceTypes() as readonly string[]).includes(k)
+  ).map((k) => serviceTypeLabel(k));
+  const mktMonthly =
+    typeof freeTierMonthlyCapProp === "number"
+      ? freeTierMonthlyCapProp
+      : launchPromoMarketingMonthlyAirbnbRecurringCap(settings);
+  const mktPrice =
+    typeof freeTierPriceCapProp === "number"
+      ? freeTierPriceCapProp
+      : launchPromoMarketingPriceCapAud(settings);
 
   const feeRulesTooltip =
-    (feeFreeLabels.length > 0
-      ? `Fee-free at escrow release: ${feeFreeLabels.join(", ")}. `
-      : "No service types are set for fee-free promo — standard fees apply everywhere. ") +
-    (standardFeeLabels.length > 0
-      ? `Standard platform fee for: ${standardFeeLabels.join(", ")}.`
-      : "");
+    `Launch: 0% platform fee on your first completed jobs (any service type) while the global promo is on and within 90 days of signup. ` +
+    `Ongoing free tier: up to ${mktMonthly} ${ongoingLabels.join(" / ")} jobs per Sydney calendar month with job amount at or below $${mktPrice} AUD; ` +
+    `Bond clean and deep/spring clean use the standard fee with no monthly cap.`;
 
   const monthlyTooltip =
-    `Planned tier: up to ${mktMonthly} Airbnb or recurring jobs per calendar month with starting price at or below $${mktPrice} AUD. ` +
-    "Per-month counters are not enforced yet — this line is for transparency.";
+    `Airbnb & recurring: up to ${mktMonthly} fee-free completions per Sydney calendar month when the job amount is at or below $${mktPrice} AUD.`;
 
   if (model.phase === "ended") {
     return (
@@ -132,8 +147,8 @@ export function LaunchPromoStatusCard({
               You&apos;ve used every fee-free job in this launch offer — amazing work.
             </p>
             <p className="text-sm leading-relaxed text-emerald-900/90 dark:text-emerald-200/90" title={feeRulesTooltip}>
-              Standard platform fees apply to your next completions. Fee-free slots applied to:{" "}
-              {feeFreeLabels.length > 0 ? feeFreeLabels.join(", ") : "no types (check admin settings)"}.
+              Standard platform fees apply to your next completions. Your launch promo covered any service type; the
+              ongoing Airbnb / recurring monthly tier may still apply on eligible jobs.
             </p>
             {model.showBondProNudge ? (
               <p className="text-sm text-emerald-800 dark:text-emerald-300">
@@ -230,8 +245,17 @@ export function LaunchPromoStatusCard({
               className="rounded-lg border border-emerald-200/70 bg-white/75 px-3 py-2 text-xs leading-snug text-emerald-950/95 dark:border-emerald-800/50 dark:bg-emerald-950/25 dark:text-emerald-100/90 sm:text-sm"
               title={monthlyTooltip}
             >
-              <span className="font-semibold">This month (planned tier):</span> 0 of {mktMonthly} free Airbnb /
-              recurring jobs (≤${mktPrice} start) — calendar tracking coming soon.
+              <span className="font-semibold">This month (Airbnb / recurring tier):</span>{" "}
+              {variant === "lister" && typeof freeTierJobsUsedThisMonth === "number" ? (
+                <>
+                  {freeTierJobsUsedThisMonth} of {mktMonthly} free jobs (≤ ${mktPrice} AUD) — resets each calendar
+                  month (Sydney).
+                </>
+              ) : (
+                <>
+                  Up to {mktMonthly} jobs at ≤ {mktPrice} AUD per month for {ongoingLabels.join(" / ")}.
+                </>
+              )}
             </p>
           </div>
 
@@ -247,8 +271,9 @@ export function LaunchPromoStatusCard({
             <span className="inline-flex items-start gap-1.5">
               <Info className={cn(infoIconClass, "mt-0.5")} aria-hidden />
               <span>
-                <span className="font-semibold">Fee-free slots</span> at escrow release:{" "}
-                {feeFreeLabels.length > 0 ? feeFreeLabels.join(", ") : "no types (admin config)"}.
+                <span className="font-semibold">Launch promo</span> uses your remaining slots on{" "}
+                <span className="font-medium">any</span> service type.{" "}
+                <span className="font-semibold">Monthly tier</span> applies only to {ongoingLabels.join(" & ")}.
               </span>
             </span>
           </div>
@@ -257,8 +282,8 @@ export function LaunchPromoStatusCard({
             <Info className={cn(infoIconClass, "mt-0.5")} aria-hidden />
             <span title={feeRulesTooltip}>
               {standardFeeLabels.length > 0
-                ? `${standardFeeLabels.join(", ")}: standard platform fee unless included above.`
-                : "All marketplace types may use fee-free slots per admin configuration."}
+                ? `${standardFeeLabels.join(", ")}: standard platform fee except where launch or monthly Airbnb / recurring tier applies.`
+                : "Fees follow launch promo, then monthly Airbnb / recurring rules, then standard rates."}
             </span>
           </p>
         </div>

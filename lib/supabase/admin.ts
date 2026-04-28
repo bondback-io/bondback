@@ -136,6 +136,8 @@ export function syntheticProfileFromAuthUser(u: User): ProfileRow {
     cleaner_total_reviews: null,
     launch_promo_lister_jobs_used: 0,
     launch_promo_cleaner_jobs_used: 0,
+    free_tier_airbnb_recurring_month_key: null,
+    free_tier_airbnb_recurring_jobs_used: 0,
   };
 }
 
