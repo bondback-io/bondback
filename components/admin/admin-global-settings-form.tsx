@@ -25,7 +25,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ArrowDown, ArrowUp, CircleHelp } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleHelp, Sparkles } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import type { SaveGlobalSettingsInput } from "@/lib/actions/global-settings";
 import {
@@ -60,6 +60,22 @@ import {
 
 function cloneServiceAddonsState(src: ServiceAddonsChecklistsMerged): ServiceAddonsChecklistsMerged {
   return mergeServiceAddonsChecklists(serializeServiceAddonsChecklistsForDb(src));
+}
+
+function isoToDatetimeLocal(iso: string | null | undefined): string {
+  if (iso == null || String(iso).trim() === "") return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function datetimeLocalToIsoOrNull(s: string): string | null {
+  const t = s.trim();
+  if (!t) return null;
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
 function moveArrayItem<T>(arr: T[], index: number, delta: -1 | 1): T[] {
@@ -220,6 +236,20 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
   );
   const [allowTwoMinuteAuctionTest, setAllowTwoMinuteAuctionTest] = React.useState(
     initial?.allowTwoMinuteAuctionTest === true
+  );
+  const [launchPromoActive, setLaunchPromoActive] = React.useState(
+    initial?.launchPromoActive === true
+  );
+  const [launchPromoEndsAtLocal, setLaunchPromoEndsAtLocal] = React.useState(() =>
+    isoToDatetimeLocal(initial?.launchPromoEndsAt ?? null)
+  );
+  const [launchPromoFreeJobSlotsState, setLaunchPromoFreeJobSlotsState] = React.useState(() =>
+    typeof initial?.launchPromoFreeJobSlots === "number" && Number.isFinite(initial.launchPromoFreeJobSlots)
+      ? Math.max(1, Math.min(20, Math.floor(initial.launchPromoFreeJobSlots)))
+      : 2
+  );
+  const [launchPromoShowBondProNudge, setLaunchPromoShowBondProNudge] = React.useState(
+    initial?.launchPromoShowBondProNudge === true
   );
   const [defaultSiteTheme, setDefaultSiteTheme] = React.useState<"light" | "dark">(
     initial?.defaultSiteTheme === "light" ? "light" : "dark"
@@ -581,6 +611,13 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       pricingAddonBlindsAud: Math.max(0, Number(pricingAddonBlindsAud) || DEFAULT_PRICING_MODIFIERS.addonBlindsAud),
       allowLowAmountListings,
       allowTwoMinuteAuctionTest,
+      launchPromoActive,
+      launchPromoEndsAt: datetimeLocalToIsoOrNull(launchPromoEndsAtLocal),
+      launchPromoFreeJobSlots: Math.max(
+        1,
+        Math.min(20, Math.floor(Number(launchPromoFreeJobSlotsState) || 2))
+      ),
+      launchPromoShowBondProNudge,
       defaultSiteTheme,
       serviceAddonsChecklists,
     };
@@ -773,6 +810,82 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               id="allow-two-minute-auction"
               checked={allowTwoMinuteAuctionTest}
               onCheckedChange={(v) => setAllowTwoMinuteAuctionTest(Boolean(v))}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-emerald-200/90 bg-emerald-50/50 dark:border-emerald-800/70 dark:bg-emerald-950/35">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-emerald-950 dark:text-emerald-100">
+            <Sparkles className="size-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden />
+            Launch promo (0% platform fee)
+          </CardTitle>
+          <p className="text-[11px] text-emerald-900/85 dark:text-emerald-200/90">
+            Master switch and window settings for the fee-free launch offer. Per-user job counters, bulk extend, and
+            force-end tools stay under{" "}
+            <Link href="/admin/promo-tools" className="font-medium underline underline-offset-2 hover:text-emerald-800 dark:hover:text-emerald-100">
+              Admin → Promo tools
+            </Link>
+            . Save changes with <strong>Save global settings</strong> at the bottom of this page.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="launch-promo-active" className="text-xs font-medium text-emerald-950 dark:text-emerald-100">
+              Promo active
+            </Label>
+            <Switch
+              id="launch-promo-active"
+              checked={launchPromoActive}
+              onCheckedChange={(v) => setLaunchPromoActive(Boolean(v))}
+            />
+          </div>
+          <div className="flex flex-col gap-2 sm:max-w-md">
+            <Label htmlFor="launch-promo-ends-at" className="text-xs font-medium text-emerald-950 dark:text-emerald-100">
+              Scheduled end (local time, optional)
+            </Label>
+            <Input
+              id="launch-promo-ends-at"
+              type="datetime-local"
+              value={launchPromoEndsAtLocal}
+              onChange={(e) => setLaunchPromoEndsAtLocal(e.target.value)}
+              className="text-xs sm:text-sm"
+            />
+            <p className="text-[11px] text-emerald-900/75 dark:text-emerald-200/80">
+              Leave empty for no fixed end time (promo still requires <strong>Promo active</strong> above). When set,
+              the window closes after this instant.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:max-w-xs">
+            <Label htmlFor="launch-promo-free-slots" className="text-xs font-medium text-emerald-950 dark:text-emerald-100">
+              Free completed jobs per user (1–20)
+            </Label>
+            <Input
+              id="launch-promo-free-slots"
+              type="number"
+              min={1}
+              max={20}
+              step={1}
+              value={launchPromoFreeJobSlotsState}
+              onChange={(e) => setLaunchPromoFreeJobSlotsState(Number(e.target.value))}
+              className="text-xs sm:text-sm tabular-nums"
+            />
+            <p className="text-[11px] text-emerald-900/75 dark:text-emerald-200/80">
+              How many completed jobs per lister (and cleaner promo logic) get 0% platform fee while the promo is open.
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <Label
+              htmlFor="launch-promo-bond-pro-nudge"
+              className="text-xs font-medium text-emerald-950 dark:text-emerald-100"
+            >
+              After promo: show Bond Pro nudge on dashboard
+            </Label>
+            <Switch
+              id="launch-promo-bond-pro-nudge"
+              checked={launchPromoShowBondProNudge}
+              onCheckedChange={(v) => setLaunchPromoShowBondProNudge(Boolean(v))}
             />
           </div>
         </CardContent>

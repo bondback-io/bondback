@@ -520,6 +520,14 @@ export type SaveGlobalSettingsInput = {
    * 0–7 full days of cleaner inactivity before non-responsive escrow cancel; 0 = no inactivity wait (idle check off).
    */
   listerNonresponsiveCancelIdleDays?: number;
+  /** 0% platform fee launch promo — see lib/launch-promo.ts */
+  launchPromoActive?: boolean;
+  /** ISO timestamp or null (empty = no fixed end; still gated by active flag). */
+  launchPromoEndsAt?: string | null;
+  /** Per-user completed jobs that get 0% fee while promo is open (clamped 1–20). */
+  launchPromoFreeJobSlots?: number;
+  /** After promo ends, dashboard may nudge Bond Pro subscription. */
+  launchPromoShowBondProNudge?: boolean;
 };
 
 export type SaveGlobalSettingsResult =
@@ -721,6 +729,16 @@ export async function saveGlobalSettings(
     lister_nonresponsive_cancel_idle_days: normalizeListerNonresponsiveCancelIdleDays(
       data.listerNonresponsiveCancelIdleDays
     ),
+    launch_promo_active: data.launchPromoActive === true,
+    launch_promo_ends_at:
+      typeof data.launchPromoEndsAt === "string" && data.launchPromoEndsAt.trim() !== ""
+        ? data.launchPromoEndsAt.trim()
+        : null,
+    launch_promo_free_job_slots:
+      typeof data.launchPromoFreeJobSlots === "number" && Number.isFinite(data.launchPromoFreeJobSlots)
+        ? Math.max(1, Math.min(20, Math.floor(data.launchPromoFreeJobSlots)))
+        : 2,
+    launch_promo_show_bond_pro_nudge: data.launchPromoShowBondProNudge === true,
   };
 
   const { error } = admin

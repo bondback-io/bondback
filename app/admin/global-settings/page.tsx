@@ -15,6 +15,7 @@ import {
 } from "@/lib/pricing-modifiers";
 import { parsePlatformFeePercentByServiceType } from "@/lib/platform-fee";
 import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
+import { launchPromoFreeJobSlots } from "@/lib/launch-promo";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
 async function requireAdmin() {
@@ -189,6 +190,14 @@ export default async function AdminGlobalSettingsPage() {
           (existing as { allow_low_amount_listings?: boolean }).allow_low_amount_listings === true,
         allowTwoMinuteAuctionTest:
           (existing as { allow_two_minute_auction_test?: boolean }).allow_two_minute_auction_test === true,
+        launchPromoActive:
+          (existing as { launch_promo_active?: boolean | null }).launch_promo_active === true,
+        launchPromoEndsAt:
+          (existing as { launch_promo_ends_at?: string | null }).launch_promo_ends_at ?? null,
+        launchPromoFreeJobSlots: launchPromoFreeJobSlots(existing),
+        launchPromoShowBondProNudge:
+          (existing as { launch_promo_show_bond_pro_nudge?: boolean | null })
+            .launch_promo_show_bond_pro_nudge === true,
         defaultSiteTheme: parseDefaultSiteThemeFromSettings(existing),
         serviceAddonsChecklists: mergeServiceAddonsChecklists(
           (existing as { service_addons_checklists?: unknown }).service_addons_checklists
