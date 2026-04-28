@@ -289,6 +289,99 @@ function CalendarDayCell({
   );
 }
 
+/** Full-width list layout for narrow screens — readable titles and 44px+ tap targets. */
+function CalendarMobileAgenda({
+  month,
+  gridDays,
+  byDate,
+  onDayOpen,
+}: {
+  month: Date;
+  gridDays: Date[];
+  byDate: Map<string, UserCalendarEvent[]>;
+  onDayOpen: (key: string) => void;
+}) {
+  const sections = React.useMemo(() => {
+    const out: { day: Date; key: string; events: UserCalendarEvent[] }[] = [];
+    for (const day of gridDays) {
+      if (!isSameMonth(day, month)) continue;
+      const key = format(day, "yyyy-MM-dd");
+      const events = byDate.get(key) ?? [];
+      if (events.length === 0) continue;
+      out.push({ day, key, events });
+    }
+    return out;
+  }, [month, gridDays, byDate]);
+
+  if (sections.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border/70 bg-muted/15 px-4 py-10 text-center dark:border-gray-700 dark:bg-gray-950/40">
+        <p className="text-sm font-medium text-foreground dark:text-gray-100">No jobs this month</p>
+        <p className="mt-1 text-xs text-muted-foreground dark:text-gray-400">
+          Scheduled visits appear here after a cleaner is assigned and dates are set.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {sections.map(({ day, key, events }) => (
+        <li
+          key={key}
+          className="overflow-hidden rounded-2xl border border-border/70 bg-muted/20 shadow-sm dark:border-gray-800 dark:bg-gray-950/50"
+        >
+          <button
+            type="button"
+            className="flex w-full min-h-[48px] items-center justify-between gap-3 border-b border-border/50 bg-muted/30 px-4 py-3 text-left transition-colors hover:bg-muted/50 active:bg-muted/60 dark:border-gray-800 dark:bg-gray-900/60"
+            onClick={() => onDayOpen(key)}
+          >
+            <span className="text-base font-semibold leading-snug text-foreground dark:text-gray-100">
+              {format(day, "EEEE, d MMMM")}
+            </span>
+            <span className="shrink-0 rounded-full bg-background/80 px-2.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground ring-1 ring-border/60 dark:bg-gray-950 dark:text-gray-400 dark:ring-gray-700">
+              {events.length} {events.length === 1 ? "job" : "jobs"}
+            </span>
+          </button>
+          <ul className="divide-y divide-border/50 dark:divide-gray-800">
+            {events.map((e) => (
+              <li key={e.id}>
+                <button
+                  type="button"
+                  className="flex w-full min-h-[52px] items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 active:bg-muted/55"
+                  onClick={() => onDayOpen(key)}
+                >
+                  <div className="mt-0.5 flex shrink-0 items-center gap-1.5">
+                    <CalendarServiceIcon
+                      serviceType={e.serviceType}
+                      className="h-5 w-5 sm:h-5 sm:w-5"
+                    />
+                    {e.isCompleted ? (
+                      <Check
+                        className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                    ) : null}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-semibold leading-snug text-foreground dark:text-gray-100">
+                      {e.title}
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground dark:text-gray-400">
+                      {kindLabel(e.kind)} · {CALENDAR_EVENT_LEGEND_LABEL[e.serviceType]}
+                    </p>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -516,7 +609,10 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
             <h1 className="text-2xl font-semibold tracking-tight text-foreground dark:text-gray-100">
               My calendar
             </h1>
-            <p className="text-sm text-muted-foreground dark:text-gray-400">
+            <p className="text-sm text-muted-foreground dark:text-gray-400 lg:hidden">
+              Tap a day or job for full details. Icons show the service type; a check means completed.
+            </p>
+            <p className="hidden text-sm text-muted-foreground dark:text-gray-400 lg:block">
               Funded jobs with an assigned cleaner. Icons match the service type; a green check marks a
               completed visit. Tap a job row or the day number to open details — or drag the grip to
               move a date (lister, hold briefly on iPhone).
@@ -599,11 +695,11 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
               Icon and colour match the service type on each job row.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-x-4 gap-y-2">
+          <CardContent className="-mx-1 flex gap-2 overflow-x-auto pb-1 pt-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:gap-x-4 sm:gap-y-2 sm:overflow-visible sm:pb-0 [&::-webkit-scrollbar]:hidden">
             {(Object.keys(CALENDAR_EVENT_DOT_CLASS) as ServiceTypeKey[]).map((k) => (
               <div
                 key={k}
-                className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs dark:border-gray-800 dark:bg-gray-950/40"
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs dark:border-gray-800 dark:bg-gray-950/40 sm:shrink"
               >
                 <CalendarServiceIcon serviceType={k} className="h-4 w-4" />
                 <span className={cn("h-2 w-2 rounded-full", CALENDAR_EVENT_DOT_CLASS[k])} aria-hidden />
@@ -620,29 +716,46 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
           onDragCancel={handleDragCancel}
         >
           <Card className="border-border dark:border-gray-800 dark:bg-gray-900/40">
-            <CardContent className="p-2 sm:p-4">
+            <CardContent className="p-3 sm:p-4">
               {relocationPending ? (
                 <p className="mb-2 text-center text-xs text-muted-foreground">Updating schedule…</p>
               ) : null}
-              <div className="mb-1.5 grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:mb-2 sm:gap-1 sm:text-xs">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                  <div key={d} className="py-1">
-                    {d}
-                  </div>
-                ))}
+
+              <div className="lg:hidden">
+                <CalendarMobileAgenda
+                  month={month}
+                  gridDays={gridDays}
+                  byDate={byDate}
+                  onDayOpen={setSelectedDayKey}
+                />
+                {initial.userHasListerRole ? (
+                  <p className="mt-3 text-center text-[11px] leading-snug text-muted-foreground dark:text-gray-500">
+                    To drag a visit to another day, use the month grid on a larger screen.
+                  </p>
+                ) : null}
               </div>
-              <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
-                {gridDays.map((day) => (
-                  <CalendarDayCell
-                    key={format(day, "yyyy-MM-dd")}
-                    day={day}
-                    month={month}
-                    byDate={byDate}
-                    userHasListerRole={initial.userHasListerRole}
-                    relocationPending={relocationPending}
-                    onDayOpen={setSelectedDayKey}
-                  />
-                ))}
+
+              <div className="hidden lg:block">
+                <div className="mb-1.5 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:mb-2 sm:text-xs">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                    <div key={d} className="py-1">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {gridDays.map((day) => (
+                    <CalendarDayCell
+                      key={format(day, "yyyy-MM-dd")}
+                      day={day}
+                      month={month}
+                      byDate={byDate}
+                      userHasListerRole={initial.userHasListerRole}
+                      relocationPending={relocationPending}
+                      onDayOpen={setSelectedDayKey}
+                    />
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
