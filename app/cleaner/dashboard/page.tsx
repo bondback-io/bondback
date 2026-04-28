@@ -58,9 +58,11 @@ import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import CleanerDashboardLoading from "./loading";
 import {
   buildLaunchPromoDashboardModel,
+  launchPromoFreeJobSlots,
   type GlobalSettingsWithLaunchPromo,
 } from "@/lib/launch-promo";
 import { LaunchPromoStatusCard } from "@/components/dashboard/launch-promo-status-card";
+import { LaunchPromoDashboardBar } from "@/components/promo/launch-promo-dashboard-bar";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -415,6 +417,20 @@ async function CleanerDashboardContent() {
           </div>
         </header>
       </div>
+
+      {launchPromoModel.phase === "active" ? (
+        <LaunchPromoDashboardBar
+          userId={user.id}
+          variant="cleaner"
+          used={launchPromoCleanerUsed}
+          freeSlots={launchPromoFreeJobSlots(globalForDash as GlobalSettingsWithLaunchPromo | null)}
+          endsAtIso={
+            (globalForDash as { launch_promo_ends_at?: string | null } | null)?.launch_promo_ends_at ??
+            null
+          }
+          settings={globalForDash as GlobalSettingsWithLaunchPromo | null}
+        />
+      ) : null}
 
       {showWelcomeBanner && (
         <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-background shadow-sm dark:border-emerald-800/60 dark:from-emerald-950/40 dark:to-gray-950">

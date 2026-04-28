@@ -53,9 +53,11 @@ import { isJobCancelledStatus, isListerJobAwaitingPayment } from "@/lib/jobs/job
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildLaunchPromoDashboardModel,
+  launchPromoFreeJobSlots,
   type GlobalSettingsWithLaunchPromo,
 } from "@/lib/launch-promo";
 import { LaunchPromoStatusCard } from "@/components/dashboard/launch-promo-status-card";
+import { LaunchPromoDashboardBar } from "@/components/promo/launch-promo-dashboard-bar";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -445,6 +447,20 @@ async function ListerDashboardContent() {
           </div>
         </header>
       </div>
+
+      {launchPromoModel.phase === "active" ? (
+        <LaunchPromoDashboardBar
+          userId={user.id}
+          variant="lister"
+          used={launchPromoListerUsed}
+          freeSlots={launchPromoFreeJobSlots(globalSettings as GlobalSettingsWithLaunchPromo | null)}
+          endsAtIso={
+            (globalSettings as { launch_promo_ends_at?: string | null } | null)?.launch_promo_ends_at ??
+            null
+          }
+          settings={globalSettings as GlobalSettingsWithLaunchPromo | null}
+        />
+      ) : null}
 
       {showWelcomeBanner && (
         <Card className="border-sky-200/80 bg-gradient-to-br from-sky-50 to-background shadow-sm dark:border-sky-800/60 dark:from-sky-950/40 dark:to-gray-950">

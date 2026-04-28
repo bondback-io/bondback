@@ -11,7 +11,7 @@ export interface LaunchPromoProgressProps {
 }
 
 export const LAUNCH_PROMO_PROGRESS_PREHEADER =
-  "You’ve used a fee-free slot — here’s what happens next";
+  "🎉 Another 0% fee job in the books — here’s what’s next";
 
 export function LaunchPromoProgress({
   firstName,
@@ -31,7 +31,7 @@ export function LaunchPromoProgress({
       viewJobLabel="Open your dashboard"
     >
       <Section style={contentSection}>
-        <Text style={heading}>Great work! {done} of {slots} free jobs completed ✅</Text>
+        <Text style={heading}>🎉 Free job completed! {done} of {slots} with 0% platform fee ✅</Text>
         <Text style={body}>Hi {displayName},</Text>
         <Text style={body}>
           {role === "lister" ? (
@@ -94,6 +94,6 @@ const trustLine = {
   margin: "20px 0 0 0",
   lineHeight: 1.5,
   fontWeight: "500" as const,
-  borderLeft: "4px solid #0ea5e9",
+  borderLeft: "4px solid #10b981",
   paddingLeft: "14px",
 };

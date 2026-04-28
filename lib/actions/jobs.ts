@@ -2598,7 +2598,13 @@ export async function armAutoReleaseTimersAfterCleanerStripeReady(
 }
 
 export type ReleaseJobFundsResult =
-  | { ok: true; transferId?: string; paymentIntentId?: string }
+  | {
+      ok: true;
+      transferId?: string;
+      paymentIntentId?: string;
+      /** True when this release consumed a launch-promo 0% fee slot (lister + cleaner counters bumped). */
+      launchPromoFreeJobCompleted?: boolean;
+    }
   | { ok: false; error: string };
 
 /**
@@ -2922,6 +2928,7 @@ export async function releaseJobFunds(
       return { ok: false, error: updateError.message };
     }
 
+    let launchPromoFreeJobCompleted = false;
     const adminPromo = createSupabaseAdminClient();
     if (adminPromo) {
       try {
@@ -2932,6 +2939,7 @@ export async function releaseJobFunds(
           appliedFeePercent: listingFeePercent,
         });
         if (promoResult.bumped) {
+          launchPromoFreeJobCompleted = true;
           const { handleLaunchPromoAfterFeeWaivedCompletion } = await import(
             "@/lib/actions/launch-promo-transactional"
           );
@@ -2964,6 +2972,7 @@ export async function releaseJobFunds(
     }
     return {
       ok: true,
+      ...(launchPromoFreeJobCompleted ? { launchPromoFreeJobCompleted: true } : {}),
       ...(testMode
         ? {
             transferId: transferIds[transferIds.length - 1],
@@ -3200,6 +3209,8 @@ export type FinalizeJobPaymentResult =
       nextPaymentCheckoutUrl?: string | null;
       /** When the next visit was paid with a saved card in the same request */
       nextPaymentAlreadyInEscrow?: boolean;
+      /** Launch promo: this completion used a 0% fee slot (show celebration UI). */
+      launchPromoFreeJobCompleted?: boolean;
     }
   | { ok: false; error: string };
 
@@ -3486,6 +3497,9 @@ export async function finalizeJobPayment(
     nextRecurringJobId: nextRecurringJobId ?? null,
     nextPaymentCheckoutUrl: nextPaymentCheckoutUrl ?? null,
     ...(nextPaymentAlreadyInEscrow ? { nextPaymentAlreadyInEscrow: true } : {}),
+    ...("launchPromoFreeJobCompleted" in releaseResult && releaseResult.launchPromoFreeJobCompleted
+      ? { launchPromoFreeJobCompleted: true }
+      : {}),
   };
 }
 

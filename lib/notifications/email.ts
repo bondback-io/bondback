@@ -796,10 +796,7 @@ export async function buildLaunchPromoWelcomeEmail(
   freeJobSlots: number
 ): Promise<{ subject: string; html: string }> {
   const n = Math.max(1, Math.floor(freeJobSlots));
-  const subject =
-    n === 2
-      ? "Welcome to Bond Back – Your First 2 Jobs Are Fee-Free! 🎉"
-      : `Welcome to Bond Back – Your first ${n} jobs are fee-free! 🎉`;
+  const subject = `Welcome to Bond Back – Your First ${n} Jobs Are Free! 🎉`;
   const templateProps = {
     firstName: firstName?.trim() || undefined,
     role,
@@ -818,7 +815,7 @@ export async function buildLaunchPromoProgressEmail(params: {
 }): Promise<{ subject: string; html: string }> {
   const n = Math.max(1, Math.floor(params.freeJobSlots));
   const done = Math.max(1, Math.min(params.completedCount, n));
-  const subject = `Great work! ${done} of ${n} free jobs completed ✅`;
+  const subject = `🎉 Free job completed! ${done} of ${n} with 0% fee ✅`;
   const element = React.createElement(LaunchPromoProgress, {
     firstName: params.firstName?.trim() || undefined,
     role: params.role,
@@ -835,7 +832,7 @@ export async function buildLaunchPromoEndingSoonEmail(params: {
   promoEndsAtIso?: string | null;
   normalFeePercent: number;
 }): Promise<{ subject: string; html: string }> {
-  const subject = "Your 0% fee promo ends soon – don't miss out!";
+  const subject = "⏳ Launch promo ending soon — finish your free jobs";
   const element = React.createElement(LaunchPromoEndingSoon, {
     firstName: params.firstName?.trim() || undefined,
     freeJobSlotsRemaining: params.freeJobSlotsRemaining,

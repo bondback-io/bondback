@@ -10,7 +10,7 @@ export interface LaunchPromoWelcomeProps {
 }
 
 export const LAUNCH_PROMO_WELCOME_PREHEADER =
-  "Your first jobs are fee-free — post a clean or browse work near you";
+  "Your first jobs are 100% fee-free — post a clean or browse work near you";
 
 export function LaunchPromoWelcome({
   firstName,
@@ -33,7 +33,9 @@ export function LaunchPromoWelcome({
       viewJobLabel={primaryLabel}
     >
       <Section style={contentSection}>
-        <Text style={heading}>Welcome to Bond Back — your launch promo is on 🎉</Text>
+        <Text style={heading}>
+          Welcome to Bond Back – Your First {slots} {slots === 1 ? "Job Is" : "Jobs Are"} Free! 🎉
+        </Text>
         <Text style={body}>Hi {displayName},</Text>
         <Text style={body}>
           Thanks for joining Bond Back. As part of our launch, your first{" "}
@@ -94,6 +96,6 @@ const trustLine = {
   margin: "20px 0 0 0",
   lineHeight: 1.5,
   fontWeight: "500" as const,
-  borderLeft: "4px solid #0ea5e9",
+  borderLeft: "4px solid #10b981",
   paddingLeft: "14px",
 };

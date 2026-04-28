@@ -20,22 +20,24 @@ export async function LaunchPromoHomepageHero() {
 
   const freeSlots = launchPromoFreeJobSlots(settings);
   const daysLeft = launchPromoCalendarDaysRemaining(settings, now);
-  const headline =
-    freeSlots === 2
-      ? "🎉 Launch Offer: First 2 Jobs Are 100% Fee-Free!"
-      : `🎉 Launch Offer: First ${freeSlots} Jobs Are 100% Fee-Free!`;
+  /** Marketing headline: dynamic slot count from admin (`launch_promo_free_job_slots`). */
+  const headline = `🎉 Launch Offer: First ${freeSlots} Jobs Are 100% Fee-Free!`;
 
   const sub =
     daysLeft != null ? (
       <>
-        No platform fees on your first {freeSlots} completed cleans • Offer ends in{" "}
+        No platform fees for your first {freeSlots} completed cleans •{" "}
+        <span className="font-semibold text-emerald-900 dark:text-emerald-200">90-day</span> launch
+        program • Ends in{" "}
         <span className="font-semibold text-emerald-900 dark:text-emerald-200">
           {daysLeft === 0 ? "less than a day" : `${daysLeft} day${daysLeft === 1 ? "" : "s"}`}
         </span>
       </>
     ) : (
       <>
-        No platform fees on your first {freeSlots} completed cleans • Limited-time launch offer
+        No platform fees for your first {freeSlots} completed cleans •{" "}
+        <span className="font-semibold text-emerald-900 dark:text-emerald-200">90 days</span>{" "}
+        limited-time launch offer
       </>
     );
 
@@ -90,7 +92,7 @@ export async function LaunchPromoHomepageHero() {
               className="h-12 min-h-[48px] w-full rounded-xl border-2 border-emerald-600/40 bg-white/90 text-base font-semibold text-emerald-900 backdrop-blur-sm hover:bg-emerald-50 dark:border-emerald-500/50 dark:bg-gray-900/80 dark:text-emerald-100 dark:hover:bg-emerald-950/50 sm:flex-1 sm:max-w-[220px]"
             >
               <Link href="/find-jobs">
-                Browse as a Cleaner
+                Browse Jobs as Cleaner
                 <ArrowRight className="ml-2 h-4 w-4 shrink-0 opacity-90" aria-hidden />
               </Link>
             </Button>

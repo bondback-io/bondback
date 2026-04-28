@@ -63,7 +63,7 @@ export function LaunchPromoDashboardBar({
     );
 
   const ctaHref = variant === "lister" ? "/listings/new" : "/find-jobs";
-  const ctaLabel = variant === "lister" ? "Create Another Free Job" : "Browse jobs";
+  const ctaLabel = variant === "lister" ? "Create Another Free Job" : "Browse Jobs as Cleaner";
 
   return (
     <div

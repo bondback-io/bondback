@@ -12,7 +12,7 @@ export interface LaunchPromoEndingSoonProps {
 }
 
 export const LAUNCH_PROMO_ENDING_SOON_PREHEADER =
-  "Use your remaining fee-free slots before the launch promo ends";
+  "⏳ Launch promo ending soon — use your remaining 0% fee slots";
 
 export function LaunchPromoEndingSoon({
   firstName,
@@ -51,7 +51,7 @@ export function LaunchPromoEndingSoon({
       viewJobLabel={remaining > 0 ? "Post or finish a job" : "Open your dashboard"}
     >
       <Section style={contentSection}>
-        <Text style={heading}>Your 0% fee promo ends soon — don&apos;t miss out!</Text>
+        <Text style={heading}>⏳ Your 0% fee launch promo ends soon</Text>
         <Text style={body}>Hi {displayName},</Text>
         <Text style={body}>
           {remaining > 0 ? (
@@ -109,6 +109,6 @@ const trustLine = {
   margin: "20px 0 0 0",
   lineHeight: 1.5,
   fontWeight: "500" as const,
-  borderLeft: "4px solid #0ea5e9",
+  borderLeft: "4px solid #10b981",
   paddingLeft: "14px",
 };
