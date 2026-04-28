@@ -10,6 +10,7 @@ import {
   endOfWeek,
   format,
   isSameMonth,
+  isToday,
   parseISO,
   startOfMonth,
   startOfWeek,
@@ -284,6 +285,144 @@ function CalendarDayCell({
             +{dayEvents.length - 3} more
           </span>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Compact month grid for phones/tablets — day numbers + coloured dots (no cramped labels). */
+function CalendarMobileMonthOverview({
+  month,
+  gridDays,
+  byDate,
+  onDayOpen,
+  selectedDayKey,
+}: {
+  month: Date;
+  gridDays: Date[];
+  byDate: Map<string, UserCalendarEvent[]>;
+  onDayOpen: (key: string) => void;
+  selectedDayKey: string | null;
+}) {
+  const stats = React.useMemo(() => {
+    let daysWith = 0;
+    let total = 0;
+    for (const day of gridDays) {
+      if (!isSameMonth(day, month)) continue;
+      const n = (byDate.get(format(day, "yyyy-MM-dd")) ?? []).length;
+      if (n > 0) {
+        daysWith += 1;
+        total += n;
+      }
+    }
+    return { daysWith, total };
+  }, [gridDays, month, byDate]);
+
+  const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-950/50">
+        <p className="text-center text-xs font-medium text-muted-foreground dark:text-gray-400">
+          {stats.total > 0 ? (
+            <>
+              <span className="tabular-nums text-foreground dark:text-gray-200">{stats.total}</span>
+              {" scheduled "}
+              {stats.total === 1 ? "item" : "items"}
+              {" · "}
+              <span className="tabular-nums text-foreground dark:text-gray-200">{stats.daysWith}</span>
+              {stats.daysWith === 1 ? " day" : " days"}
+            </>
+          ) : (
+            "No scheduled items in this month — dots appear when you have jobs on a day."
+          )}
+        </p>
+      </div>
+
+      <div
+        className="grid grid-cols-7 gap-1"
+        role="grid"
+        aria-label={`Month overview for ${format(month, "MMMM yyyy")}`}
+      >
+        {weekdayLabels.map((d) => (
+          <div
+            key={d}
+            className="py-1 text-center text-[10px] font-semibold uppercase tracking-tight text-muted-foreground dark:text-gray-500"
+            role="columnheader"
+          >
+            {d.slice(0, 3)}
+          </div>
+        ))}
+        {gridDays.map((day) => {
+          const key = format(day, "yyyy-MM-dd");
+          const evs = byDate.get(key) ?? [];
+          const outside = !isSameMonth(day, month);
+          const today = isToday(day);
+          const selected = selectedDayKey === key;
+          const dotEvents = evs.slice(0, 4);
+          const overflow = evs.length - dotEvents.length;
+
+          return (
+            <div key={key} role="gridcell" className="min-w-0">
+              <button
+                type="button"
+                onClick={() => onDayOpen(key)}
+                className={cn(
+                  "flex min-h-[3.25rem] w-full flex-col items-center justify-between rounded-xl border px-0.5 pb-1 pt-1.5 transition-colors active:scale-[0.97]",
+                  outside &&
+                    "cursor-default border-transparent bg-transparent opacity-40 dark:opacity-35",
+                  !outside &&
+                    "border-border/60 bg-background/90 shadow-sm dark:border-gray-700 dark:bg-gray-900/90",
+                  !outside &&
+                    evs.length > 0 &&
+                    "border-primary/35 bg-primary/[0.07] ring-1 ring-primary/15 dark:ring-primary/25",
+                  today &&
+                    !outside &&
+                    "ring-2 ring-emerald-500/70 ring-offset-2 ring-offset-background dark:ring-offset-gray-950",
+                  selected &&
+                    !outside &&
+                    "border-emerald-500/50 bg-emerald-500/10 dark:border-emerald-500/40"
+                )}
+                aria-label={
+                  outside
+                    ? undefined
+                    : `${format(day, "EEEE, d MMMM yyyy")}${
+                        evs.length ? `, ${evs.length} scheduled ${evs.length === 1 ? "item" : "items"}` : ", no items"
+                      }. Open details.`
+                }
+                aria-current={today ? "date" : undefined}
+              >
+                <span
+                  className={cn(
+                    "text-[13px] font-bold tabular-nums leading-none",
+                    outside ? "text-muted-foreground" : "text-foreground dark:text-gray-100"
+                  )}
+                >
+                  {format(day, "d")}
+                </span>
+                <div
+                  className="flex min-h-[14px] max-w-full flex-wrap items-center justify-center gap-0.5 px-0.5"
+                  aria-hidden={evs.length === 0}
+                >
+                  {dotEvents.map((e) => (
+                    <span
+                      key={e.id}
+                      className={cn(
+                        "h-1.5 w-1.5 shrink-0 rounded-full",
+                        CALENDAR_EVENT_DOT_CLASS[e.serviceType]
+                      )}
+                    />
+                  ))}
+                  {overflow > 0 ? (
+                    <span className="text-[8px] font-bold leading-none text-muted-foreground dark:text-gray-500">
+                      +{overflow}
+                    </span>
+                  ) : null}
+                </div>
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -610,7 +749,8 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
               My calendar
             </h1>
             <p className="text-sm text-muted-foreground dark:text-gray-400 lg:hidden">
-              Tap a day or job for full details. Icons show the service type; a check means completed.
+              The month overview uses coloured dots (see legend) for busy days; tap a day for details.
+              Below that, the list shows each job — icons show the service type; a check means completed.
             </p>
             <p className="hidden text-sm text-muted-foreground dark:text-gray-400 lg:block">
               Funded jobs with an assigned cleaner. Icons match the service type; a green check marks a
@@ -721,15 +861,32 @@ export function UserCalendarClient({ initial }: { initial: UserCalendarPayload }
                 <p className="mb-2 text-center text-xs text-muted-foreground">Updating schedule…</p>
               ) : null}
 
-              <div className="lg:hidden">
-                <CalendarMobileAgenda
-                  month={month}
-                  gridDays={gridDays}
-                  byDate={byDate}
-                  onDayOpen={setSelectedDayKey}
-                />
+              <div className="space-y-5 lg:hidden">
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold text-foreground dark:text-gray-100">
+                    Month overview
+                  </h2>
+                  <CalendarMobileMonthOverview
+                    month={month}
+                    gridDays={gridDays}
+                    byDate={byDate}
+                    onDayOpen={setSelectedDayKey}
+                    selectedDayKey={selectedDayKey}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold text-foreground dark:text-gray-100">
+                    Scheduled jobs
+                  </h2>
+                  <CalendarMobileAgenda
+                    month={month}
+                    gridDays={gridDays}
+                    byDate={byDate}
+                    onDayOpen={setSelectedDayKey}
+                  />
+                </div>
                 {initial.userHasListerRole ? (
-                  <p className="mt-3 text-center text-[11px] leading-snug text-muted-foreground dark:text-gray-500">
+                  <p className="text-center text-[11px] leading-snug text-muted-foreground dark:text-gray-500">
                     To drag a visit to another day, use the month grid on a larger screen.
                   </p>
                 ) : null}
