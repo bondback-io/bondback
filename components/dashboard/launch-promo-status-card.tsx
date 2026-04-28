@@ -189,13 +189,14 @@ export function LaunchPromoStatusCard({
   }
 
   const { used, freeSlots, endsAt } = model;
-  const pctBar = Math.min(100, Math.round((used / Math.max(1, freeSlots)) * 100));
   const countdownLabel =
     daysLeft != null
       ? daysLeft === 0
-        ? "Promo ends in less than a day"
+        ? "Ends in under a day"
         : `Promo ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`
-      : "Promo window — use your slots while the offer runs (90-day launch program)";
+      : "Use your slots while the offer runs";
+
+  const endDateLine = endsAt ? format(endsAt, "d MMM yyyy") : null;
 
   return (
     <section
@@ -206,83 +207,70 @@ export function LaunchPromoStatusCard({
       )}
       aria-labelledby={`launch-promo-active-${userId}`}
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-emerald-200/60 bg-emerald-600/10 px-3 py-2.5 text-xs font-semibold text-emerald-950 dark:border-emerald-800/50 dark:bg-emerald-500/10 dark:text-emerald-100 sm:px-5 sm:text-sm">
+      <div className="flex flex-col gap-0.5 border-b border-emerald-200/60 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-950 dark:border-emerald-800/50 dark:bg-emerald-500/10 dark:text-emerald-100 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:px-4 sm:text-sm">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden>🎉</span>
-          0% fee launch promo — active
+          0% fee promo — active
         </span>
-        <span className="hidden text-emerald-700/70 dark:text-emerald-300/70 sm:inline">·</span>
-        <span className="text-emerald-900/95 dark:text-emerald-100/90">{countdownLabel}</span>
+        <span className="hidden text-emerald-700/60 dark:text-emerald-300/60 sm:inline" aria-hidden>
+          ·
+        </span>
+        <span className="text-emerald-900/90 dark:text-emerald-100/85">
+          {countdownLabel}
+          {endDateLine ? (
+            <>
+              {" "}
+              <span className="font-normal text-emerald-800/80 dark:text-emerald-200/75">· until {endDateLine}</span>
+            </>
+          ) : null}
+        </span>
       </div>
 
-      <div className="flex flex-col gap-6 px-4 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-center lg:gap-10">
+      <div className="flex flex-col gap-4 px-4 py-4 sm:px-5 sm:py-5 lg:flex-row lg:items-center lg:gap-8">
         <LaunchPromoCircularProgress
           used={used}
           total={freeSlots}
-          aria-label={`${used} of ${freeSlots} free jobs completed`}
+          aria-label={`${used} of ${freeSlots} free jobs completed with zero percent platform fee`}
           className="mx-auto lg:mx-0"
         />
 
-        <div className="min-w-0 flex-1 space-y-4">
+        <div className="min-w-0 flex-1 space-y-3">
           <div>
             <h2
               id={`launch-promo-active-${userId}`}
-              className="text-pretty text-xl font-bold tracking-tight text-emerald-950 dark:text-emerald-50 sm:text-2xl"
+              className="text-pretty text-lg font-bold tracking-tight text-emerald-950 dark:text-emerald-50 sm:text-xl"
             >
-              Keep going — you&apos;re saving on platform fees
+              Saving on platform fees
             </h2>
-            <p className="mt-2 text-sm font-semibold text-emerald-900 dark:text-emerald-200 sm:text-base">
-              <span className="tabular-nums text-lg font-extrabold sm:text-xl">{used}</span>
+            <p className="mt-1 text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+              <span className="tabular-nums text-base font-extrabold sm:text-lg">{used}</span>
               <span className="font-bold text-emerald-700 dark:text-emerald-300"> of </span>
-              <span className="tabular-nums text-lg font-extrabold sm:text-xl">{freeSlots}</span>
-              <span className="font-medium"> free jobs completed</span>
+              <span className="tabular-nums text-base font-extrabold sm:text-lg">{freeSlots}</span>
+              <span className="font-semibold"> free jobs completed</span>
             </p>
           </div>
 
-          {/* Secondary horizontal bar reinforces ring on wide screens */}
-          <div
-            className="h-3 w-full max-w-xl overflow-hidden rounded-full bg-emerald-200/80 dark:bg-emerald-900/55"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={freeSlots}
-            aria-valuenow={used}
-            aria-label={`${used} of ${freeSlots} promo jobs used`}
+          <p
+            className="text-xs leading-snug text-emerald-950/95 dark:text-emerald-100/90 sm:text-sm"
+            title={monthlyTooltip}
           >
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 transition-[width] duration-500 dark:from-emerald-400 dark:via-teal-400 dark:to-emerald-300"
-              style={{ width: `${pctBar}%` }}
-            />
-          </div>
-
-          <div className="space-y-1 text-sm text-emerald-900 dark:text-emerald-200">
-            <p className="font-medium">{countdownLabel}</p>
-            {endsAt ? (
-              <p className="text-xs text-emerald-800/90 dark:text-emerald-300/85">
-                <time dateTime={endsAt.toISOString()}>Window ends {format(endsAt, "d MMM yyyy")}</time>
-              </p>
-            ) : null}
-            <p
-              className="rounded-lg border border-emerald-200/70 bg-white/75 px-3 py-2 text-xs leading-snug text-emerald-950/95 dark:border-emerald-800/50 dark:bg-emerald-950/25 dark:text-emerald-100/90 sm:text-sm"
-              title={monthlyTooltip}
-            >
-              <span className="font-semibold">This month (Airbnb / recurring tier):</span>{" "}
-              {variant === "lister" && typeof freeTierJobsUsedThisMonth === "number" ? (
-                <>
-                  {freeTierJobsUsedThisMonth} of {mktMonthly} free jobs (≤ ${mktPrice} AUD) — resets each calendar
-                  month (Sydney).
-                </>
-              ) : (
-                <>
-                  Up to {mktMonthly} jobs at ≤ {mktPrice} AUD per month for {ongoingLabels.join(" / ")}.
-                </>
-              )}
-            </p>
-          </div>
+            <span className="font-semibold">This month (Airbnb / recurring tier):</span>{" "}
+            {variant === "lister" && typeof freeTierJobsUsedThisMonth === "number" ? (
+              <>
+                {freeTierJobsUsedThisMonth} of {mktMonthly} free jobs (≤ ${mktPrice} AUD); resets each calendar month
+                (Sydney).
+              </>
+            ) : (
+              <>
+                Up to {mktMonthly} jobs at ≤ ${mktPrice} AUD / month ({ongoingLabels.join(" / ")}).
+              </>
+            )}
+          </p>
 
           {variant === "lister" ? (
             <CreateListingCtaButton
               size="lg"
-              className="h-12 w-full rounded-xl bg-emerald-600 text-base font-bold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 dark:bg-emerald-600 dark:shadow-emerald-950/30 dark:hover:bg-emerald-500 sm:w-auto sm:min-w-[240px]"
+              className="h-11 w-full rounded-xl bg-emerald-600 text-sm font-bold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 dark:bg-emerald-600 dark:shadow-emerald-950/30 dark:hover:bg-emerald-500 sm:h-12 sm:w-auto sm:min-w-[220px] sm:text-base"
             >
               {ctaLabel}
             </CreateListingCtaButton>
@@ -290,29 +278,24 @@ export function LaunchPromoStatusCard({
             <Button
               asChild
               size="lg"
-              className="h-12 w-full rounded-xl bg-emerald-600 text-base font-bold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 dark:bg-emerald-600 dark:shadow-emerald-950/30 dark:hover:bg-emerald-500 sm:w-auto sm:min-w-[240px]"
+              className="h-11 w-full rounded-xl bg-emerald-600 text-sm font-bold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 dark:bg-emerald-600 dark:shadow-emerald-950/30 dark:hover:bg-emerald-500 sm:h-12 sm:w-auto sm:min-w-[220px] sm:text-base"
             >
               <Link href={ctaHref}>{ctaLabel}</Link>
             </Button>
           )}
 
-          <div className="rounded-xl border border-emerald-200/70 bg-white/70 px-3 py-2.5 text-xs leading-relaxed text-emerald-950/95 dark:border-emerald-800/50 dark:bg-emerald-950/20 dark:text-emerald-100/90">
-            <span className="inline-flex items-start gap-1.5">
-              <Info className={cn(infoIconClass, "mt-0.5")} aria-hidden />
-              <span>
-                <span className="font-semibold">Launch promo</span> uses your remaining slots on{" "}
-                <span className="font-medium">any</span> service type.{" "}
-                <span className="font-semibold">Monthly tier</span> applies only to {ongoingLabels.join(" & ")}.
-              </span>
-            </span>
-          </div>
-
-          <p className="flex items-start gap-1.5 text-[11px] leading-snug text-emerald-900/75 dark:text-emerald-300/80 sm:text-xs">
+          <p className="flex items-start gap-1.5 text-[11px] leading-snug text-emerald-900/80 dark:text-emerald-300/85 sm:text-xs">
             <Info className={cn(infoIconClass, "mt-0.5")} aria-hidden />
             <span title={feeRulesTooltip}>
-              {standardFeeLabels.length > 0
-                ? `${standardFeeLabels.join(", ")}: standard platform fee except where launch or monthly Airbnb / recurring tier applies.`
-                : "Fees follow launch promo, then monthly Airbnb / recurring rules, then standard rates."}
+              <span className="font-medium">Launch promo</span> slots work on <span className="font-medium">any</span>{" "}
+              service type. <span className="font-medium">Monthly tier</span> ({ongoingLabels.join(" & ")} only).{" "}
+              {standardFeeLabels.length > 0 ? (
+                <>
+                  {standardFeeLabels.join(", ")}: standard fee unless launch or monthly tier applies.
+                </>
+              ) : (
+                <>Standard fees apply when launch and monthly rules don&apos;t.</>
+              )}
             </span>
           </p>
         </div>

@@ -62,9 +62,9 @@ export function LaunchPromoCircularProgress({
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </svg>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800/90 dark:text-emerald-200/90 sm:text-xs">
-          Free jobs
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/90 dark:text-emerald-200/90 sm:text-[11px]">
+          0% fee
         </p>
         <p className="mt-0.5 text-3xl font-extrabold tabular-nums leading-none text-emerald-950 dark:text-emerald-50 sm:text-4xl">
           {u}
@@ -73,8 +73,8 @@ export function LaunchPromoCircularProgress({
             / {safeTotal}
           </span>
         </p>
-        <p className="mt-1 max-w-[9rem] text-[11px] font-medium leading-snug text-emerald-900/85 dark:text-emerald-100/85 sm:text-xs">
-          completed with 0% platform fee
+        <p className="mt-0.5 max-w-[8.5rem] text-[10px] font-medium leading-tight text-emerald-900/85 dark:text-emerald-100/85 sm:text-[11px]">
+          free jobs done
         </p>
       </div>
     </div>

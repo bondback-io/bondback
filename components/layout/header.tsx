@@ -17,7 +17,7 @@ export type HeaderProps = {
   stripeTestMode?: boolean;
 };
 
-/** Bond Back wordmark home link. */
+/** Bond Back wordmark home link (pill: bold Bond, regular Back). */
 function LogoWithTagline({ className }: { className?: string }) {
   return (
     <Link
