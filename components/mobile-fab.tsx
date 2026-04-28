@@ -6,6 +6,7 @@ import { memo } from "react";
 import Image from "next/image";
 import { Plus, Search, Star, Briefcase, MapPin, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCreateListingPicker } from "@/components/listing/create-listing-picker-context";
 import { formatCents } from "@/lib/listings";
 import { REMOTE_IMAGE_BLUR_DATA_URL } from "@/lib/remote-image-blur";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
@@ -23,9 +24,29 @@ export function MobileDashboardFab({
   variant: "lister" | "cleaner";
 }) {
   const router = useRouter();
+  const { openCreateListingPicker } = useCreateListingPicker();
   const isLister = variant === "lister";
   const href = isLister ? "/listings/new" : "/find-jobs";
   const label = isLister ? "Create New Listing" : BROWSE_JOBS_NAV_LABEL;
+
+  if (isLister) {
+    return (
+      <button
+        type="button"
+        onMouseEnter={() => router.prefetch("/listings/new")}
+        onClick={() => openCreateListingPicker()}
+        className={cn(
+          "fixed left-4 right-[4.75rem] z-[55] flex items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-semibold text-white shadow-2xl transition active:scale-[0.98] sm:text-base md:hidden",
+          "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))]",
+          "bg-emerald-600 ring-2 ring-emerald-400/40 hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+        )}
+        aria-label={label}
+      >
+        <Plus className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
+        <span className="truncate">{label}</span>
+      </button>
+    );
+  }
 
   return (
     <Link
@@ -35,17 +56,11 @@ export function MobileDashboardFab({
       className={cn(
         "fixed left-4 right-[4.75rem] z-[55] flex items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-semibold !text-white shadow-2xl transition active:scale-[0.98] no-underline hover:!text-white sm:text-base md:hidden",
         "bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))]",
-        isLister
-          ? "bg-emerald-600 ring-2 ring-emerald-400/40 hover:bg-emerald-500 dark:bg-emerald-600 dark:!text-white dark:hover:bg-emerald-500 dark:hover:!text-white"
-          : "bg-blue-600 ring-2 ring-blue-400/40 hover:bg-blue-500 dark:bg-blue-600 dark:!text-white dark:hover:bg-blue-500 dark:hover:!text-white"
+        "bg-blue-600 ring-2 ring-blue-400/40 hover:bg-blue-500 dark:bg-blue-600 dark:!text-white dark:hover:bg-blue-500 dark:hover:!text-white"
       )}
       aria-label={label}
     >
-      {isLister ? (
-        <Plus className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
-      ) : (
-        <Search className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
-      )}
+      <Search className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
       <span className="truncate">{label}</span>
     </Link>
   );

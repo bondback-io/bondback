@@ -13,6 +13,7 @@ import {
 } from "@/lib/launch-promo";
 import { SERVICE_TYPES, serviceTypeLabel } from "@/lib/service-types";
 import { Button } from "@/components/ui/button";
+import { CreateListingCtaButton } from "@/components/listing/create-listing-cta-button";
 import { cn } from "@/lib/utils";
 import { LaunchPromoCircularProgress } from "@/components/promo/launch-promo-circular-progress";
 
@@ -107,14 +108,24 @@ export function LaunchPromoStatusCard({
           </p>
         ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            asChild
-            size="sm"
-            variant="outline"
-            className="border-emerald-600/40 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-500/50 dark:text-emerald-100 dark:hover:bg-emerald-950/50"
-          >
-            <Link href={ctaHref}>{variant === "lister" ? "Post a new job" : "Browse open jobs"}</Link>
-          </Button>
+          {variant === "lister" ? (
+            <CreateListingCtaButton
+              size="sm"
+              variant="outline"
+              className="border-emerald-600/40 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-500/50 dark:text-emerald-100 dark:hover:bg-emerald-950/50"
+            >
+              Post a new job
+            </CreateListingCtaButton>
+          ) : (
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="border-emerald-600/40 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-500/50 dark:text-emerald-100 dark:hover:bg-emerald-950/50"
+            >
+              <Link href={ctaHref}>Browse open jobs</Link>
+            </Button>
+          )}
         </div>
       </section>
     );
@@ -155,13 +166,22 @@ export function LaunchPromoStatusCard({
                 <span className="font-medium">Bond Pro</span> — we&apos;ll highlight savings here when it launches.
               </p>
             ) : null}
-            <Button
-              asChild
-              size="lg"
-              className="h-11 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:w-auto"
-            >
-              <Link href={ctaHref}>{ctaLabel}</Link>
-            </Button>
+            {variant === "lister" ? (
+              <CreateListingCtaButton
+                size="lg"
+                className="h-11 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:w-auto"
+              >
+                {ctaLabel}
+              </CreateListingCtaButton>
+            ) : (
+              <Button
+                asChild
+                size="lg"
+                className="h-11 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:w-auto"
+              >
+                <Link href={ctaHref}>{ctaLabel}</Link>
+              </Button>
+            )}
           </div>
         </div>
       </section>
@@ -259,13 +279,22 @@ export function LaunchPromoStatusCard({
             </p>
           </div>
 
-          <Button
-            asChild
-            size="lg"
-            className="h-12 w-full rounded-xl bg-emerald-600 text-base font-bold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 dark:bg-emerald-600 dark:shadow-emerald-950/30 dark:hover:bg-emerald-500 sm:w-auto sm:min-w-[240px]"
-          >
-            <Link href={ctaHref}>{ctaLabel}</Link>
-          </Button>
+          {variant === "lister" ? (
+            <CreateListingCtaButton
+              size="lg"
+              className="h-12 w-full rounded-xl bg-emerald-600 text-base font-bold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 dark:bg-emerald-600 dark:shadow-emerald-950/30 dark:hover:bg-emerald-500 sm:w-auto sm:min-w-[240px]"
+            >
+              {ctaLabel}
+            </CreateListingCtaButton>
+          ) : (
+            <Button
+              asChild
+              size="lg"
+              className="h-12 w-full rounded-xl bg-emerald-600 text-base font-bold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 dark:bg-emerald-600 dark:shadow-emerald-950/30 dark:hover:bg-emerald-500 sm:w-auto sm:min-w-[240px]"
+            >
+              <Link href={ctaHref}>{ctaLabel}</Link>
+            </Button>
+          )}
 
           <div className="rounded-xl border border-emerald-200/70 bg-white/70 px-3 py-2.5 text-xs leading-relaxed text-emerald-950/95 dark:border-emerald-800/50 dark:bg-emerald-950/20 dark:text-emerald-100/90">
             <span className="inline-flex items-start gap-1.5">

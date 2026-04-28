@@ -31,6 +31,7 @@ import { SupportContactProvider } from "@/components/providers/support-contact-p
 import { getSupportContactEmail } from "@/lib/support-contact-email";
 import { LoggedInRoutePrefetch } from "@/components/performance/logged-in-route-prefetch";
 import { ProductTour } from "@/components/onboarding/ProductTour";
+import { CreateListingPickerProvider } from "@/components/listing/create-listing-picker-context";
 
 const site = getSiteUrl();
 
@@ -161,6 +162,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
       <body>
         <SupportContactProvider email={getSupportContactEmail()}>
         <QueryClientProviderWrapper>
+        <CreateListingPickerProvider>
         {showAnnouncement && settings?.announcement_text?.trim() ? (
           <SiteAnnouncementBanner text={settings.announcement_text} />
         ) : null}
@@ -210,6 +212,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
           <ContextualFab activeRole={session?.activeRole ?? null} />
         </Toaster>
         <PwaInstallPrompt />
+        </CreateListingPickerProvider>
         </QueryClientProviderWrapper>
         </SupportContactProvider>
       </body>

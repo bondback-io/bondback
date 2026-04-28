@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 import { isGooglePublicAvatarUrl } from "@/lib/google-avatar-url";
 import { OptimizedImage } from "@/components/ui/optimized-image";
+import { useCreateListingPicker } from "@/components/listing/create-listing-picker-context";
 import {
   Dialog,
   DialogContent,
@@ -332,6 +333,7 @@ function jobsActivityHref(roles: ProfileRole[], activeRole: ProfileRole | null) 
 
 export function UserMenu({ session }: UserMenuProps) {
   const router = useRouter();
+  const { openCreateListingPicker } = useCreateListingPicker();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [mobileSheetOpen, setMobileSheetOpen] = React.useState(false);
@@ -598,18 +600,21 @@ export function UserMenu({ session }: UserMenuProps) {
                     }}
                   >
                     <SheetClose asChild>
-                      <Link
-                        href="/listings/new"
-                        prefetch
+                      <button
+                        type="button"
                         className={[
                           MOBILE_SUB_ROW_CLASS,
-                          "text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100",
+                          "w-full text-left text-foreground hover:bg-muted dark:hover:bg-gray-800 dark:text-gray-100",
                         ].join(" ")}
                         aria-label="Create listing"
+                        onClick={() => {
+                          router.prefetch("/listings/new");
+                          openCreateListingPicker();
+                        }}
                       >
                         <PlusCircle className="h-4 w-4 shrink-0" aria-hidden />
                         <span>Create Listing</span>
-                      </Link>
+                      </button>
                     </SheetClose>
                     <SheetClose asChild>
                       <Link
@@ -853,7 +858,8 @@ export function UserMenu({ session }: UserMenuProps) {
             >
               <DropdownMenuItem
                 onSelect={() => {
-                  router.push("/listings/new");
+                  router.prefetch("/listings/new");
+                  openCreateListingPicker();
                 }}
                 className="flex cursor-pointer items-center gap-2.5 rounded-lg py-2 pl-6 focus:bg-muted dark:focus:bg-gray-800"
                 aria-label="Create listing"

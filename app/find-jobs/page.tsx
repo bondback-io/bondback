@@ -36,6 +36,7 @@ import { listingsToFindJobsMapPoints } from "@/lib/find-jobs/map-points-from-lis
 import { clearExpiredMarketplaceBanIfNeeded } from "@/lib/auth/clear-expired-ban";
 import { isProfileBanActiveForAccess } from "@/lib/profile-ban";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CreateListingCtaButton } from "@/components/listing/create-listing-cta-button";
 
 export const metadata: Metadata = {
   title: "Find bond cleaning jobs",
@@ -321,9 +322,9 @@ async function FindJobsPageContent({
             <Button type="button" size="sm" variant="outline" asChild>
               <Link href={increaseRadiusHref}>Increase radius</Link>
             </Button>
-            <Button type="button" size="sm" asChild>
-              <Link href="/listings/new">Create listing</Link>
-            </Button>
+            <CreateListingCtaButton type="button" size="sm">
+              Create listing
+            </CreateListingCtaButton>
           </div>
         </CardContent>
       </Card>

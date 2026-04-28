@@ -385,6 +385,7 @@ async function ListerDashboardContent() {
       href: "/listings/new",
       primary: true,
       icon: "plus" as const,
+      useCreateListingPicker: true,
     },
     { label: "Browse Cleaners", href: "/cleaners", icon: "search" as const },
     {
@@ -539,6 +540,7 @@ async function ListerDashboardContent() {
             description="Create a listing to get bids from cleaners."
             actionLabel="Create your first listing"
             actionHref="/listings/new"
+            useCreateListingPicker
             icon="list"
           />
         ) : (

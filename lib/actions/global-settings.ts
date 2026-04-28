@@ -986,6 +986,13 @@ export async function sendGlobalSettingsTestEmail(
     const result = await sendEmail(recipient, "Bond Back – Resend test (global settings)", html, {
       log: { userId: adminId, kind: "admin_test_global_settings" },
     });
+    if (result.skipped) {
+      return {
+        ok: false,
+        error:
+          "Sending is off: Global settings has “Send notification emails” disabled. Turn it on, save, then try again.",
+      };
+    }
     if (!result.ok) return { ok: false, error: result.error ?? "Send failed" };
     return { ok: true };
   } catch (e) {

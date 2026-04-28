@@ -7,7 +7,7 @@ import { Menu, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { CreateListingConfirmDialog } from "@/components/listing/create-listing-confirm-dialog";
+import { useCreateListingPicker } from "@/components/listing/create-listing-picker-context";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { useSwipeToClose } from "@/lib/use-swipe-to-close";
 import { FindJobsSheetLink } from "@/components/layout/find-jobs-nav-link";
@@ -90,11 +90,9 @@ function GuestMobileSheetContent({ onNavigate }: { onNavigate?: () => void }) {
 function DesktopNavLinks({
   isLoggedIn,
   isLister,
-  onRequestCreateListing,
-}: Pick<MainNavProps, "isLoggedIn" | "isLister"> & {
-  onRequestCreateListing?: () => void;
-}) {
+}: Pick<MainNavProps, "isLoggedIn" | "isLister">) {
   const router = useRouter();
+  const { openCreateListingPicker } = useCreateListingPicker();
 
   return (
     <nav
@@ -103,40 +101,23 @@ function DesktopNavLinks({
     >
       {isLoggedIn && (
         <>
-          {isLister &&
-            (onRequestCreateListing ? (
-              <Button
-                id="tour-create-listing-desktop"
-                type="button"
-                size="sm"
-                className="ml-0 hidden shrink-0 gap-2 rounded-full bg-emerald-600 px-2.5 py-1.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-900/25 md:px-3 md:py-2 lg:px-4 2xl:inline-flex dark:bg-emerald-600 dark:shadow-none dark:hover:bg-emerald-500 dark:hover:shadow-md dark:hover:shadow-emerald-950/50"
-                title="Create listing"
-                aria-label="Create listing"
-                onClick={onRequestCreateListing}
-              >
-                <PlusCircle className="h-4 w-4 shrink-0" aria-hidden />
-                <span>Create Listing</span>
-              </Button>
-            ) : (
-              <Button
-                asChild
-                size="sm"
-                className="ml-0 hidden shrink-0 rounded-full bg-emerald-600 px-2.5 py-1.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-900/25 md:px-3 md:py-2 lg:px-4 2xl:inline-flex dark:bg-emerald-600 dark:shadow-none dark:hover:bg-emerald-500 dark:hover:shadow-md dark:hover:shadow-emerald-950/50"
-              >
-                <Link
-                  id="tour-create-listing-desktop"
-                  href="/listings/new"
-                  prefetch
-                  className="inline-flex items-center gap-2 whitespace-nowrap"
-                  title="Create listing"
-                  aria-label="Create listing"
-                  onMouseEnter={() => router.prefetch("/listings/new")}
-                >
-                  <PlusCircle className="h-4 w-4 shrink-0" aria-hidden />
-                  <span>Create Listing</span>
-                </Link>
-              </Button>
-            ))}
+          {isLister && (
+            <Button
+              id="tour-create-listing-desktop"
+              type="button"
+              size="sm"
+              className="ml-0 hidden shrink-0 gap-2 rounded-full bg-emerald-600 px-2.5 py-1.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/20 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-900/25 md:px-3 md:py-2 lg:px-4 2xl:inline-flex dark:bg-emerald-600 dark:shadow-none dark:hover:bg-emerald-500 dark:hover:shadow-md dark:hover:shadow-emerald-950/50"
+              title="Create listing"
+              aria-label="Create listing"
+              onClick={() => {
+                router.prefetch("/listings/new");
+                openCreateListingPicker();
+              }}
+            >
+              <PlusCircle className="h-4 w-4 shrink-0" aria-hidden />
+              <span>Create Listing</span>
+            </Button>
+          )}
         </>
       )}
     </nav>
@@ -150,8 +131,6 @@ export function MainNav({
   trailingGuestTools = false,
 }: MainNavProps) {
   const [open, setOpen] = React.useState(false);
-  const [createListingOpen, setCreateListingOpen] = React.useState(false);
-  const openCreateListingDialog = React.useCallback(() => setCreateListingOpen(true), []);
   useBodyScrollLock(open);
   const swipeHandlers = useSwipeToClose(() => setOpen(false), "right");
 
@@ -163,11 +142,7 @@ export function MainNav({
         className
       )}
     >
-      <DesktopNavLinks
-        isLoggedIn={isLoggedIn}
-        isLister={isLister}
-        onRequestCreateListing={isLister ? openCreateListingDialog : undefined}
-      />
+      <DesktopNavLinks isLoggedIn={isLoggedIn} isLister={isLister} />
 
       {!isLoggedIn && (
         <Sheet open={open} onOpenChange={setOpen}>
@@ -206,9 +181,6 @@ export function MainNav({
         </Sheet>
       )}
 
-      {isLister && (
-        <CreateListingConfirmDialog open={createListingOpen} onOpenChange={setCreateListingOpen} />
-      )}
     </div>
   );
 }

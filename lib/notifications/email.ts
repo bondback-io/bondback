@@ -197,12 +197,13 @@ export async function sendEmail(
   }
 
   try {
+    /** Resend Node SDK expects camelCase (maps to API JSON). `reply_to` was ignored, so Reply-To never applied. */
     const payload: {
       from: string;
       to: string[];
       subject: string;
       html: string;
-      reply_to?: string;
+      replyTo?: string | string[];
       headers?: Record<string, string>;
       attachments?: { filename: string; content: Buffer }[];
     } = {
@@ -211,7 +212,7 @@ export async function sendEmail(
       subject,
       html: htmlContent,
     };
-    if (REPLY_TO) payload.reply_to = REPLY_TO;
+    if (REPLY_TO) payload.replyTo = REPLY_TO;
     if (options?.headers && Object.keys(options.headers).length > 0) {
       payload.headers = options.headers;
     }

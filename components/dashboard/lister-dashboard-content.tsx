@@ -57,7 +57,13 @@ export type ListerDashboardContentProps = {
 };
 
 const LISTER_ACTIONS = [
-  { label: "Create New Listing", href: "/listings/new", primary: true, icon: "plus" as const },
+  {
+    label: "Create New Listing",
+    href: "/listings/new",
+    primary: true,
+    icon: "plus" as const,
+    useCreateListingPicker: true,
+  },
   { label: "Browse Cleaners", href: "/cleaners", icon: "search" as const },
   { label: "My Active Jobs", href: "/lister/dashboard#active-jobs", icon: "briefcase" as const },
   { label: "My Completed Jobs", href: "/lister/dashboard#completed-jobs", icon: "check-circle" as const },
@@ -107,6 +113,7 @@ export function ListerDashboardContent({
             description="Create a listing to get bids from cleaners."
             actionLabel="Create your first listing"
             actionHref="/listings/new"
+            useCreateListingPicker
             icon="list"
           />
         ) : (

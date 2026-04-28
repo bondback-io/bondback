@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCreateListingPicker } from "@/components/listing/create-listing-picker-context";
 import { cn } from "@/lib/utils";
 import {
   launchPromoCalendarDaysRemaining,
@@ -34,6 +36,8 @@ export function LaunchPromoDashboardBar({
   settings,
   profileCreatedAtIso,
 }: LaunchPromoDashboardBarProps) {
+  const router = useRouter();
+  const { openCreateListingPicker } = useCreateListingPicker();
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
@@ -112,13 +116,27 @@ export function LaunchPromoDashboardBar({
             ) : null}
           </div>
         </div>
-        <Button
-          asChild
-          size="sm"
-          className="h-10 shrink-0 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:h-9"
-        >
-          <Link href={ctaHref}>{ctaLabel}</Link>
-        </Button>
+        {variant === "lister" ? (
+          <Button
+            type="button"
+            size="sm"
+            className="h-10 shrink-0 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:h-9"
+            onClick={() => {
+              router.prefetch("/listings/new");
+              openCreateListingPicker();
+            }}
+          >
+            {ctaLabel}
+          </Button>
+        ) : (
+          <Button
+            asChild
+            size="sm"
+            className="h-10 shrink-0 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:h-9"
+          >
+            <Link href={ctaHref}>{ctaLabel}</Link>
+          </Button>
+        )}
       </div>
     </div>
   );

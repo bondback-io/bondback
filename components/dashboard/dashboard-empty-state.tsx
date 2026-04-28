@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { useCreateListingPicker as useListingServicePickerDialog } from "@/components/listing/create-listing-picker-context";
 import { cn } from "@/lib/utils";
 import { List, Briefcase } from "lucide-react";
 
@@ -18,6 +20,8 @@ export type DashboardEmptyStateProps = {
   description?: string;
   actionLabel: string;
   actionHref: string;
+  /** Opens the service-type picker instead of navigating directly. */
+  useCreateListingPicker?: boolean;
   /** Icon identifier (string) so Server Components can pass safely. */
   icon?: EmptyStateIconName;
   className?: string;
@@ -28,9 +32,12 @@ export function DashboardEmptyState({
   description,
   actionLabel,
   actionHref,
+  useCreateListingPicker = false,
   icon: iconName,
   className,
 }: DashboardEmptyStateProps) {
+  const router = useRouter();
+  const { openCreateListingPicker } = useListingServicePickerDialog();
   const Icon = iconName ? EMPTY_STATE_ICON_MAP[iconName] : null;
   return (
     <div
@@ -52,9 +59,24 @@ export function DashboardEmptyState({
           {description}
         </p>
       )}
-      <Button asChild size="sm" variant="success" className="mt-4 rounded-full">
-        <Link href={actionHref}>{actionLabel}</Link>
-      </Button>
+      {useCreateListingPicker ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="success"
+          className="mt-4 rounded-full"
+          onClick={() => {
+            router.prefetch(actionHref);
+            openCreateListingPicker();
+          }}
+        >
+          {actionLabel}
+        </Button>
+      ) : (
+        <Button asChild size="sm" variant="success" className="mt-4 rounded-full">
+          <Link href={actionHref}>{actionLabel}</Link>
+        </Button>
+      )}
     </div>
   );
 }

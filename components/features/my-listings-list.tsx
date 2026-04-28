@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { OptimizedImage } from "@/components/ui/optimized-image";
+import { CreateListingCtaButton } from "@/components/listing/create-listing-cta-button";
 import {
   clampAuctionDurationDays,
   formatAuctionDurationChoiceLabel,
@@ -1016,9 +1017,9 @@ export function MyListingsList({
                       anytime from here.
                     </p>
                   </div>
-                  <Button asChild variant="success" size="lg" className="h-12 rounded-xl px-8 text-base font-semibold">
-                    <Link href="/listings/new">Create new listing</Link>
-                  </Button>
+                  <CreateListingCtaButton variant="success" size="lg" className="h-12 rounded-xl px-8 text-base font-semibold">
+                    Create new listing
+                  </CreateListingCtaButton>
                 </div>
               ) : (
                 <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
@@ -1096,9 +1097,9 @@ export function MyListingsList({
                   past listings.
                 </p>
               </div>
-              <Button asChild variant="success" size="lg" className="h-12 rounded-xl px-8 text-base font-semibold">
-                <Link href="/listings/new">Create new listing</Link>
-              </Button>
+              <CreateListingCtaButton variant="success" size="lg" className="h-12 rounded-xl px-8 text-base font-semibold">
+                Create new listing
+              </CreateListingCtaButton>
             </div>
           )}
 
@@ -1142,9 +1143,9 @@ export function MyListingsList({
                   Publish your first bond clean listing to start receiving bids.
                 </p>
               </div>
-              <Button asChild variant="success" size="lg" className="h-12 rounded-xl px-8 text-base font-semibold">
-                <Link href="/listings/new">Create new listing</Link>
-              </Button>
+              <CreateListingCtaButton variant="success" size="lg" className="h-12 rounded-xl px-8 text-base font-semibold">
+                Create new listing
+              </CreateListingCtaButton>
             </div>
           )}
 

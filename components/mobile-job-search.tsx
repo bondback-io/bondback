@@ -274,9 +274,13 @@ export function MobileJobSearchBar({
   const { toast } = useToast();
   const distanceUnit = useDistanceUnit();
   const mdUp = useMdUp();
-  const cleanersSuburbListId = React.useId();
+  const suburbSuggestListId = React.useId();
 
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  /** After picking a suburb on /find-jobs, hide the inline list until the user edits again. */
+  const [suburbSuggestionsDismissed, setSuburbSuggestionsDismissed] = React.useState(
+    () => Boolean(initialSuburb?.trim())
+  );
   const skipRadiusFromUrlOnceRef = React.useRef(false);
   const [radiusKm, setRadiusKm] = React.useState(() => {
     if (
@@ -398,6 +402,7 @@ export function MobileJobSearchBar({
 
   const suburbLabel =
     suburb.trim() ||
+    query.trim() ||
     profileSuburb?.trim() ||
     (centerLat != null && centerLon != null ? "Near me" : "Area");
 
@@ -542,10 +547,16 @@ export function MobileJobSearchBar({
         radius_km: String(radiusKm),
       });
     }
+    if (variant === "jobs") {
+      setSuburbSuggestionsDismissed(true);
+    }
     setSheetOpen(false);
   };
 
   const handleMainInput = (value: string) => {
+    if (variant === "jobs") {
+      setSuburbSuggestionsDismissed(false);
+    }
     const trimmed = value.trim();
     setQuery(value);
 
@@ -569,8 +580,8 @@ export function MobileJobSearchBar({
       return;
     }
 
-    setSuburb(value);
     if (trimmed === "") {
+      setSuburb("");
       setPostcode("");
       setCenterLat(null);
       setCenterLon(null);
@@ -701,12 +712,18 @@ export function MobileJobSearchBar({
       propertyType !== "any");
   const pillLabel = `${formatRadiusBannerLabel(radiusKm, distanceUnit)} (${suburbLabel})`;
 
-  /** Hide suggestions once a suburb is chosen (query matches locked suburb); show again when editing. */
-  const showCleanersSuburbSuggestions =
-    variant === "cleaners" &&
+  /**
+   * Cleaners: hide once the typed query matches the committed suburb (select flow clears suburb until pick).
+   * Jobs (/find-jobs): inline list was cleaners-only — use dismiss flag so URL-driven suburb sync does not hide it mid-type.
+   */
+  const showSuburbSuggestions =
     query.trim().length >= 2 &&
-    (suburb.trim() === "" ||
-      query.trim().toLowerCase() !== suburb.trim().toLowerCase());
+    (variant === "cleaners"
+      ? suburb.trim() === "" ||
+        query.trim().toLowerCase() !== suburb.trim().toLowerCase()
+      : variant === "jobs"
+        ? !suburbSuggestionsDismissed
+        : false);
 
   return (
     <div
@@ -719,21 +736,17 @@ export function MobileJobSearchBar({
       )}
     >
       <div className="flex items-center gap-2 md:gap-3">
-        <div className="relative z-10 min-h-[44px] min-w-0 flex-1 md:min-h-[44px]">
+        <div className="relative z-30 min-h-[44px] min-w-0 flex-1 md:min-h-[44px]">
           <Input
             type="search"
             enterKeyHint="search"
-            placeholder={
-              variant === "cleaners"
-                ? "Type a suburb — pick from suggestions"
-                : "Search jobs near me…"
-            }
+            placeholder="Type a suburb — pick from suggestions"
             value={query}
             onChange={(e) => handleMainInput(e.target.value)}
             onKeyDown={(e) => {
-              if (variant !== "cleaners") return;
+              if (variant !== "cleaners" && variant !== "jobs") return;
               if (e.key !== "Enter") return;
-              if (!showCleanersSuburbSuggestions) return;
+              if (!showSuburbSuggestions) return;
               const first = results[0];
               if (pending || !first) return;
               e.preventDefault();
@@ -752,20 +765,24 @@ export function MobileJobSearchBar({
                 ? "Search cleaners by suburb"
                 : "Search jobs by suburb"
             }
-            aria-autocomplete={variant === "cleaners" ? "list" : undefined}
+            aria-autocomplete={
+              variant === "cleaners" || variant === "jobs" ? "list" : undefined
+            }
             aria-expanded={
-              variant === "cleaners" ? showCleanersSuburbSuggestions : undefined
+              variant === "cleaners" || variant === "jobs"
+                ? showSuburbSuggestions
+                : undefined
             }
             aria-controls={
-              variant === "cleaners" && showCleanersSuburbSuggestions
-                ? cleanersSuburbListId
+              (variant === "cleaners" || variant === "jobs") && showSuburbSuggestions
+                ? suburbSuggestListId
                 : undefined
             }
           />
-          {showCleanersSuburbSuggestions && (
+          {showSuburbSuggestions && (
             <div
-              className="absolute left-0 right-0 top-full mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg dark:border-gray-700 dark:bg-gray-900"
-              id={cleanersSuburbListId}
+              className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg dark:border-gray-700 dark:bg-gray-900"
+              id={suburbSuggestListId}
             >
               {pending && (
                 <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground dark:text-gray-400">

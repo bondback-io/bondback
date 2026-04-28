@@ -41,6 +41,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { ServiceTypeKey } from "@/lib/service-types";
 import { FIND_JOBS_MAP_POINTS_SOFT_CAP } from "@/lib/find-jobs/map-points-from-listings";
+import { useCreateListingPicker } from "@/components/listing/create-listing-picker-context";
 
 const MARKER_TO_POINT = new WeakMap<L.Marker, FindJobsMapPoint>();
 
@@ -592,6 +593,7 @@ export type FindJobsMapPaneProps = {
 
 export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: FindJobsMapPaneProps) {
   const router = useRouter();
+  const { openCreateListingPicker } = useCreateListingPicker();
   const {
     detailListing,
     setHighlightedListingId,
@@ -812,11 +814,13 @@ export function FindJobsMapPane({ points, centerLat, centerLon, radiusKm }: Find
             type="button"
             size="icon"
             className="h-12 w-12 rounded-full bg-emerald-600 text-white shadow-lg hover:bg-emerald-700"
-            asChild
+            aria-label="List a job"
+            onClick={() => {
+              router.prefetch("/listings/new");
+              openCreateListingPicker();
+            }}
           >
-            <Link href="/listings/new" aria-label="List a job">
-              <Plus className="h-5 w-5" aria-hidden />
-            </Link>
+            <Plus className="h-5 w-5" aria-hidden />
           </Button>
         </div>
       ) : null}

@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CreateListingConfirmDialog } from "@/components/listing/create-listing-confirm-dialog";
+import { useCreateListingPicker } from "@/components/listing/create-listing-picker-context";
 
 export type ProfileRole = "lister" | "cleaner";
 
@@ -61,7 +61,7 @@ export type ContextualFabProps = {
 export function ContextualFab({ activeRole, className }: ContextualFabProps) {
   const pathname = usePathname();
   const hideForContext = useHideFabContext();
-  const [createListingOpen, setCreateListingOpen] = useState(false);
+  const { openCreateListingPicker } = useCreateListingPicker();
 
   /**
    * FAB route = show this widget at all. `hideForContext` hides only the floating
@@ -92,7 +92,7 @@ export function ContextualFab({ activeRole, className }: ContextualFabProps) {
             type="button"
             title={ariaLabel}
             aria-label={ariaLabel}
-            onClick={() => setCreateListingOpen(true)}
+            onClick={() => openCreateListingPicker()}
             className={cn(
               "flex h-16 w-16 min-h-[4rem] min-w-[4rem] items-center justify-center rounded-full bg-emerald-600 text-white shadow-2xl ring-2 ring-emerald-400/50 transition hover:bg-emerald-500 active:scale-95 dark:bg-emerald-600 dark:hover:bg-emerald-500"
             )}
@@ -101,8 +101,6 @@ export function ContextualFab({ activeRole, className }: ContextualFabProps) {
           </button>
         </div>
       )}
-
-      <CreateListingConfirmDialog open={createListingOpen} onOpenChange={setCreateListingOpen} />
     </>
   );
 }

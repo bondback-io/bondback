@@ -1,34 +1,32 @@
 "use client";
 
+import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { useCreateListingPicker } from "@/components/listing/create-listing-picker-context";
 import { cn } from "@/lib/utils";
+import { useCreateListingPicker } from "@/components/listing/create-listing-picker-context";
 
-type Props = Omit<React.ComponentProps<typeof Button>, "asChild" | "onClick"> & {
-  children?: React.ReactNode;
-};
+export type CreateListingCtaButtonProps = React.ComponentProps<typeof Button>;
 
 /** Opens the global service-type picker (same as header Create Listing). */
-export function MyListingsNewListingButton({
-  children = "New listing",
+export function CreateListingCtaButton({
   className,
+  onClick,
   ...props
-}: Props) {
+}: CreateListingCtaButtonProps) {
   const router = useRouter();
   const { openCreateListingPicker } = useCreateListingPicker();
 
   return (
     <Button
       type="button"
-      onClick={() => {
+      {...props}
+      className={cn(className)}
+      onClick={(e) => {
+        onClick?.(e);
         router.prefetch("/listings/new");
         openCreateListingPicker();
       }}
-      className={cn(className)}
-      {...props}
-    >
-      {children}
-    </Button>
+    />
   );
 }

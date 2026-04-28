@@ -32,7 +32,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-const NewListingPage = async () => {
+const NewListingPage = async ({
+  searchParams,
+}: {
+  searchParams?: Promise<{ service_type?: string }>;
+}) => {
+  const sp = (await searchParams) ?? {};
+  const initialServiceType = sp.service_type;
+
   const supabase = await createServerSupabaseClient();
 
   const {
@@ -167,6 +174,7 @@ const NewListingPage = async () => {
       listerId={session.user.id}
       listerSuburb={profile.suburb ?? undefined}
       listerPostcode={profile.postcode ?? ""}
+      initialServiceType={initialServiceType}
       feePercentage={feePercentage}
       feePercentageByService={feePercentageByService}
       pricingModifiers={pricingModifiers}

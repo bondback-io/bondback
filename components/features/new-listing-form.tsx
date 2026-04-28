@@ -54,20 +54,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { LucideIcon } from "lucide-react";
 import {
-  Building2,
   CalendarIcon,
   CheckCircle2,
   CircleHelp,
   ImagePlus,
-  KeyRound,
   MapPin,
   Hash,
   ChevronRight,
   ChevronLeft,
   ListChecks,
-  Repeat2,
   X,
   Sparkles,
 } from "lucide-react";
@@ -137,6 +133,7 @@ import {
   serviceTypeLabel,
   type ServiceTypeKey,
 } from "@/lib/service-types";
+import { CREATE_LISTING_SERVICE_PICKER_OPTIONS } from "@/lib/create-listing-service-picker-options";
 import {
   buildListingServiceDetailsPayload,
   DEEP_FOCUS_AREA_KEYS,
@@ -165,37 +162,6 @@ function getDefaultFreeChecklistLinesForForm(
 
 const serviceTypeZodEnum = z.enum(SERVICE_TYPES as unknown as [string, ...string[]]);
 
-const SERVICE_TYPE_PICKER_OPTIONS: {
-  value: ServiceTypeKey;
-  title: string;
-  subtitle: string;
-  icon: LucideIcon;
-}[] = [
-  {
-    value: "bond_cleaning",
-    title: "Bond cleaning",
-    subtitle: "End of lease & bond return",
-    icon: KeyRound,
-  },
-  {
-    value: "recurring_house_cleaning",
-    title: "Recurring clean",
-    subtitle: "Weekly, fortnightly, or monthly",
-    icon: Repeat2,
-  },
-  {
-    value: "airbnb_turnover",
-    title: "Airbnb turnover",
-    subtitle: "Short-stay & guest-ready",
-    icon: Building2,
-  },
-  {
-    value: "deep_clean",
-    title: "Deep / spring clean",
-    subtitle: "Deep, spring & inspection-ready cleans",
-    icon: Sparkles,
-  },
-];
 const recurringFreqZodEnum = z.enum(
   RECURRING_FREQUENCIES as unknown as [string, ...string[]]
 );
@@ -514,6 +480,8 @@ export type NewListingFormProps = {
     freeTierJobsUsedThisMonth: number;
     freeTierMonthKeyFromServer: string;
   };
+  /** From `/listings/new?service_type=` — pre-selects the form service type. */
+  initialServiceType?: string | null;
 };
 
 function platformFeeCents(jobAmountDollars: number, feePct: number): number {
@@ -553,7 +521,9 @@ export function NewListingForm({
   launchPromo,
   freeTierPriceCapAud = LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD,
   promoFeePreview,
+  initialServiceType = null,
 }: NewListingFormProps) {
+  const initialSt = normalizeServiceType(initialServiceType);
   const minReserveAud = allowLowAmountListings
     ? LOW_AMOUNT_MIN_RESERVE_AUD
     : DEFAULT_MIN_LISTING_STARTING_PRICE_AUD;
@@ -603,15 +573,19 @@ export function NewListingForm({
   const [, startSubmitTransition] = useTransition();
   const [photoStagingCount, setPhotoStagingCount] = useState(0);
 
-  const defaultReservePrice = Math.max(
-    computeBaseListingPriceAud(pricingModifiers, {
-      bedrooms: 2,
-      bathrooms: 1,
-      condition: "excellent_very_good",
-      levels: "1",
-      serviceType: "bond_cleaning",
-    }),
-    minReserveAud
+  const defaultReservePrice = useMemo(
+    () =>
+      Math.max(
+        computeBaseListingPriceAud(pricingModifiers, {
+          bedrooms: 2,
+          bathrooms: 1,
+          condition: "excellent_very_good",
+          levels: "1",
+          serviceType: initialSt,
+        }),
+        minReserveAud
+      ),
+    [pricingModifiers, minReserveAud, initialSt]
   );
 
   const durationOptions = useMemo(
@@ -622,7 +596,7 @@ export function NewListingForm({
   const form = useForm<ListingFormValues>({
     resolver: listingResolver,
     defaultValues: {
-      serviceType: "bond_cleaning",
+      serviceType: initialSt,
       recurringFrequency: undefined,
       airbnbGuestCapacity: undefined,
       airbnbTurnaroundHours: undefined,
@@ -1457,7 +1431,7 @@ export function NewListingForm({
                       role="radiogroup"
                       aria-label="Service type"
                     >
-                      {SERVICE_TYPE_PICKER_OPTIONS.map((opt) => {
+                      {CREATE_LISTING_SERVICE_PICKER_OPTIONS.map((opt) => {
                         const selected = field.value === opt.value;
                         const Icon = opt.icon;
                         return (
@@ -2586,6 +2560,15 @@ export function NewListingForm({
                                   checked={isChecked}
                                   className="mt-0.5 sm:mt-0"
                                   onCheckedChange={(checked) => {
+                                    const isSpecial = (specialAreaKeys as readonly string[]).includes(key);
+                                    if (isSpecial) {
+                                      const sa = watchedValues.specialAreas ?? [];
+                                      const nextSa = checked
+                                        ? [...new Set([...sa, key as (typeof specialAreaKeys)[number]])]
+                                        : sa.filter((a) => a !== key);
+                                      form.setValue("specialAreas", nextSa, { shouldValidate: true });
+                                      return;
+                                    }
                                     const next = checked
                                       ? [...watchedValues.addons, key]
                                       : watchedValues.addons.filter((a) => a !== key);
