@@ -9,7 +9,6 @@ import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
 import {
   isLaunchPromoWindowOpen,
   launchPromoFreeJobSlots,
-  listerQualifiesForZeroPlatformFee,
   type GlobalSettingsWithLaunchPromo,
 } from "@/lib/launch-promo";
 import { NewListingFormLazy } from "./new-listing-form-client";
@@ -145,12 +144,7 @@ const NewListingPage = async () => {
       )
     )
   );
-  const listingQualifiesForPromoBanner = listerQualifiesForZeroPlatformFee({
-    baseFeePercent: feePercentage,
-    listerJobsUsed: listerPromoUsed,
-    freeSlots: promoFreeSlots,
-    promoOpen: promoWindowOpen,
-  });
+  const showLaunchPromoOnForm = promoWindowOpen && listerPromoUsed < promoFreeSlots;
 
   return (
     <NewListingFormLazy
@@ -165,7 +159,7 @@ const NewListingPage = async () => {
       allowLowAmountListings={allowLowAmountListings}
       allowTwoMinuteAuctionTest={allowTwoMinuteAuctionTest}
       launchPromo={
-        listingQualifiesForPromoBanner
+        showLaunchPromoOnForm
           ? {
               userId: session.user.id,
               used: listerPromoUsed,

@@ -61,7 +61,6 @@ import {
   type GlobalSettingsWithLaunchPromo,
 } from "@/lib/launch-promo";
 import { LaunchPromoStatusCard } from "@/components/dashboard/launch-promo-status-card";
-import { LaunchPromoDashboardBar } from "@/components/promo/launch-promo-dashboard-bar";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -417,23 +416,6 @@ async function CleanerDashboardContent() {
         </header>
       </div>
 
-      {launchPromoModel.phase === "active" ? (
-        <LaunchPromoDashboardBar
-          userId={user.id}
-          variant="cleaner"
-          used={launchPromoModel.used}
-          freeSlots={launchPromoModel.freeSlots}
-          endsAtIso={
-            globalForDash
-              ? (globalForDash as GlobalSettingsWithLaunchPromo).launch_promo_ends_at != null
-                ? String((globalForDash as GlobalSettingsWithLaunchPromo).launch_promo_ends_at)
-                : null
-              : null
-          }
-          settings={globalForDash as GlobalSettingsWithLaunchPromo | null}
-        />
-      ) : null}
-
       {showWelcomeBanner && (
         <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-background shadow-sm dark:border-emerald-800/60 dark:from-emerald-950/40 dark:to-gray-950">
           <CardHeader className="space-y-1 pb-2 pt-5 sm:pt-4">
@@ -447,7 +429,12 @@ async function CleanerDashboardContent() {
         </Card>
       )}
 
-      <LaunchPromoStatusCard model={launchPromoModel} />
+      <LaunchPromoStatusCard
+        model={launchPromoModel}
+        variant="cleaner"
+        userId={user.id}
+        settings={globalForDash as GlobalSettingsWithLaunchPromo | null}
+      />
 
       {/* Quick stats — larger type + padding on mobile; rating stays prominent */}
       <QuickStatsRow

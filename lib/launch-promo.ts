@@ -16,6 +16,23 @@ export type GlobalSettingsWithLaunchPromo = GlobalFeeSettings & LaunchPromoGloba
 const DEFAULT_FREE_SLOTS = 2;
 const MAX_FREE_SLOTS_CAP = 20;
 
+/**
+ * Product marketing numbers (monthly Airbnb/recurring allowance is not fully tracked in DB yet;
+ * dashboards use these for copy + tooltips; enforce price/month caps when you add migrations).
+ */
+export const LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP = 2;
+export const LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD = 350;
+
+/** Bond + deep cleans always charge the normal platform fee (promo slots apply to other service types). */
+export function launchPromoZeroFeeEligibleForServiceType(
+  serviceType: string | null | undefined
+): boolean {
+  const t = String(serviceType ?? "").trim().toLowerCase();
+  if (!t) return true;
+  if (t === "bond_cleaning" || t === "deep_clean") return false;
+  return true;
+}
+
 export function launchPromoFreeJobSlots(
   settings: GlobalSettingsWithLaunchPromo | null | undefined
 ): number {
@@ -109,6 +126,20 @@ export async function fetchListerPlatformFeePercentWithLaunchPromo(
   settings: GlobalSettingsWithLaunchPromo | null
 ): Promise<number> {
   const base = await fetchPlatformFeePercentForListing(supabase, listingId, settings);
+
+  let serviceType: string | null = null;
+  if (listingId != null && String(listingId).trim() !== "") {
+    const { data } = await supabase
+      .from("listings")
+      .select("service_type")
+      .eq("id", String(listingId))
+      .maybeSingle();
+    serviceType = (data as { service_type?: string } | null)?.service_type ?? null;
+  }
+  if (!launchPromoZeroFeeEligibleForServiceType(serviceType)) {
+    return base;
+  }
+
   const freeSlots = launchPromoFreeJobSlots(settings);
   const promoOpen = isLaunchPromoWindowOpen(settings, new Date());
   const used = await fetchListerPromoJobsUsed(supabase, listerId);

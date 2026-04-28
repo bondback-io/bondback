@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { launchPromoZeroFeeEligibleForServiceType } from "@/lib/launch-promo";
 
 const storageKey = (userId: string) => `bb_launch_promo_listing_form_v1:${userId}`;
 
@@ -11,12 +12,18 @@ export type LaunchPromoListingFormBannerProps = {
   userId: string;
   used: number;
   freeSlots: number;
+  /** Current draft service type; bond/deep are excluded from 0% fee. */
+  serviceType?: string | null;
+  /** Admin/default fee for this type; shown when bond/deep excludes 0%. */
+  standardFeePercent?: number;
 };
 
 export function LaunchPromoListingFormBanner({
   userId,
   used,
   freeSlots,
+  serviceType,
+  standardFeePercent,
 }: LaunchPromoListingFormBannerProps) {
   const [dismissed, setDismissed] = useState(true);
 
@@ -40,6 +47,13 @@ export function LaunchPromoListingFormBanner({
   if (dismissed) return null;
 
   const remaining = Math.max(0, freeSlots - used);
+  const zeroFeeEligible = launchPromoZeroFeeEligibleForServiceType(serviceType);
+  const feeLabel =
+    typeof standardFeePercent === "number" &&
+    Number.isFinite(standardFeePercent) &&
+    standardFeePercent >= 0
+      ? `${standardFeePercent}%`
+      : null;
 
   return (
     <div
@@ -61,15 +75,30 @@ export function LaunchPromoListingFormBanner({
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <Badge className="border-emerald-600/30 bg-emerald-600 text-[10px] font-semibold uppercase tracking-wide text-white dark:bg-emerald-600">
-              Promo active
+              {zeroFeeEligible ? "Promo active" : "Launch promo"}
             </Badge>
           </div>
-          <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-50 sm:text-base">
-            Great news! This job qualifies for 0% platform fee
-          </p>
-          <p className="text-xs text-emerald-900/85 dark:text-emerald-200/90 sm:text-sm">
-            You have {remaining} of {freeSlots} free jobs remaining
-          </p>
+          {zeroFeeEligible ? (
+            <>
+              <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-50 sm:text-base">
+                Great news! This job qualifies for 0% platform fee
+              </p>
+              <p className="text-xs text-emerald-900/85 dark:text-emerald-200/90 sm:text-sm">
+                You have {remaining} of {freeSlots} free jobs remaining
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-50 sm:text-base">
+                Standard platform fee applies to this job type
+              </p>
+              <p className="text-xs text-emerald-900/85 dark:text-emerald-200/90 sm:text-sm">
+                Bond and deep cleans are not eligible for the 0% launch offer
+                {feeLabel ? ` — estimated fee for this listing is ${feeLabel}` : ""}. You still have{" "}
+                {remaining} of {freeSlots} free jobs on eligible listing types.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

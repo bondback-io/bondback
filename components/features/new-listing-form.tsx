@@ -109,6 +109,10 @@ import {
 import { notifyListerListingLive } from "@/lib/actions/notifications";
 import { LaunchPromoListingFormBanner } from "@/components/promo/launch-promo-listing-form-banner";
 import {
+  listerQualifiesForZeroPlatformFee,
+  launchPromoZeroFeeEligibleForServiceType,
+} from "@/lib/launch-promo";
+import {
   computeBaseListingPriceAud,
   getListingAddonPriceFromModifiers,
   PROPERTY_CONDITION_OPTIONS,
@@ -646,6 +650,23 @@ export function NewListingForm({
     return feePercentage;
   }, [feePercentageByService, serviceTypeWatched, feePercentage]);
 
+  /** Estimates lister-facing fee on this draft; 0 when launch promo + eligible service type + slots remain. */
+  const displayFeePercent = useMemo(() => {
+    if (
+      launchPromo &&
+      listerQualifiesForZeroPlatformFee({
+        baseFeePercent: effectiveFeePercent,
+        listerJobsUsed: launchPromo.used,
+        freeSlots: launchPromo.freeSlots,
+        promoOpen: true,
+      }) &&
+      launchPromoZeroFeeEligibleForServiceType(serviceTypeWatched)
+    ) {
+      return 0;
+    }
+    return effectiveFeePercent;
+  }, [launchPromo, effectiveFeePercent, serviceTypeWatched]);
+
   useEffect(() => {
     if (serviceTypeWatched !== "recurring_house_cleaning") {
       form.setValue("recurringFrequency", undefined, { shouldValidate: true });
@@ -677,9 +698,9 @@ export function NewListingForm({
     () =>
       platformFeeCents(
         typeof reservePriceWatched === "number" && reservePriceWatched > 0 ? reservePriceWatched : 0,
-        effectiveFeePercent
+        displayFeePercent
       ),
-    [reservePriceWatched, effectiveFeePercent]
+    [reservePriceWatched, displayFeePercent]
   );
   const buyNowNum =
     typeof buyNowPriceWatched === "string" && buyNowPriceWatched.trim() !== ""
@@ -691,9 +712,9 @@ export function NewListingForm({
     () =>
       platformFeeCents(
         Number.isFinite(buyNowNum) && buyNowNum > 0 ? buyNowNum : 0,
-        effectiveFeePercent
+        displayFeePercent
       ),
-    [buyNowNum, effectiveFeePercent]
+    [buyNowNum, displayFeePercent]
   );
   const minPhotosPublish = useMemo(
     () => minPhotosRequiredToPublish(serviceTypeWatched as ServiceTypeKey),
@@ -1334,6 +1355,8 @@ export function NewListingForm({
             userId={launchPromo.userId}
             used={launchPromo.used}
             freeSlots={launchPromo.freeSlots}
+            serviceType={serviceTypeWatched}
+            standardFeePercent={effectiveFeePercent}
           />
         ) : null}
         <header className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-sky-50/40 px-4 py-5 shadow-sm ring-1 ring-emerald-500/10 dark:border-emerald-800/60 dark:from-emerald-950/45 dark:via-gray-950 dark:to-sky-950/25 dark:ring-emerald-400/10 sm:px-6 sm:py-6">
@@ -2918,8 +2941,18 @@ export function NewListingForm({
                     </div>
                   </dl>
                   <p className="mt-2 text-[11px] text-muted-foreground dark:text-gray-500">
-                    Service Fee for this job type is {effectiveFeePercent}% (admin default or per-type override). Your
-                    starting price below may match or differ from this suggestion.
+                    Standard service fee for this job type is {effectiveFeePercent}% (admin default or per-type
+                    override).
+                    {displayFeePercent < effectiveFeePercent ? (
+                      <>
+                        {" "}
+                        <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                          Launch promo: {displayFeePercent}% estimated for this listing type while you have free
+                          slots.
+                        </span>
+                      </>
+                    ) : null}{" "}
+                    Your starting price below may match or differ from this suggestion.
                   </p>
                 </div>
 
@@ -2985,9 +3018,7 @@ export function NewListingForm({
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
                     Cleaners bid down from the starting price. Your bond is most likely returned if the final price covers this amount.
                   </p>
-                  {typeof reservePriceWatched === "number" &&
-                    reservePriceWatched > 0 &&
-                    reserveFeeCents > 0 && (
+                  {typeof reservePriceWatched === "number" && reservePriceWatched > 0 && (
                       <div
                         className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm dark:border-gray-700 dark:bg-gray-800/60"
                         role="status"
@@ -3005,7 +3036,7 @@ export function NewListingForm({
                           </div>
                           <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                             <dt className="text-muted-foreground dark:text-gray-400">
-                              Service Fee ({effectiveFeePercent}%)
+                              Service Fee ({displayFeePercent}%)
                             </dt>
                             <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                               {formatAudFromCents(reserveFeeCents)}
@@ -3104,7 +3135,7 @@ export function NewListingForm({
                   <p className="text-xs text-muted-foreground dark:text-gray-400">
                     Cleaners can accept this price instantly. Must be lower than starting price.
                   </p>
-                  {Number.isFinite(buyNowNum) && buyNowNum > 0 && buyNowFeeCents > 0 && (
+                  {Number.isFinite(buyNowNum) && buyNowNum > 0 && (
                     <div
                       className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm dark:border-gray-700 dark:bg-gray-800/60"
                       role="status"
@@ -3122,7 +3153,7 @@ export function NewListingForm({
                         </div>
                         <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                           <dt className="text-muted-foreground dark:text-gray-400">
-                            Service Fee ({effectiveFeePercent}%)
+                            Service Fee ({displayFeePercent}%)
                           </dt>
                           <dd className="text-base font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-lg">
                             {formatAudFromCents(buyNowFeeCents)}
