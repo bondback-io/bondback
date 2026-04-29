@@ -26,6 +26,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { ArrowDown, ArrowUp, CircleHelp, Sparkles } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import type { SaveGlobalSettingsInput } from "@/lib/actions/global-settings";
@@ -124,6 +130,29 @@ const SMS_TYPE_CONTROLS: { key: string; label: string }[] = [
   { key: "auto_release_warning", label: "Auto-release warning" },
   { key: "new_job_in_area", label: "New job in area (cleaners)" },
 ];
+
+/** Collapsible group for `/admin/global-settings` — wraps existing cards unchanged. */
+function AdminSettingsAccordionSection({
+  value,
+  title,
+  children,
+}: {
+  value: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <AccordionItem
+      value={value}
+      className="overflow-hidden rounded-xl border border-border bg-card/50 dark:border-gray-800 dark:bg-gray-950/40"
+    >
+      <AccordionTrigger className="px-3 py-3 text-left text-sm font-semibold hover:no-underline [&[data-state=open]>svg]:text-muted-foreground sm:min-h-[3rem] sm:py-3">
+        {title}
+      </AccordionTrigger>
+      <AccordionContent className="space-y-4 px-2 pb-3 pt-0 sm:space-y-4 sm:px-3">{children}</AccordionContent>
+    </AccordionItem>
+  );
+}
 
 function PricingFieldHelp({
   label,
@@ -699,7 +728,16 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
         </p>
       </div>
 
-      <Card className="border-amber-200/80 bg-amber-50/50 dark:border-amber-800/60 dark:bg-amber-950/30">
+      <Accordion
+        type="multiple"
+        defaultValue={["fees-cleaners"]}
+        className="w-full space-y-2"
+      >
+        <AdminSettingsAccordionSection
+          value="escrow-cancel"
+          title="Lister cancel · non-responsive cleaner (escrow)"
+        >
+          <Card className="border-amber-200/80 bg-amber-50/50 dark:border-amber-800/60 dark:bg-amber-950/30">
         <CardHeader>
           <CardTitle className="text-sm font-semibold text-amber-950 dark:text-amber-100">
             Lister cancel — non-responsive cleaner (escrow)
@@ -750,7 +788,12 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </p>
         </CardContent>
       </Card>
+        </AdminSettingsAccordionSection>
 
+        <AdminSettingsAccordionSection
+          value="site-testing"
+          title="Site theme · Stripe test mode · Test listings"
+        >
       <Card className="border-border bg-card dark:border-gray-800 dark:bg-gray-950/50">
         <CardHeader>
           <CardTitle className="text-sm font-semibold dark:text-gray-100">Default site theme</CardTitle>
@@ -853,7 +896,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </div>
         </CardContent>
       </Card>
+        </AdminSettingsAccordionSection>
 
+        <AdminSettingsAccordionSection value="launch-promo" title="Launch promo (0% platform fee)">
       <Card className="border-emerald-200/90 bg-emerald-50/50 dark:border-emerald-800/70 dark:bg-emerald-950/35">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm font-semibold text-emerald-950 dark:text-emerald-100">
@@ -1007,7 +1052,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </div>
         </CardContent>
       </Card>
+        </AdminSettingsAccordionSection>
 
+        <AdminSettingsAccordionSection value="sms-cleaner-notifications" title="SMS (Twilio) & cleaner new-listing alerts">
       <Card className="border-violet-200 bg-violet-50/50 dark:border-violet-900 dark:bg-violet-950/30">
         <CardHeader>
           <CardTitle className="text-sm font-semibold text-violet-900 dark:text-violet-100">
@@ -1262,7 +1309,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </div>
         </CardContent>
       </Card>
+        </AdminSettingsAccordionSection>
 
+        <AdminSettingsAccordionSection value="catalog-pricing" title="Add-ons, checklists & pricing modifiers">
       <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
         <CardHeader>
           <CardTitle className="text-sm font-semibold dark:text-gray-100">
@@ -1940,7 +1989,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </p>
         </CardContent>
       </Card>
+        </AdminSettingsAccordionSection>
 
+        <AdminSettingsAccordionSection value="fees-cleaners" title="Service fees & cleaner requirements">
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
           <CardHeader>
@@ -2204,8 +2255,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </CardContent>
         </Card>
       </div>
+        </AdminSettingsAccordionSection>
 
-      {/* Row 4: Referral Program Settings */}
+        <AdminSettingsAccordionSection value="referrals" title="Referral program">
       <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
           <CardHeader>
             <CardTitle className="text-sm font-semibold dark:text-gray-100">
@@ -2361,7 +2413,12 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           )}
         </CardContent>
       </Card>
+        </AdminSettingsAccordionSection>
 
+        <AdminSettingsAccordionSection
+          value="payouts-email-admin"
+          title="Auto-release, payouts, receipts & emails"
+        >
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
           <CardHeader>
@@ -2714,7 +2771,9 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </CardContent>
         </Card>
       </div>
+        </AdminSettingsAccordionSection>
 
+        <AdminSettingsAccordionSection value="site-banners" title="Announcement banner & maintenance mode">
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="border-border bg-card/80 dark:border-gray-800 dark:bg-gray-900">
           <CardHeader>
@@ -2794,6 +2853,8 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           </CardContent>
         </Card>
       </div>
+        </AdminSettingsAccordionSection>
+      </Accordion>
 
       <div className="flex justify-end">
         <Button
