@@ -70,11 +70,11 @@ export function LaunchPromoStatusCard({
   const feeRulesTooltip =
     `When both launch promo and the monthly Airbnb/recurring free tier could apply, launch promo is used first (launch slots count before the monthly quota). ` +
     `Launch: 0% platform fee on your first completed jobs (any service type) while the global promo is on and within 90 days of signup. ` +
-    `Ongoing free tier: up to ${mktMonthly} ${ongoingLabels.join(" / ")} jobs per Sydney calendar month with job amount at or below $${mktPrice} AUD; ` +
+    `Ongoing free tier: up to ${mktMonthly} ${ongoingLabels.join(" / ")} fee-free completions per Sydney calendar month after escrow release when the job amount is at or below $${mktPrice} AUD; ` +
     `Bond clean and deep/spring clean use the standard fee with no monthly cap.`;
 
   const monthlyTooltip =
-    `Airbnb & recurring: up to ${mktMonthly} fee-free completions per Sydney calendar month when the job amount is at or below $${mktPrice} AUD.`;
+    `Airbnb & recurring: up to ${mktMonthly} fee-free completions per Sydney calendar month after escrow release, when the job amount is at or below $${mktPrice} AUD.`;
 
   if (model.phase === "ended") {
     return (
@@ -258,12 +258,13 @@ export function LaunchPromoStatusCard({
             <span className="font-semibold">This month (Airbnb / recurring tier):</span>{" "}
             {variant === "lister" && typeof freeTierJobsUsedThisMonth === "number" ? (
               <>
-                {freeTierJobsUsedThisMonth} of {mktMonthly} free jobs (≤ ${mktPrice} AUD); resets each calendar month
-                (Sydney).
+                {freeTierJobsUsedThisMonth} of {mktMonthly} fee-free completions after escrow release (≤ ${mktPrice}{" "}
+                AUD); resets each Sydney calendar month.
               </>
             ) : (
               <>
-                Up to {mktMonthly} jobs at ≤ ${mktPrice} AUD / month ({ongoingLabels.join(" / ")}).
+                Up to {mktMonthly} fee-free completions after escrow release per Sydney calendar month (≤ ${mktPrice}{" "}
+                AUD; {ongoingLabels.join(" / ")}).
               </>
             )}
           </p>
