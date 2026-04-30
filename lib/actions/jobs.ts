@@ -2758,16 +2758,6 @@ export async function releaseJobFunds(
   }
 
   try {
-    /**
-     * After partial lister refunds, each charge has less balance available for `source_transaction` transfers.
-     * Transfer at most: min(cleaner leg amount, charge_remaining − platform fee on that leg).
-     * If nothing remains for the cleaner, skip Connect transfers and still mark escrow settled.
-     */
-    const basePlatformFeePercent = await fetchPlatformFeePercentForListing(
-      supabase,
-      j.listing_id,
-      globalForRelease
-    );
     const feeResolution = await resolveListerPlatformFeeWithLaunchPromo(supabase, {
       listingId: j.listing_id,
       listerId: j.lister_id,
@@ -2777,6 +2767,11 @@ export async function releaseJobFunds(
     const listingFeePercent = feeResolution.feePercent;
     const topUpsParsed = parseJobTopUpPayments(j.top_up_payments as never);
 
+    /**
+     * After partial lister refunds, each charge has less balance available for `source_transaction` transfers.
+     * Transfer at most: min(cleaner leg amount, charge_remaining − platform fee on that leg).
+     * If nothing remains for the cleaner, skip Connect transfers and still mark escrow settled.
+     */
     type PlanRow = {
       leg: (typeof legs)[number];
       chargeId: string;
@@ -2944,7 +2939,6 @@ export async function releaseJobFunds(
         const promoResult = await incrementLaunchPromoJobCompletionsIfNeeded(adminPromo, {
           listerId: j.lister_id,
           winnerId: j.winner_id,
-          baseFeePercent: basePlatformFeePercent,
           appliedFeePercent: listingFeePercent,
           zeroFeeSource: feeResolution.zeroFeeSource,
         });

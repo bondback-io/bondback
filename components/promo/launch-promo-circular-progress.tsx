@@ -1,12 +1,12 @@
 import { cn } from "@/lib/utils";
 
 type LaunchPromoCircularProgressProps = {
-  /** Jobs completed under promo (0 … total). */
+  /** Fee-free completions after payment release (0 … total); not incremented when posting a listing alone. */
   used: number;
   /** Total free slots from global settings. */
   total: number;
   className?: string;
-  /** Accessible label, e.g. "3 of 5 free jobs completed". */
+  /** Accessible label, e.g. "3 of 5 fee-free completions after payment release". */
   "aria-label": string;
 };
 
@@ -73,8 +73,8 @@ export function LaunchPromoCircularProgress({
             / {safeTotal}
           </span>
         </p>
-        <p className="mt-0.5 max-w-[8.5rem] text-[10px] font-medium leading-tight text-emerald-900/85 dark:text-emerald-100/85 sm:text-[11px]">
-          free jobs done
+        <p className="mt-0.5 max-w-[9rem] text-[10px] font-medium leading-tight text-emerald-900/85 dark:text-emerald-100/85 sm:text-[11px]">
+          after escrow release
         </p>
       </div>
     </div>

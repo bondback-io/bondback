@@ -68,6 +68,7 @@ export function LaunchPromoStatusCard({
       : launchPromoMarketingPriceCapAud(settings);
 
   const feeRulesTooltip =
+    `When both launch promo and the monthly Airbnb/recurring free tier could apply, launch promo is used first (launch slots count before the monthly quota). ` +
     `Launch: 0% platform fee on your first completed jobs (any service type) while the global promo is on and within 90 days of signup. ` +
     `Ongoing free tier: up to ${mktMonthly} ${ongoingLabels.join(" / ")} jobs per Sydney calendar month with job amount at or below $${mktPrice} AUD; ` +
     `Bond clean and deep/spring clean use the standard fee with no monthly cap.`;
@@ -141,7 +142,7 @@ export function LaunchPromoStatusCard({
           <LaunchPromoCircularProgress
             used={model.freeSlots}
             total={model.freeSlots}
-            aria-label={`All ${model.freeSlots} of ${model.freeSlots} free jobs completed`}
+            aria-label={`All ${model.freeSlots} of ${model.freeSlots} launch fee-free completions after escrow was released`}
             className="mx-auto md:mx-0"
           />
           <div className="min-w-0 flex-1 space-y-3">
@@ -230,7 +231,7 @@ export function LaunchPromoStatusCard({
         <LaunchPromoCircularProgress
           used={used}
           total={freeSlots}
-          aria-label={`${used} of ${freeSlots} free jobs completed with zero percent platform fee`}
+          aria-label={`${used} of ${freeSlots} launch fee-free completions after payment release (posting a job does not use a slot until escrow is released at zero percent)`}
           className="mx-auto lg:mx-0"
         />
 
@@ -246,7 +247,7 @@ export function LaunchPromoStatusCard({
               <span className="tabular-nums text-base font-extrabold sm:text-lg">{used}</span>
               <span className="font-bold text-emerald-700 dark:text-emerald-300"> of </span>
               <span className="tabular-nums text-base font-extrabold sm:text-lg">{freeSlots}</span>
-              <span className="font-semibold"> free jobs completed</span>
+              <span className="font-semibold"> fee-free completions after escrow release</span>
             </p>
           </div>
 

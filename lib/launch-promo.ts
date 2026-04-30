@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import type { GlobalFeeSettings } from "@/lib/platform-fee";
-import { fetchPlatformFeePercentForListing } from "@/lib/platform-fee";
+import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import {
   SERVICE_TYPES,
   normalizeServiceType,
@@ -329,7 +329,7 @@ export type ListerZeroFeeSource = "launch_promo" | "ongoing_free_airbnb_recurrin
 
 export type ListerPlatformFeeResolution = {
   feePercent: number;
-  /** When `feePercent === 0` and base > 0, which program waived the fee (for counters). */
+  /** When the lister pays no platform fee (`feePercent === 0`), which program waived it (for counters). */
   zeroFeeSource: ListerZeroFeeSource | null;
 };
 
@@ -350,17 +350,12 @@ export async function resolveListerPlatformFeeWithLaunchPromo(
   const now = params.now ?? new Date();
   const { listingId, listerId, settings, agreedAmountCents } = params;
 
-  const base = await fetchPlatformFeePercentForListing(supabase, listingId, settings);
-  if (!(base > 0)) {
-    return { feePercent: base, zeroFeeSource: null };
-  }
-
   const listingSelect =
     listingId != null && String(listingId).trim() !== ""
       ? supabase
           .from("listings")
           .select(
-            "service_type, reserve_cents, buy_now_cents, starting_price_cents, current_lowest_bid_cents"
+            "service_type, platform_fee_percentage, reserve_cents, buy_now_cents, starting_price_cents, current_lowest_bid_cents"
           )
           .eq("id", String(listingId))
           .maybeSingle()
@@ -374,12 +369,43 @@ export async function resolveListerPlatformFeeWithLaunchPromo(
     .eq("id", listerId)
     .maybeSingle();
 
-  const [{ data: listingData }, { data: profileData }] = await Promise.all([
+  const [{ data: listingRow }, { data: profileData }] = await Promise.all([
     listingSelect,
     profileSelect,
   ]);
 
-  const listing = listingData as ListingFeeSlice | null;
+  const row = listingRow as {
+    service_type?: string | null;
+    platform_fee_percentage?: number | null;
+    reserve_cents?: number | null;
+    buy_now_cents?: number | null;
+    starting_price_cents?: number | null;
+    current_lowest_bid_cents?: number | null;
+  } | null;
+
+  const serviceType = row?.service_type ?? null;
+  const settingsForFee = settings as GlobalFeeSettings;
+  const snapshotFee = resolvePlatformFeePercent(
+    row?.platform_fee_percentage,
+    settingsForFee,
+    serviceType
+  );
+  /** Standard rate for this listing’s service (ignores per-listing snapshot). Used to decide if a waiver “counts”. */
+  const globalFee = resolvePlatformFeePercent(undefined, settingsForFee, serviceType);
+
+  if (!(globalFee > 0)) {
+    return { feePercent: snapshotFee, zeroFeeSource: null };
+  }
+
+  const listing: ListingFeeSlice | null = row
+    ? {
+        service_type: row.service_type,
+        reserve_cents: row.reserve_cents,
+        buy_now_cents: row.buy_now_cents,
+        starting_price_cents: row.starting_price_cents,
+        current_lowest_bid_cents: row.current_lowest_bid_cents,
+      }
+    : null;
   const profile = profileData as ProfilePromoSlice | null;
 
   const launchUsedRaw = profile?.launch_promo_lister_jobs_used;
@@ -399,19 +425,18 @@ export async function resolveListerPlatformFeeWithLaunchPromo(
     return { feePercent: 0, zeroFeeSource: "launch_promo" };
   }
 
-  const serviceType = listing?.service_type ?? null;
   if (!isOngoingFreeTierServiceType(serviceType)) {
-    return { feePercent: base, zeroFeeSource: null };
+    return { feePercent: snapshotFee, zeroFeeSource: null };
   }
 
   const priceAud = listingJobAmountAudFromRow(listing, agreedAmountCents);
   if (priceAud <= 0) {
-    return { feePercent: base, zeroFeeSource: null };
+    return { feePercent: snapshotFee, zeroFeeSource: null };
   }
 
   const capAud = launchPromoMarketingPriceCapAud(settings);
   if (priceAud > capAud) {
-    return { feePercent: base, zeroFeeSource: null };
+    return { feePercent: snapshotFee, zeroFeeSource: null };
   }
 
   const monthKey = calendarMonthKeyAuSydney(now);
@@ -421,7 +446,7 @@ export async function resolveListerPlatformFeeWithLaunchPromo(
     return { feePercent: 0, zeroFeeSource: "ongoing_free_airbnb_recurring" };
   }
 
-  return { feePercent: base, zeroFeeSource: null };
+  return { feePercent: snapshotFee, zeroFeeSource: null };
 }
 
 export async function fetchListerPlatformFeePercentWithLaunchPromo(
@@ -596,13 +621,12 @@ export async function incrementLaunchPromoJobCompletionsIfNeeded(
   params: {
     listerId: string;
     winnerId: string | null;
-    baseFeePercent: number;
     appliedFeePercent: number;
     zeroFeeSource: ListerZeroFeeSource | null;
   }
 ): Promise<LaunchPromoIncrementResult> {
-  const { listerId, winnerId, baseFeePercent, appliedFeePercent, zeroFeeSource } = params;
-  if (!(baseFeePercent > 0) || appliedFeePercent !== 0 || !zeroFeeSource) {
+  const { listerId, winnerId, appliedFeePercent, zeroFeeSource } = params;
+  if (appliedFeePercent !== 0 || !zeroFeeSource) {
     return { bumped: false };
   }
   const nowIso = new Date().toISOString();
