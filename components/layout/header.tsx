@@ -23,7 +23,7 @@ function LogoWithTagline({ className }: { className?: string }) {
     <Link
       href="/"
       className={cn(
-        "inline-flex min-h-9 min-w-0 shrink-0 items-center justify-center rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-11 sm:rounded-xl",
+        "inline-flex min-h-10 min-w-0 shrink-0 items-center justify-center rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-[2.875rem] sm:rounded-xl md:min-h-12",
         className
       )}
       aria-label="Bond Back home"
@@ -33,7 +33,7 @@ function LogoWithTagline({ className }: { className?: string }) {
         alt=""
         aria-hidden
         decoding="async"
-        className="pointer-events-none h-7 w-auto max-h-8 max-w-[min(11rem,46vw)] object-contain object-left dark:brightness-[1.06] dark:contrast-[1.02] sm:h-8 sm:max-h-9 sm:max-w-[13.5rem] md:h-9 md:max-w-[15.5rem]"
+        className="pointer-events-none h-9 w-auto max-h-10 max-w-[min(13rem,52vw)] object-contain object-left dark:brightness-[1.06] dark:contrast-[1.02] sm:h-10 sm:max-h-11 sm:max-w-[16rem] md:h-11 md:max-h-12 md:max-w-[18rem]"
       />
     </Link>
   );
@@ -77,18 +77,18 @@ export const Header = async ({
           <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1.5 sm:gap-2">
             <div className="flex min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible [scrollbar-width:none] sm:gap-2 md:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
               {/**
-               * Logo → Browse Jobs → main nav. On `md+`, flex `order` keeps logo left of the divider + Browse Jobs.
+               * Logged-in mobile: hide wordmark to save space — Browse Jobs leads. Desktop: larger wordmark + divider.
                */}
-              <LogoWithTagline className="flex shrink-0 md:order-1" />
+              <LogoWithTagline className="hidden shrink-0 md:flex md:order-1" />
               <span
-                className="hidden h-7 w-px shrink-0 self-center bg-border/90 dark:bg-gray-700 md:order-2 md:block"
+                className="hidden h-9 w-px shrink-0 self-center bg-border/90 dark:bg-gray-700 md:order-2 md:block md:h-10"
                 aria-hidden
               />
               <FindJobsNavLink
                 id="tour-find-jobs-nav"
-                className="relative z-20 min-w-0 md:order-3"
+                className="relative z-20 order-1 min-w-0 md:order-3"
               />
-              <MainNav className="min-w-0 md:order-4" isLoggedIn={isLoggedIn} isLister={isLister} />
+              <MainNav className="order-2 min-w-0 md:order-4" isLoggedIn={isLoggedIn} isLister={isLister} />
             </div>
 
             <nav
