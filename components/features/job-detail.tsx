@@ -3982,7 +3982,9 @@ export function JobDetail({
                       )}
                     </div>
                   )}
+                  {/* Listers dispute from “Approve & Release”; omit this duplicate panel when viewer is this job's lister. */}
                   {isJobCleaner &&
+                    !isJobLister &&
                     hasAfterPhotos &&
                     allCompleted &&
                     numericJobId &&

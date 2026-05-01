@@ -17,7 +17,7 @@ export type HeaderProps = {
   stripeTestMode?: boolean;
 };
 
-/** Bond Back wordmark home link (pill: bold Bond, regular Back). */
+/** Bond Back wordmark home link. Full wordmark: `/brand/bondback-wordmark.svg`; monogram: `/brand/bondback-monogram.svg`. */
 function LogoWithTagline({ className }: { className?: string }) {
   return (
     <Link
@@ -28,9 +28,13 @@ function LogoWithTagline({ className }: { className?: string }) {
       )}
       aria-label="Bond Back home"
     >
-      <span className="rounded-lg bg-primary px-2 py-1.5 text-xs font-semibold leading-tight text-primary-foreground shadow-sm ring-1 ring-black/5 dark:text-white dark:ring-white/10 sm:rounded-xl sm:px-2.5 sm:py-2 sm:text-sm">
-        Bond<span className="font-normal text-primary-foreground/90 dark:text-white/90"> Back</span>
-      </span>
+      <img
+        src="/brand/bondback-wordmark.svg"
+        alt=""
+        aria-hidden
+        decoding="async"
+        className="pointer-events-none h-7 w-auto max-h-8 max-w-[min(11rem,46vw)] object-contain object-left dark:brightness-[1.06] dark:contrast-[1.02] sm:h-8 sm:max-h-9 sm:max-w-[13.5rem] md:h-9 md:max-w-[15.5rem]"
+      />
     </Link>
   );
 }
@@ -73,19 +77,18 @@ export const Header = async ({
           <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1.5 sm:gap-2">
             <div className="flex min-h-[2.75rem] min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible [scrollbar-width:none] sm:gap-2 md:gap-3 lg:gap-4 [&::-webkit-scrollbar]:hidden">
               {/**
-               * Mobile (logged-in): hide logo to reduce clutter — Browse Jobs sits at the leading edge.
-               * md+: logo → divider → Browse Jobs (flex `order` keeps DOM stable for a11y).
+               * Logo → Browse Jobs → main nav. On `md+`, flex `order` keeps logo left of the divider + Browse Jobs.
                */}
-              <LogoWithTagline className="hidden shrink-0 md:order-1 md:flex" />
+              <LogoWithTagline className="flex shrink-0 md:order-1" />
               <span
                 className="hidden h-7 w-px shrink-0 self-center bg-border/90 dark:bg-gray-700 md:order-2 md:block"
                 aria-hidden
               />
               <FindJobsNavLink
                 id="tour-find-jobs-nav"
-                className="relative z-20 order-1 min-w-0 md:order-3"
+                className="relative z-20 min-w-0 md:order-3"
               />
-              <MainNav className="order-2 min-w-0 md:order-4" isLoggedIn={isLoggedIn} isLister={isLister} />
+              <MainNav className="min-w-0 md:order-4" isLoggedIn={isLoggedIn} isLister={isLister} />
             </div>
 
             <nav

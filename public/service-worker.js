@@ -7,7 +7,7 @@
  * listed app routes network-first for navigations (was SWR stale-first — caused refresh thrash).
  */
 
-const CACHE_VERSION = "bondback-v3";
+const CACHE_VERSION = "bondback-v4";
 const SHELL_CACHE = CACHE_VERSION + "-shell";
 const IMAGES_CACHE = CACHE_VERSION + "-images";
 const PAGES_CACHE = CACHE_VERSION + "-pages";
@@ -19,7 +19,9 @@ const SHELL_URLS = [
   "/",
   "/manifest.json",
   "/offline",
-  "/icon"
+  "/favicon.ico",
+  "/brand/bondback-wordmark.svg",
+  "/brand/bondback-monogram.svg",
 ];
 
 // Paths that get stale-while-revalidate (semi-dynamic)
@@ -47,8 +49,11 @@ function isAppShellRequest(url) {
     path === "/" ||
     path === "/manifest.json" ||
     path === "/offline" ||
-    path === "/icon" ||
-    /^\/(icons\/|favicon)/.test(path)
+    path === "/favicon.ico" ||
+    /^\/(?:favicon-(?:16x16|32x32)\.png|apple-touch-icon\.png|android-chrome-(?:192x192|512x512)\.png|brand\/)/.test(
+      path
+    ) ||
+    /^\/(?:icons\/|favicon)/.test(path)
   );
 }
 

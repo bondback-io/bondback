@@ -43,7 +43,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#3b82f6" },
+    { media: "(prefers-color-scheme: light)", color: "#1f9f9b" },
     { media: "(prefers-color-scheme: dark)", color: "#1e3a5f" },
   ],
 };
@@ -87,6 +87,14 @@ export const metadata: Metadata = {
     title: "Bond Back — Bond cleaning & end of lease cleaning",
     description:
       "Australian marketplace for bond cleaning and end of lease cleaning. List, bid, and release payment securely.",
+  },
+  icons: {
+    icon: [
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    shortcut: "/favicon.ico",
   },
 };
 
