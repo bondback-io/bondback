@@ -3749,7 +3749,8 @@ export function JobDetail({
                 </>
               )}
 
-              {isJobCleaner && (
+              {/* Upload UI is cleaner-only; never show to this job's lister (even if they also hold the cleaner role). */}
+              {isJobCleaner && !isJobLister && (
                 <div
                   id="job-after-photos"
                   className="mt-4 scroll-mt-24 space-y-3 rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.06] to-transparent px-4 py-4 dark:border-violet-900/40 dark:from-violet-950/30 sm:px-5"
