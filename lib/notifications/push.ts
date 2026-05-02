@@ -223,6 +223,7 @@ export const PUSH_NOTIFICATION_TYPES = new Set<string>([
   "bid_outbid",
   "listing_assigned_buy_now",
   "listing_expired_no_bids",
+  "cleaner_bonus_earned",
 ]);
 
 /**
@@ -308,6 +309,17 @@ export function buildPushPayload(
           : `Payment received for Job #${id}. Tap to view earnings.`,
         data: { jobId: id, type: "payment_released" },
       };
+    case "cleaner_bonus_earned": {
+      const bonus =
+        options?.amountCents != null ? `$${(options.amountCents / 100).toFixed(0)}` : "";
+      return {
+        title: "Cleaner bonus",
+        body: bonus
+          ? `You earned ${bonus} extra on Job #${id}. Tap to view the job.`
+          : `Cleaner bonus applied on Job #${id}. Tap to view.`,
+        data: { jobId: id, type: "cleaner_bonus_earned" },
+      };
+    }
     case "dispute_opened":
       return {
         title: "Dispute opened",

@@ -123,7 +123,8 @@ export type NotificationType =
   | "listing_expired_no_bids"
   | "recurring_next_visit"
   | "recurring_contract"
-  | "recurring_occurrence_skipped";
+  | "recurring_occurrence_skipped"
+  | "cleaner_bonus_earned";
 
 export type SendEmailAttachment = {
   filename: string;
@@ -465,6 +466,10 @@ export async function buildNotificationEmail(
     recurring_next_visit: `Next recurring clean — Job #${id} – Bond Back`,
     recurring_contract: `Recurring contract update – Bond Back`,
     recurring_occurrence_skipped: `Recurring visit skipped – Bond Back`,
+    cleaner_bonus_earned: (() => {
+      const amt = parseAmountFromMessageForEmail(messageText);
+      return amt ? `Bonus unlocked — ${amt} extra – Bond Back` : `Cleaner bonus — Job #${id} – Bond Back`;
+    })(),
   };
 
   let element: React.ReactElement;
@@ -534,6 +539,20 @@ export async function buildNotificationEmail(
         jobId: idStr,
         messageText,
         amountDisplay,
+      });
+      break;
+    }
+    case "cleaner_bonus_earned": {
+      const bonusDisplay = parseAmountFromMessageForEmail(messageText);
+      templateProps = { headline: "Cleaner bonus earned", messageText, hrefForJob };
+      element = React.createElement(GenericNotification, {
+        headline: "You earned a cleaner bonus",
+        messageText:
+          messageText ||
+          "An extra amount was added to your payout on this job — funded from the platform fee on this release.",
+        hrefPath: hrefForJob,
+        preview: bonusDisplay ? `Bonus ${bonusDisplay} — Bond Back` : "Cleaner bonus — Bond Back",
+        ctaLabel: id > 0 ? "View job" : "Open Bond Back",
       });
       break;
     }

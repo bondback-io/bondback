@@ -16,6 +16,11 @@ import {
   type ServicePricedAddon,
 } from "@/lib/service-addons-checklists";
 import { normalizeListerNonresponsiveCancelIdleDays } from "@/lib/global-settings/lister-nonresponsive-idle-days";
+import {
+  normalizeCleanerPromoBonusPercentage,
+  normalizeCleanerPromoDurationDays,
+  normalizeCleanerPromoMaxJobs,
+} from "@/lib/cleaner-promo";
 
 /** When to send the email. instant = immediately; 5m, 1h, 1d etc. = delayed (requires worker); on_dob = on user's date of birth (birthday template only). */
 export type SendAfterOption = "instant" | "5m" | "15m" | "30m" | "1h" | "2h" | "1d" | "2d" | "3d" | "5d" | "7d" | "10d" | "14d" | "21d" | "30d" | "60d" | "on_dob";
@@ -119,6 +124,11 @@ type GlobalSettingsRow = {
   launch_promo_zero_fee_service_types?: string[] | null;
   launch_promo_marketing_price_cap_aud?: number | null;
   launch_promo_marketing_monthly_airbnb_recurring_cap?: number | null;
+  /** Cleaner escrow-release bonus promo — see lib/cleaner-promo.ts */
+  enable_cleaner_promo?: boolean | null;
+  cleaner_promo_max_jobs?: number | null;
+  cleaner_promo_duration_days?: number | null;
+  cleaner_promo_bonus_percentage?: number | null;
   /** Default light/dark for guests and new signups. */
   default_site_theme?: string | null;
   /** Cleaner new listing #1 (within preferred km). Requires sql/20260417100000_global_settings_new_listing_channel_toggles.sql */
@@ -549,6 +559,11 @@ export type SaveGlobalSettingsInput = {
   launchPromoMarketingPriceCapAud?: number;
   /** Marketing/tooltip: jobs per calendar month for planned tier copy. */
   launchPromoMarketingMonthlyAirbnbRecurringCap?: number;
+  /** Cleaner bonus on escrow release — funded by reduced platform fee; see lib/cleaner-promo.ts */
+  enableCleanerPromo?: boolean;
+  cleanerPromoMaxJobs?: number;
+  cleanerPromoDurationDays?: number;
+  cleanerPromoBonusPercentage?: number;
 };
 
 export type SaveGlobalSettingsResult =
@@ -773,6 +788,10 @@ export async function saveGlobalSettings(
       Number.isFinite(data.launchPromoMarketingMonthlyAirbnbRecurringCap)
         ? Math.max(0, Math.min(100, Math.floor(data.launchPromoMarketingMonthlyAirbnbRecurringCap)))
         : 2,
+    enable_cleaner_promo: data.enableCleanerPromo !== false,
+    cleaner_promo_max_jobs: normalizeCleanerPromoMaxJobs(data.cleanerPromoMaxJobs),
+    cleaner_promo_duration_days: normalizeCleanerPromoDurationDays(data.cleanerPromoDurationDays),
+    cleaner_promo_bonus_percentage: normalizeCleanerPromoBonusPercentage(data.cleanerPromoBonusPercentage),
   };
 
   const { error } = admin
@@ -797,6 +816,11 @@ export async function saveGlobalSettings(
               msg.includes("launch_promo_marketing_price_cap_aud") ||
               msg.includes("launch_promo_marketing_monthly_airbnb_recurring_cap")
             ? " Add launch promo admin columns (see supabase/sql/20260428120000_launch_promo_admin_eligibility.sql) or run supabase/sql/20260417140000_global_settings_ensure_columns_admin_save.sql."
+          : msg.includes("enable_cleaner_promo") ||
+              msg.includes("cleaner_promo_max_jobs") ||
+              msg.includes("cleaner_promo_duration_days") ||
+              msg.includes("cleaner_promo_bonus_percentage")
+            ? " Add cleaner bonus promo columns (see supabase/sql/20260430200000_cleaner_bonus_promo.sql)."
           : " Run supabase/sql/20260417140000_global_settings_ensure_columns_admin_save.sql in the Supabase SQL editor (adds all columns used by Admin → Global Settings save), or apply the individual migrations under supabase/migrations."
         : "";
     return { ok: false, error: msg + hint };

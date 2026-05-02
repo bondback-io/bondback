@@ -86,6 +86,10 @@ export interface Database {
           free_tier_airbnb_recurring_month_key: string | null;
           /** Ongoing free-tier completions this month (Airbnb/recurring, not launch). */
           free_tier_airbnb_recurring_jobs_used: number;
+          /** Promo: jobs where cleaner bonus was applied (escrow releases). */
+          cleaner_promo_jobs_used: number;
+          /** When first cleaner bonus anchored the rolling promo window. */
+          cleaner_promo_start_date: string | null;
         };
         Insert: {
           id: string;
@@ -147,6 +151,8 @@ export interface Database {
           launch_promo_cleaner_jobs_used?: number;
           free_tier_airbnb_recurring_month_key?: string | null;
           free_tier_airbnb_recurring_jobs_used?: number;
+          cleaner_promo_jobs_used?: number;
+          cleaner_promo_start_date?: string | null;
         };
         Update: {
           roles?: string[] | null;
@@ -206,6 +212,8 @@ export interface Database {
           launch_promo_cleaner_jobs_used?: number;
           free_tier_airbnb_recurring_month_key?: string | null;
           free_tier_airbnb_recurring_jobs_used?: number;
+          cleaner_promo_jobs_used?: number;
+          cleaner_promo_start_date?: string | null;
         };
         Relationships: [
           {
@@ -913,7 +921,8 @@ export interface Database {
             | "listing_expired_no_bids"
             | "launch_promo_active"
             | "launch_promo_progress"
-            | "launch_promo_ended";
+            | "launch_promo_ended"
+            | "cleaner_bonus_earned";
           job_id: number | null;
           message_text: string;
           /** Short label for lists (e.g. New bid · Job #12). */
@@ -957,7 +966,8 @@ export interface Database {
             | "listing_expired_no_bids"
             | "launch_promo_active"
             | "launch_promo_progress"
-            | "launch_promo_ended";
+            | "launch_promo_ended"
+            | "cleaner_bonus_earned";
           job_id?: number | null;
           message_text: string;
           title?: string | null;
@@ -998,7 +1008,8 @@ export interface Database {
             | "listing_expired_no_bids"
             | "launch_promo_active"
             | "launch_promo_progress"
-            | "launch_promo_ended";
+            | "launch_promo_ended"
+            | "cleaner_bonus_earned";
           job_id?: number | null;
           message_text?: string;
           title?: string | null;

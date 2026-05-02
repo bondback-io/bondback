@@ -27,3 +27,5 @@ export { CleanerDashboardContent } from "./cleaner-dashboard-content";
 export type { CleanerDashboardContentProps } from "./cleaner-dashboard-content";
 export { LaunchPromoStatusCard } from "./launch-promo-status-card";
 export type { LaunchPromoStatusCardProps } from "./launch-promo-status-card";
+export { CleanerBonusPromoCard } from "./cleaner-bonus-promo-card";
+export type { CleanerBonusPromoCardProps } from "./cleaner-bonus-promo-card";

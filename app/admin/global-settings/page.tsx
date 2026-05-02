@@ -213,6 +213,35 @@ export default async function AdminGlobalSettingsPage() {
         launchPromoMarketingMonthlyAirbnbRecurringCap: launchPromoMarketingMonthlyAirbnbRecurringCap(
           existing as GlobalSettingsWithLaunchPromo | null
         ),
+        enableCleanerPromo:
+          (existing as { enable_cleaner_promo?: boolean | null }).enable_cleaner_promo !== false,
+        cleanerPromoMaxJobs: Math.max(
+          1,
+          Math.min(
+            50,
+            Math.floor(
+              Number((existing as { cleaner_promo_max_jobs?: number | null }).cleaner_promo_max_jobs) || 3
+            )
+          )
+        ),
+        cleanerPromoDurationDays: Math.max(
+          1,
+          Math.min(
+            730,
+            Math.floor(
+              Number((existing as { cleaner_promo_duration_days?: number | null }).cleaner_promo_duration_days) ||
+                90
+            )
+          )
+        ),
+        cleanerPromoBonusPercentage: Math.max(
+          0,
+          Math.min(
+            100,
+            Number((existing as { cleaner_promo_bonus_percentage?: number | null }).cleaner_promo_bonus_percentage) ||
+              10
+          )
+        ),
         defaultSiteTheme: parseDefaultSiteThemeFromSettings(existing),
         serviceAddonsChecklists: mergeServiceAddonsChecklists(
           (existing as { service_addons_checklists?: unknown }).service_addons_checklists

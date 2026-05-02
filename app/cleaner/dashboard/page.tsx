@@ -20,6 +20,7 @@ import {
   QuickActionsRow,
   CollapsibleActivityFeed,
   DashboardEmptyState,
+  CleanerBonusPromoCard,
 } from "@/components/dashboard";
 import { ResponsiveCleanerJobCards } from "@/components/mobile-fab";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,14 @@ import { bidCountsForListingIds } from "@/lib/marketplace";
 import { getNotificationHref } from "@/lib/notifications/display";
 import { getCachedGlobalSettingsForPages } from "@/lib/cached-global-settings-read";
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
+import {
+  cleanerPromoGloballyOn,
+  cleanerPromoWindowOpen,
+  normalizeCleanerPromoBonusPercentage,
+  normalizeCleanerPromoDurationDays,
+  normalizeCleanerPromoMaxJobs,
+  type GlobalSettingsCleanerPromoSlice,
+} from "@/lib/cleaner-promo";
 import CleanerDashboardLoading from "./loading";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -295,6 +304,19 @@ async function CleanerDashboardContent() {
     href: getNotificationHref(n as NotificationRow),
   }));
 
+  const gsPromo = globalForDash as GlobalSettingsCleanerPromoSlice | null;
+  const promoJobsUsed = Math.max(0, Math.floor(Number(profile.cleaner_promo_jobs_used ?? 0)));
+  const promoStart =
+    profile.cleaner_promo_start_date != null ? String(profile.cleaner_promo_start_date).trim() : null;
+  const showCleanerBonusPromo =
+    cleanerPromoGloballyOn(gsPromo) &&
+    cleanerPromoWindowOpen({
+      settings: gsPromo,
+      jobsUsed: promoJobsUsed,
+      startDateIso: promoStart && promoStart.length > 0 ? promoStart : null,
+      now,
+    });
+
   const nowMs = Date.now();
   const createdAtMs = profile.created_at ? new Date(profile.created_at).getTime() : 0;
   const welcomeWithinMs = 7 * 24 * 60 * 60 * 1000;
@@ -401,6 +423,16 @@ async function CleanerDashboardContent() {
             </CardDescription>
           </CardHeader>
         </Card>
+      )}
+
+      {showCleanerBonusPromo && (
+        <CleanerBonusPromoCard
+          bonusPct={normalizeCleanerPromoBonusPercentage(gsPromo?.cleaner_promo_bonus_percentage)}
+          maxJobs={normalizeCleanerPromoMaxJobs(gsPromo?.cleaner_promo_max_jobs)}
+          durationDays={normalizeCleanerPromoDurationDays(gsPromo?.cleaner_promo_duration_days)}
+          jobsUsed={promoJobsUsed}
+          startDateIso={promoStart && promoStart.length > 0 ? promoStart : null}
+        />
       )}
 
       {/* Quick stats — larger type + padding on mobile; rating stays prominent */}

@@ -36,6 +36,7 @@ const TEST_TYPES: { type: NotificationType; label: string }[] = [
   { type: "launch_promo_active", label: "Launch promo active" },
   { type: "launch_promo_progress", label: "Launch promo progress" },
   { type: "launch_promo_ended", label: "Launch promo ended" },
+  { type: "cleaner_bonus_earned", label: "Cleaner bonus earned" },
 ];
 
 /** Admin QA: in-app notification samples (no email/SMS/push). */

@@ -19,6 +19,14 @@ import {
   resolveListerPlatformFeeWithLaunchPromo,
 } from "@/lib/launch-promo";
 import {
+  cleanerPromoWindowOpen,
+  fundedCleanerBonusCents,
+  normalizeCleanerPromoBonusPercentage,
+  reducedLegPlatformFeesCents,
+  type GlobalSettingsCleanerPromoSlice,
+} from "@/lib/cleaner-promo";
+import { formatCents } from "@/lib/listings";
+import {
   getStripeServer,
   createJobCheckoutSessionUrl,
   createJobPaymentIntentWithSavedMethod,
@@ -2612,6 +2620,8 @@ export type ReleaseJobFundsResult =
       paymentIntentId?: string;
       /** True when this release consumed a launch-promo 0% fee slot (lister + cleaner counters bumped). */
       launchPromoFreeJobCompleted?: boolean;
+      /** Extra cents paid to cleaner via reduced platform fee (cleaner promo). */
+      cleanerBonusCentsApplied?: number;
     }
   | { ok: false; error: string };
 
@@ -2772,12 +2782,20 @@ export async function releaseJobFunds(
      * Transfer at most: min(cleaner leg amount, charge_remaining − platform fee on that leg).
      * If nothing remains for the cleaner, skip Connect transfers and still mark escrow settled.
      */
+    type LegPrepRow = {
+      leg: (typeof legs)[number];
+      chargeId: string;
+      poolAfterPriorTransfers: number;
+      baseFeeCents: number;
+    };
     type PlanRow = {
       leg: (typeof legs)[number];
       chargeId: string;
       transferAmount: number;
+      effectiveFeeCents: number;
     };
-    const plan: PlanRow[] = [];
+
+    const legPrep: LegPrepRow[] = [];
 
     for (const leg of legs) {
       const pi = await stripe.paymentIntents.retrieve(leg.paymentIntentId);
@@ -2827,11 +2845,70 @@ export async function releaseJobFunds(
         0,
         remainingOnCharge - alreadyTransferredFromCharge
       );
-      const legFeeCents = legPlatformFeeCentsForRelease(leg, listingFeePercent, topUpsParsed);
-      const maxCleanerFromCharge = Math.max(0, poolAfterPriorTransfers - legFeeCents);
-      const transferAmount = Math.min(leg.agreedCents, maxCleanerFromCharge);
-      plan.push({ leg, chargeId: cid, transferAmount });
+      const baseFeeCents = legPlatformFeeCentsForRelease(leg, listingFeePercent, topUpsParsed);
+      legPrep.push({ leg, chargeId: cid, poolAfterPriorTransfers, baseFeeCents });
     }
+
+    const baseFees = legPrep.map((r) => r.baseFeeCents);
+    const totalPlatformFee = baseFees.reduce((s, f) => s + Math.max(0, f), 0);
+
+    let adjustedFees = legPrep.map((r) => r.baseFeeCents);
+    let cleanerBonusFundedCents = 0;
+    let bonusPercentageUsed = 0;
+
+    const adminCleanerPromo = createSupabaseAdminClient();
+    if (adminCleanerPromo && totalPlatformFee >= 1) {
+      const gs = globalForRelease as GlobalSettingsCleanerPromoSlice | null;
+      bonusPercentageUsed = normalizeCleanerPromoBonusPercentage(gs?.cleaner_promo_bonus_percentage);
+      const { data: winProf } = await adminCleanerPromo
+        .from("profiles")
+        .select("cleaner_promo_jobs_used, cleaner_promo_start_date")
+        .eq("id", winnerId)
+        .maybeSingle();
+      const promoJobsUsed = Math.max(
+        0,
+        Math.floor(
+          Number((winProf as { cleaner_promo_jobs_used?: number | null })?.cleaner_promo_jobs_used ?? 0)
+        )
+      );
+      const promoStart =
+        (winProf as { cleaner_promo_start_date?: string | null })?.cleaner_promo_start_date ?? null;
+
+      if (
+        bonusPercentageUsed > 0 &&
+        cleanerPromoWindowOpen({
+          settings: gs,
+          jobsUsed: promoJobsUsed,
+          startDateIso: promoStart,
+          now: new Date(),
+        })
+      ) {
+        const bonusDesired = fundedCleanerBonusCents({
+          agreedCentsTotal,
+          bonusPercentage: bonusPercentageUsed,
+          totalPlatformFeeCents: totalPlatformFee,
+        });
+        if (bonusDesired >= 1) {
+          adjustedFees = reducedLegPlatformFeesCents(baseFees, bonusDesired);
+          cleanerBonusFundedCents = Math.max(
+            0,
+            totalPlatformFee - adjustedFees.reduce((s, f) => s + Math.max(0, f), 0)
+          );
+        }
+      }
+    }
+
+    const plan: PlanRow[] = legPrep.map((row, i) => {
+      const fee = adjustedFees[i] ?? row.baseFeeCents;
+      const maxCleanerFromCharge = Math.max(0, row.poolAfterPriorTransfers - fee);
+      const transferAmount = Math.min(row.leg.agreedCents, maxCleanerFromCharge);
+      return {
+        leg: row.leg,
+        chargeId: row.chargeId,
+        transferAmount,
+        effectiveFeeCents: fee,
+      };
+    });
 
     const totalCleanerTransfer = plan.reduce((s, p) => s + p.transferAmount, 0);
 
@@ -2869,11 +2946,6 @@ export async function releaseJobFunds(
       }
 
       for (const row of plan) {
-        const legFeeCents = legPlatformFeeCentsForRelease(
-          row.leg,
-          listingFeePercent,
-          topUpsParsed
-        );
         const freshCh = await stripe.charges.retrieve(row.chargeId);
         const grossRem = Math.max(
           0,
@@ -2883,7 +2955,7 @@ export async function releaseJobFunds(
         const poolAfterPrior = Math.max(0, grossRem - alreadyOut);
         let transferAmountNow = Math.min(
           row.leg.agreedCents,
-          Math.max(0, poolAfterPrior - legFeeCents)
+          Math.max(0, poolAfterPrior - row.effectiveFeeCents)
         );
         if (transferAmountNow < 1) continue;
 
@@ -2962,6 +3034,62 @@ export async function releaseJobFunds(
       }
     }
 
+    let cleanerBonusCentsApplied: number | undefined;
+    if (
+      cleanerBonusFundedCents >= 1 &&
+      transferIds.length > 0 &&
+      adminCleanerPromo &&
+      bonusPercentageUsed > 0
+    ) {
+      let bumpOk = false;
+      for (let attempt = 0; attempt < 3 && !bumpOk; attempt++) {
+        const { data: profNow } = await adminCleanerPromo
+          .from("profiles")
+          .select("cleaner_promo_jobs_used, cleaner_promo_start_date")
+          .eq("id", winnerId)
+          .maybeSingle();
+        const usedLock = Math.max(
+          0,
+          Math.floor(
+            Number((profNow as { cleaner_promo_jobs_used?: number | null })?.cleaner_promo_jobs_used ?? 0)
+          )
+        );
+        const startExisting =
+          (profNow as { cleaner_promo_start_date?: string | null })?.cleaner_promo_start_date ?? null;
+        const anchorStart = trimStr(startExisting) ? String(startExisting).trim() : nowIso;
+        const { data: bumpRows, error: bumpErr } = await adminCleanerPromo
+          .from("profiles")
+          .update({
+            cleaner_promo_jobs_used: usedLock + 1,
+            cleaner_promo_start_date: anchorStart,
+            updated_at: nowIso,
+          } as never)
+          .eq("id", winnerId)
+          .eq("cleaner_promo_jobs_used", usedLock)
+          .select("id");
+        if (!bumpErr && bumpRows && bumpRows.length > 0) {
+          bumpOk = true;
+        }
+      }
+      if (!bumpOk && process.env.NODE_ENV !== "production") {
+        console.warn("[releaseJobFunds] cleaner promo usage bump failed after retries");
+      }
+      cleanerBonusCentsApplied = cleanerBonusFundedCents;
+      try {
+        await createNotification(
+          winnerId,
+          "cleaner_bonus_earned",
+          numericJobId,
+          `You earned a ${bonusPercentageUsed}% cleaner bonus on this job — ${formatCents(cleanerBonusFundedCents)} extra (paid by reducing the platform fee on this release).`,
+          { amountCents: cleanerBonusFundedCents }
+        );
+      } catch (e) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[releaseJobFunds] cleaner_bonus_earned notification failed", e);
+        }
+      }
+    }
+
     const testMode = await isStripeTestMode();
     if (testMode) {
       console.log(
@@ -2977,6 +3105,9 @@ export async function releaseJobFunds(
     return {
       ok: true,
       ...(launchPromoFreeJobCompleted ? { launchPromoFreeJobCompleted: true } : {}),
+      ...(cleanerBonusCentsApplied != null && cleanerBonusCentsApplied >= 1
+        ? { cleanerBonusCentsApplied }
+        : {}),
       ...(testMode
         ? {
             transferId: transferIds[transferIds.length - 1],
@@ -3215,6 +3346,8 @@ export type FinalizeJobPaymentResult =
       nextPaymentAlreadyInEscrow?: boolean;
       /** Launch promo: this completion used a 0% fee slot (show celebration UI). */
       launchPromoFreeJobCompleted?: boolean;
+      /** Cleaner promo: extra cents paid via reduced platform fee on this release. */
+      cleanerBonusCentsApplied?: number;
     }
   | { ok: false; error: string };
 
@@ -3489,6 +3622,7 @@ export async function finalizeJobPayment(
   if (row.lister_id) await recomputeVerificationBadgesForUser(row.lister_id);
 
   revalidatePath("/dashboard");
+  revalidatePath("/cleaner/dashboard");
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${row.id}`);
   if (nextRecurringJobId != null) {
@@ -3503,6 +3637,11 @@ export async function finalizeJobPayment(
     ...(nextPaymentAlreadyInEscrow ? { nextPaymentAlreadyInEscrow: true } : {}),
     ...("launchPromoFreeJobCompleted" in releaseResult && releaseResult.launchPromoFreeJobCompleted
       ? { launchPromoFreeJobCompleted: true }
+      : {}),
+    ...("cleanerBonusCentsApplied" in releaseResult &&
+    typeof releaseResult.cleanerBonusCentsApplied === "number" &&
+    releaseResult.cleanerBonusCentsApplied >= 1
+      ? { cleanerBonusCentsApplied: releaseResult.cleanerBonusCentsApplied }
       : {}),
   };
 }
@@ -3704,6 +3843,7 @@ export async function processAutoRelease(): Promise<ProcessAutoReleaseResult> {
 
   if (jobIds.length) {
     revalidatePath("/dashboard");
+    revalidatePath("/cleaner/dashboard");
     revalidatePath("/jobs");
   }
 

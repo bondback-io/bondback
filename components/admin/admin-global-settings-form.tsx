@@ -32,7 +32,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { ArrowDown, ArrowUp, CircleHelp, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleHelp, Gift, Sparkles } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import type { SaveGlobalSettingsInput } from "@/lib/actions/global-settings";
 import {
@@ -62,6 +62,7 @@ import {
   LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP,
   LAUNCH_PROMO_MARKETING_PRICE_CAP_AUD,
 } from "@/lib/launch-promo";
+import { CLEANER_PROMO_DEFAULTS } from "@/lib/cleaner-promo";
 import {
   mergeServiceAddonsChecklists,
   serializeServiceAddonsChecklistsForDb,
@@ -126,6 +127,7 @@ const SMS_TYPE_CONTROLS: { key: string; label: string }[] = [
   { key: "job_created", label: "Job created" },
   { key: "job_approved_to_start", label: "Approved to start" },
   { key: "payment_released", label: "Payment released" },
+  { key: "cleaner_bonus_earned", label: "Cleaner bonus earned" },
   { key: "dispute_opened", label: "Dispute opened" },
   { key: "auto_release_warning", label: "Auto-release warning" },
   { key: "new_job_in_area", label: "New job in area (cleaners)" },
@@ -306,6 +308,24 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
       Number.isFinite(initial.launchPromoMarketingMonthlyAirbnbRecurringCap)
         ? initial.launchPromoMarketingMonthlyAirbnbRecurringCap
         : LAUNCH_PROMO_MARKETING_MONTHLY_AIRBNB_RECURRING_CAP
+  );
+  const [enableCleanerPromo, setEnableCleanerPromo] = React.useState(
+    initial?.enableCleanerPromo !== false
+  );
+  const [cleanerPromoMaxJobsState, setCleanerPromoMaxJobsState] = React.useState(() =>
+    typeof initial?.cleanerPromoMaxJobs === "number" && Number.isFinite(initial.cleanerPromoMaxJobs)
+      ? Math.max(1, Math.min(50, Math.floor(initial.cleanerPromoMaxJobs)))
+      : CLEANER_PROMO_DEFAULTS.maxJobs
+  );
+  const [cleanerPromoDurationDaysState, setCleanerPromoDurationDaysState] = React.useState(() =>
+    typeof initial?.cleanerPromoDurationDays === "number" && Number.isFinite(initial.cleanerPromoDurationDays)
+      ? Math.max(1, Math.min(730, Math.floor(initial.cleanerPromoDurationDays)))
+      : CLEANER_PROMO_DEFAULTS.durationDays
+  );
+  const [cleanerPromoBonusPctState, setCleanerPromoBonusPctState] = React.useState(() =>
+    typeof initial?.cleanerPromoBonusPercentage === "number" && Number.isFinite(initial.cleanerPromoBonusPercentage)
+      ? Math.max(0, Math.min(100, initial.cleanerPromoBonusPercentage))
+      : CLEANER_PROMO_DEFAULTS.bonusPercentage
   );
   const [defaultSiteTheme, setDefaultSiteTheme] = React.useState<"light" | "dark">(
     initial?.defaultSiteTheme === "light" ? "light" : "dark"
@@ -686,6 +706,25 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
           Math.floor(Number(launchPromoMarketingMonthlyCapState) || 0)
         )
       ),
+      enableCleanerPromo,
+      cleanerPromoMaxJobs: Math.max(
+        1,
+        Math.min(50, Math.floor(Number(cleanerPromoMaxJobsState) || CLEANER_PROMO_DEFAULTS.maxJobs))
+      ),
+      cleanerPromoDurationDays: Math.max(
+        1,
+        Math.min(
+          730,
+          Math.floor(Number(cleanerPromoDurationDaysState) || CLEANER_PROMO_DEFAULTS.durationDays)
+        )
+      ),
+      cleanerPromoBonusPercentage: Math.max(
+        0,
+        Math.min(
+          100,
+          Number(cleanerPromoBonusPctState) || CLEANER_PROMO_DEFAULTS.bonusPercentage
+        )
+      ),
       defaultSiteTheme,
       serviceAddonsChecklists,
     };
@@ -1049,6 +1088,90 @@ export function AdminGlobalSettingsForm({ initial }: AdminGlobalSettingsFormProp
               checked={launchPromoShowBondProNudge}
               onCheckedChange={(v) => setLaunchPromoShowBondProNudge(Boolean(v))}
             />
+          </div>
+        </CardContent>
+      </Card>
+        </AdminSettingsAccordionSection>
+
+        <AdminSettingsAccordionSection value="cleaner-bonus-promo" title="Cleaner bonus promo (escrow release)">
+      <Card className="border-violet-200/90 bg-violet-50/50 dark:border-violet-800/70 dark:bg-violet-950/35">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold text-violet-950 dark:text-violet-100">
+            <Gift className="size-4 shrink-0 text-violet-700 dark:text-violet-300" aria-hidden />
+            Cleaner bonus promo
+          </CardTitle>
+          <p className="text-[11px] text-violet-900/85 dark:text-violet-200/90">
+            On escrow release, eligible cleaners receive an extra percentage of the agreed job amount, funded by
+            reducing the platform fee retained on that release (never charged to the lister). Requires a non-zero
+            platform fee on the job.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="cleaner-promo-active" className="text-xs font-medium text-violet-950 dark:text-violet-100">
+              Promo enabled
+            </Label>
+            <Switch
+              id="cleaner-promo-active"
+              checked={enableCleanerPromo}
+              onCheckedChange={(v) => setEnableCleanerPromo(Boolean(v))}
+            />
+          </div>
+          <div className="grid gap-3 sm:max-w-lg sm:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="cleaner-promo-max-jobs" className="text-xs font-medium text-violet-950 dark:text-violet-100">
+                Max bonus jobs (1–50)
+              </Label>
+              <Input
+                id="cleaner-promo-max-jobs"
+                type="number"
+                min={1}
+                max={50}
+                step={1}
+                value={cleanerPromoMaxJobsState}
+                onChange={(e) => setCleanerPromoMaxJobsState(Number(e.target.value))}
+                className="text-xs sm:text-sm tabular-nums"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label
+                htmlFor="cleaner-promo-duration"
+                className="text-xs font-medium text-violet-950 dark:text-violet-100"
+              >
+                Window (days)
+              </Label>
+              <Input
+                id="cleaner-promo-duration"
+                type="number"
+                min={1}
+                max={730}
+                step={1}
+                value={cleanerPromoDurationDaysState}
+                onChange={(e) => setCleanerPromoDurationDaysState(Number(e.target.value))}
+                className="text-xs sm:text-sm tabular-nums"
+              />
+              <p className="text-[10px] text-violet-900/75 dark:text-violet-200/80">
+                Rolling window from first bonus.
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="cleaner-promo-pct" className="text-xs font-medium text-violet-950 dark:text-violet-100">
+                Bonus % of agreed total
+              </Label>
+              <Input
+                id="cleaner-promo-pct"
+                type="number"
+                min={0}
+                max={100}
+                step={0.5}
+                value={cleanerPromoBonusPctState}
+                onChange={(e) => setCleanerPromoBonusPctState(Number(e.target.value))}
+                className="text-xs sm:text-sm tabular-nums"
+              />
+              <p className="text-[10px] text-violet-900/75 dark:text-violet-200/80">
+                Capped by fee collected on release.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

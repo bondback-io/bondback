@@ -112,6 +112,8 @@ function labelForType(type: NotificationRow["type"]): string {
       return "Buy now taken";
     case "listing_expired_no_bids":
       return "No bids";
+    case "cleaner_bonus_earned":
+      return "Cleaner bonus";
     default:
       return "Update";
   }

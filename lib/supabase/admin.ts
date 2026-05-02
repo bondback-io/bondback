@@ -138,6 +138,8 @@ export function syntheticProfileFromAuthUser(u: User): ProfileRow {
     launch_promo_cleaner_jobs_used: 0,
     free_tier_airbnb_recurring_month_key: null,
     free_tier_airbnb_recurring_jobs_used: 0,
+    cleaner_promo_jobs_used: 0,
+    cleaner_promo_start_date: null,
   };
 }
 
