@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { CREATE_LISTING_SERVICE_PICKER_OPTIONS } from "@/lib/create-listing-service-picker-options";
+import { CALENDAR_SERVICE_TYPE_ROW_ACCENT } from "@/lib/calendar/service-type-calendar";
+import { normalizeServiceType } from "@/lib/service-types";
 import { ChevronRight } from "lucide-react";
 
 export function CreateListingServicePickerDialog({
@@ -51,19 +53,28 @@ export function CreateListingServicePickerDialog({
           <ul className="flex flex-col gap-2" role="listbox" aria-label="Listing service types">
             {CREATE_LISTING_SERVICE_PICKER_OPTIONS.map((opt) => {
               const Icon = opt.icon;
+              const accent =
+                CALENDAR_SERVICE_TYPE_ROW_ACCENT[normalizeServiceType(opt.value)];
               return (
                 <li key={opt.value}>
                   <button
                     type="button"
                     role="option"
                     className={cn(
-                      "flex w-full min-h-[56px] items-center gap-3 rounded-2xl border-2 border-emerald-800/40 bg-emerald-900/35 px-4 py-3 text-left transition-colors",
+                      "flex w-full min-h-[56px] items-center gap-3 rounded-2xl border-2 border-emerald-800/40 border-l-4 bg-emerald-900/35 px-4 py-3 text-left transition-colors",
+                      accent.rowBorderLeft,
                       "hover:border-emerald-500/70 hover:bg-emerald-900/55 active:scale-[0.99]",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-950"
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-950",
+                      accent.focusRing
                     )}
                     onClick={() => navigateWithService(opt.value)}
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600/30 text-emerald-200 ring-1 ring-emerald-500/30">
+                    <span
+                      className={cn(
+                        "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                        accent.iconWell
+                      )}
+                    >
                       <Icon className="h-5 w-5" aria-hidden />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -71,7 +82,7 @@ export function CreateListingServicePickerDialog({
                       <span className="mt-0.5 block text-sm text-emerald-200/80">{opt.subtitle}</span>
                     </span>
                     <ChevronRight
-                      className="h-5 w-5 shrink-0 text-emerald-400/80"
+                      className={cn("h-5 w-5 shrink-0", accent.chevron)}
                       aria-hidden
                     />
                   </button>
