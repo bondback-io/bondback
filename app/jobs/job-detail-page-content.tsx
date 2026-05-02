@@ -488,28 +488,17 @@ export async function JobDetailPageContent({
     roles.includes("cleaner");
 
   /**
-   * Lister payout UI vs cleaner job UI:
-   * - Normal job: only one of lister_id / winner_id matches the viewer — mutually exclusive.
-   * - Same UUID as both lister and winner (dual-role tests / edge rows): choose hat by job phase so
-   *   lister never loses Pay / Approve & Release while nav is on Cleaner, and in_progress stays cleaner-first.
+   * Escrow / payout panels (`isJobLister`) vs cleaner job tools (`isJobCleanerForJob`):
+   * - While `active_role === "cleaner"`, never show lister Pay / Top up / Approve & Release — even if this user
+   *   is `jobs.lister_id` on a dual-role account (switch to Lister in the nav to manage escrow).
+   * - While acting as lister (any non-cleaner active role), lister controls follow `jobs.lister_id`; cleaner
+   *   tools follow `jobs.winner_id` when they also hold the cleaner role.
    */
   let isJobLister: boolean;
   let isJobCleanerForJob: boolean;
-  if (isJobListerParty && isJobCleanerParty) {
-    const st = String(job?.status ?? "");
-    if (st === "accepted" || st === "completed_pending_approval") {
-      isJobLister = true;
-      isJobCleanerForJob = false;
-    } else if (st === "in_progress") {
-      isJobLister = false;
-      isJobCleanerForJob = true;
-    } else if (activeRole === "cleaner") {
-      isJobLister = false;
-      isJobCleanerForJob = true;
-    } else {
-      isJobLister = true;
-      isJobCleanerForJob = false;
-    }
+  if (activeRole === "cleaner") {
+    isJobLister = false;
+    isJobCleanerForJob = isJobCleanerParty;
   } else {
     isJobLister = isJobListerParty;
     isJobCleanerForJob = isJobCleanerParty;
