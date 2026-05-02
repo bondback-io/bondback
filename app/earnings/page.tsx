@@ -21,6 +21,7 @@ import {
 import { resolveCleanerEarningsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
 import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 import type { ListingPriceFallbackCents } from "@/lib/admin-job-gross";
+import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = {
@@ -52,16 +53,20 @@ function listingPriceExtras(listing: ListingRow | undefined): ListingPriceFallba
   };
 }
 
-const PLATFORM_FEE_RATE = 0.12;
-
-/** Paid completed rows: effective platform fee (nominal 12% minus promo-funded bonus), net includes bonus. */
+/** Paid completed rows: effective platform fee (nominal fee % minus Bond Back promo-funded bonus), net includes bonus. */
 function completedFeeNetBonus(
   grossCents: number,
   job: JobRow,
-  listing: ListingRow | undefined
+  listing: ListingRow | undefined,
+  globalForFee: Parameters<typeof resolvePlatformFeePercent>[1]
 ): { feeCents: number; netCents: number; bonusCents: number } {
   const bonusCents = jobCleanerBonusCentsApplied(job);
-  const nominalFee = Math.round(grossCents * PLATFORM_FEE_RATE);
+  const feePct = resolvePlatformFeePercent(
+    listing?.platform_fee_percentage,
+    globalForFee,
+    listing?.service_type ?? null
+  );
+  const nominalFee = Math.round((grossCents * feePct) / 100);
   return {
     bonusCents,
     feeCents: Math.max(0, nominalFee - bonusCents),
@@ -71,6 +76,19 @@ function completedFeeNetBonus(
       listingPriceExtras(listing)
     ),
   };
+}
+
+function nominalPlatformFeeCentsForDisplay(
+  grossCents: number,
+  listing: ListingRow | undefined,
+  globalForFee: Parameters<typeof resolvePlatformFeePercent>[1]
+): number {
+  const feePct = resolvePlatformFeePercent(
+    listing?.platform_fee_percentage,
+    globalForFee,
+    listing?.service_type ?? null
+  );
+  return Math.round((grossCents * feePct) / 100);
 }
 
 export const metadata: Metadata = {
@@ -171,7 +189,7 @@ export default async function EarningsPage() {
     const listingsClient = (createSupabaseAdminClient() ?? supabase) as SupabaseClient;
     const { data: listingsData } = await listingsClient
       .from("listings")
-      .select("id, title, current_lowest_bid_cents, buy_now_cents, reserve_cents")
+      .select("id, title, current_lowest_bid_cents, buy_now_cents, reserve_cents, platform_fee_percentage, service_type")
       .in("id", listingIds as string[]);
     (listingsData ?? []).forEach((l: { id: string }) => {
       listingsMap.set(l.id, l as ListingRow);
@@ -202,7 +220,7 @@ export default async function EarningsPage() {
     const listing = listingsMap.get(job.listing_id);
     const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) continue;
-    const { feeCents, netCents, bonusCents } = completedFeeNetBonus(grossCents, job, listing);
+    const { feeCents, netCents, bonusCents } = completedFeeNetBonus(grossCents, job, listing, globalSettings);
     const releasedAt =
       job.payment_released_at?.trim() ||
       job.updated_at ||
@@ -256,9 +274,9 @@ export default async function EarningsPage() {
 
     const settled = isDashboardCompletedJob(job);
     const feeNetBonus = settled
-      ? completedFeeNetBonus(grossCents, job, listing)
+      ? completedFeeNetBonus(grossCents, job, listing, globalSettings)
       : {
-          feeCents: Math.round(grossCents * PLATFORM_FEE_RATE),
+          feeCents: nominalPlatformFeeCentsForDisplay(grossCents, listing, globalSettings),
           netCents: grossCents,
           bonusCents: 0,
         };
@@ -341,7 +359,7 @@ export default async function EarningsPage() {
     const listing = listingsMap.get(j.listing_id);
     const grossCents = adminJobGrossCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) return;
-    const { feeCents, netCents } = completedFeeNetBonus(grossCents, j, listing);
+    const { feeCents, netCents } = completedFeeNetBonus(grossCents, j, listing, globalSettings);
     const jobDate = new Date(j.updated_at || j.created_at);
 
     periodBreakdown.lifetime.grossCents += grossCents;

@@ -5,6 +5,7 @@ import { getGlobalSettings } from "@/lib/actions/global-settings";
 import { resolvePlatformFeePercent } from "@/lib/platform-fee";
 import type { Database } from "@/types/supabase";
 import { format } from "date-fns";
+import { jobCleanerBonusCentsApplied } from "@/lib/jobs/cleaner-net-earnings";
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -17,6 +18,7 @@ type JobRow = {
   title: string | null;
   agreed_amount_cents: number | null;
   payment_intent_id: string | null;
+  cleaner_bonus_cents_applied?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -47,6 +49,11 @@ export type MonthlyPoint = {
 export type RecentTransaction = {
   job: JobRow;
   amountCents: number;
+  /** Platform fee implied by job gross × fee % (before Bond Back promo funded from that fee). */
+  nominalFeeCents: number;
+  /** Extra to cleaner paid by reducing the platform fee slice (not charged to lister). */
+  cleanerPromoBonusCents: number;
+  /** Fee retained after promo: nominal − promo. */
   feeCents: number;
   payoutCents: number;
 };
@@ -121,7 +128,7 @@ export async function getPaymentsOverview(): Promise<PaymentsOverview> {
   const { data: jobsData } = await supabase
     .from("jobs")
     .select(
-      "id, listing_id, lister_id, winner_id, status, agreed_amount_cents, payment_intent_id, created_at, updated_at, title"
+      "id, listing_id, lister_id, winner_id, status, agreed_amount_cents, payment_intent_id, cleaner_bonus_cents_applied, created_at, updated_at, title"
     )
     .order("created_at", { ascending: false });
 
@@ -183,27 +190,31 @@ export async function getPaymentsOverview(): Promise<PaymentsOverview> {
     const amountCents = jobAmountCents(job, listing);
     if (amountCents <= 0) return;
 
-    const feeC = feeCents(amountCents, feePercent);
-    const payoutC = amountCents - feeC;
+    const nominalFee = feeCents(amountCents, feePercent);
+    const promoBonus = jobCleanerBonusCentsApplied(
+      job as Parameters<typeof jobCleanerBonusCentsApplied>[0]
+    );
+    const retainedFee = Math.max(0, nominalFee - promoBonus);
+    const payout = amountCents - retainedFee;
     const jobDate = new Date(job.updated_at || job.created_at);
     const monthKey = format(jobDate, "MMM yyyy");
 
     if (job.status === "completed") {
-      totalPlatformRevenueCents += feeC;
+      totalPlatformRevenueCents += retainedFee;
       completedCount += 1;
       const existing = byMonth.get(monthKey) ?? { feeCents: 0, payoutCents: 0 };
       byMonth.set(monthKey, {
-        feeCents: existing.feeCents + feeC,
-        payoutCents: existing.payoutCents + payoutC,
+        feeCents: existing.feeCents + retainedFee,
+        payoutCents: existing.payoutCents + payout,
       });
       if (jobDate >= monthStart) {
-        paidOutThisMonthCents += payoutC;
+        paidOutThisMonthCents += payout;
       }
     } else if (
       job.payment_intent_id?.trim() &&
       ESCROW_ACTIVE_STATUSES.includes(job.status as (typeof ESCROW_ACTIVE_STATUSES)[number])
     ) {
-      pendingPayoutsCents += payoutC;
+      pendingPayoutsCents += payout;
     }
   });
 
@@ -229,9 +240,20 @@ export async function getPaymentsOverview(): Promise<PaymentsOverview> {
         settings,
         listing?.service_type ?? null
       );
-      const feeCv = feeCents(amountCents, feePercent);
-      const payoutCents = amountCents - feeCv;
-      return { job, amountCents, feeCents: feeCv, payoutCents };
+      const nominalFee = feeCents(amountCents, feePercent);
+      const promoBonus = jobCleanerBonusCentsApplied(
+        job as Parameters<typeof jobCleanerBonusCentsApplied>[0]
+      );
+      const feeRetained = Math.max(0, nominalFee - promoBonus);
+      const payout = amountCents - feeRetained;
+      return {
+        job,
+        amountCents,
+        nominalFeeCents: nominalFee,
+        cleanerPromoBonusCents: promoBonus,
+        feeCents: feeRetained,
+        payoutCents: payout,
+      };
     })
     .filter((r) => r.amountCents > 0);
 

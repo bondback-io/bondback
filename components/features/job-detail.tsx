@@ -1848,12 +1848,6 @@ export function JobDetail({
         });
         return;
       }
-      const cleanerBonusNote =
-        "cleanerBonusCentsApplied" in res &&
-        typeof res.cleanerBonusCentsApplied === "number" &&
-        res.cleanerBonusCentsApplied >= 1
-          ? ` The cleaner also received ${formatCents(res.cleanerBonusCentsApplied)} from our cleaner bonus promo (extra payout funded by platform fee).`
-          : "";
       if (isStripeTestMode && res.ok && "transferId" in res) {
         console.log("[Stripe Test] Funds released — Transfer ID:", res.transferId, "PaymentIntent ID:", res.paymentIntentId);
       }
@@ -1864,14 +1858,12 @@ export function JobDetail({
           toast({
             title: "🎉 Free job completed!",
             description:
-              "You've used another 0% platform fee slot. Opening checkout for the next visit in this series…" +
-              cleanerBonusNote,
+              "You've used another 0% platform fee slot. Opening checkout for the next visit in this series…",
           });
         } else {
           toast({
             title: "Funds released",
-            description:
-              "Opening checkout for the next visit in this series…" + cleanerBonusNote,
+            description: "Opening checkout for the next visit in this series…",
           });
         }
         window.location.href = res.nextPaymentCheckoutUrl;
@@ -1884,14 +1876,13 @@ export function JobDetail({
           toast({
             title: "🎉 Free job completed!",
             description:
-              "You've used another 0% platform fee slot. The next visit is paid — taking you to that job." +
-              cleanerBonusNote,
+              "You've used another 0% platform fee slot. The next visit is paid — taking you to that job.",
           });
         } else {
           toast({
             title: "Funds released",
             description:
-              "The next visit is paid and ready — taking you to that job." + cleanerBonusNote,
+              "The next visit is paid and ready — taking you to that job.",
           });
         }
         scheduleRouterAction(() => router.push(`/jobs/${res.nextRecurringJobId}`));
@@ -1902,14 +1893,13 @@ export function JobDetail({
         toast({
           title: "🎉 Free job completed!",
           description:
-            "You've earned progress on your launch promo — another job completed with 0% platform fee. Check your dashboard for slots remaining." +
-            cleanerBonusNote,
+            "You've earned progress on your launch promo — another job completed with 0% platform fee. Check your dashboard for slots remaining.",
         });
       } else {
         toast({
           title: isStripeTestMode ? "Funds released to cleaner (test mode)" : "Funds released",
           description:
-            "The cleaner has been notified. Funds are on the way to their connected account." + cleanerBonusNote,
+            "The cleaner has been notified. Funds are on the way to their connected account.",
         });
       }
       setLocalJobStatus("completed");

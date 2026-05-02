@@ -39,7 +39,7 @@ export type EarningsTransaction = {
   title: string;
   grossCents: number;
   feeCents: number;
-  /** Cleaner promo funded from reduced platform fee on release (`jobs.cleaner_bonus_cents_applied`). */
+  /** Bond Back promo bonus funded from platform service fee on release (`jobs.cleaner_bonus_cents_applied`). */
   bonusCents: number;
   netCents: number;
   status: "Pending" | "Processing" | "Paid";
@@ -141,7 +141,7 @@ function buildEarningsCsv(
     "Job Title",
     "Date Completed",
     "Your earnings (AUD)",
-    "Cleaner promo bonus (AUD)",
+    "Bond Back promo bonus (AUD)",
     "Payout Date",
     "Status",
   ];
@@ -750,7 +750,7 @@ export function EarningsPageClient({
                   <StatusBadge status={tx.status} />
                   {tx.bonusCents >= 1 ? (
                     <span className="text-xs text-emerald-700 dark:text-emerald-400">
-                      Promo bonus {formatCents(tx.bonusCents)}
+                      Bond Back promo bonus {formatCents(tx.bonusCents)}
                     </span>
                   ) : null}
                   <span className="text-xs text-muted-foreground dark:text-gray-400">
@@ -792,7 +792,7 @@ export function EarningsPageClient({
                   </TableHead>
                   <TableHead className="text-right dark:text-gray-300">
                     <span className="inline-flex min-h-11 items-center font-medium dark:text-gray-300">
-                      Promo bonus
+                      Bond Back promo bonus
                     </span>
                   </TableHead>
                   <TableHead className="dark:text-gray-300">Status</TableHead>
@@ -894,7 +894,7 @@ export function EarningsPageClient({
                       <PayoutStatusBadge status={row.status} />
                       {row.bonusCents >= 1 ? (
                         <span className="text-xs text-emerald-700 dark:text-emerald-400">
-                          Promo bonus {formatCents(row.bonusCents)}
+                          Bond Back promo bonus {formatCents(row.bonusCents)}
                         </span>
                       ) : null}
                       <span className="text-xs text-muted-foreground dark:text-gray-400">
@@ -913,7 +913,9 @@ export function EarningsPageClient({
                     <TableRow className="dark:border-gray-800 dark:hover:bg-transparent">
                       <TableHead className="whitespace-nowrap dark:text-gray-300">Job</TableHead>
                       <TableHead className="text-right whitespace-nowrap dark:text-gray-300">Your earnings</TableHead>
-                      <TableHead className="text-right whitespace-nowrap dark:text-gray-300">Promo bonus</TableHead>
+                      <TableHead className="text-right whitespace-nowrap dark:text-gray-300">
+                        Bond Back promo bonus
+                      </TableHead>
                       <TableHead className="whitespace-nowrap dark:text-gray-300">Payout date</TableHead>
                       <TableHead className="whitespace-nowrap dark:text-gray-300">Status</TableHead>
                       <TableHead className="whitespace-nowrap dark:text-gray-300">Method</TableHead>

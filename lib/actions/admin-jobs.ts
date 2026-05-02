@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getStripeServer } from "@/lib/stripe";
@@ -27,6 +28,7 @@ import { insertAdminMediationProposalRecords } from "@/lib/actions/disputes";
 import { isJobCancelledStatus, JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 import { isCleanerStripeReleaseBlockingError } from "@/lib/stripe-payout-ready";
 import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
+import type { Database } from "@/types/supabase";
 
 type CleanerStripeNotifyReason = "dispute_resolve" | "mediation_binding" | "force_release";
 
@@ -349,7 +351,10 @@ export async function adminResolveDispute(formData: FormData): Promise<void> {
 
   // Ensure payout/refund happens when PaymentIntent is still held (manual capture).
   if (resolution === "release_funds" || resolution === "reject") {
-    const releaseResult = await releaseJobFunds(numericJobId);
+    const svc = createSupabaseAdminClient();
+    const releaseResult = await releaseJobFunds(numericJobId, {
+      supabase: (svc ?? supabase) as SupabaseClient<Database>,
+    });
     if (!releaseResult.ok) {
       await maybeNotifyCleanerStripeRequiredForRelease(
         j.winner_id,
@@ -711,7 +716,10 @@ export async function overrideTimer(
 
   // Force release now: run escrow release + mark completed
   if (actionType === "force_release_now") {
-    const releaseResult = await releaseJobFunds(jobId);
+    const svc = createSupabaseAdminClient();
+    const releaseResult = await releaseJobFunds(jobId, {
+      supabase: (svc ?? supabase) as SupabaseClient<Database>,
+    });
     if (!releaseResult.ok) {
       await maybeNotifyCleanerStripeRequiredForRelease(
         row.winner_id,

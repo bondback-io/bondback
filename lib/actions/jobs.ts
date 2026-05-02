@@ -2699,6 +2699,8 @@ export async function releaseJobFunds(
 ): Promise<ReleaseJobFundsResult> {
   const supabase = (options?.supabase ??
     (await createServerSupabaseClient())) as SupabaseClient<Database>;
+  /** Prefer service role for writing `cleaner_bonus_cents_applied` and release fields under strict RLS. */
+  const jobWriteClient = createSupabaseAdminClient() ?? supabase;
   const numericJobId = typeof jobId === "number" ? jobId : Number(jobId);
 
   const { data: job, error: jobError } = await supabase
@@ -2989,7 +2991,7 @@ export async function releaseJobFunds(
       dispute_reason: j.dispute_reason,
       dispute_status: j.dispute_status,
     });
-    const { error: updateError } = await supabase
+    const { error: updateError } = await jobWriteClient
       .from("jobs")
       .update({
         payment_released_at: nowIso,
@@ -3083,7 +3085,7 @@ export async function releaseJobFunds(
           winnerId,
           "cleaner_bonus_earned",
           numericJobId,
-          `You earned a ${bonusPercentageUsed}% cleaner bonus on this job — ${formatCents(cleanerBonusFundedCents)} extra (paid by reducing the platform fee on this release).`,
+          `Bond Back promo bonus: ${formatCents(cleanerBonusFundedCents)} added to your payout (${bonusPercentageUsed}% of the job funded from the platform service fee — the lister was not charged extra).`,
           { amountCents: cleanerBonusFundedCents }
         );
       } catch (e) {
@@ -3505,7 +3507,7 @@ export async function finalizeJobPayment(
     }
   }
 
-  const releaseResult = await releaseJobFunds(numericJobId);
+  const releaseResult = await releaseJobFunds(numericJobId, { supabase: gatedClient });
   if (!releaseResult.ok) {
     return { ok: false, error: releaseResult.error };
   }

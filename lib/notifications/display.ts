@@ -113,7 +113,7 @@ function labelForType(type: NotificationRow["type"]): string {
     case "listing_expired_no_bids":
       return "No bids";
     case "cleaner_bonus_earned":
-      return "Cleaner bonus";
+      return "Bond Back promo bonus";
     default:
       return "Update";
   }

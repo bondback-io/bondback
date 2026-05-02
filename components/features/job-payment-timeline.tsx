@@ -44,7 +44,7 @@ export type JobPaymentTimelineProps = {
    */
   isCancelledWithListerEscrowRefund?: boolean;
   /**
-   * Cleaner-only: recorded cents from promo-funded fee reduction on release (`jobs.cleaner_bonus_cents_applied`).
+   * Cleaner-only: Bond Back promo bonus cents (`jobs.cleaner_bonus_cents_applied`), funded from the platform fee.
    * Omit or null so listers do not see this line.
    */
   cleanerPromoBonusCents?: number | null;
@@ -236,9 +236,9 @@ export function JobPaymentTimeline({
         ) : null}
         {cleanerPromoBonusCents != null && cleanerPromoBonusCents >= 1 ? (
           <p className="mt-2 rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-3 py-2 text-xs leading-relaxed text-emerald-950 dark:border-emerald-800/55 dark:bg-emerald-950/35 dark:text-emerald-100">
-            <span className="font-semibold">Cleaner promo bonus:</span>{" "}
-            {formatCents(cleanerPromoBonusCents)} paid from the platform fee discount on release (your payout
-            reflects this).
+            <span className="font-semibold">Bond Back promo bonus:</span>{" "}
+            {formatCents(cleanerPromoBonusCents)} funded from the platform service fee when payment was released
+            (not added to what the lister paid — your payout includes this).
           </p>
         ) : null}
       </CardHeader>

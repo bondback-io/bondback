@@ -287,8 +287,8 @@ export async function createNotification(
         : `Payment received for Job #${jobId ?? "?"}. View earnings: ${appUrl}/earnings`;
     } else if (type === "cleaner_bonus_earned") {
       const extra =
-        options?.amountCents != null ? `$${(options.amountCents / 100).toFixed(0)}` : "a bonus";
-      body = `Cleaner bonus: ${extra} extra on Job #${jobId ?? "?"}. View: ${appUrl}/jobs/${jobId ?? ""}`;
+        options?.amountCents != null ? `$${(options.amountCents / 100).toFixed(0)}` : "extra";
+      body = `Bond Back promo bonus: ${extra} on Job #${jobId ?? "?"}. View: ${appUrl}/jobs/${jobId ?? ""}`;
     } else if (type === "dispute_opened") {
       body = `Dispute on Job #${jobId ?? "?"}. Respond now: ${appUrl}/jobs/${jobId ?? ""}`;
     } else if (type === "new_job_in_area") {

@@ -42,7 +42,7 @@ const CLEANER_DASHBOARD_JOB_SELECT_VARIANTS: readonly string[] = [
   "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, dispute_status, payment_released_at, cleaner_bonus_cents_applied, completed_at",
   /** DBs missing `proposed_refund_amount` / `counter_proposal_amount` but still record `refund_amount`. */
   "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, dispute_resolution, refund_amount, dispute_status, payment_released_at, cleaner_bonus_cents_applied, completed_at",
-  "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, refund_amount, dispute_status, payment_released_at, completed_at",
+  "id, listing_id, title, status, created_at, updated_at, cleaner_confirmed_complete, agreed_amount_cents, winner_id, refund_amount, dispute_status, payment_released_at, cleaner_bonus_cents_applied, completed_at",
   CLEANER_DASHBOARD_JOB_SELECT_MINIMAL,
 ];
 

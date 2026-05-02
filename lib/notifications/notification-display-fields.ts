@@ -162,7 +162,7 @@ export function buildNotificationPersistFields(
       title = "Launch promo ended";
       break;
     case "cleaner_bonus_earned":
-      title = jobId != null ? `Bonus · Job #${jobId}` : "Cleaner bonus";
+      title = jobId != null ? `Bond Back promo bonus · Job #${jobId}` : "Bond Back promo bonus";
       break;
     default:
       title = "Update";

@@ -205,7 +205,8 @@ export function AdminPaymentsPageClient(props: Props) {
               Recent completed transactions
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Jobs marked completed: cleaner payout, Service Fee, date. Funds released from escrow.
+              Completed jobs: cleaner payout (includes any Bond Back promo), net platform fee retained after promo, and
+              promo amount funded from the service fee (not charged to the lister).
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -220,15 +221,26 @@ export function AdminPaymentsPageClient(props: Props) {
                     <TableRow>
                       <TableHead>Job ID</TableHead>
                       <TableHead className="hidden md:table-cell">Cleaner</TableHead>
-                      <TableHead className="text-right">Amount paid</TableHead>
-                      <TableHead className="text-right">Fee taken</TableHead>
+                      <TableHead className="text-right">Cleaner received</TableHead>
+                      <TableHead className="hidden lg:table-cell text-right" title="Before Bond Back promo">
+                        Nominal fee
+                      </TableHead>
+                      <TableHead className="text-right">Net fee kept</TableHead>
+                      <TableHead className="text-right">Bond Back promo</TableHead>
                       <TableHead className="hidden sm:table-cell">Date</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recentTransactions.map(({ job, feeCents, payoutCents }) => {
+                    {recentTransactions.map(
+                      ({
+                        job,
+                        nominalFeeCents,
+                        cleanerPromoBonusCents,
+                        feeCents,
+                        payoutCents,
+                      }) => {
                       const cleaner = job.winner_id ? profilesById[job.winner_id] : null;
                       const date = job.updated_at || job.created_at;
 
@@ -243,8 +255,21 @@ export function AdminPaymentsPageClient(props: Props) {
                           <TableCell className="text-right text-[11px] font-medium tabular-nums text-foreground dark:text-gray-100 sm:text-xs">
                             {formatCents(payoutCents)}
                           </TableCell>
-                          <TableCell className="text-right text-[11px] tabular-nums text-muted-foreground sm:text-xs">
+                          <TableCell className="hidden lg:table-cell text-right text-[11px] tabular-nums text-muted-foreground sm:text-xs">
+                            {formatCents(nominalFeeCents)}
+                          </TableCell>
+                          <TableCell
+                            className="text-right text-[11px] tabular-nums text-muted-foreground sm:text-xs"
+                            title={
+                              cleanerPromoBonusCents >= 1
+                                ? `Net fee after ${formatCents(cleanerPromoBonusCents)} Bond Back promo from nominal ${formatCents(nominalFeeCents)}`
+                                : undefined
+                            }
+                          >
                             {formatCents(feeCents)}
+                          </TableCell>
+                          <TableCell className="text-right text-[11px] tabular-nums text-emerald-700 dark:text-emerald-400 sm:text-xs">
+                            {cleanerPromoBonusCents >= 1 ? formatCents(cleanerPromoBonusCents) : "—"}
                           </TableCell>
                           <TableCell className="hidden sm:table-cell text-[11px] text-muted-foreground">
                             {date ? format(new Date(date), "dd MMM yyyy") : "—"}

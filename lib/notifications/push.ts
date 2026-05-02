@@ -313,10 +313,10 @@ export function buildPushPayload(
       const bonus =
         options?.amountCents != null ? `$${(options.amountCents / 100).toFixed(0)}` : "";
       return {
-        title: "Cleaner bonus",
+        title: "Bond Back promo bonus",
         body: bonus
-          ? `You earned ${bonus} extra on Job #${id}. Tap to view the job.`
-          : `Cleaner bonus applied on Job #${id}. Tap to view.`,
+          ? `Bond Back promo bonus: ${bonus} extra on Job #${id} (from platform fee). Tap to view.`
+          : `Bond Back promo bonus on Job #${id}. Tap to view.`,
         data: { jobId: id, type: "cleaner_bonus_earned" },
       };
     }
