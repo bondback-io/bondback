@@ -475,11 +475,22 @@ export async function JobDetailPageContent({
       : "Back to jobs";
   const backHref = isListerActive ? "/my-listings" : isCleaner ? "/dashboard" : "/jobs";
 
-  const isJobLister =
+  const isJobListerParty =
     !!user &&
     !!job &&
     sameUserId(user.id, job.lister_id) &&
     roles.includes("lister");
+  const isJobCleanerParty =
+    !!user &&
+    !!job &&
+    String(job.winner_id ?? "").trim() !== "" &&
+    sameUserId(user.id, job.winner_id) &&
+    roles.includes("cleaner");
+  /**
+   * Winning cleaner must never see lister payout / escrow controls. Dual-role accounts can match
+   * `job.lister_id` (same UUID as winner in bad data, or edge cases); cleaner hat wins on the job.
+   */
+  const isJobLister = isJobListerParty && !isJobCleanerParty;
   const isListingOwner =
     !!user &&
     sameUserId(listingRow.lister_id, user.id) &&
@@ -837,12 +848,7 @@ export async function JobDetailPageContent({
           currentUserId={sessionUserId ?? null}
           isJobLister={isJobLister}
           isListingOwner={isListingOwner}
-          isJobCleaner={
-            !!user &&
-            !!job &&
-            sameUserId(user.id, job.winner_id) &&
-            roles.includes("cleaner")
-          }
+          isJobCleaner={isJobCleanerParty}
           hasReviewedCleaner={hasReviewedCleaner}
           hasReviewedLister={hasReviewedLister}
           canLeaveReview={canLeaveReview}
