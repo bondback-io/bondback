@@ -486,11 +486,34 @@ export async function JobDetailPageContent({
     String(job.winner_id ?? "").trim() !== "" &&
     sameUserId(user.id, job.winner_id) &&
     roles.includes("cleaner");
+
   /**
-   * Winning cleaner must never see lister payout / escrow controls. Dual-role accounts can match
-   * `job.lister_id` (same UUID as winner in bad data, or edge cases); cleaner hat wins on the job.
+   * Lister payout UI vs cleaner job UI:
+   * - Normal job: only one of lister_id / winner_id matches the viewer — mutually exclusive.
+   * - Same UUID as both lister and winner (dual-role tests / edge rows): choose hat by job phase so
+   *   lister never loses Pay / Approve & Release while nav is on Cleaner, and in_progress stays cleaner-first.
    */
-  const isJobLister = isJobListerParty && !isJobCleanerParty;
+  let isJobLister: boolean;
+  let isJobCleanerForJob: boolean;
+  if (isJobListerParty && isJobCleanerParty) {
+    const st = String(job?.status ?? "");
+    if (st === "accepted" || st === "completed_pending_approval") {
+      isJobLister = true;
+      isJobCleanerForJob = false;
+    } else if (st === "in_progress") {
+      isJobLister = false;
+      isJobCleanerForJob = true;
+    } else if (activeRole === "cleaner") {
+      isJobLister = false;
+      isJobCleanerForJob = true;
+    } else {
+      isJobLister = true;
+      isJobCleanerForJob = false;
+    }
+  } else {
+    isJobLister = isJobListerParty;
+    isJobCleanerForJob = isJobCleanerParty;
+  }
   const isListingOwner =
     !!user &&
     sameUserId(listingRow.lister_id, user.id) &&
@@ -848,7 +871,7 @@ export async function JobDetailPageContent({
           currentUserId={sessionUserId ?? null}
           isJobLister={isJobLister}
           isListingOwner={isListingOwner}
-          isJobCleaner={isJobCleanerParty}
+          isJobCleaner={isJobCleanerForJob}
           hasReviewedCleaner={hasReviewedCleaner}
           hasReviewedLister={hasReviewedLister}
           canLeaveReview={canLeaveReview}
