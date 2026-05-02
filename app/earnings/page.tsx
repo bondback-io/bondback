@@ -10,7 +10,10 @@ import { getEffectivePayoutSchedule, getNextPayoutEstimate, formatPayoutSchedule
 import { getGlobalSettings } from "@/lib/actions/global-settings";
 import type { Database } from "@/types/supabase";
 import { adminJobGrossCents } from "@/lib/admin-job-gross";
-import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
+import {
+  cleanerEarningsIncludingBonusCents,
+  jobCleanerBonusCentsApplied,
+} from "@/lib/jobs/cleaner-net-earnings";
 import {
   isCleanerEarningsPaidJob,
   isDashboardCompletedJob,
@@ -18,24 +21,6 @@ import {
 import { resolveCleanerEarningsJobSelect } from "@/lib/jobs/dashboard-jobs-select";
 import { JOB_STATUS_NOT_IN_LISTING_SLOT } from "@/lib/jobs/job-status-helpers";
 import type { ListingPriceFallbackCents } from "@/lib/admin-job-gross";
-
-function listingPriceExtras(listing: ListingRow | undefined): ListingPriceFallbackCents | undefined {
-  if (!listing) return undefined;
-  return {
-    buy_now_cents: listing.buy_now_cents,
-    reserve_cents: listing.reserve_cents,
-  };
-}
-
-const PLATFORM_FEE_RATE = 0.12;
-
-export const metadata: Metadata = {
-  title: "Earnings",
-  description:
-    "Track cleaner earnings and payouts from bond cleaning jobs on Bond Back — Australia.",
-  alternates: { canonical: "/earnings" },
-  robots: { index: false, follow: true },
-};
 
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type JobRow = {
@@ -56,6 +41,44 @@ type JobRow = {
   proposed_refund_amount?: number | null;
   counter_proposal_amount?: number | null;
   completed_at?: string | null;
+  cleaner_bonus_cents_applied?: number | null;
+};
+
+function listingPriceExtras(listing: ListingRow | undefined): ListingPriceFallbackCents | undefined {
+  if (!listing) return undefined;
+  return {
+    buy_now_cents: listing.buy_now_cents,
+    reserve_cents: listing.reserve_cents,
+  };
+}
+
+const PLATFORM_FEE_RATE = 0.12;
+
+/** Paid completed rows: effective platform fee (nominal 12% minus promo-funded bonus), net includes bonus. */
+function completedFeeNetBonus(
+  grossCents: number,
+  job: JobRow,
+  listing: ListingRow | undefined
+): { feeCents: number; netCents: number; bonusCents: number } {
+  const bonusCents = jobCleanerBonusCentsApplied(job);
+  const nominalFee = Math.round(grossCents * PLATFORM_FEE_RATE);
+  return {
+    bonusCents,
+    feeCents: Math.max(0, nominalFee - bonusCents),
+    netCents: cleanerEarningsIncludingBonusCents(
+      job,
+      listing?.current_lowest_bid_cents,
+      listingPriceExtras(listing)
+    ),
+  };
+}
+
+export const metadata: Metadata = {
+  title: "Earnings",
+  description:
+    "Track cleaner earnings and payouts from bond cleaning jobs on Bond Back — Australia.",
+  alternates: { canonical: "/earnings" },
+  robots: { index: false, follow: true },
 };
 
 export default async function EarningsPage() {
@@ -167,6 +190,7 @@ export default async function EarningsPage() {
     title: string;
     grossCents: number;
     feeCents: number;
+    bonusCents: number;
     netCents: number;
     payoutDate: string;
     status: "Paid" | "Processing" | "Failed";
@@ -178,8 +202,7 @@ export default async function EarningsPage() {
     const listing = listingsMap.get(job.listing_id);
     const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) continue;
-    const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
-    const netCents = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
+    const { feeCents, netCents, bonusCents } = completedFeeNetBonus(grossCents, job, listing);
     const releasedAt =
       job.payment_released_at?.trim() ||
       job.updated_at ||
@@ -189,6 +212,7 @@ export default async function EarningsPage() {
       title: earningsRowTitle(job, listing),
       grossCents,
       feeCents,
+      bonusCents,
       netCents,
       payoutDate: releasedAt,
       status: "Paid",
@@ -217,6 +241,7 @@ export default async function EarningsPage() {
     title: string;
     grossCents: number;
     feeCents: number;
+    bonusCents: number;
     netCents: number;
     status: "Pending" | "Processing" | "Paid";
     payoutDate: string | null;
@@ -229,10 +254,15 @@ export default async function EarningsPage() {
     const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) continue;
 
-    const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
-    const netCents = isDashboardCompletedJob(job)
-      ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing))
-      : grossCents;
+    const settled = isDashboardCompletedJob(job);
+    const feeNetBonus = settled
+      ? completedFeeNetBonus(grossCents, job, listing)
+      : {
+          feeCents: Math.round(grossCents * PLATFORM_FEE_RATE),
+          netCents: grossCents,
+          bonusCents: 0,
+        };
+    const { feeCents, netCents, bonusCents } = feeNetBonus;
     const title = earningsRowTitle(job, listing);
 
     let status: "Pending" | "Processing" | "Paid" = "Pending";
@@ -245,6 +275,7 @@ export default async function EarningsPage() {
       title,
       grossCents,
       feeCents,
+      bonusCents,
       netCents,
       status,
       payoutDate:
@@ -255,7 +286,11 @@ export default async function EarningsPage() {
 
     if (isDashboardCompletedJob(job)) {
       const d = job.payment_released_at || job.updated_at || job.created_at;
-      const netForChart = cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
+      const netForChart = cleanerEarningsIncludingBonusCents(
+        job,
+        listing?.current_lowest_bid_cents,
+        listingPriceExtras(listing)
+      );
       chartEvents.push({
         date: d,
         grossCents,
@@ -266,12 +301,19 @@ export default async function EarningsPage() {
 
   const totalEarningsCents = completedJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    return sum + cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
+    return (
+      sum +
+      cleanerEarningsIncludingBonusCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing))
+    );
   }, 0);
 
   const thisMonthCents = completedJobs.reduce((sum, j) => {
     const listing = listingsMap.get(j.listing_id);
-    const c = cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
+    const c = cleanerEarningsIncludingBonusCents(
+      j,
+      listing?.current_lowest_bid_cents,
+      listingPriceExtras(listing)
+    );
     const jobDate = new Date(j.updated_at || j.created_at);
     if (jobDate >= monthStart && jobDate <= now) return sum + c;
     return sum;
@@ -299,8 +341,7 @@ export default async function EarningsPage() {
     const listing = listingsMap.get(j.listing_id);
     const grossCents = adminJobGrossCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) return;
-    const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
-    const netCents = cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
+    const { feeCents, netCents } = completedFeeNetBonus(grossCents, j, listing);
     const jobDate = new Date(j.updated_at || j.created_at);
 
     periodBreakdown.lifetime.grossCents += grossCents;
@@ -346,7 +387,11 @@ export default async function EarningsPage() {
     const grossCents = adminJobGrossCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing));
     if (grossCents <= 0) continue;
     const netCents = isDashboardCompletedJob(job)
-      ? cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, listingPriceExtras(listing))
+      ? cleanerEarningsIncludingBonusCents(
+          job,
+          listing?.current_lowest_bid_cents,
+          listingPriceExtras(listing)
+        )
       : grossCents;
     const title = earningsRowTitle(job, listing);
 

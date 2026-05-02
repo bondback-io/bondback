@@ -85,7 +85,13 @@ import { compressImage } from "@/lib/utils/compressImage";
 export type ListingAuctionDetailProps = {
   listing: ListingRow;
   initialBids: BidWithBidder[];
+  /** True when `active_role` is cleaner (session mode). */
   isCleaner: boolean;
+  /**
+   * True when `profiles.roles` includes `cleaner`. Used for bidding UI even if the user is browsing in
+   * lister mode. Omit to fall back to {@link isCleaner} only (legacy callers).
+   */
+  hasCleanerRole?: boolean;
   /** True when the current user owns this listing and has the lister role on their profile. */
   isListerOwner: boolean;
   /** True when the session is in lister mode (active_role). Cancel listing / accept bid require this. */
@@ -116,6 +122,7 @@ export function ListingAuctionDetail({
   listing,
   initialBids,
   isCleaner,
+  hasCleanerRole: hasCleanerRoleProp,
   isListerOwner,
   isListerSessionActive,
   hasActiveJob,
@@ -202,8 +209,14 @@ export function ListingAuctionDetail({
       : null;
   const isListingCancelled =
     String(listing.status ?? "").toLowerCase() === "cancelled";
-  const showCleanerBidUi =
-    isCleaner && isLive && !hasActiveJob && !isListingCancelled;
+
+  const cleanerRoleMember = hasCleanerRoleProp ?? isCleaner;
+  const viewerOwnsListing = Boolean(
+    currentUserId &&
+      listing.lister_id != null &&
+      String(listing.lister_id) === String(currentUserId)
+  );
+  const canBidOnListing = cleanerRoleMember && !viewerOwnsListing;
 
   /** Full listing page: bid card (cleaners + guests / other listers — not the listing owner). */
   const showPlaceBidCardOnListingPage =
@@ -211,11 +224,15 @@ export function ListingAuctionDetail({
     isLive &&
     !hasActiveJob &&
     !isListingCancelled &&
-    !isListerOwner;
+    !viewerOwnsListing;
 
   /** Find Jobs embed: show bid form in the top-right card for everyone (guests see login / CTA copy). */
   const showEmbedBidForm =
-    embedInFindJobs && isLive && !hasActiveJob && !isListingCancelled;
+    embedInFindJobs &&
+    isLive &&
+    !hasActiveJob &&
+    !isListingCancelled &&
+    !viewerOwnsListing;
 
   const handleAcceptBid = useCallback(
     async (bid: BidWithBidder) => {
@@ -249,7 +266,7 @@ export function ListingAuctionDetail({
   );
 
   const showRevertLastBidInHistory =
-    isCleaner &&
+    cleanerRoleMember &&
     isLive &&
     !hasActiveJob &&
     Boolean(
@@ -490,7 +507,7 @@ export function ListingAuctionDetail({
             <Button variant="ghost" asChild className="-ml-2 w-fit">
               <Link
                 href={
-                  canManageListingAsLister ? "/my-listings" : isCleaner ? "/dashboard" : "/jobs"
+                  canManageListingAsLister ? "/my-listings" : cleanerRoleMember ? "/dashboard" : "/jobs"
                 }
               >
                 ← Back
@@ -730,7 +747,7 @@ export function ListingAuctionDetail({
                     <PlaceBidForm
                       listingId={String(listing.id)}
                       listing={listing}
-                      isCleaner={isCleaner}
+                      isCleaner={canBidOnListing}
                       currentUserId={currentUserId}
                       compactHelpText
                       onBidPlaced={onBidPlaced}
@@ -894,7 +911,7 @@ export function ListingAuctionDetail({
               <PlaceBidForm
                 listingId={listing.id}
                 listing={listing}
-                isCleaner={isCleaner}
+                isCleaner={canBidOnListing}
                 currentUserId={currentUserId}
                 onBidPlaced={onBidPlaced}
               />

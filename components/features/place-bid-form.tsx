@@ -191,7 +191,15 @@ export function PlaceBidForm({
       <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 px-4 py-4 text-sm leading-relaxed text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
         {currentUserId ? (
           <>
-            Switch to <strong>Cleaner</strong> mode in the header or Settings to place a bid on this job.
+            Only cleaners can place bids. Add cleaner services in{" "}
+            <Link href="/settings" className="font-medium text-primary underline underline-offset-2">
+              Settings
+            </Link>
+            , or{" "}
+            <Link href="/signup" className="font-medium text-primary underline underline-offset-2">
+              sign up as a cleaner
+            </Link>
+            .
           </>
         ) : (
           <>

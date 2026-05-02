@@ -39,6 +39,8 @@ export type EarningsTransaction = {
   title: string;
   grossCents: number;
   feeCents: number;
+  /** Cleaner promo funded from reduced platform fee on release (`jobs.cleaner_bonus_cents_applied`). */
+  bonusCents: number;
   netCents: number;
   status: "Pending" | "Processing" | "Paid";
   payoutDate: string | null;
@@ -66,6 +68,7 @@ export type PayoutHistoryItem = {
   title: string;
   grossCents: number;
   feeCents: number;
+  bonusCents: number;
   netCents: number;
   payoutDate: string;
   status: "Paid" | "Processing" | "Failed";
@@ -138,6 +141,7 @@ function buildEarningsCsv(
     "Job Title",
     "Date Completed",
     "Your earnings (AUD)",
+    "Cleaner promo bonus (AUD)",
     "Payout Date",
     "Status",
   ];
@@ -146,11 +150,12 @@ function buildEarningsCsv(
     t.title,
     formatDateDDMMYYYY(t.payoutDate ?? t.date),
     formatCentsTax(t.netCents),
+    t.bonusCents >= 1 ? formatCentsTax(t.bonusCents) : "",
     formatDateDDMMYYYY(t.payoutDate),
     t.status,
   ]);
   const totalNet = paid.reduce((s, t) => s + t.netCents, 0);
-  const totalsRow = ["", "TOTAL", "", formatCentsTax(totalNet), "", ""];
+  const totalsRow = ["", "TOTAL", "", formatCentsTax(totalNet), "", "", ""];
   const allRows = [headers, ...rows.map((r) => r.map(String)), totalsRow];
   const csv = allRows
     .map((row) => row.map(escapeCsvField).join(","))
@@ -743,6 +748,11 @@ export function EarningsPageClient({
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <StatusBadge status={tx.status} />
+                  {tx.bonusCents >= 1 ? (
+                    <span className="text-xs text-emerald-700 dark:text-emerald-400">
+                      Promo bonus {formatCents(tx.bonusCents)}
+                    </span>
+                  ) : null}
                   <span className="text-xs text-muted-foreground dark:text-gray-400">
                     Payout:{" "}
                     {tx.payoutDate ? format(new Date(tx.payoutDate), "d MMM yyyy") : "—"}
@@ -780,6 +790,11 @@ export function EarningsPageClient({
                       Your earnings {sortBy === "amount" ? (sortDesc ? "↓" : "↑") : ""}
                     </button>
                   </TableHead>
+                  <TableHead className="text-right dark:text-gray-300">
+                    <span className="inline-flex min-h-11 items-center font-medium dark:text-gray-300">
+                      Promo bonus
+                    </span>
+                  </TableHead>
                   <TableHead className="dark:text-gray-300">Status</TableHead>
                   <TableHead className="dark:text-gray-300">Payout</TableHead>
                 </TableRow>
@@ -803,6 +818,9 @@ export function EarningsPageClient({
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-400">
                       {formatCents(tx.netCents)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground dark:text-gray-400">
+                      {tx.bonusCents >= 1 ? formatCents(tx.bonusCents) : "—"}
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={tx.status} />
@@ -874,6 +892,11 @@ export function EarningsPageClient({
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <PayoutStatusBadge status={row.status} />
+                      {row.bonusCents >= 1 ? (
+                        <span className="text-xs text-emerald-700 dark:text-emerald-400">
+                          Promo bonus {formatCents(row.bonusCents)}
+                        </span>
+                      ) : null}
                       <span className="text-xs text-muted-foreground dark:text-gray-400">
                         {formatDateDDMMYYYY(row.payoutDate)}
                       </span>
@@ -890,6 +913,7 @@ export function EarningsPageClient({
                     <TableRow className="dark:border-gray-800 dark:hover:bg-transparent">
                       <TableHead className="whitespace-nowrap dark:text-gray-300">Job</TableHead>
                       <TableHead className="text-right whitespace-nowrap dark:text-gray-300">Your earnings</TableHead>
+                      <TableHead className="text-right whitespace-nowrap dark:text-gray-300">Promo bonus</TableHead>
                       <TableHead className="whitespace-nowrap dark:text-gray-300">Payout date</TableHead>
                       <TableHead className="whitespace-nowrap dark:text-gray-300">Status</TableHead>
                       <TableHead className="whitespace-nowrap dark:text-gray-300">Method</TableHead>
@@ -911,6 +935,9 @@ export function EarningsPageClient({
                         </TableCell>
                         <TableCell className="text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-400">
                           {formatCents(row.netCents)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground dark:text-gray-400">
+                          {row.bonusCents >= 1 ? formatCents(row.bonusCents) : "—"}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground dark:text-gray-400">
                           {formatDateDDMMYYYY(row.payoutDate)}

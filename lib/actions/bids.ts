@@ -128,9 +128,8 @@ export async function placeBid(
 
   const profile = profileData as { roles: string[] | null; active_role: string | null } | null;
   const roles = (profile?.roles ?? []) as string[];
-  const activeRole = profile?.active_role ?? (roles[0] ?? null);
 
-  if (!roles.includes("cleaner") || activeRole !== "cleaner") {
+  if (!roles.includes("cleaner")) {
     return { ok: false, error: "Only cleaners can place bids." };
   }
 
@@ -175,6 +174,10 @@ export async function placeBid(
   }
 
   const row = listing as ListingRow;
+  if (String(row.lister_id) === session.user.id) {
+    return { ok: false, error: "You can't bid on your own listing." };
+  }
+
   if (row.status !== "live") {
     return { ok: false, error: "This auction is no longer live." };
   }
@@ -384,9 +387,8 @@ export async function cancelLastBid(
     active_role: string | null;
   } | null;
   const roles = (profile?.roles ?? []) as string[];
-  const activeRole = profile?.active_role ?? (roles[0] ?? null);
 
-  if (!roles.includes("cleaner") || activeRole !== "cleaner") {
+  if (!roles.includes("cleaner")) {
     return { ok: false, error: "Only cleaners can cancel bids." };
   }
 

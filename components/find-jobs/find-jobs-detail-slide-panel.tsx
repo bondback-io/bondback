@@ -47,6 +47,7 @@ export function FindJobsDetailPanelBody({
 }: FindJobsDetailPanelBodyProps) {
   const {
     viewerIsCleaner,
+    viewerHasCleanerRole,
     viewerUserId,
     viewerActiveRole,
     patchDetailListingRow,
@@ -169,6 +170,7 @@ export function FindJobsDetailPanelBody({
               listing={listing}
               initialBids={bids}
               isCleaner={viewerIsCleaner}
+              hasCleanerRole={viewerHasCleanerRole}
               isListerOwner={isOwner}
               isListerSessionActive={isListerSessionActive}
               hasActiveJob={false}

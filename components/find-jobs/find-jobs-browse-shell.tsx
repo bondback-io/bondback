@@ -17,6 +17,7 @@ export type FindJobsBrowseShellProps = {
   centerLon: number;
   radiusKm: number;
   viewerIsCleaner?: boolean;
+  viewerHasCleanerRole?: boolean;
   viewerUserId?: string | null;
   viewerActiveRole?: FindJobsViewerActiveRole;
 };
@@ -28,6 +29,7 @@ export function FindJobsBrowseShell({
   centerLon,
   radiusKm,
   viewerIsCleaner = false,
+  viewerHasCleanerRole = false,
   viewerUserId = null,
   viewerActiveRole = null,
 }: FindJobsBrowseShellProps) {
@@ -35,6 +37,7 @@ export function FindJobsBrowseShell({
     <FindJobsMapProvider
       initialMapPoints={mapPoints}
       viewerIsCleaner={viewerIsCleaner}
+      viewerHasCleanerRole={viewerHasCleanerRole}
       viewerUserId={viewerUserId}
       viewerActiveRole={viewerActiveRole}
     >

@@ -35,6 +35,8 @@ type FindJobsMapContextValue = {
   /** Merge fields into open detail listing + list registry (e.g. after a successful bid). */
   patchDetailListingRow: (listingId: string, patch: Partial<ListingRow>) => void;
   viewerIsCleaner: boolean;
+  /** Profile includes cleaner role — bidding UI even when browsing as lister. */
+  viewerHasCleanerRole: boolean;
   viewerUserId: string | null;
   viewerActiveRole: FindJobsViewerActiveRole;
 };
@@ -46,6 +48,7 @@ type FindJobsMapProviderProps = {
   /** SSR pins until the jobs list registers client-filtered rows. */
   initialMapPoints?: FindJobsMapPoint[];
   viewerIsCleaner?: boolean;
+  viewerHasCleanerRole?: boolean;
   viewerUserId?: string | null;
   viewerActiveRole?: FindJobsViewerActiveRole;
 };
@@ -54,6 +57,7 @@ export function FindJobsMapProvider({
   children,
   initialMapPoints = [],
   viewerIsCleaner = false,
+  viewerHasCleanerRole = false,
   viewerUserId = null,
   viewerActiveRole = null,
 }: FindJobsMapProviderProps) {
@@ -128,6 +132,7 @@ export function FindJobsMapProvider({
       getListerCardData,
       patchDetailListingRow,
       viewerIsCleaner,
+      viewerHasCleanerRole,
       viewerUserId,
       viewerActiveRole,
     }),
@@ -143,6 +148,7 @@ export function FindJobsMapProvider({
       getListerCardData,
       patchDetailListingRow,
       viewerIsCleaner,
+      viewerHasCleanerRole,
       viewerUserId,
       viewerActiveRole,
     ]

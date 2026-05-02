@@ -149,6 +149,7 @@ export default async function ListingDetailPage({
   const activeRole =
     (profile?.active_role as string | null) ?? (roles[0] ?? null);
   const isCleaner = roles.includes("cleaner") && activeRole === "cleaner";
+  const hasCleanerRole = roles.includes("cleaner");
   const isListerActive = roles.includes("lister") && activeRole === "lister";
 
   const listingId = raw;
@@ -444,6 +445,7 @@ export default async function ListingDetailPage({
               listing={listingRow}
               initialBids={initialBids}
               isCleaner={isCleaner}
+              hasCleanerRole={hasCleanerRole}
               isListerOwner={ownsListingAsLister}
               isListerSessionActive={isListerActive}
               hasActiveJob={hasActiveJob}

@@ -30,7 +30,7 @@ import { AdminUsersFilters } from "@/components/admin/admin-users-filters";
 import { AdminUserVerificationActions } from "@/components/admin/admin-user-verification-actions";
 import { VerificationBadges } from "@/components/shared/verification-badges";
 import { PROFILE_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
-import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
+import { cleanerEarningsIncludingBonusCents } from "@/lib/jobs/cleaner-net-earnings";
 import { effectiveProfilePhotoUrl } from "@/lib/profile-display-photo";
 import { calculateProfileStrengthPercent } from "@/lib/profile-strength";
 
@@ -46,6 +46,7 @@ type JobRow = {
   refund_amount?: number | null;
   proposed_refund_amount?: number | null;
   counter_proposal_amount?: number | null;
+  cleaner_bonus_cents_applied?: number | null;
 };
 type ListingRow = {
   id: string;
@@ -107,7 +108,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     serviceRoleMissing
       ? { data: [] as JobRow[], error: null }
       : supabaseAdmin!.from("jobs").select(
-          "id, lister_id, winner_id, listing_id, status, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount"
+          "id, lister_id, winner_id, listing_id, status, agreed_amount_cents, dispute_resolution, refund_amount, proposed_refund_amount, counter_proposal_amount, cleaner_bonus_cents_applied"
         ),
     serviceRoleMissing || !supabaseAdmin
       ? Promise.resolve([] as User[])
@@ -176,7 +177,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     if (j.winner_id) totalJobsByUser.set(j.winner_id, (totalJobsByUser.get(j.winner_id) ?? 0) + 1);
     if (j.status === "completed" && j.winner_id && j.listing_id) {
       const list = listingsMap.get(j.listing_id);
-      const cents = cleanerNetEarnedCents(j, list?.current_lowest_bid_cents, {
+      const cents = cleanerEarningsIncludingBonusCents(j, list?.current_lowest_bid_cents, {
         buy_now_cents: list?.buy_now_cents,
         reserve_cents: list?.reserve_cents,
       });

@@ -41,7 +41,10 @@ import { fetchMessengerPeerProfilesByIds } from "@/lib/messenger-peer-profiles-s
 import { isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { disputeOpenerRole } from "@/lib/jobs/dispute-opened-by";
 import { isJobCancelledStatus } from "@/lib/jobs/job-status-helpers";
-import { listerRefundCentsFromDisputeJob } from "@/lib/jobs/cleaner-net-earnings";
+import {
+  jobCleanerBonusCentsApplied,
+  listerRefundCentsFromDisputeJob,
+} from "@/lib/jobs/cleaner-net-earnings";
 import { jobQualifiesForDisputeHub } from "@/lib/jobs/dispute-hub-helpers";
 import {
   getListerNonResponsiveCancelPreview,
@@ -329,41 +332,6 @@ export async function JobDetailPageContent({
       : null;
   const isListerEscrowOnlyCancel = job?.status === "cancelled_by_lister" && hasListerEscrowCancel;
 
-  const paymentTimeline =
-    job &&
-    (j?.payment_intent_id ||
-      j?.payment_released_at ||
-      j?.dispute_resolution ||
-      hasListerEscrowCancel)
-      ? {
-          hasPaymentHold,
-          heldAmountCents: hasPaymentHold ? agreedAmountCents : null,
-          paymentReleasedAt: j.payment_released_at ?? null,
-          disputeResolution: j.dispute_resolution ?? null,
-          resolutionAt:
-            isListerEscrowOnlyCancel && hasListerEscrowCancel
-              ? (le?.lister_escrow_cancelled_at ?? null)
-              : (j.resolution_at ?? null),
-          refundAmountCents: isListerEscrowOnlyCancel
-            ? (listerEscrowRefundCents ?? (j.refund_amount as number | null) ?? null)
-            : (timelineRefundCentsResolved ??
-              (j.refund_amount ??
-                proposedRefundAmount ??
-                counterProposalAmount ??
-                null)),
-          topUpPayments,
-          totalAgreedCents: agreedAmountCents,
-          netToCleanerCents:
-            completedCleanerEscrowPayoutCents ??
-            (job?.status === "completed" ? agreedAmountCents : null),
-          disputeCaseHref,
-          listerEscrowCancelReasonCode: le?.lister_escrow_cancel_reason ?? null,
-          isCancelledWithListerEscrowRefund: Boolean(
-            isListerEscrowOnlyCancel && (listerEscrowRefundCents != null && listerEscrowRefundCents > 0)
-          ),
-        }
-      : null;
-
   const isJobCancelled = isJobCancelledStatus(job?.status);
   const hasActiveJob = !!job && !isJobCancelled;
 
@@ -503,6 +471,51 @@ export async function JobDetailPageContent({
     isJobLister = isJobListerParty;
     isJobCleanerForJob = isJobCleanerParty;
   }
+
+  const recordedCleanerBonusCents =
+    job && String(job.status ?? "") === "completed"
+      ? jobCleanerBonusCentsApplied(job)
+      : 0;
+
+  const paymentTimeline =
+    job &&
+    (j?.payment_intent_id ||
+      j?.payment_released_at ||
+      j?.dispute_resolution ||
+      hasListerEscrowCancel)
+      ? {
+          hasPaymentHold,
+          heldAmountCents: hasPaymentHold ? agreedAmountCents : null,
+          paymentReleasedAt: j.payment_released_at ?? null,
+          disputeResolution: j.dispute_resolution ?? null,
+          resolutionAt:
+            isListerEscrowOnlyCancel && hasListerEscrowCancel
+              ? (le?.lister_escrow_cancelled_at ?? null)
+              : (j.resolution_at ?? null),
+          refundAmountCents: isListerEscrowOnlyCancel
+            ? (listerEscrowRefundCents ?? (j.refund_amount as number | null) ?? null)
+            : (timelineRefundCentsResolved ??
+              (j.refund_amount ??
+                proposedRefundAmount ??
+                counterProposalAmount ??
+                null)),
+          topUpPayments,
+          totalAgreedCents: agreedAmountCents,
+          netToCleanerCents:
+            completedCleanerEscrowPayoutCents ??
+            (job?.status === "completed" ? agreedAmountCents : null),
+          disputeCaseHref,
+          listerEscrowCancelReasonCode: le?.lister_escrow_cancel_reason ?? null,
+          isCancelledWithListerEscrowRefund: Boolean(
+            isListerEscrowOnlyCancel && (listerEscrowRefundCents != null && listerEscrowRefundCents > 0)
+          ),
+          cleanerPromoBonusCents:
+            isJobCleanerForJob && recordedCleanerBonusCents >= 1
+              ? recordedCleanerBonusCents
+              : null,
+        }
+      : null;
+
   const isListingOwner =
     !!user &&
     sameUserId(listingRow.lister_id, user.id) &&

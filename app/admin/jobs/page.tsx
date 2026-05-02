@@ -28,6 +28,7 @@ import { AdminJobsPendingReviewTable } from "@/components/admin/admin-jobs-pendi
 import { JOB_ADMIN_TABLE_SELECT } from "@/lib/supabase/queries";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
 import { adminJobGrossCents } from "@/lib/admin-job-gross";
+import { jobCleanerBonusCentsApplied } from "@/lib/jobs/cleaner-net-earnings";
 
 interface AdminJobsPageProps {
   searchParams: Promise<{
@@ -261,6 +262,9 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                 <TableHead className="hidden md:table-cell">Lister</TableHead>
                 <TableHead className="hidden md:table-cell">Cleaner</TableHead>
                 <TableHead className="text-right whitespace-nowrap">Price</TableHead>
+                <TableHead className="hidden xl:table-cell text-right whitespace-nowrap">
+                  Cleaner promo
+                </TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden sm:table-cell">
                   Created
@@ -307,6 +311,15 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                           : undefined;
                         const cents = adminJobGrossCents(job, listingLow);
                         return cents > 0 ? `$${(cents / 100).toFixed(0)}` : "—";
+                      })()}
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell text-right text-[11px] tabular-nums text-muted-foreground">
+                      {(() => {
+                        const b =
+                          String(job.status) === "completed"
+                            ? jobCleanerBonusCentsApplied(job)
+                            : 0;
+                        return b >= 1 ? `$${(b / 100).toFixed(0)}` : "—";
                       })()}
                     </TableCell>
                     <TableCell>

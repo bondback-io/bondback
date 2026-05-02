@@ -98,9 +98,10 @@ async function FindJobsPageContent({
   const viewerIsCleaner = Boolean(
     session && session.roles.includes("cleaner") && session.activeRole === "cleaner"
   );
+  const viewerHasCleanerRole = Boolean(session?.roles.includes("cleaner"));
 
   let cleanerMarketplaceBanned = false;
-  if (sessionUserId && viewerIsCleaner) {
+  if (sessionUserId && viewerHasCleanerRole) {
     await clearExpiredMarketplaceBanIfNeeded(sessionUserId);
     const { data: banRow } = await supabase
       .from("profiles")
@@ -395,6 +396,7 @@ async function FindJobsPageContent({
                   centerLon={effectiveCenterLon}
                   radiusKm={activeRadiusKm}
                   viewerIsCleaner={viewerIsCleaner}
+                  viewerHasCleanerRole={viewerHasCleanerRole}
                   viewerUserId={sessionUserId}
                   viewerActiveRole={viewerActiveRole}
                 >

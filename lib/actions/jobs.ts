@@ -2997,6 +2997,9 @@ export async function releaseJobFunds(
         top_up_payments: updatedTopUps as unknown as never,
         updated_at: nowIso,
         ...(disputeClose ?? {}),
+        ...(cleanerBonusFundedCents >= 1 && transferIds.length > 0
+          ? { cleaner_bonus_cents_applied: cleanerBonusFundedCents }
+          : {}),
       } as never)
       .eq("id", numericJobId);
 

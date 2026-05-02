@@ -35,6 +35,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { adminJobGrossCents } from "@/lib/admin-job-gross";
+import { jobCleanerBonusCentsApplied } from "@/lib/jobs/cleaner-net-earnings";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
@@ -97,9 +98,12 @@ async function getAdminDashboardData() {
           .eq("status", "live"),
         supabase
           .from("jobs")
-          .select("id, listing_id, status, agreed_amount_cents, winner_id, created_at, updated_at", {
-            count: "exact",
-          })
+          .select(
+            "id, listing_id, status, agreed_amount_cents, winner_id, cleaner_bonus_cents_applied, created_at, updated_at",
+            {
+              count: "exact",
+            }
+          )
           .order("created_at", { ascending: false }),
         supabase
           .from("jobs")
@@ -130,7 +134,14 @@ async function getAdminDashboardData() {
       const listing = listingsMap.get(job.listing_id as string);
       return sum + adminJobGrossCents(job as JobRow, listing?.current_lowest_bid_cents);
     }, 0);
-    const totalRevenueCents = Math.round(totalGrossCents * PLATFORM_FEE_RATE);
+    const totalRevenueCents = completedJobs.reduce((sum, job) => {
+      const listing = listingsMap.get(job.listing_id as string);
+      const gross = adminJobGrossCents(job as JobRow, listing?.current_lowest_bid_cents);
+      if (gross <= 0) return sum;
+      const nominal = Math.round(gross * PLATFORM_FEE_RATE);
+      const bonus = jobCleanerBonusCentsApplied(job as JobRow);
+      return sum + Math.max(0, nominal - bonus);
+    }, 0);
 
     const pendingPayoutsCents = 0;
 
@@ -146,7 +157,9 @@ async function getAdminDashboardData() {
       const listing = listingsMap.get(job.listing_id as string);
       const gross = adminJobGrossCents(job as JobRow, listing?.current_lowest_bid_cents);
       if (gross <= 0) continue;
-      const fee = Math.round(gross * PLATFORM_FEE_RATE);
+      const nominal = Math.round(gross * PLATFORM_FEE_RATE);
+      const bonus = jobCleanerBonusCentsApplied(job as JobRow);
+      const fee = Math.max(0, nominal - bonus);
       const when = new Date((job as any).updated_at || job.created_at);
       const key = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, "0")}`;
       const prev = monthlyMap.get(key) ?? { feeCents: 0, grossCents: 0 };
@@ -223,7 +236,9 @@ async function getAdminDashboardData() {
       const listing = listingsMap.get(job.listing_id as string);
       const gross = adminJobGrossCents(job as JobRow, listing?.current_lowest_bid_cents);
       if (gross <= 0) continue;
-      const fee = Math.round(gross * PLATFORM_FEE_RATE);
+      const nominal = Math.round(gross * PLATFORM_FEE_RATE);
+      const bonus = jobCleanerBonusCentsApplied(job as JobRow);
+      const fee = Math.max(0, nominal - bonus);
       const net = gross - fee;
       const preferred = profilesByWinner.get(winnerId) ?? "platform_default";
       const interval = getEffectivePayoutSchedule(

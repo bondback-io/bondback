@@ -13,11 +13,15 @@ import {
   loadListingFullForSession,
 } from "@/lib/jobs/load-job-for-detail-route";
 import { profileFieldIsAdmin } from "@/lib/is-admin";
-import { listerRefundCentsFromDisputeJob } from "@/lib/jobs/cleaner-net-earnings";
+import { listerRefundCentsFromDisputeJob, jobCleanerBonusCentsApplied } from "@/lib/jobs/cleaner-net-earnings";
 import { jobQualifiesForDisputeHub } from "@/lib/jobs/dispute-hub-helpers";
 import { parseJobTopUpPayments } from "@/lib/job-top-up";
 
 type Params = Promise<{ id: string }>;
+
+function sameUserId(a: unknown, b: unknown): boolean {
+  return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+}
 
 /**
  * GET /api/jobs/[id]
@@ -38,7 +42,7 @@ export async function GET(
 
   const { data: adminProfile } = await supabase
     .from("profiles")
-    .select("is_admin")
+    .select("is_admin, roles, active_role")
     .eq("id", user.id)
     .maybeSingle();
   const detailLoadOpts = {
@@ -198,6 +202,18 @@ export async function GET(
       ? `/disputes/${numericJobId}`
       : null;
 
+  const viewerRoles = ((adminProfile as { roles?: string[] | null } | null)?.roles ?? []) as string[];
+  const winnerTrim =
+    winnerId != null && String(winnerId).trim() !== "" ? String(winnerId).trim() : "";
+  const isJobCleanerParty =
+    winnerTrim.length > 0 &&
+    sameUserId(user.id, winnerTrim) &&
+    viewerRoles.includes("cleaner");
+  const recordedCleanerBonusCents =
+    jobStatus === "completed" && job
+      ? jobCleanerBonusCentsApplied(job as { cleaner_bonus_cents_applied?: number | null })
+      : 0;
+
   const paymentTimeline = job && (hasPaymentHold || (job as { payment_released_at?: string }).payment_released_at || (job as { dispute_resolution?: string }).dispute_resolution)
     ? {
         hasPaymentHold,
@@ -217,6 +233,8 @@ export async function GET(
           completedCleanerEscrowPayoutCents ??
           (jobStatus === "completed" ? agreedAmountCents : null),
         disputeCaseHref,
+        cleanerPromoBonusCents:
+          isJobCleanerParty && recordedCleanerBonusCents >= 1 ? recordedCleanerBonusCents : null,
       }
     : null;
 

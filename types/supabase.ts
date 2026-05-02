@@ -528,6 +528,8 @@ export interface Database {
           /** When status is accepted without escrow; lister must Pay & Start by this time (UTC). */
           lister_payment_due_at: string | null;
           payment_released_at: string | null;
+          /** Extra cents to cleaner from cleaner bonus promo on this release (fee reduction). */
+          cleaner_bonus_cents_applied: number | null;
           stripe_transfer_id: string | null;
           cleaner_confirmed_complete: boolean | null;
           cleaner_confirmed_at: string | null;
@@ -575,6 +577,7 @@ export interface Database {
           top_up_payments?: Json;
           lister_payment_due_at?: string | null;
           payment_released_at?: string | null;
+          cleaner_bonus_cents_applied?: number | null;
           stripe_transfer_id?: string | null;
           cleaner_confirmed_complete?: boolean | null;
           cleaner_confirmed_at?: string | null;
@@ -621,6 +624,7 @@ export interface Database {
           top_up_payments?: Json;
           lister_payment_due_at?: string | null;
           payment_released_at?: string | null;
+          cleaner_bonus_cents_applied?: number | null;
           stripe_transfer_id?: string | null;
           cleaner_confirmed_complete?: boolean | null;
           cleaner_confirmed_at?: string | null;

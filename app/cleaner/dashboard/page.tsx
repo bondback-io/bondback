@@ -45,7 +45,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { ScrollToHash } from "@/components/dashboard/scroll-to-hash";
 import { normalizeProfileRolesFromDb } from "@/lib/profile-roles";
 import { getCleanerReadyToRequestPaymentByJobId } from "@/lib/jobs/cleaner-complete-readiness";
-import { cleanerNetEarnedCents } from "@/lib/jobs/cleaner-net-earnings";
+import { cleanerEarningsIncludingBonusCents } from "@/lib/jobs/cleaner-net-earnings";
 import { detailUrlForCardItem } from "@/lib/navigation/listing-or-job-href";
 import {
   isDashboardActivePipelineJob,
@@ -244,7 +244,7 @@ async function CleanerDashboardContent() {
     const jobDate = new Date(j.updated_at || j.created_at);
     if (!(jobDate >= monthStart && jobDate <= now)) return sum;
     return sum +
-      cleanerNetEarnedCents(j, listing?.current_lowest_bid_cents, {
+      cleanerEarningsIncludingBonusCents(j, listing?.current_lowest_bid_cents, {
         buy_now_cents: listing?.buy_now_cents,
         reserve_cents: listing?.reserve_cents,
       });
@@ -595,7 +595,7 @@ async function CleanerDashboardContent() {
                           <span className="text-xs font-medium text-foreground dark:text-gray-200">
                             Net paid{" "}
                             {formatCents(
-                              cleanerNetEarnedCents(job, listing?.current_lowest_bid_cents, {
+                              cleanerEarningsIncludingBonusCents(job, listing?.current_lowest_bid_cents, {
                                 buy_now_cents: listing?.buy_now_cents,
                                 reserve_cents: listing?.reserve_cents,
                               })
