@@ -2809,6 +2809,20 @@ export async function releaseJobFunds(
         };
       }
       if (pi.status !== "succeeded" && pi.status !== "requires_capture") {
+        if (pi.status === "canceled") {
+          return {
+            ok: false,
+            error:
+              "This escrow hold was canceled or expired in Stripe, so there is nothing left to release. Refresh the job page — if Pay & Start is available again, complete it to place a new hold. If the job is already completed on your side or this keeps happening, contact Bond Back support with your job number.",
+          };
+        }
+        if (pi.status === "requires_payment_method") {
+          return {
+            ok: false,
+            error:
+              "Escrow was never successfully funded (no valid payment method on the hold). Complete Pay & Start on this job to charge your card and fund escrow, then you can release after the clean.",
+          };
+        }
         return {
           ok: false,
           error: `Payment cannot be released yet (status: ${pi.status}). Please ensure every payment was completed successfully.`,

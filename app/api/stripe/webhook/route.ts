@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import Stripe from "stripe";
 import { getStripeServerForMode } from "@/lib/stripe";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAdminActivity } from "@/lib/admin-activity-log";
+import { parseJobTopUpPayments } from "@/lib/job-top-up";
+import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
+import type { Json } from "@/types/supabase";
 
 /**
  * POST /api/stripe/webhook
@@ -130,6 +134,84 @@ export async function POST(request: Request) {
         logEvent({ payment_intent_id: pi.id, job_id: jobId });
         // Escrow: manual-capture PIs reach `succeeded` only after capture. Do not set
         // `payment_released_at` here — `releaseJobFunds` updates DB after capture + Connect transfer.
+        break;
+      }
+
+      case "payment_intent.canceled": {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        logEvent({ payment_intent_id: pi.id });
+        if (!admin) break;
+
+        /** Stale escrow: clear primary PI only when no top-up PaymentIntents (those need manual JSON edits if one leg dies). */
+        const { data: jobs } = await admin
+          .from("jobs")
+          .select("id, status, payment_intent_id, top_up_payments, lister_id, winner_id, listing_id")
+          .eq("payment_intent_id", pi.id)
+          .is("payment_released_at", null);
+
+        const { createNotification } = await import("@/lib/actions/notifications");
+
+        for (const raw of jobs ?? []) {
+          const j = raw as {
+            id: number;
+            status: string;
+            lister_id: string;
+            winner_id: string | null;
+            listing_id: string | null;
+            top_up_payments?: Json | null;
+          };
+          const tops = parseJobTopUpPayments(j.top_up_payments ?? null);
+          if (tops.length > 0) {
+            console.warn("[stripe/webhook] payment_intent.canceled skipped (job has top-up legs)", j.id);
+            continue;
+          }
+          const nowIso = new Date().toISOString();
+          const listingUuid =
+            typeof j.listing_id === "string" && j.listing_id.trim() ? j.listing_id : undefined;
+          const patch: Record<string, unknown> = {
+            payment_intent_id: null,
+            updated_at: nowIso,
+          };
+          if (j.status === "in_progress") {
+            patch.status = "accepted";
+            patch.lister_payment_due_at = listerPaymentDueAtFromNowIso();
+          }
+          const { error } = await admin.from("jobs").update(patch as never).eq("id", j.id);
+          if (error) {
+            console.error("[stripe/webhook] payment_intent.canceled clear job escrow failed", j.id, error);
+            continue;
+          }
+          revalidatePath("/jobs");
+          revalidatePath(`/jobs/${j.id}`);
+          revalidatePath("/dashboard");
+          revalidatePath("/lister/dashboard");
+          const listerMsg =
+            j.status === "completed_pending_approval"
+              ? "Stripe canceled or expired the card hold on this job. Escrow has been cleared in Bond Back — contact support if the clean still needs payout."
+              : "Stripe canceled or expired the card hold on this job. Use Pay & Start again on this visit to place a fresh hold.";
+          try {
+            await createNotification(j.lister_id, "job_status_update", j.id, listerMsg, {
+              listingUuid,
+            });
+          } catch (e) {
+            console.error("[stripe/webhook] payment_intent.canceled lister notify", e);
+          }
+          if (j.winner_id) {
+            try {
+              await createNotification(
+                j.winner_id,
+                "job_status_update",
+                j.id,
+                j.status === "completed_pending_approval"
+                  ? "The lister’s payment hold expired or was canceled in Stripe — Bond Back notified them. Hang tight unless support contacts you."
+                  : "The lister’s payment hold expired or was canceled — they need to Pay & Start again before escrow is active.",
+                { listingUuid }
+              );
+            } catch (e) {
+              console.error("[stripe/webhook] payment_intent.canceled cleaner notify", e);
+            }
+          }
+        }
         break;
       }
 
