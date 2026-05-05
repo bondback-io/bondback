@@ -1861,11 +1861,18 @@ export function JobDetail({
         payAndStartNextRecurring: payNextRecurringOnRelease,
       });
       if (!res.ok) {
+        const err = res.error ?? "";
         toast({
           variant: "destructive",
           title: "Could not release funds",
-          description: res.error ?? "Failed to finalize payment.",
+          description: err || "Failed to finalize payment.",
         });
+        if (
+          typeof err === "string" &&
+          (err.includes("Refresh this page") || err.includes("cleared the stale"))
+        ) {
+          scheduleRouterAction(() => router.refresh());
+        }
         return;
       }
       const recurringNextPayMessage =

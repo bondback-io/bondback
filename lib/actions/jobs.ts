@@ -53,6 +53,7 @@ import { mergeServiceAddonsChecklists } from "@/lib/service-addons-checklists";
 import { normalizeServiceType } from "@/lib/service-types";
 import { sameUuid, trimStr } from "@/lib/utils";
 import { listerPaymentDueAtFromNowIso } from "@/lib/jobs/lister-payment-deadline";
+import { clearStaleCanceledPrimaryEscrowHold } from "@/lib/jobs/clear-stale-canceled-primary-escrow";
 import { isCleanerStripeReleaseBlockingError, isProfileStripePayoutReady } from "@/lib/stripe-payout-ready";
 import { hasRecentJobNotification } from "@/lib/notifications/notification-dedupe";
 import { disputeOpenedByLister } from "@/lib/jobs/dispute-opened-by";
@@ -2706,7 +2707,7 @@ export async function releaseJobFunds(
   const { data: job, error: jobError } = await supabase
     .from("jobs")
     .select(
-      "id, lister_id, listing_id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id, top_up_payments, disputed_at, dispute_reason, dispute_status"
+      "id, status, lister_id, listing_id, payment_intent_id, agreed_amount_cents, winner_id, payment_released_at, stripe_transfer_id, top_up_payments, disputed_at, dispute_reason, dispute_status"
     )
     .eq("id", numericJobId)
     .maybeSingle();
@@ -2723,6 +2724,7 @@ export async function releaseJobFunds(
     winner_id: string | null;
     payment_released_at: string | null;
     stripe_transfer_id: string | null;
+    status: string;
     top_up_payments?: unknown;
     disputed_at?: string | null;
     dispute_reason?: string | null;
@@ -2810,10 +2812,34 @@ export async function releaseJobFunds(
       }
       if (pi.status !== "succeeded" && pi.status !== "requires_capture") {
         if (pi.status === "canceled") {
+          const primaryLeg = leg.topUpIndex < 0;
+          if (primaryLeg && topUpsParsed.length === 0) {
+            const adminEscrow = createSupabaseAdminClient();
+            if (adminEscrow) {
+              const cleared = await clearStaleCanceledPrimaryEscrowHold(adminEscrow, {
+                jobId: numericJobId,
+                status: j.status,
+                listerId: j.lister_id,
+                winnerId: j.winner_id,
+                listingId: j.listing_id,
+                topUpPaymentsRaw:
+                  (j.top_up_payments ?? null) as Database["public"]["Tables"]["jobs"]["Row"]["top_up_payments"],
+              });
+              if (cleared) {
+                return {
+                  ok: false,
+                  error:
+                    j.status === "completed_pending_approval"
+                      ? "Stripe had already canceled or expired this card hold — nothing was left to release. Bond Back has cleared the stale escrow record. Refresh this page. If the clean is finished and payout is still owed, contact Bond Back support with your job number."
+                      : "Stripe had already canceled or expired this card hold — nothing was left to release. Bond Back has cleared the stale record. Refresh this page, then use Pay & Start to place a fresh hold.",
+                };
+              }
+            }
+          }
           return {
             ok: false,
             error:
-              "This escrow hold was canceled or expired in Stripe, so there is nothing left to release. Refresh the job page — if Pay & Start is available again, complete it to place a new hold. If the job is already completed on your side or this keeps happening, contact Bond Back support with your job number.",
+              "This escrow hold was canceled or expired in Stripe, so there is nothing left to release. If this job used extra (top-up) payments, contact Bond Back support. Otherwise refresh the job page — if Pay & Start appears, complete it to place a new hold.",
           };
         }
         if (pi.status === "requires_payment_method") {
