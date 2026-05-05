@@ -1800,6 +1800,26 @@ export function JobDetail({
     canLeaveReview ||
     Boolean(paymentTimeline?.disputeResolution?.trim());
 
+  /**
+   * Match server `finalizeJobPayment`: recurring visit jobs skip checklist/photo gates; readiness for those
+   * rows also treats an empty checklist as payable (`cleaner-complete-readiness.ts`). Non-recurring needs
+   * 3+ after-photos; once `completed_pending_approval`, cleaner already satisfied checklist server-side —
+   * do not gate on client `allCompleted` (fixes empty/stale checklist hiding the release button).
+   */
+  const canListerApproveReleaseFunds =
+    isRecurringVisitJob &&
+    (localJobStatus === "in_progress" ||
+      localJobStatus === "completed_pending_approval")
+      ? true
+      : hasAfterPhotos &&
+          (localJobStatus === "completed_pending_approval" ||
+            (localJobStatus === "in_progress" && allCompleted));
+
+  const canListerRaiseDisputeWhileReviewingRelease =
+    localJobStatus === "completed_pending_approval" &&
+    (isRecurringVisitJob || hasAfterPhotos) &&
+    !hideRaiseDisputeFromJobHistory;
+
   const canListerTopUp = useMemo(
     () =>
       Boolean(
@@ -1848,6 +1868,10 @@ export function JobDetail({
         });
         return;
       }
+      const recurringNextPayMessage =
+        "recurringNextPayMessage" in res && res.recurringNextPayMessage
+          ? String(res.recurringNextPayMessage).trim()
+          : null;
       if (isStripeTestMode && res.ok && "transferId" in res) {
         console.log("[Stripe Test] Funds released — Transfer ID:", res.transferId, "PaymentIntent ID:", res.paymentIntentId);
       }
@@ -1893,12 +1917,14 @@ export function JobDetail({
         toast({
           title: "🎉 Free job completed!",
           description:
+            recurringNextPayMessage ??
             "You've earned progress on your launch promo — another job completed with 0% platform fee. Check your dashboard for slots remaining.",
         });
       } else {
         toast({
           title: isStripeTestMode ? "Funds released to cleaner (test mode)" : "Funds released",
           description:
+            recurringNextPayMessage ??
             "The cleaner has been notified. Funds are on the way to their connected account.",
         });
       }
@@ -4094,7 +4120,9 @@ export function JobDetail({
                   {localJobStatus === "completed_pending_approval"
                     ? autoReleaseTimerSuspendedForStripeConnect
                       ? "The review countdown and auto-release start only after your cleaner finishes Stripe payout setup. You'll see the timer here once they're ready to receive payment."
-                      : "Review after-photos, then release or raise a dispute. A dispute pauses auto-release until it is resolved."
+                      : isRecurringVisitJob
+                        ? "Review this visit, then release or raise a dispute. A dispute pauses auto-release until it is resolved."
+                        : "Review after-photos, then release or raise a dispute. A dispute pauses auto-release until it is resolved."
                     : `After the cleaner requests payment, you have ${autoReleaseHours} hours to approve or dispute once after-photos are in.`}
                 </p>
                 {releaseBlockedByCleanerStripe && (
@@ -4113,7 +4141,8 @@ export function JobDetail({
                 )}
                 {!showListerFinalizeNotice && (
                   <>
-                    {!hasAfterPhotos &&
+                    {!isRecurringVisitJob &&
+                      !hasAfterPhotos &&
                       (localJobStatus === "completed_pending_approval" ||
                         localJobStatus === "in_progress") && (
                       <div id="job-after-photos" className="scroll-mt-24 space-y-2">
@@ -4131,16 +4160,11 @@ export function JobDetail({
                     )}
                     <div className="mt-3 space-y-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
-                        {hasAfterPhotos && allCompleted && (
+                        {canListerApproveReleaseFunds && (
                           <Button
                             type="button"
                             size="lg"
-                            disabled={
-                              !allCompleted ||
-                              !hasAfterPhotos ||
-                              isFinalizing ||
-                              releaseBlockedByCleanerStripe
-                            }
+                            disabled={isFinalizing || releaseBlockedByCleanerStripe}
                             onClick={() => setShowApproveReleaseConfirm(true)}
                             className="min-h-[48px] flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-700"
                           >
@@ -4148,9 +4172,7 @@ export function JobDetail({
                           </Button>
                         )}
 
-                        {localJobStatus === "completed_pending_approval" &&
-                          hasAfterPhotos &&
-                          !hideRaiseDisputeFromJobHistory && (
+                        {canListerRaiseDisputeWhileReviewingRelease && (
                           <Button
                             type="button"
                             size="lg"

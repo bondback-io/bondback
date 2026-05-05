@@ -3349,6 +3349,8 @@ export type FinalizeJobPaymentResult =
       nextPaymentCheckoutUrl?: string | null;
       /** When the next visit was paid with a saved card in the same request */
       nextPaymentAlreadyInEscrow?: boolean;
+      /** When lister asked to pay the next visit but checkout/scheduling did not run */
+      recurringNextPayMessage?: string;
       /** Launch promo: this completion used a 0% fee slot (show celebration UI). */
       launchPromoFreeJobCompleted?: boolean;
       /** Cleaner promo: extra cents paid via reduced platform fee on this release. */
@@ -3517,12 +3519,16 @@ export async function finalizeJobPayment(
       ? { transferId: releaseResult.transferId, paymentIntentId: releaseResult.paymentIntentId }
       : undefined;
 
-  const updatePayload: Partial<JobRow> & { status: string } = { status: "completed" };
+  const completionIso = new Date().toISOString();
+  const updatePayload: Partial<JobRow> & { status: string; completed_at: string } = {
+    status: "completed",
+    completed_at: completionIso,
+  };
   if (!row.cleaner_confirmed_complete) {
     (updatePayload as Record<string, unknown>).cleaner_confirmed_complete = true;
-    (updatePayload as Record<string, unknown>).cleaner_confirmed_at = new Date().toISOString();
+    (updatePayload as Record<string, unknown>).cleaner_confirmed_at = completionIso;
   }
-  const { error: updateError } = await supabase
+  const { error: updateError } = await gatedClient
     .from("jobs")
     .update(updatePayload as Partial<JobRow> as never)
     .eq("id", row.id as never);
@@ -3532,7 +3538,7 @@ export async function finalizeJobPayment(
   }
 
   if (row.listing_id && !isRecurringVisit) {
-    await supabase
+    await gatedClient
       .from("listings")
       .update({ status: "ended" } as never)
       .eq("id", row.listing_id as never);
@@ -3553,16 +3559,22 @@ export async function finalizeJobPayment(
 
   let nextPaymentCheckoutUrl: string | null = null;
   let nextPaymentAlreadyInEscrow = false;
-  if (
-    options?.payAndStartNextRecurring === true &&
-    nextRecurringJobId != null &&
-    nextRecurringJobId > 0
-  ) {
-    const payNext = await createJobCheckoutSession(nextRecurringJobId);
-    if (payNext.ok && "url" in payNext && payNext.url) {
-      nextPaymentCheckoutUrl = payNext.url;
-    } else if (payNext.ok && "alreadyPaid" in payNext && payNext.alreadyPaid) {
-      nextPaymentAlreadyInEscrow = true;
+  let recurringNextPayMessage: string | undefined;
+
+  if (options?.payAndStartNextRecurring === true && isRecurringVisit) {
+    if (nextRecurringJobId == null || nextRecurringJobId < 1) {
+      recurringNextPayMessage =
+        "Funds were released. Pay & Start for the next visit did not run — no follow-up job was scheduled (the series may have ended, be paused, or scheduling failed). Pay from your dashboard when the next visit is ready.";
+    } else {
+      const payNext = await createJobCheckoutSession(nextRecurringJobId);
+      if (payNext.ok && "url" in payNext && payNext.url) {
+        nextPaymentCheckoutUrl = payNext.url;
+      } else if (payNext.ok && "alreadyPaid" in payNext && payNext.alreadyPaid) {
+        nextPaymentAlreadyInEscrow = true;
+      } else if (!payNext.ok) {
+        recurringNextPayMessage = `Funds were released. Pay & Start for the next visit failed: ${payNext.error} Open job #${nextRecurringJobId} to try again.`;
+        console.error("[finalizeJobPayment] createJobCheckoutSession next recurring failed", payNext.error);
+      }
     }
   }
 
@@ -3640,6 +3652,7 @@ export async function finalizeJobPayment(
     nextRecurringJobId: nextRecurringJobId ?? null,
     nextPaymentCheckoutUrl: nextPaymentCheckoutUrl ?? null,
     ...(nextPaymentAlreadyInEscrow ? { nextPaymentAlreadyInEscrow: true } : {}),
+    ...(recurringNextPayMessage ? { recurringNextPayMessage } : {}),
     ...("launchPromoFreeJobCompleted" in releaseResult && releaseResult.launchPromoFreeJobCompleted
       ? { launchPromoFreeJobCompleted: true }
       : {}),
