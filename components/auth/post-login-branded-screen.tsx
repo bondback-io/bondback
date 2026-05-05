@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import { BondBackWordmark } from "@/components/brand/bondback-wordmark";
 
 type PostLoginBrandedScreenProps = {
   /** Shown under the logo; keep short for mobile. */
@@ -26,10 +27,10 @@ export function PostLoginBrandedScreen({
         aria-hidden
       />
       <div className="relative flex w-full max-w-md flex-col items-center text-center">
-        <p className="text-2xl font-semibold tracking-tight text-primary sm:text-3xl">Bond Back</p>
-        <p className="mt-2 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-          Bond cleaning marketplace
-        </p>
+        <BondBackWordmark
+          variant="labeled"
+          className="h-11 max-h-[3rem] max-w-[min(18rem,88vw)] sm:h-12 sm:max-h-[3.25rem] md:h-[3.25rem]"
+        />
         <div className="mt-10 flex flex-col items-center gap-5">
           <Loader2
             className="h-10 w-10 animate-spin text-primary/90 sm:h-11 sm:w-11"

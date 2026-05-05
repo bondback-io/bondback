@@ -3,6 +3,7 @@
 import { memo, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { BondBackWordmark } from "@/components/brand/bondback-wordmark";
 import { cn } from "@/lib/utils";
 
 /**
@@ -127,19 +128,14 @@ function AuthEmailConfirmTransitionLoaderInner({
           isCompact ? "max-w-sm gap-4" : "max-w-md gap-6"
         )}
       >
-        <p
-          className={cn(
-            "font-semibold tracking-tight text-primary",
-            isCompact ? "text-lg" : "text-2xl sm:text-3xl"
-          )}
-        >
-          Bond Back
-        </p>
-        {!isCompact && (
-          <p className="-mt-2 text-[0.65rem] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            Bond cleaning marketplace
-          </p>
-        )}
+        <BondBackWordmark
+          variant="labeled"
+          className={
+            isCompact
+              ? "h-9 max-h-10 max-w-[min(15rem,82vw)] sm:h-10"
+              : "h-10 max-h-12 max-w-[min(17rem,88vw)] sm:h-11 sm:max-h-[3.25rem] md:h-12"
+          }
+        />
 
         <div
           className={cn(

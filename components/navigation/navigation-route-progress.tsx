@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { BondBackWordmark } from "@/components/brand/bondback-wordmark";
 import { getNavigationLoadingLabel } from "@/lib/navigation-route-labels";
 
 function isSameRoute(a: string, b: string): boolean {
@@ -186,10 +187,10 @@ function NavigationRouteProgressInner() {
             aria-hidden
           />
           <div className="relative flex w-full max-w-md flex-col items-center text-center">
-            <p className="text-xl font-semibold tracking-tight text-primary sm:text-2xl">Bond Back</p>
-            <p className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground sm:text-xs">
-              Bond cleaning marketplace
-            </p>
+            <BondBackWordmark
+              variant="labeled"
+              className="h-10 max-h-12 max-w-[min(17rem,85vw)] sm:h-11 sm:max-h-[3.25rem] md:h-12 md:max-w-[19rem]"
+            />
             <p className="mt-2 text-[11px] text-muted-foreground/90 sm:text-xs">Loading page</p>
             <div className="mt-8 flex flex-col items-center gap-5 sm:mt-9">
               <Loader2
@@ -220,8 +221,7 @@ function NavigationRouteProgressInner() {
 
 /**
  * In-app navigation: top progress strip + (after a short delay) a full-screen surface
- * aligned with `PostLoginBrandedScreen` (gradient + centered Bond Back), slightly smaller
- * typography and no long marketing line — for route changes only.
+ * aligned with post-login loaders (same wordmark as the sticky header).
  */
 export function NavigationRouteProgress() {
   return (

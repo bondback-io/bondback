@@ -10,6 +10,7 @@ import { FindJobsNavLink } from "@/components/layout/find-jobs-nav-link";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PendingBidsBadge } from "@/components/pwa/pending-bids-badge";
 import { getInAppNotificationFeedbackPrefs } from "@/lib/notifications/in-app-notification-prefs";
+import { BondBackWordmark } from "@/components/brand/bondback-wordmark";
 
 export type HeaderProps = {
   className?: string;
@@ -17,7 +18,7 @@ export type HeaderProps = {
   stripeTestMode?: boolean;
 };
 
-/** Bond Back wordmark home link. Full wordmark: `/brand/bondback-wordmark.svg`; monogram: `/brand/bondback-monogram.svg`. */
+/** Bond Back wordmark home link (`/brand/bondback-wordmark.svg`). Monogram lives at `/brand/bondback-monogram.svg`. */
 function LogoWithTagline({ className }: { className?: string }) {
   return (
     <Link
@@ -28,13 +29,7 @@ function LogoWithTagline({ className }: { className?: string }) {
       )}
       aria-label="Bond Back home"
     >
-      <img
-        src="/brand/bondback-wordmark.svg"
-        alt=""
-        aria-hidden
-        decoding="async"
-        className="pointer-events-none h-9 w-auto max-h-10 max-w-[min(13rem,52vw)] object-contain object-left dark:brightness-[1.06] dark:contrast-[1.02] sm:h-10 sm:max-h-11 sm:max-w-[16rem] md:h-11 md:max-h-12 md:max-w-[18rem]"
-      />
+      <BondBackWordmark variant="decorative" />
     </Link>
   );
 }
