@@ -17,6 +17,10 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { scheduleRouterAction, scrollToTopAfterBidAccepted } from "@/lib/deferred-router";
 import { format } from "date-fns";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import {
+  isLikelyTransientNetworkError,
+  userFacingSupabaseErrorMessage,
+} from "@/lib/supabase/user-facing-error";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1435,18 +1439,32 @@ export function JobDetail({
     const load = async () => {
       setChecklistLoading(true);
       setChecklistError(null);
-      const { data, error } = await supabase
-        .from("job_checklist_items")
-        .select("*")
-        .eq("job_id", numericJobId as never)
-        .order("id", { ascending: true });
-      if (cancelled) return;
-      if (error) {
-        setChecklistError(error.message);
-        setChecklistLoading(false);
-        return;
+      const maxAttempts = 3;
+      let lastMessage: string | null = null;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 400 * attempt));
+          if (cancelled) return;
+        }
+        const { data, error } = await supabase
+          .from("job_checklist_items")
+          .select("*")
+          .eq("job_id", numericJobId as never)
+          .order("id", { ascending: true });
+        if (cancelled) return;
+        if (!error) {
+          setChecklist((data ?? []) as ChecklistItem[]);
+          setChecklistLoading(false);
+          return;
+        }
+        lastMessage = error.message;
+        if (!isLikelyTransientNetworkError(error.message) || attempt === maxAttempts - 1) {
+          setChecklistError(userFacingSupabaseErrorMessage(error.message));
+          setChecklistLoading(false);
+          return;
+        }
       }
-      setChecklist((data ?? []) as ChecklistItem[]);
+      setChecklistError(userFacingSupabaseErrorMessage(lastMessage));
       setChecklistLoading(false);
     };
 
@@ -1598,7 +1616,7 @@ export function JobDetail({
       .eq("id", item.id as never)
       .eq("job_id", numericJobId as never);
     if (error) {
-      setChecklistError(error.message);
+      setChecklistError(userFacingSupabaseErrorMessage(error.message));
       return;
     }
     const nextList = (checklist ?? []).map((it) =>
@@ -1629,7 +1647,7 @@ export function JobDetail({
       .update({ is_completed: true } as never)
       .eq("job_id", numericJobId as never);
     if (error) {
-      setChecklistError(error.message);
+      setChecklistError(userFacingSupabaseErrorMessage(error.message));
       return;
     }
     if (currentUserId) {
@@ -1652,7 +1670,7 @@ export function JobDetail({
       .select("*")
       .maybeSingle();
     if (error) {
-      setChecklistError(error.message);
+      setChecklistError(userFacingSupabaseErrorMessage(error.message));
       return;
     }
     if (data) {
@@ -1674,7 +1692,7 @@ export function JobDetail({
       .eq("id", item.id as never)
       .eq("job_id", numericJobId as never);
     if (error) {
-      setChecklistError(error.message);
+      setChecklistError(userFacingSupabaseErrorMessage(error.message));
       setChecklist((prev) =>
         [...(prev ?? []), item].sort((a, b) => a.id - b.id)
       );
@@ -1695,7 +1713,7 @@ export function JobDetail({
       .eq("id", item.id as never)
       .eq("job_id", numericJobId as never);
     if (error) {
-      setChecklistError(error.message);
+      setChecklistError(userFacingSupabaseErrorMessage(error.message));
       setChecklist((prev) =>
         (prev ?? []).map((it) => (it.id === item.id ? { ...it, label: prevLabel } : it))
       );
